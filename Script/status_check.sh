@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =======================
-# OpenInfra - Comprehensive Status Check Script
+# NOAH - Comprehensive Status Check Script
 # =======================
 
 set -euo pipefail
@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default configuration
 DEFAULT_ENVIRONMENT="dev"
-DEFAULT_NAMESPACE_PREFIX="openinfra"
+DEFAULT_NAMESPACE_PREFIX="noah"
 SHOW_DETAILED=false
 SHOW_LOGS=false
 CHECK_HEALTH=true
@@ -56,7 +56,7 @@ error_exit() {
 # Help function
 show_help() {
     cat << EOF
-${BLUE}OpenInfra - Comprehensive Status Check Script v${SCRIPT_VERSION}${NC}
+${BLUE}NOAH - Comprehensive Status Check Script v${SCRIPT_VERSION}${NC}
 
 ${YELLOW}USAGE:${NC}
     $0 [OPTIONS]
@@ -339,7 +339,7 @@ display_status_table() {
     local charts
     IFS=' ' read -ra charts <<< "$(get_available_charts)"
     
-    echo -e "${BLUE}📊 OpenInfra Services Status${NC}"
+    echo -e "${BLUE}📊 NOAH Services Status${NC}"
     echo -e "${BLUE}=============================${NC}"
     
     # Table header
@@ -477,10 +477,10 @@ display_network_info() {
 
 # Generate status report
 generate_status_report() {
-    local report_file="openinfra-status-$(date +%Y%m%d-%H%M%S).log"
+    local report_file="noah-status-$(date +%Y%m%d-%H%M%S).log"
     
     {
-        echo "OpenInfra Status Report"
+        echo "NOAH Status Report"
         echo "=========================="
         echo "Generated: $(date)"
         echo "Environment: $ENVIRONMENT"
@@ -508,7 +508,7 @@ generate_status_report() {
 
 # Main function
 main() {
-    echo -e "${BLUE}📋 OpenInfra - Comprehensive Status Check v${SCRIPT_VERSION}${NC}"
+    echo -e "${BLUE}📋 NOAH - Comprehensive Status Check v${SCRIPT_VERSION}${NC}"
     echo -e "${BLUE}================================================================${NC}"
     
     # Parse arguments

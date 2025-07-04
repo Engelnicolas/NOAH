@@ -1,6 +1,6 @@
-# OpenInfra - Enhanced Script Section
+# NOAH - Enhanced Script Section
 
-This directory contains production-ready deployment and automation scripts for the OpenInfra infrastructure platform. All scripts have been completely enhanced with robust error handling, comprehensive logging, configuration management, and advanced operational features.
+This directory contains production-ready deployment and automation scripts for the NOAH infrastructure platform. All scripts have been completely enhanced with robust error handling, comprehensive logging, configuration management, and advanced operational features.
 
 ## 📋 Overview
 
@@ -271,7 +271,7 @@ The scripts support the following environment variables:
 ```bash
 # Environment settings
 export ENVIRONMENT=prod                    # dev/staging/prod
-export NAMESPACE_PREFIX=openinfra         # Kubernetes namespace prefix
+export NAMESPACE_PREFIX=noah         # Kubernetes namespace prefix
 export HELM_TIMEOUT=10m                   # Helm operation timeout
 
 # Backup settings
@@ -478,4 +478,4 @@ For issues and support:
 
 ---
 
-**Note**: This enhanced script section provides production-ready automation for the OpenInfra platform. All scripts include comprehensive help documentation accessible via the `--help` option.
+**Note**: This enhanced script section provides production-ready automation for the NOAH platform. All scripts include comprehensive help documentation accessible via the `--help` option.

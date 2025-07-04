@@ -59,7 +59,7 @@
    DNS Server: {{ include "samba4.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.ports.dns }}
    {{- end }}
 
-6. Integration with OpenInfra Services:
+6. Integration with NOAH Services:
    
    # Keycloak LDAP Integration
    Connection URL: ldap://{{ include "samba4.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.ports.ldap }}

@@ -1,4 +1,4 @@
-# OpenInfra Inventory File
+# NOAH Inventory File
 # Defines target environments and their configurations
 
 [local]
@@ -21,28 +21,28 @@ localhost ansible_connection=local
 # Group variables for different environments
 [production:vars]
 env=production
-namespace=openinfra-prod
+k8s_namespace=noah-prod
 parallel_deployment=false
 run_validation=true
 backup_enabled=true
 
 [staging:vars]
 env=staging
-namespace=openinfra-staging
+k8s_namespace=noah-staging
 parallel_deployment=true
 run_validation=true
 backup_enabled=false
 
 [development:vars]
 env=development
-namespace=openinfra-dev
+k8s_namespace=noah-dev
 parallel_deployment=true
 run_validation=false
 backup_enabled=false
 
 [local:vars]
 env=local
-namespace=openinfra-local
+k8s_namespace=noah-local
 parallel_deployment=false
 run_validation=true
 backup_enabled=false

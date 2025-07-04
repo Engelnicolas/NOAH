@@ -41,7 +41,7 @@
     body:
       clientId: "oauth2-proxy-client"
       name: "OAuth2 Proxy"
-      description: "OAuth2 Proxy for OpenInfra services"
+      description: "OAuth2 Proxy for NOAH services"
       enabled: true
       protocol: "openid-connect"
       publicClient: false
@@ -140,13 +140,13 @@
       Content-Type: "application/json"
     body_format: json
     body:
-      name: "openinfra-roles"
-      description: "OpenInfra role information"
+      name: "noah-roles"
+      description: "NOAH role information"
       protocol: "openid-connect"
       attributes:
         "include.in.token.scope": "true"
         "display.on.consent.screen": "true"
-        "consent.screen.text": "OpenInfra roles and permissions"
+        "consent.screen.text": "NOAH roles and permissions"
       protocolMappers:
         - name: "groups"
           protocol: "openid-connect"
@@ -181,8 +181,8 @@
       Content-Type: "application/json"
     body_format: json
     body:
-      alias: "openinfra-ldap"
-      displayName: "OpenInfra LDAP"
+      alias: "noah-ldap"
+      displayName: "NOAH LDAP"
       providerId: "ldap"
       enabled: true
       config:
@@ -391,7 +391,7 @@
       - monitoring-admin, monitoring-viewer
       
       📋 Client Scopes:
-      - openinfra-roles: {{ client_scope_creation.status in [201, 409] | ternary('Created', 'Failed') }}
+      - noah-roles: {{ client_scope_creation.status in [201, 409] | ternary('Created', 'Failed') }}
       - Standard scopes: openid, profile, email, roles, groups
       
       🔗 LDAP Group Mapping:

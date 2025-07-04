@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =======================
-# OpenInfra - Enhanced Monitoring Stack Teardown Script
+# NOAH - Enhanced Monitoring Stack Teardown Script
 # =======================
 
 set -euo pipefail
@@ -53,7 +53,7 @@ error_exit() {
 # Help function
 show_help() {
     cat << EOF
-${BLUE}OpenInfra - Enhanced Monitoring Stack Teardown v${SCRIPT_VERSION}${NC}
+${BLUE}NOAH - Enhanced Monitoring Stack Teardown v${SCRIPT_VERSION}${NC}
 
 ${YELLOW}USAGE:${NC}
     $0 [OPTIONS]
@@ -308,7 +308,7 @@ handle_persistent_volumes() {
         if [[ "$DRY_RUN" == "false" ]]; then
             echo "$pvcs" | while read -r pvc; do
                 if [[ -n "$pvc" ]]; then
-                    kubectl label "$pvc" -n "$NAMESPACE" preserved-by=openinfra-teardown --overwrite 2>/dev/null || true
+                    kubectl label "$pvc" -n "$NAMESPACE" preserved-by=noah-teardown --overwrite 2>/dev/null || true
                 fi
             done
         fi
@@ -419,7 +419,7 @@ display_remaining_resources() {
     # List preserved PVCs
     if [[ "$PRESERVE_DATA" == "true" ]]; then
         local preserved_pvcs
-        preserved_pvcs=$(kubectl get pvc -n "$NAMESPACE" -l preserved-by=openinfra-teardown --no-headers 2>/dev/null || true)
+        preserved_pvcs=$(kubectl get pvc -n "$NAMESPACE" -l preserved-by=noah-teardown --no-headers 2>/dev/null || true)
         
         if [[ -n "$preserved_pvcs" ]]; then
             echo -e "\n${BLUE}Preserved persistent volumes:${NC}"
@@ -433,7 +433,7 @@ generate_teardown_report() {
     local report_file="monitoring-teardown-$(date +%Y%m%d-%H%M%S).log"
     
     {
-        echo "OpenInfra Monitoring Stack Teardown Report"
+        echo "NOAH Monitoring Stack Teardown Report"
         echo "=============================================="
         echo "Timestamp: $(date)"
         echo "Environment: $ENVIRONMENT"
@@ -477,7 +477,7 @@ generate_teardown_report() {
 
 # Main function
 main() {
-    echo -e "${BLUE}🧹 OpenInfra - Enhanced Monitoring Stack Teardown v${SCRIPT_VERSION}${NC}"
+    echo -e "${BLUE}🧹 NOAH - Enhanced Monitoring Stack Teardown v${SCRIPT_VERSION}${NC}"
     echo -e "${BLUE}================================================================${NC}"
     
     # Parse arguments

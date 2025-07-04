@@ -332,7 +332,7 @@
           dhcp-option DNS 10.96.0.10
           dhcp-option DNS 8.8.8.8
           
-          # Routes for OpenInfra services
+          # Routes for NOAH services
           route 10.96.0.0 255.240.0.0  # Kubernetes service network
           route 10.244.0.0 255.255.0.0 # Pod network
           
@@ -511,10 +511,10 @@
       kind: Ingress
       metadata:
         name: openvpn-auth-ingress
-        namespace: openinfra
+        namespace: noah
         annotations:
-          nginx.ingress.kubernetes.io/auth-url: "https://oauth2-proxy.openinfra.svc.cluster.local/oauth2/auth"
-          nginx.ingress.kubernetes.io/auth-signin: "https://oauth2-proxy.openinfra.svc.cluster.local/oauth2/start"
+          nginx.ingress.kubernetes.io/auth-url: "https://oauth2-proxy.noah.svc.cluster.local/oauth2/auth"
+          nginx.ingress.kubernetes.io/auth-signin: "https://oauth2-proxy.noah.svc.cluster.local/oauth2/start"
       spec:
         rules:
         - host: openvpn.local

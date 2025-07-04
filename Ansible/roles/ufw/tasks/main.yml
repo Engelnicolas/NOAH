@@ -1,6 +1,6 @@
 ---
 # Ansible/roles/ufw/tasks/main.yml
-# Configure UFW firewall rules for OpenInfra security
+# Configure UFW firewall rules for NOAH security
 
 - name: Create UFW configuration DaemonSet
   kubernetes.core.k8s:
@@ -245,7 +245,7 @@
       apiVersion: networking.k8s.io/v1
       kind: NetworkPolicy
       metadata:
-        name: openinfra-network-policy
+        name: noah-network-policy
         namespace: "{{ namespace }}"
       spec:
         podSelector: {}

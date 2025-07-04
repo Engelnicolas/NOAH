@@ -29,23 +29,23 @@ Samba4 provides a comprehensive Active Directory Domain Controller implementatio
 
 ```bash
 # Add the repository (if using a Helm repository)
-helm repo add openinfra https://your-repo-url
+helm repo add noah https://your-repo-url
 
 # Install Samba4 with default values
-helm install samba4 openinfra/samba4
+helm install samba4 noah/samba4
 ```
 
 ### Installation with Custom Values
 
 ```bash
 # Install with custom configuration
-helm install samba4 openinfra/samba4 -f values.yaml
+helm install samba4 noah/samba4 -f values.yaml
 ```
 
 ### Installation with Inline Parameters
 
 ```bash
-helm install samba4 openinfra/samba4 \
+helm install samba4 noah/samba4 \
   --set samba.realm=EXAMPLE.COM \
   --set samba.workgroup=EXAMPLE \
   --set samba.adminPassword=SecurePassword123 \
@@ -198,7 +198,7 @@ networkPolicy:
   ingress:
     allowedNamespaces:
       - default
-      - openinfra
+      - noah
 
 # Pod Security
 podSecurityContext:
@@ -435,7 +435,7 @@ To upgrade Samba4 to a new version:
 helm repo update
 
 # Upgrade the release
-helm upgrade samba4 openinfra/samba4 -f values.yaml
+helm upgrade samba4 noah/samba4 -f values.yaml
 ```
 
 **Important**: Always backup your domain before upgrading!

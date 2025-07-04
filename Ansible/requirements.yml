@@ -1,5 +1,5 @@
 ---
-# Ansible Galaxy requirements for OpenInfra
+# Ansible Galaxy requirements for NOAH
 collections:
   - name: kubernetes.core
     version: ">=2.4.0"

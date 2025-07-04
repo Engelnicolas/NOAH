@@ -642,7 +642,7 @@ grafana:
       prometheus:
         name: Prometheus
         type: prometheus
-        url: "http://{{ include "prometheus.fullname" . }}:{{ .Values.prometheus.service.port }}"
+        url: 'http://{{ include "prometheus.fullname" . }}:{{ .Values.prometheus.service.port }}'
         access: proxy
         isDefault: true
 

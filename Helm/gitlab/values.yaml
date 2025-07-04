@@ -198,8 +198,8 @@ oidc:
   scope: ["openid", "profile", "email", "groups"]
   discoveryUrl: "https://keycloak.noah.local/realms/noah/.well-known/openid_configuration"
   userInfoUrl: "https://keycloak.noah.local/realms/noah/protocol/openid-connect/userinfo"
-  authUrl: "https://keycloak.openinfra.local/realms/openinfra/protocol/openid-connect/auth"
-  tokenUrl: "https://keycloak.openinfra.local/realms/openinfra/protocol/openid-connect/token"
+  authUrl: "https://keycloak.noah.local/realms/noah/protocol/openid-connect/auth"
+  tokenUrl: "https://keycloak.noah.local/realms/noah/protocol/openid-connect/token"
   allowSingleSignOn: true
   blockAutoCreatedUsers: false
   autoLinkUser: true
@@ -208,18 +208,18 @@ oidc:
 ldap:
   enabled: true
   label: "LDAP"
-  host: "samba4.openinfra.svc.cluster.local"
+  host: "samba4.noah.svc.cluster.local"
   port: 389
   uid: "sAMAccountName"
   method: "plain"
-  bindDn: "cn=gitlab-service,cn=Users,dc=openinfra,dc=local"
+  bindDn: "cn=gitlab-service,cn=Users,dc=noah,dc=local"
   password: ""
   existingSecret: ""
   existingSecretKey: "ldap-password"
-  baseDn: "dc=openinfra,dc=local"
+  baseDn: "dc=noah,dc=local"
   userFilter: ""
-  groupBase: "cn=Groups,dc=openinfra,dc=local"
-  adminGroup: "cn=GitLab-Admins,cn=Groups,dc=openinfra,dc=local"
+  groupBase: "cn=Groups,dc=noah,dc=local"
+  adminGroup: "cn=GitLab-Admins,cn=Groups,dc=noah,dc=local"
   externalGroups: []
   allowUsernameOrEmailLogin: true
   blockAutoCreatedUsers: false
@@ -244,7 +244,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hostname: "gitlab.openinfra.local"
+  hostname: "gitlab.noah.local"
   path: /
   pathType: Prefix
   tls:
@@ -257,7 +257,7 @@ sshIngress:
   className: nginx
   annotations:
     nginx.ingress.kubernetes.io/tcp-services-configmap: "default/tcp-services"
-  hostname: "gitlab.openinfra.local"
+  hostname: "gitlab.noah.local"
   port: 22
 
 # Resource limits and requests

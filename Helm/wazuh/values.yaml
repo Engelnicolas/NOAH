@@ -724,10 +724,10 @@ affinity:
 initContainers:
   - name: wait-for-elasticsearch
     image: busybox:1.35
-    command: ['sh', '-c', 'until nslookup elasticsearch.openinfra.svc.cluster.local; do echo waiting for elasticsearch; sleep 2; done;']
+    command: ['sh', '-c', 'until nslookup elasticsearch.noah.svc.cluster.local; do echo waiting for elasticsearch; sleep 2; done;']
   - name: wait-for-ldap
     image: busybox:1.35
-    command: ['sh', '-c', 'until nslookup ldap.openinfra.svc.cluster.local; do echo waiting for ldap; sleep 2; done;']
+    command: ['sh', '-c', 'until nslookup ldap.noah.svc.cluster.local; do echo waiting for ldap; sleep 2; done;']
 
 # Extra Environment Variables
 extraEnvVars: []

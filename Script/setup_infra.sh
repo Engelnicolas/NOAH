@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # =============================================================================
-# OpenInfra - Enhanced Infrastructure Setup Script
+# NOAH - Enhanced Infrastructure Setup Script
 # =============================================================================
 #
 # This script provides comprehensive infrastructure setup and configuration
-# for the OpenInfra platform. It supports multiple deployment scenarios
+# for the NOAH platform. It supports multiple deployment scenarios
 # including development, staging, and production environments.
 #
 # FEATURES:
@@ -37,7 +37,7 @@
 # - Internet connection (unless --offline mode)
 # - Administrative privileges for system modifications
 #
-# Author: OpenInfra Team
+# Author: NOAH Team
 # Version: 2.0.0
 # License: MIT
 # Documentation: ../Docs/README.md
@@ -128,7 +128,7 @@ error_exit() {
 # Help function
 show_help() {
     cat << EOF
-${BLUE}OpenInfra - Enhanced Infrastructure Setup Script v${SCRIPT_VERSION}${NC}
+${BLUE}NOAH - Enhanced Infrastructure Setup Script v${SCRIPT_VERSION}${NC}
 
 ${YELLOW}USAGE:${NC}
     $0 [OPTIONS]
@@ -676,7 +676,7 @@ trap 'error_exit "Script interrupted by user"' INT TERM
 
 # Main function
 main() {
-    echo -e "${BLUE}🚀 OpenInfra - Enhanced Infrastructure Setup v${SCRIPT_VERSION}${NC}"
+    echo -e "${BLUE}🚀 NOAH - Enhanced Infrastructure Setup v${SCRIPT_VERSION}${NC}"
     echo -e "${BLUE}================================================================${NC}"
     
     # Parse arguments

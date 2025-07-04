@@ -1,8 +1,8 @@
 # =============================================================================
-# OpenInfra - Enhanced Makefile for Production Operations
+# NOAH - Enhanced Makefile for Production Operations
 # =============================================================================
 #
-# This Makefile provides a unified interface for managing the OpenInfra
+# This Makefile provides a unified interface for managing the NOAH
 # deployment lifecycle. It orchestrates deployment, monitoring, maintenance,
 # and operational tasks across different environments.
 #
@@ -20,7 +20,7 @@
 # USAGE:
 #   make help           # Show all available targets
 #   make setup          # Initialize environment and dependencies
-#   make deploy         # Deploy the complete OpenInfra stack
+#   make deploy         # Deploy the complete NOAH stack
 #   make status         # Check deployment status and health
 #   make clean          # Clean up deployments and resources
 #
@@ -29,7 +29,7 @@
 #   ENVIRONMENT=prod make deploy
 #   NAMESPACE_PREFIX=myorg make setup
 #
-# Author: OpenInfra Team
+# Author: NOAH Team
 # Version: 2.0.0
 # License: MIT
 # =============================================================================
@@ -44,8 +44,8 @@
 ENVIRONMENT ?= dev
 
 # Kubernetes namespace prefix for resource organization
-# All resources will be created in namespaces like: openinfra-dev, openinfra-prod
-NAMESPACE_PREFIX ?= openinfra
+# All resources will be created in namespaces like: noah-dev, noah-prod
+NAMESPACE_PREFIX ?= noah
 
 # Helm operation timeout for large deployments
 # Increase for production environments with many resources
@@ -90,7 +90,7 @@ all: help
 
 # Display comprehensive help information with all available targets
 help: ## Show this help message with all available commands and usage
-	@echo "$(BLUE)OpenInfra - Enhanced Deployment Makefile$(NC)"
+	@echo "$(BLUE)NOAH - Enhanced Deployment Makefile$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Available targets:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)

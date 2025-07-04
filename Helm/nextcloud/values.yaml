@@ -113,7 +113,7 @@ nextcloud:
   
   # Primary hostname for Nextcloud access
   # This must match the ingress hostname and certificate
-  host: "nextcloud.openinfra.local"
+  host: "nextcloud.noah.local"
   
   # Protocol for external access (https recommended for production)
   protocol: "https"
@@ -121,7 +121,7 @@ nextcloud:
   # Trusted domains for Nextcloud access
   # All domains that users will use to access Nextcloud
   trustedDomains: 
-    - "nextcloud.openinfra.local"
+    - "nextcloud.noah.local"
   
   # =============================================================================
   # File Storage Configuration
@@ -188,15 +188,15 @@ oidc:
   clientSecret: ""
   existingSecret: ""
   existingSecretKey: "oidc-client-secret"
-  discoveryUrl: "https://keycloak.openinfra.local/realms/openinfra/.well-known/openid_configuration"
+  discoveryUrl: "https://keycloak.noah.local/realms/noah/.well-known/openid_configuration"
   
   # OIDC Configuration
   config:
     use_pkce: true
     loginButtonName: "Login with Keycloak"
     autoRedirectOnLoginPage: false
-    redirectUrl: "https://nextcloud.openinfra.local/apps/oidc_login/oidc"
-    logoutUrl: "https://keycloak.openinfra.local/realms/openinfra/protocol/openid-connect/logout"
+    redirectUrl: "https://nextcloud.noah.local/apps/oidc_login/oidc"
+    logoutUrl: "https://keycloak.noah.local/realms/noah/protocol/openid-connect/logout"
     
     # User mapping
     userMappings:
@@ -217,17 +217,17 @@ oidc:
 # LDAP Authentication (fallback/additional)
 ldap:
   enabled: true
-  host: "samba4.openinfra.svc.cluster.local"
+  host: "samba4.noah.svc.cluster.local"
   port: 389
-  dn: "dc=openinfra,dc=local"
-  bindUser: "cn=nextcloud-service,cn=Users,dc=openinfra,dc=local"
+  dn: "dc=noah,dc=local"
+  bindUser: "cn=nextcloud-service,cn=Users,dc=noah,dc=local"
   bindPassword: ""
   existingSecret: ""
   existingSecretKey: "ldap-password"
   
   # User configuration
   userSearch:
-    base: "cn=Users,dc=openinfra,dc=local"
+    base: "cn=Users,dc=noah,dc=local"
     filter: "(&(objectClass=user)(sAMAccountName=%uid))"
     attributes:
       displayName: "displayName"
@@ -237,7 +237,7 @@ ldap:
       
   # Group configuration
   groupSearch:
-    base: "cn=Groups,dc=openinfra,dc=local"
+    base: "cn=Groups,dc=noah,dc=local"
     filter: "(&(objectClass=group))"
     memberAttribute: "member"
 
@@ -259,7 +259,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hostname: "nextcloud.openinfra.local"
+  hostname: "nextcloud.noah.local"
   path: /
   pathType: Prefix
   tls:
@@ -341,7 +341,7 @@ livenessProbe:
     port: http
     httpHeaders:
       - name: Host
-        value: "nextcloud.openinfra.local"
+        value: "nextcloud.noah.local"
   initialDelaySeconds: 120
   periodSeconds: 30
   timeoutSeconds: 10
@@ -354,7 +354,7 @@ readinessProbe:
     port: http
     httpHeaders:
       - name: Host
-        value: "nextcloud.openinfra.local"
+        value: "nextcloud.noah.local"
   initialDelaySeconds: 60
   periodSeconds: 10
   timeoutSeconds: 5
@@ -367,7 +367,7 @@ startupProbe:
     port: http
     httpHeaders:
       - name: Host
-        value: "nextcloud.openinfra.local"
+        value: "nextcloud.noah.local"
   initialDelaySeconds: 30
   periodSeconds: 15
   timeoutSeconds: 10

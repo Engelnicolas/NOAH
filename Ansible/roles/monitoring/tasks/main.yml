@@ -75,7 +75,7 @@
                 target_label: __metrics_path__
                 regex: (.+)
                 
-          - job_name: 'openinfra-services'
+          - job_name: 'noah-services'
             static_configs:
               - targets:
                 - 'keycloak:8080'
@@ -95,7 +95,7 @@
         config:
           global:
             smtp_smarthost: 'localhost:587'
-            smtp_from: 'alerts@openinfra.local'
+            smtp_from: 'alerts@noah.local'
           route:
             group_by: ['alertname']
             group_wait: 10s
@@ -181,18 +181,18 @@
             gnetId: 1860
             revision: 27
             datasource: Prometheus
-          openinfra-overview:
+          noah-overview:
             json: |
               {
                 "dashboard": {
-                  "title": "OpenInfra Services Overview",
+                  "title": "NOAH Services Overview",
                   "panels": [
                     {
                       "title": "Service Status",
                       "type": "stat",
                       "targets": [
                         {
-                          "expr": "up{job=\"openinfra-services\"}",
+                          "expr": "up{job=\"noah-services\"}",
                           "legendFormat": "{{instance}}"
                         }
                       ]
@@ -399,7 +399,7 @@
               ],
               "labels": {
                 "env": "{{ env | default('production') }}",
-                "service": "openinfra"
+                "service": "noah"
               }
             }
           ]
@@ -465,7 +465,7 @@
       - Kubernetes Cluster Overview
       - Kubernetes Pods
       - Node Exporter Metrics
-      - OpenInfra Services Overview
+      - NOAH Services Overview
       
       🎯 Monitored Services:
       - Keycloak, Nextcloud, Mattermost
@@ -478,7 +478,7 @@
       3. Configure additional dashboards
       4. Set up alerting rules
       5. Configure notification channels
-    namespace: openinfra
+    namespace: noah
     label_selectors:
       - "app=grafana"
   register: grafana_pods

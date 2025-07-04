@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =======================
-# OpenInfra - Enhanced Monitoring Stack Deployment Script
+# NOAH - Enhanced Monitoring Stack Deployment Script
 # =======================
 
 set -euo pipefail
@@ -56,7 +56,7 @@ error_exit() {
 # Help function
 show_help() {
     cat << EOF
-${BLUE}OpenInfra - Enhanced Monitoring Stack Deployment v${SCRIPT_VERSION}${NC}
+${BLUE}NOAH - Enhanced Monitoring Stack Deployment v${SCRIPT_VERSION}${NC}
 
 ${YELLOW}USAGE:${NC}
     $0 [OPTIONS]
@@ -188,7 +188,7 @@ data:
       scrape_interval: 15s
       evaluation_interval: 15s
       external_labels:
-        cluster: 'openinfra-$ENVIRONMENT'
+        cluster: 'noah-$ENVIRONMENT'
         environment: '$ENVIRONMENT'
 
     rule_files:
@@ -263,8 +263,8 @@ data:
             action: replace
             target_label: kubernetes_pod_name
 
-      # OpenInfra services
-      - job_name: 'openinfra-services'
+      # NOAH services
+      - job_name: 'noah-services'
         kubernetes_sd_configs:
           - role: service
         relabel_configs:
@@ -319,9 +319,9 @@ metadata:
   name: prometheus-rules
   namespace: $NAMESPACE
 data:
-  openinfra.yml: |
+  noah.yml: |
     groups:
-    - name: openinfra.rules
+    - name: noah.rules
       rules:
       - alert: HighErrorRate
         expr: |
@@ -406,7 +406,7 @@ install_prometheus() {
     # Prepare Prometheus values
     local values_args="--set server.retention=$PROMETHEUS_RETENTION"
     values_args="$values_args --set server.global.external_labels.environment=$ENVIRONMENT"
-    values_args="$values_args --set server.global.external_labels.cluster=openinfra-$ENVIRONMENT"
+    values_args="$values_args --set server.global.external_labels.cluster=noah-$ENVIRONMENT"
     
     if [[ "$ENABLE_ALERTMANAGER" == "false" ]]; then
         values_args="$values_args --set alertmanager.enabled=false"
@@ -602,7 +602,7 @@ display_access_info() {
     echo "1. Access Grafana and import dashboards"
     echo "2. Configure alerting rules in Prometheus"
     echo "3. Set up notification channels in Grafana"
-    echo "4. Monitor your OpenInfra services"
+    echo "4. Monitor your NOAH services"
 }
 
 # Generate summary report
@@ -610,7 +610,7 @@ generate_summary() {
     local report_file="monitoring-deployment-$(date +%Y%m%d-%H%M%S).log"
     
     {
-        echo "OpenInfra Monitoring Stack Deployment Report"
+        echo "NOAH Monitoring Stack Deployment Report"
         echo "==============================================="
         echo "Timestamp: $(date)"
         echo "Environment: $ENVIRONMENT"
@@ -638,7 +638,7 @@ generate_summary() {
 
 # Main function
 main() {
-    echo -e "${BLUE}📊 OpenInfra - Enhanced Monitoring Stack Deployment v${SCRIPT_VERSION}${NC}"
+    echo -e "${BLUE}📊 NOAH - Enhanced Monitoring Stack Deployment v${SCRIPT_VERSION}${NC}"
     echo -e "${BLUE}================================================================${NC}"
     
     # Parse arguments

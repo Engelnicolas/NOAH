@@ -1,15 +1,15 @@
-# OpenInfra Ansible Makefile
+# NOAH Ansible Makefile
 # Provides convenient commands for deployment operations
 
 .PHONY: help install-deps deploy deploy-parallel rollback scale backup validate clean
 
 # Default target
 help:
-	@echo "OpenInfra Ansible Deployment Commands"
+	@echo "NOAH Ansible Deployment Commands"
 	@echo "======================================="
 	@echo "install-deps    Install Ansible collections and dependencies"
-	@echo "deploy          Deploy OpenInfra stack (sequential)"
-	@echo "deploy-parallel Deploy OpenInfra stack (parallel where possible)"
+	@echo "deploy          Deploy NOAH stack (sequential)"
+	@echo "deploy-parallel Deploy NOAH stack (parallel where possible)"
 	@echo "deploy-dev      Deploy to development environment"
 	@echo "deploy-staging  Deploy to staging environment"
 	@echo "deploy-prod     Deploy to production environment"
@@ -32,12 +32,12 @@ install-deps:
 
 # Standard deployment (sequential)
 deploy:
-	@echo "Deploying OpenInfra stack..."
+	@echo "Deploying NOAH stack..."
 	ansible-playbook -i inventory main.yml -v
 
 # Parallel deployment where possible
 deploy-parallel:
-	@echo "Deploying OpenInfra stack (parallel mode)..."
+	@echo "Deploying NOAH stack (parallel mode)..."
 	ansible-playbook -i inventory main.yml -e "parallel_deployment=true" -v
 
 # Environment-specific deployments
@@ -55,7 +55,7 @@ deploy-prod:
 
 # Rollback operations
 rollback:
-	@echo "Rolling back OpenInfra deployment..."
+	@echo "Rolling back NOAH deployment..."
 	ansible-playbook -i inventory main.yml -e "rollback=true" --tags rollback -v
 
 rollback-force:
@@ -65,12 +65,12 @@ rollback-force:
 
 # Scaling operations
 scale:
-	@echo "Scaling OpenInfra services..."
+	@echo "Scaling NOAH services..."
 	ansible-playbook -i inventory main.yml -e "scale_services=true" --tags scaling -v
 
 # Backup operations
 backup:
-	@echo "Backing up OpenInfra data..."
+	@echo "Backing up NOAH data..."
 	ansible-playbook -i inventory main.yml -e "backup_enabled=true" --tags backup -v
 
 # Validation
@@ -81,9 +81,9 @@ validate:
 # Cleanup
 clean:
 	@echo "Cleaning up temporary files..."
-	rm -f /tmp/ansible-openinfra.log
-	rm -f /tmp/openinfra_deployment_*.txt
-	rm -rf /tmp/openinfra-backup/
+	rm -f /tmp/ansible-noah.log
+	rm -f /tmp/noah_deployment_*.txt
+	rm -rf /tmp/noah-backup/
 
 # Check syntax
 check:

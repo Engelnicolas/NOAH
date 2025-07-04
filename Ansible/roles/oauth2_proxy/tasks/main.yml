@@ -99,7 +99,7 @@
         namespace: "{{ namespace }}"
       data:
         oauth2_proxy.cfg: |
-          # OAuth2 Proxy Configuration for OpenInfra
+          # OAuth2 Proxy Configuration for NOAH
           provider = "keycloak-oidc"
           oidc_issuer_url = "{{ keycloak.issuer_url }}"
           client_id = "oauth2-proxy-client"

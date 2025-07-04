@@ -78,14 +78,14 @@ mattermost:
   # - Mobile app connections
   # - API endpoint discovery
   # - OAuth redirect URLs
-  siteUrl: "https://mattermost.openinfra.local"
+  siteUrl: "https://mattermost.noah.local"
   
   # =============================================================================
   # Service Settings - Core server behavior
   # =============================================================================
   servicesSettings:
-    siteURL: "https://mattermost.openinfra.local"
-    websocketURL: "wss://mattermost.openinfra.local"
+    siteURL: "https://mattermost.noah.local"
+    websocketURL: "wss://mattermost.noah.local"
     allowCorsFrom: "*"
     corsExposedHeaders: ""
     corsAllowCredentials: false
@@ -130,13 +130,13 @@ mattermost:
     
   # Team settings
   teamSettings:
-    siteName: "OpenInfra Mattermost"
+    siteName: "NOAH Mattermost"
     maxUsersPerTeam: 1000
     enableTeamCreation: true
     enableUserCreation: true
     enableOpenServer: false
     enableUserDeactivation: true
-    restrictCreationToDomains: "openinfra.local"
+    restrictCreationToDomains: "noah.local"
     enableCustomBrand: false
     customBrandText: ""
     customDescriptionText: ""
@@ -224,9 +224,9 @@ mattermost:
     useChannelInEmailNotifications: true
     requireEmailVerification: true
     feedbackName: ""
-    feedbackEmail: "admin@openinfra.local"
-    replyToAddress: "admin@openinfra.local"
-    feedbackOrganization: "OpenInfra"
+    feedbackEmail: "admin@noah.local"
+    replyToAddress: "admin@noah.local"
+    feedbackOrganization: "NOAH"
     enableSMTPAuth: true
     smtpUsername: ""
     smtpPassword: ""
@@ -266,7 +266,7 @@ mattermost:
     aboutLink: "https://about.mattermost.com/default-about/"
     helpLink: "https://about.mattermost.com/default-help/"
     reportAProblemLink: "https://about.mattermost.com/default-report-a-problem/"
-    supportEmail: "admin@openinfra.local"
+    supportEmail: "admin@noah.local"
     customTermsOfServiceEnabled: false
     customTermsOfServiceReAcceptancePeriod: 365
     enableAskCommunityLink: true
@@ -336,7 +336,7 @@ oidc:
   
   # OIDC discovery URL for automatic configuration
   # This URL provides all necessary OIDC endpoints and keys
-  discoveryUrl: "https://keycloak.openinfra.local/realms/openinfra/.well-known/openid_configuration"
+  discoveryUrl: "https://keycloak.noah.local/realms/noah/.well-known/openid_configuration"
   
   # Login button customization
   buttonText: "Login with Keycloak"
@@ -350,17 +350,17 @@ oidc:
 
 ldap:
   enabled: true
-  host: "samba4.openinfra.svc.cluster.local"
+  host: "samba4.noah.svc.cluster.local"
   port: 389
-  dn: "dc=openinfra,dc=local"
-  bindUser: "cn=mattermost-service,cn=Users,dc=openinfra,dc=local"
+  dn: "dc=noah,dc=local"
+  bindUser: "cn=mattermost-service,cn=Users,dc=noah,dc=local"
   bindPassword: ""
   existingSecret: ""
   existingSecretKey: "ldap-password"
   
   # User configuration
   userSearch:
-    base: "cn=Users,dc=openinfra,dc=local"
+    base: "cn=Users,dc=noah,dc=local"
     filter: "(&(objectClass=user)(sAMAccountName=%v))"
     attributes:
       id: "sAMAccountName"
@@ -373,7 +373,7 @@ ldap:
       
   # Group configuration
   groupSearch:
-    base: "cn=Groups,dc=openinfra,dc=local"
+    base: "cn=Groups,dc=noah,dc=local"
     filter: "(&(objectClass=group))"
     groupDisplayNameAttribute: "cn"
     groupIdAttribute: "cn"
@@ -402,7 +402,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hostname: "mattermost.openinfra.local"
+  hostname: "mattermost.noah.local"
   path: /
   pathType: Prefix
   tls:

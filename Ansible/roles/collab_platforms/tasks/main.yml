@@ -71,7 +71,7 @@
       
       mattermost:
         siteURL: "https://mattermost.local"
-        siteName: "OpenInfra Mattermost"
+        siteName: "NOAH Mattermost"
         
       database:
         type: sqlite  # For production, use PostgreSQL

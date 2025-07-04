@@ -1,9 +1,9 @@
 # =============================================================================
-# OpenInfra - Global Configuration Variables
+# NOAH - Global Configuration Variables
 # =============================================================================
 #
 # This file contains all global configuration variables used across the
-# OpenInfra deployment. These variables are shared between all Ansible
+# NOAH deployment. These variables are shared between all Ansible
 # roles and playbooks to ensure consistent configuration.
 #
 # SECURITY WARNING:
@@ -43,9 +43,9 @@ parallel_deployment: false
 # Values: development, staging, production
 env: production
 
-# Kubernetes namespace for all OpenInfra components
+# Kubernetes namespace for all NOAH components
 # All services, secrets, and resources will be deployed to this namespace
-namespace: openinfra
+k8s_namespace: noah
 
 # =============================================================================
 # LDAP/Active Directory Configuration (Samba4)
@@ -53,7 +53,7 @@ namespace: openinfra
 # Central directory service for user authentication and authorization
 
 # LDAP server connection URL (internal cluster service)
-ldap_url: ldap://samba4.openinfra.svc.cluster.local
+ldap_url: ldap://samba4.noah.svc.cluster.local
 
 # LDAP bind distinguished name for service authentication
 # This account must have read access to user and group objects
@@ -102,7 +102,7 @@ keycloak:
   # SECURITY: Change this default password before production deployment
   admin_password: admin
   
-  # Primary realm for OpenInfra user management
+  # Primary realm for NOAH user management
   realm: master
   
   # OIDC issuer URL for OAuth2/OpenID Connect flows
@@ -220,7 +220,7 @@ scale_config:
 
 # Backup settings
 backup_enabled: false
-backup_path: /tmp/openinfra-backup
+backup_path: /tmp/noah-backup
 
 # Optional webhook for deployment notifications
 # notification_webhook: https://hooks.slack.com/services/YOUR/WEBHOOK/URL

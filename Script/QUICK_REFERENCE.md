@@ -1,4 +1,4 @@
-# OpenInfra - Quick Reference Guide
+# NOAH - Quick Reference Guide
 
 ## 🚀 Quick Start Commands
 
@@ -125,7 +125,7 @@ kubectl port-forward -n monitoring svc/prometheus-server 9090:80
 # Access: http://localhost:9090
 
 # Application services
-kubectl port-forward -n openinfra-gitlab svc/gitlab 8080:80
+kubectl port-forward -n noah-gitlab svc/gitlab 8080:80
 ```
 
 ### Service Discovery
@@ -143,7 +143,7 @@ kubectl get svc --all-namespaces | grep LoadBalancer
 ```bash
 # Core settings
 export ENVIRONMENT=prod
-export NAMESPACE_PREFIX=openinfra
+export NAMESPACE_PREFIX=noah
 export HELM_TIMEOUT=10m
 
 # Backup settings
@@ -304,7 +304,7 @@ kubectl scale deployment/service-name --replicas=3 -n namespace
 ```bash
 # Forward all services (background)
 kubectl port-forward -n monitoring svc/grafana 3000:80 &
-kubectl port-forward -n openinfra-gitlab svc/gitlab 8080:80 &
+kubectl port-forward -n noah-gitlab svc/gitlab 8080:80 &
 ```
 
 ### Ingress Access

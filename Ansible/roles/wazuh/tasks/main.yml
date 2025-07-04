@@ -29,7 +29,7 @@
           
         config:
           cluster:
-            name: "openinfra-cluster"
+            name: "noah-cluster"
             node_name: "wazuh-manager"
             node_type: "master"
             key: "{{ wazuh_cluster_key | default('changeme123456789') }}"
@@ -264,8 +264,8 @@
         namespace: "{{ namespace }}"
       data:
         local_rules.xml: |
-          <!-- Custom rules for OpenInfra monitoring -->
-          <group name="openinfra,">
+          <!-- Custom rules for NOAH monitoring -->
+          <group name="noah,">
             
             <!-- Keycloak authentication events -->
             <rule id="100001" level="3">
@@ -343,7 +343,7 @@
             
           </group>
 
-- name: Configure Wazuh for OpenInfra monitoring
+- name: Configure Wazuh for NOAH monitoring
   kubernetes.core.k8s_exec:
     namespace: "{{ namespace }}"
     pod: "{{ wazuh_manager_pods.resources[0].metadata.name }}"
@@ -360,10 +360,10 @@
         
         # Configure log monitoring for services
         cat >> /var/ossec/ruleset/rules/local_rules.xml << 'EOF'
-        <!-- OpenInfra custom rules -->
-        <group name="openinfra">
+        <!-- NOAH custom rules -->
+        <group name="noah">
           <rule id="100020" level="0">
-            <description>OpenInfra services monitoring</description>
+            <description>NOAH services monitoring</description>
           </rule>
         </group>
         EOF
@@ -425,7 +425,7 @@
       - API Health: {{ wazuh_manager_health.status in [200, 401] | ternary('Healthy', 'Unhealthy') }}
       - Registration Port: 1515
       - API Port: 55000
-      - Cluster: openinfra-cluster
+      - Cluster: noah-cluster
       
       📊 Wazuh Dashboard:
       - URL: https://wazuh.local
@@ -450,7 +450,7 @@
       - GitLab access monitoring
       - OpenVPN connection tracking
       - Kubernetes security events
-      - Custom OpenInfra rules
+      - Custom NOAH rules
       
       📝 Next Steps:
       1. Access dashboard at https://wazuh.local

@@ -23,7 +23,7 @@
         enabled: true
         servers:
           main:
-            label: "OpenInfra LDAP"
+            label: "NOAH LDAP"
             host: "{{ ldap_url.split('://')[1] }}"
             port: 389
             uid: "sAMAccountName"
@@ -42,7 +42,7 @@
       oidc:
         enabled: true
         name: "keycloak"
-        label: "OpenInfra SSO"
+        label: "NOAH SSO"
         issuer: "{{ keycloak.issuer_url }}"
         discovery: true
         client_id: "gitlab-client"
@@ -197,7 +197,7 @@
         namespace: "{{ namespace }}"
       data:
         .gitlab-ci.yml: |
-          # Default GitLab CI/CD template for OpenInfra projects
+          # Default GitLab CI/CD template for NOAH projects
           stages:
             - test
             - build

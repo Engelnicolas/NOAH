@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =======================
-# OpenInfra - Enhanced Helm Charts Uninstall Script
+# NOAH - Enhanced Helm Charts Uninstall Script
 # =======================
 
 set -euo pipefail
@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default configuration
 DEFAULT_ENVIRONMENT="dev"
-DEFAULT_NAMESPACE_PREFIX="openinfra"
+DEFAULT_NAMESPACE_PREFIX="noah"
 FORCE_DELETE=false
 PRESERVE_DATA=false
 DELETE_NAMESPACES=false
@@ -56,7 +56,7 @@ error_exit() {
 # Help function
 show_help() {
     cat << EOF
-${BLUE}OpenInfra - Enhanced Helm Charts Uninstall Script v${SCRIPT_VERSION}${NC}
+${BLUE}NOAH - Enhanced Helm Charts Uninstall Script v${SCRIPT_VERSION}${NC}
 
 ${YELLOW}USAGE:${NC}
     $0 [OPTIONS]
@@ -222,7 +222,7 @@ confirm_deletion() {
         IFS=' ' read -ra charts_to_delete <<< "$(get_available_charts)"
     fi
     
-    echo -e "${YELLOW}⚠️  WARNING: This will uninstall the following OpenInfra charts:${NC}"
+    echo -e "${YELLOW}⚠️  WARNING: This will uninstall the following NOAH charts:${NC}"
     for chart in "${charts_to_delete[@]}"; do
         local namespace="${NAMESPACE_PREFIX}-${chart}"
         if is_chart_installed "$chart"; then
@@ -261,7 +261,7 @@ create_backup() {
         return
     fi
     
-    local backup_dir="openinfra-backup-$(date +%Y%m%d-%H%M%S)"
+    local backup_dir="noah-backup-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$backup_dir"
     
     log "Creating backup in: $backup_dir"
@@ -326,7 +326,7 @@ handle_persistent_volumes() {
             # Add labels to PVCs for identification
             echo "$pvcs" | while read -r pvc; do
                 if [[ -n "$pvc" ]]; then
-                    kubectl label "$pvc" -n "$namespace" preserved-by=openinfra-uninstall chart="$chart" --overwrite 2>/dev/null || true
+                    kubectl label "$pvc" -n "$namespace" preserved-by=noah-uninstall chart="$chart" --overwrite 2>/dev/null || true
                 fi
             done
         fi
@@ -436,7 +436,7 @@ delete_namespace_if_empty() {
         # Count resources excluding preserved PVCs
         resource_count=$(kubectl get all -n "$namespace" --no-headers 2>/dev/null | wc -l)
         local preserved_pvc_count
-        preserved_pvc_count=$(kubectl get pvc -n "$namespace" -l preserved-by=openinfra-uninstall --no-headers 2>/dev/null | wc -l)
+        preserved_pvc_count=$(kubectl get pvc -n "$namespace" -l preserved-by=noah-uninstall --no-headers 2>/dev/null | wc -l)
         
         # If only preserved PVCs remain, we can consider the namespace "empty" for our purposes
         if [[ $resource_count -eq 0 && $preserved_pvc_count -gt 0 ]]; then
@@ -463,11 +463,11 @@ delete_namespace_if_empty() {
 
 # Generate uninstall report
 generate_uninstall_report() {
-    local report_file="openinfra-uninstall-$(date +%Y%m%d-%H%M%S).log"
+    local report_file="noah-uninstall-$(date +%Y%m%d-%H%M%S).log"
     local successful_uninstalls=("$@")
     
     {
-        echo "OpenInfra Helm Charts Uninstall Report"
+        echo "NOAH Helm Charts Uninstall Report"
         echo "=========================================="
         echo "Timestamp: $(date)"
         echo "Environment: $ENVIRONMENT"
@@ -516,7 +516,7 @@ generate_uninstall_report() {
                 
                 # List preserved PVCs
                 local preserved_pvcs
-                preserved_pvcs=$(kubectl get pvc --all-namespaces -l preserved-by=openinfra-uninstall --no-headers 2>/dev/null || true)
+                preserved_pvcs=$(kubectl get pvc --all-namespaces -l preserved-by=noah-uninstall --no-headers 2>/dev/null || true)
                 if [[ -n "$preserved_pvcs" ]]; then
                     echo ""
                     echo "Preserved Persistent Volumes:"
@@ -544,28 +544,28 @@ display_post_uninstall_info() {
     
     # Check for remaining Helm releases
     local remaining_releases
-    remaining_releases=$(helm list --all-namespaces | grep -E "(${NAMESPACE_PREFIX}-|openinfra)" || true)
+    remaining_releases=$(helm list --all-namespaces | grep -E "(${NAMESPACE_PREFIX}-|noah)" || true)
     
     if [[ -n "$remaining_releases" ]]; then
-        echo -e "${YELLOW}Remaining OpenInfra Helm releases:${NC}"
+        echo -e "${YELLOW}Remaining NOAH Helm releases:${NC}"
         echo "$remaining_releases"
     else
-        echo -e "${GREEN}✅ No OpenInfra Helm releases remaining${NC}"
+        echo -e "${GREEN}✅ No NOAH Helm releases remaining${NC}"
     fi
     
     # Check for remaining namespaces
     local remaining_namespaces
-    remaining_namespaces=$(kubectl get namespaces | grep -E "(${NAMESPACE_PREFIX}-|openinfra)" || true)
+    remaining_namespaces=$(kubectl get namespaces | grep -E "(${NAMESPACE_PREFIX}-|noah)" || true)
     
     if [[ -n "$remaining_namespaces" ]]; then
-        echo -e "\n${YELLOW}Remaining OpenInfra namespaces:${NC}"
+        echo -e "\n${YELLOW}Remaining NOAH namespaces:${NC}"
         echo "$remaining_namespaces"
     fi
     
     # Show preserved PVCs if any
     if [[ "$PRESERVE_DATA" == "true" ]]; then
         local preserved_pvcs
-        preserved_pvcs=$(kubectl get pvc --all-namespaces -l preserved-by=openinfra-uninstall --no-headers 2>/dev/null || true)
+        preserved_pvcs=$(kubectl get pvc --all-namespaces -l preserved-by=noah-uninstall --no-headers 2>/dev/null || true)
         
         if [[ -n "$preserved_pvcs" ]]; then
             echo -e "\n${BLUE}💾 Preserved Persistent Volumes:${NC}"
@@ -577,7 +577,7 @@ display_post_uninstall_info() {
 
 # Main function
 main() {
-    echo -e "${BLUE}🧹 OpenInfra - Enhanced Helm Charts Uninstall v${SCRIPT_VERSION}${NC}"
+    echo -e "${BLUE}🧹 NOAH - Enhanced Helm Charts Uninstall v${SCRIPT_VERSION}${NC}"
     echo -e "${BLUE}================================================================${NC}"
     
     # Parse arguments

@@ -149,7 +149,7 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hostname: keycloak.openinfra.local
+  hostname: keycloak.noah.local
   path: /
   pathType: Prefix
   tls:
@@ -284,9 +284,9 @@ cache:
 ldap:
   enabled: true
   vendor: ad  # ad for Active Directory, other for generic LDAP
-  connectionUrl: "ldap://samba4.openinfra.svc.cluster.local:389"
-  usersDN: "cn=Users,dc=openinfra,dc=local"
-  bindDN: "cn=keycloak-service,cn=Users,dc=openinfra,dc=local"
+  connectionUrl: "ldap://samba4.noah.svc.cluster.local:389"
+  usersDN: "cn=Users,dc=noah,dc=local"
+  bindDN: "cn=keycloak-service,cn=Users,dc=noah,dc=local"
   bindCredential: ""
   existingSecret: ""
   existingSecretKey: ldap-password
@@ -299,7 +299,7 @@ ldap:
   userLDAPFilter: ""
   
   # Group mapping
-  groupsDN: "cn=Groups,dc=openinfra,dc=local"
+  groupsDN: "cn=Groups,dc=noah,dc=local"
   groupObjectClasses: "group"
   groupNameLDAPAttribute: "cn"
   groupMembershipLDAPAttribute: "member"
@@ -320,8 +320,8 @@ ldap:
   # Kerberos
   kerberos:
     enabled: false
-    kerberosRealm: "OPENINFRA.LOCAL"
-    serverPrincipal: "HTTP/keycloak.openinfra.local@OPENINFRA.LOCAL"
+    kerberosRealm: "NOAH.LOCAL"
+    serverPrincipal: "HTTP/keycloak.noah.local@NOAH.LOCAL"
     keyTab: ""
 
 # Custom themes
@@ -337,8 +337,8 @@ providers:
 # Realm configuration
 realm:
   enabled: true
-  name: "openinfra"
-  displayName: "OpenInfra"
+  name: "noah"
+  displayName: "NOAH"
   enabled: true
   
   # OIDC clients will be configured via Ansible

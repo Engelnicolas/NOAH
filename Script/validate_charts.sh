@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =======================
-# OpenInfra - Helm Charts Validation Script
+# NOAH - Helm Charts Validation Script
 # =======================
 
 set -euo pipefail
@@ -63,7 +63,7 @@ error_exit() {
 # Help function
 show_help() {
     cat << EOF
-${BLUE}OpenInfra - Helm Charts Validation Script v${SCRIPT_VERSION}${NC}
+${BLUE}NOAH - Helm Charts Validation Script v${SCRIPT_VERSION}${NC}
 
 ${YELLOW}USAGE:${NC}
     $0 [OPTIONS] [CHART_NAMES...]
@@ -601,7 +601,7 @@ generate_validation_report() {
     local report_file="helm-validation-$(date +%Y%m%d-%H%M%S).log"
     
     {
-        echo "OpenInfra Helm Charts Validation Report"
+        echo "NOAH Helm Charts Validation Report"
         echo "==========================================="
         echo "Generated: $(date)"
         echo "Validation Mode: $(if [[ "$STRICT_MODE" == "true" ]]; then echo "Strict"; else echo "Standard"; fi)"
@@ -642,7 +642,7 @@ display_summary() {
 
 # Main function
 main() {
-    echo -e "${BLUE}🔍 OpenInfra - Helm Charts Validation v${SCRIPT_VERSION}${NC}"
+    echo -e "${BLUE}🔍 NOAH - Helm Charts Validation v${SCRIPT_VERSION}${NC}"
     echo -e "${BLUE}================================================================${NC}"
     
     # Parse arguments

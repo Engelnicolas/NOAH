@@ -246,7 +246,7 @@
         namespace: "{{ namespace }}"
       data:
         rules.yaml: |
-          # OpenEDR Detection Rules for OpenInfra
+          # OpenEDR Detection Rules for NOAH
           rules:
             - name: "Suspicious Process Execution"
               type: "process"
@@ -343,7 +343,7 @@
         python3 /app/manage.py shell -c "
         from django.contrib.auth.models import User
         if not User.objects.filter(username='admin').exists():
-            User.objects.create_superuser('admin', 'admin@openinfra.local', '{{ openedr_admin_password | default('changeme123') }}')
+            User.objects.create_superuser('admin', 'admin@noah.local', '{{ openedr_admin_password | default('changeme123') }}')
             print('Admin user created')
         else:
             print('Admin user already exists')

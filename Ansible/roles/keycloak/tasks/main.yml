@@ -38,14 +38,14 @@
 # - ldap_base_dn: LDAP base distinguished name
 # - keycloak_ldap_password: LDAP bind password
 #
-# Author: OpenInfra Team
+# Author: NOAH Team
 # Version: 2.0.0
 # =============================================================================
 
 # =============================================================================
 # Keycloak Helm Chart Deployment
 # =============================================================================
-# Deploy Keycloak using the custom Helm chart with OpenInfra-specific configuration
+# Deploy Keycloak using the custom Helm chart with NOAH-specific configuration
 
 - name: Deploy Keycloak Identity Provider using Helm
   kubernetes.core.helm:

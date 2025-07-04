@@ -23,7 +23,6 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get_version.outputs.version }}
     steps:
       - name: Checkout code
@@ -63,16 +62,14 @@ jobs:
           echo "" >> changelog.md            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$LAST_TAG...${{ steps.get_version.outputs.version }}" >> changelog.md
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_version.outputs.version }}
-          release_name: N.O.A.H ${{ steps.get_version.outputs.version }}
+          name: N.O.A.H ${{ steps.get_version.outputs.version }}
           body_path: changelog.md
           draft: false
           prerelease: ${{ contains(steps.get_version.outputs.version, '-') }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   build-release-assets:
     name: Build Release Assets
@@ -97,7 +94,7 @@ jobs:
           version: ${{ env.HELM_VERSION }}
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -145,25 +142,14 @@ jobs:
           cd release-assets
           sha256sum *.tar.gz > checksums-${{ matrix.asset_name }}.txt
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: release-assets/${{ matrix.asset_name }}-${{ needs.create-release.outputs.version }}.tar.gz
-          asset_name: ${{ matrix.asset_name }}-${{ needs.create-release.outputs.version }}.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload Checksums
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: release-assets/checksums-${{ matrix.asset_name }}.txt
-          asset_name: checksums-${{ matrix.asset_name }}.txt
-          asset_content_type: text/plain
+          tag_name: ${{ needs.create-release.outputs.version }}
+          files: |
+            release-assets/${{ matrix.asset_name }}-${{ needs.create-release.outputs.version }}.tar.gz
+            release-assets/checksums-${{ matrix.asset_name }}.txt
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   publish-helm-charts:
     name: Publish Helm Charts

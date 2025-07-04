@@ -81,7 +81,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -196,7 +196,7 @@ jobs:
 
       - name: Create issue for tool updates
         if: env.TOOLS_OUTDATED == 'true'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const title = 'Tool versions need updating';

@@ -28,7 +28,8 @@ jobs:
 
       - name: Install Ansible and dependencies
         run: |
-          pip install ansible${{ env.ANSIBLE_VERSION }} ansible-lint yamllint jinja2-cli
+          pip install ansible${{ env.ANSIBLE_VERSION }} ansible-lint \
+            yamllint jinja2-cli
           pip install kubernetes requests
 
       - name: Install Helm
@@ -41,13 +42,16 @@ jobs:
           cd Ansible
           echo "Running ansible-lint on playbooks..."
           ansible-lint main.yml --exclude=roles/*/files/ || true
-          
+
           echo "Running yamllint on YAML files..."
-          find . -name "*.yml" -o -name "*.yaml" | xargs yamllint -d relaxed || true
+          find . -name "*.yml" -o -name "*.yaml" | \
+            xargs yamllint -d relaxed || true
 
       - name: Validate Ansible syntax
         run: |
           cd Ansible
+          # Validate ansible.cfg configuration
+          ansible-config dump --only-changed > /dev/null || exit 1
           ansible-playbook --syntax-check main.yml
 
       - name: Lint Helm charts
@@ -141,7 +145,7 @@ jobs:
           done
 
       - name: Upload Helm packages as artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: helm-packages
           path: ./helm-packages/
@@ -179,12 +183,14 @@ jobs:
       - name: Run Checkov IaC security scan
         run: |
           echo "Running Checkov security scan..."
-          checkov -d . --framework helm,yaml,dockerfile --output cli || true
+          checkov -d . --framework helm,yaml,dockerfile \
+            --output cli || true
 
       - name: Run semgrep security scan
         run: |
           echo "Running semgrep security scan..."
-          semgrep --config=auto . --json --output=semgrep-results.json || true
+          semgrep --config=auto . --json \
+            --output=semgrep-results.json || true
 
       - name: Run custom security tests
         run: |
@@ -311,7 +317,7 @@ jobs:
           done
 
       - name: Upload documentation artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: documentation
           path: docs/
@@ -359,7 +365,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Helm packages
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: helm-packages
           path: ./helm-packages/
@@ -380,7 +386,7 @@ jobs:
           sha256sum * > checksums.txt
 
       - name: Upload release assets
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: release-assets
           path: release-assets/
@@ -395,9 +401,9 @@ jobs:
       - name: Determine overall status
         id: status
         run: |
-          if [[ "${{ needs.helm-tests.result }}" == "success" && 
-                "${{ needs.security-tests.result }}" == "success" && 
-                "${{ needs.integration-tests.result }}" == "success" && 
+          if [[ "${{ needs.helm-tests.result }}" == "success" &&
+                "${{ needs.security-tests.result }}" == "success" &&
+                "${{ needs.integration-tests.result }}" == "success" &&
                 "${{ needs.compliance-check.result }}" == "success" ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "message=✅ All CI checks passed successfully!" >> $GITHUB_OUTPUT

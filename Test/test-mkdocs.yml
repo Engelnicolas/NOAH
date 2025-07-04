@@ -1,0 +1,17 @@
+site_name: N.O.A.H Documentation Test
+site_description: Next Open-source Architecture Hub - Comprehensive Infrastructure Automation
+site_author: N.O.A.H Team
+
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+  - User Guide: USER_GUIDE.md
+  - Helm Charts:
+      - charts/index.md
+  - Ansible:
+      - ansible/index.md
+  - Scripts:
+      - scripts/index.md
+  - Contributing: CONTRIBUTING.md

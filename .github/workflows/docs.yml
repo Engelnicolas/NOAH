@@ -342,13 +342,70 @@ jobs:
           # Copy main README as index
           cp README.md docs/index.md
           
-          # Copy existing docs
+          # Copy essential documentation files
+          if [ -f "CONTRIBUTING.md" ]; then
+            cp CONTRIBUTING.md docs/
+            echo "✓ Copied CONTRIBUTING.md"
+          else
+            echo "⚠️  CONTRIBUTING.md not found - this will cause mkdocs build to fail"
+            exit 1
+          fi
+          
+          if [ -f "LICENSE" ]; then
+            cp LICENSE docs/
+            echo "✓ Copied LICENSE"
+          else
+            echo "⚠️  LICENSE not found - this will cause mkdocs build to fail"
+            exit 1
+          fi
+          
+          # Copy existing docs directory
           if [ -d "Docs" ]; then
             cp -r Docs/* docs/ 2>/dev/null || true
+            echo "✓ Copied Docs directory contents"
           fi
+          
+          # Ensure all navigation files exist
+          touch docs/index.md docs/charts/index.md docs/ansible/index.md docs/scripts/index.md
+          
+          # Verify required files for mkdocs navigation
+          echo "Verifying documentation files:"
+          ls -la docs/
+          echo "Files in docs directory:"
+          find docs/ -name "*.md" | sort
 
       - name: Build documentation
         run: |
+          # Verify all navigation files exist before building
+          echo "Verifying mkdocs navigation files:"
+          
+          required_files=(
+            "docs/index.md"
+            "docs/USER_GUIDE.md"
+            "docs/charts/index.md"
+            "docs/ansible/index.md"
+            "docs/scripts/index.md"
+            "docs/CONTRIBUTING.md"
+            "docs/LICENSE"
+          )
+          
+          missing_files=()
+          for file in "${required_files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✓ $file exists"
+            else
+              echo "✗ $file missing"
+              missing_files+=("$file")
+            fi
+          done
+          
+          if [ ${#missing_files[@]} -gt 0 ]; then
+            echo "Error: Missing required files for mkdocs navigation:"
+            printf '%s\n' "${missing_files[@]}"
+            exit 1
+          fi
+          
+          echo "All required files present. Building documentation..."
           mkdocs build --strict
 
       - name: Upload artifact

@@ -50,6 +50,47 @@ Thank you for your interest in contributing to N.O.A.H (Next Open-source Archite
 
 ### 🔧 Development Guidelines
 
+#### Pre-commit Validation
+Before submitting any code, run the validation scripts:
+
+```bash
+# Fix YAML linting issues (trailing spaces, missing newlines)
+./Script/fix_yaml_linting.sh
+
+# Run comprehensive project validation
+./Script/validate_project.sh
+
+# Validate specific components
+ansible-playbook --syntax-check Ansible/main.yml -i Ansible/inventory
+helm lint Helm/*/
+
+# Manage Helm dependencies
+./Script/manage_helm_dependencies.sh
+```
+
+#### Common Linting Issues and Fixes
+
+**YAML Files:**
+- Remove trailing spaces: `sed -i 's/[[:space:]]*$//' file.yml`
+- Ensure files end with newline: `echo "" >> file.yml`
+- Validate syntax: `python3 -c "import yaml; yaml.safe_load(open('file.yml'))"`
+
+**Ansible Inventory:**
+- Use standard YAML format (not plugin-based)
+- Avoid deprecated inventory plugins like `kubernetes.core.k8s`
+- Test with: `ansible-inventory --list`
+
+**Helm Charts:**
+- Update dependencies: `helm dependency update`
+- Lint charts: `helm lint chart-directory/`
+- Test template rendering: `helm template test chart-directory/`
+
+**Helm Dependencies:**
+- Always run `helm dependency update` before testing charts
+- Verify dependencies are listed in Chart.yaml with specific versions
+- Check that charts/ directory contains required dependency charts
+- For GitLab chart, ensure postgresql and redis dependencies are present
+
 #### Ansible Roles and Playbooks
 - Follow Ansible best practices
 - Use meaningful variable names
@@ -61,6 +102,20 @@ Thank you for your interest in contributing to N.O.A.H (Next Open-source Archite
 - Include comprehensive values.yaml documentation
 - Test charts with `helm lint` and `helm template`
 - Ensure charts are idempotent
+
+#### Helm Dependencies Management
+- **Adding Dependencies**: Update Chart.yaml with specific versions
+  ```yaml
+  dependencies:
+    - name: postgresql
+      version: "13.2.24"
+      repository: "https://charts.bitnami.com/bitnami"
+      condition: postgresql.enabled
+  ```
+- **Updating Dependencies**: Run `helm dependency update` from chart directory
+- **Verification**: Ensure charts/ subdirectory contains all required dependencies
+- **Version Pinning**: Use specific versions rather than ranges for reproducibility
+- **Testing**: Always test with dependencies using `helm template` and `helm lint`
 
 #### Scripts and Automation
 - Include proper error handling
@@ -78,14 +133,26 @@ Thank you for your interest in contributing to N.O.A.H (Next Open-source Archite
 
 #### Running Tests
 ```bash
-# Lint all files
+# Fix YAML linting issues
+./Script/fix_yaml.py
+
+# Validate all fixes
+./Script/validate_fixes.sh
+
+# Lint all files  
 ./Script/validate_charts.sh
 
 # Run Ansible syntax check
 ansible-playbook --syntax-check Ansible/main.yml -i Ansible/inventory
 
-# Test Helm charts
+# Test Helm charts (if helm is installed)
 helm lint Helm/*/
+
+# Update and test Helm dependencies
+cd Helm/gitlab && helm dependency update && helm lint .
+
+# Or use the dependency management script
+./Script/manage_helm_dependencies.sh
 
 # Run full test suite
 cd Test && ./run_all_tests.sh

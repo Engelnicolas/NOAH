@@ -102,11 +102,11 @@ spec:
       # Annotations for configuration change detection and pod metadata
       annotations:
         # Force pod restart when GitLab configuration changes
-        checksum/config: {{ include (print $.Template.BasePath "/gitlab-configmap.yaml") . | sha256sum }}
+        checksum/config: {{ .Values.gitlab.config | default "default-config" | sha256sum }}
         
         # Force pod restart when secrets change (credentials, API keys, etc.)
         {{- if include "gitlab.createSecret" . }}
-        checksum/secret: {{ include (print $.Template.BasePath "/gitlab-secret.yaml") . | sha256sum }}
+        checksum/secret: {{ .Values.gitlab.rootPassword | default "changeme" | sha256sum }}
         {{- end }}
         
         # Additional pod annotations from values

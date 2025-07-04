@@ -21,10 +21,10 @@ maintainers:
     email: admin@noah.local
 dependencies:
   - name: postgresql
-    version: "^13.0.0"
+    version: "13.2.24"
     repository: "https://charts.bitnami.com/bitnami"
     condition: postgresql.enabled
   - name: redis
-    version: "^18.0.0"
+    version: "18.4.0"
     repository: "https://charts.bitnami.com/bitnami"
     condition: redis.enabled

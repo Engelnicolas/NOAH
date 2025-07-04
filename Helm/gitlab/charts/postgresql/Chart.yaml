@@ -1,0 +1,12 @@
+apiVersion: v2
+name: postgresql
+description: PostgreSQL object-relational database management system
+type: application
+version: 13.2.24
+appVersion: "15.5.0"
+home: https://github.com/bitnami/charts/tree/main/bitnami/postgresql
+sources:
+  - https://github.com/bitnami/containers/tree/main/bitnami/postgresql
+maintainers:
+  - name: Bitnami
+    email: containers@bitnami.com

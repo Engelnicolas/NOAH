@@ -1,0 +1,248 @@
+---
+# Wazuh Manager Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wazuh.fullname" . }}-manager-conf
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+data:
+  {{- include "wazuh.manager.config" . | nindent 2 }}
+
+---
+{{- if .Values.dashboard.enabled }}
+# Wazuh Dashboard Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wazuh.fullname" . }}-dashboard-conf
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+data:
+  {{- include "wazuh.dashboard.config" . | nindent 2 }}
+{{- end }}
+
+---
+{{- if .Values.indexer.enabled }}
+# Wazuh Indexer Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wazuh.fullname" . }}-indexer-conf
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: indexer
+data:
+  opensearch.yml: |
+    cluster.name: {{ .Values.indexer.config.cluster.name }}
+    network.host: {{ .Values.indexer.config.network.host }}
+    http.port: 9200
+    transport.tcp.port: 9300
+    discovery.seed_hosts: {{ .Values.indexer.config.discovery.seed_hosts | toJson }}
+    cluster.initial_master_nodes: {{ .Values.indexer.config.cluster.initial_master_nodes | toJson }}
+    
+    # Security settings
+    plugins.security.ssl.transport.pemcert_filepath: {{ .Values.indexer.config.plugins.security.ssl.transport.pemcert_filepath }}
+    plugins.security.ssl.transport.pemkey_filepath: {{ .Values.indexer.config.plugins.security.ssl.transport.pemkey_filepath }}
+    plugins.security.ssl.transport.pemtrustedcas_filepath: {{ .Values.indexer.config.plugins.security.ssl.transport.pemtrustedcas_filepath }}
+    plugins.security.ssl.transport.enforce_hostname_verification: false
+    plugins.security.ssl.transport.resolve_hostname: false
+    plugins.security.ssl.http.enabled: {{ .Values.indexer.config.plugins.security.ssl.http.enabled }}
+    plugins.security.ssl.http.pemcert_filepath: {{ .Values.indexer.config.plugins.security.ssl.http.pemcert_filepath }}
+    plugins.security.ssl.http.pemkey_filepath: {{ .Values.indexer.config.plugins.security.ssl.http.pemkey_filepath }}
+    plugins.security.ssl.http.pemtrustedcas_filepath: {{ .Values.indexer.config.plugins.security.ssl.http.pemtrustedcas_filepath }}
+    plugins.security.allow_unsafe_democertificates: false
+    plugins.security.allow_default_init_securityindex: true
+    plugins.security.authcz.admin_dn:
+      - "CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US"
+    plugins.security.audit.type: internal_opensearch
+    plugins.security.enable_snapshot_restore_privilege: true
+    plugins.security.check_snapshot_restore_write_privileges: true
+    plugins.security.restapi.roles_enabled: ["all_access", "security_rest_api_access"]
+    cluster.routing.allocation.disk.threshold_enabled: false
+    node.max_local_storage_nodes: 3
+    
+    # Performance settings
+    indices.query.bool.max_clause_count: 100000
+    indices.fielddata.cache.size: 40%
+    indices.requests.cache.size: 2%
+    thread_pool.search.queue_size: 100000
+    thread_pool.write.queue_size: 10000
+    
+    # Monitoring
+    plugins.security.audit.enable_rest: true
+    plugins.security.audit.enable_transport: true
+{{- end }}
+
+---
+{{- if .Values.agent.enabled }}
+# Wazuh Agent Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wazuh.fullname" . }}-agent-conf
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+data:
+  ossec.conf: |
+    <ossec_config>
+      <client>
+        <server>
+          <address>{{ .Values.agent.config.manager_address }}</address>
+          <port>{{ .Values.agent.config.port }}</port>
+          <protocol>{{ .Values.agent.config.protocol }}</protocol>
+        </server>
+        <config-profile>{{ .Values.agent.config.profile | default "generic" }}</config-profile>
+        <notify_time>{{ .Values.agent.config.notify_time }}</notify_time>
+        <time-reconnect>{{ .Values.agent.config.time_reconnect }}</time-reconnect>
+        <auto_restart>{{ .Values.agent.config.auto_restart }}</auto_restart>
+        <crypto_method>{{ .Values.agent.config.crypto_method }}</crypto_method>
+      </client>
+
+      <client_buffer>
+        <disabled>no</disabled>
+        <queue_size>5000</queue_size>
+        <events_per_second>500</events_per_second>
+      </client_buffer>
+
+      {{- if not .Values.agent.config.active_response.disabled }}
+      <active-response>
+        <disabled>{{ .Values.agent.config.active_response.disabled }}</disabled>
+        <ca_store>{{ .Values.agent.config.active_response.ca_store }}</ca_store>
+        <ca_verification>{{ .Values.agent.config.active_response.ca_verification }}</ca_verification>
+      </active-response>
+      {{- end }}
+
+      {{- range .Values.agent.config.localfile }}
+      <localfile>
+        <log_format>{{ .log_format }}</log_format>
+        {{- if .location }}
+        <location>{{ .location }}</location>
+        {{- end }}
+        {{- if .command }}
+        <command>{{ .command }}</command>
+        {{- end }}
+        {{- if .frequency }}
+        <frequency>{{ .frequency }}</frequency>
+        {{- end }}
+      </localfile>
+      {{- end }}
+
+      <wodle name="open-scap">
+        <disabled>yes</disabled>
+        <timeout>1800</timeout>
+        <interval>1d</interval>
+        <scan-on-start>yes</scan-on-start>
+      </wodle>
+
+      <wodle name="cis-cat">
+        <disabled>yes</disabled>
+        <timeout>1800</timeout>
+        <interval>1d</interval>
+        <scan-on-start>yes</scan-on-start>
+      </wodle>
+
+      <wodle name="osquery">
+        <disabled>yes</disabled>
+        <run_daemon>yes</run_daemon>
+        <log_path>/var/log/osquery/osqueryd.results.log</log_path>
+        <config_path>/etc/osquery/osquery.conf</config_path>
+        <add_labels>yes</add_labels>
+      </wodle>
+
+      <wodle name="syscollector">
+        <disabled>no</disabled>
+        <interval>1h</interval>
+        <scan_on_start>yes</scan_on_start>
+        <hardware>yes</hardware>
+        <os>yes</os>
+        <network>yes</network>
+        <packages>yes</packages>
+        <ports all="no">yes</ports>
+        <processes>yes</processes>
+      </wodle>
+
+      <sca>
+        <enabled>yes</enabled>
+        <scan_on_start>yes</scan_on_start>
+        <interval>12h</interval>
+        <skip_nfs>yes</skip_nfs>
+      </sca>
+
+      <rootcheck>
+        <disabled>no</disabled>
+        <check_files>yes</check_files>
+        <check_trojans>yes</check_trojans>
+        <check_dev>yes</check_dev>
+        <check_sys>yes</check_sys>
+        <check_pids>yes</check_pids>
+        <check_ports>yes</check_ports>
+        <check_if>yes</check_if>
+        <frequency>43200</frequency>
+        <rootkit_files>/var/ossec/etc/rootcheck/rootkit_files.txt</rootkit_files>
+        <rootkit_trojans>/var/ossec/etc/rootcheck/rootkit_trojans.txt</rootkit_trojans>
+        <system_audit>/var/ossec/etc/rootcheck/system_audit_rcl.txt</system_audit>
+        <system_audit>/var/ossec/etc/rootcheck/system_audit_ssh.txt</system_audit>
+        <system_audit>/var/ossec/etc/rootcheck/cis_debian_linux_rcl.txt</system_audit>
+        <skip_nfs>yes</skip_nfs>
+      </rootcheck>
+
+      <syscheck>
+        <disabled>no</disabled>
+        <frequency>43200</frequency>
+        <scan_on_start>yes</scan_on_start>
+        
+        <!-- Directories to check -->
+        <directories check_all="yes">/etc,/usr/bin,/usr/sbin</directories>
+        <directories check_all="yes">/bin,/sbin,/boot</directories>
+        
+        <!-- Files/directories to ignore -->
+        <ignore>/etc/mtab</ignore>
+        <ignore>/etc/hosts.deny</ignore>
+        <ignore>/etc/mail/statistics</ignore>
+        <ignore>/etc/random-seed</ignore>
+        <ignore>/etc/random.seed</ignore>
+        <ignore>/etc/adjtime</ignore>
+        <ignore>/etc/httpd/logs</ignore>
+        <ignore>/etc/utmpx</ignore>
+        <ignore>/etc/wtmpx</ignore>
+        <ignore>/etc/cups/certs</ignore>
+        <ignore>/etc/dumpdates</ignore>
+        <ignore>/etc/svc/volatile</ignore>
+        
+        <!-- Scan network file systems -->
+        <skip_nfs>yes</skip_nfs>
+        
+        <!-- File types to ignore -->
+        <ignore type="sregex">\.log$|\.swp$|\.tmp$</ignore>
+        
+        <!-- Maximum file size to scan -->
+        <max_file_size>50MB</max_file_size>
+        
+        <!-- Scan symbolic links -->
+        <follow_symbolic_links>no</follow_symbolic_links>
+        
+        <!-- Audit settings -->
+        <audit_key>wazuh_fim</audit_key>
+        <audit_key>wazuh_audit</audit_key>
+        
+        <!-- Kernel audit for file integrity monitoring -->
+        <whodata>yes</whodata>
+      </syscheck>
+
+      <labels>
+        <label key="aws.instance-id">$(curl -s http://169.254.169.254/latest/meta-data/instance-id)</label>
+        <label key="aws.region">$(curl -s http://169.254.169.254/latest/meta-data/placement/region)</label>
+        <label key="kubernetes.node">$(hostname)</label>
+        <label key="kubernetes.namespace">{{ .Release.Namespace }}</label>
+        <label key="kubernetes.pod">$(hostname)</label>
+      </labels>
+    </ossec_config>
+{{- end }}

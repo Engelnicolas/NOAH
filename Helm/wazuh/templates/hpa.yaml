@@ -1,0 +1,77 @@
+---
+{{- if .Values.autoscaling.manager.enabled }}
+# Wazuh Manager Horizontal Pod Autoscaler
+apiVersion: {{ include "wazuh.hpa.apiVersion" . }}
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "wazuh.manager.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: {{ include "wazuh.manager.fullname" . }}
+  minReplicas: {{ .Values.autoscaling.manager.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.manager.maxReplicas }}
+  metrics:
+    {{- if .Values.autoscaling.manager.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.manager.targetCPUUtilizationPercentage }}
+    {{- end }}
+    {{- if .Values.autoscaling.manager.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.manager.targetMemoryUtilizationPercentage }}
+    {{- end }}
+  {{- if .Values.autoscaling.manager.behavior }}
+  behavior:
+    {{- toYaml .Values.autoscaling.manager.behavior | nindent 4 }}
+  {{- end }}
+{{- end }}
+
+---
+{{- if and .Values.dashboard.enabled .Values.autoscaling.dashboard.enabled }}
+# Wazuh Dashboard Horizontal Pod Autoscaler
+apiVersion: {{ include "wazuh.hpa.apiVersion" . }}
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "wazuh.dashboard.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "wazuh.dashboard.fullname" . }}
+  minReplicas: {{ .Values.autoscaling.dashboard.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.dashboard.maxReplicas }}
+  metrics:
+    {{- if .Values.autoscaling.dashboard.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.dashboard.targetCPUUtilizationPercentage }}
+    {{- end }}
+    {{- if .Values.autoscaling.dashboard.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.dashboard.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}

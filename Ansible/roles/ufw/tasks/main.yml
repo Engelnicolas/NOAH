@@ -1,0 +1,302 @@
+---
+# Ansible/roles/ufw/tasks/main.yml
+# Configure UFW firewall rules for OpenInfra security
+
+- name: Create UFW configuration DaemonSet
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: apps/v1
+      kind: DaemonSet
+      metadata:
+        name: ufw-configurator
+        namespace: "{{ namespace }}"
+        labels:
+          app: ufw-configurator
+      spec:
+        selector:
+          matchLabels:
+            app: ufw-configurator
+        template:
+          metadata:
+            labels:
+              app: ufw-configurator
+          spec:
+            hostNetwork: true
+            hostPID: true
+            containers:
+            - name: ufw-config
+              image: ubuntu:22.04
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -e
+                  
+                  # Install UFW if not present
+                  apt-get update && apt-get install -y ufw
+                  
+                  # Reset UFW to default state
+                  ufw --force reset
+                  
+                  # Set default policies
+                  ufw default deny incoming
+                  ufw default allow outgoing
+                  
+                  # Allow SSH (essential for management)
+                  ufw allow 22/tcp
+                  
+                  # Allow HTTP/HTTPS for web services
+                  ufw allow 80/tcp
+                  ufw allow 443/tcp
+                  
+                  # Allow Kubernetes API server
+                  ufw allow 6443/tcp
+                  
+                  # Allow kubelet API
+                  ufw allow 10250/tcp
+                  
+                  # Allow NodePort services range
+                  ufw allow 30000:32767/tcp
+                  
+                  # Allow DNS
+                  ufw allow 53/tcp
+                  ufw allow 53/udp
+                  
+                  # Allow NTP
+                  ufw allow 123/udp
+                  
+                  # Allow LDAP/Samba4
+                  ufw allow 389/tcp
+                  ufw allow 636/tcp
+                  ufw allow 88/tcp
+                  ufw allow 464/tcp
+                  ufw allow 53/tcp
+                  
+                  # Allow OpenVPN
+                  ufw allow 1194/udp
+                  
+                  # Allow monitoring ports
+                  ufw allow 9090/tcp  # Prometheus
+                  ufw allow 3000/tcp  # Grafana
+                  ufw allow 9100/tcp  # Node Exporter
+                  
+                  # Allow Wazuh agent communication
+                  ufw allow 1514/tcp
+                  ufw allow 1515/tcp
+                  ufw allow 514/udp
+                  
+                  # Allow internal cluster communication
+                  ufw allow from 10.244.0.0/16  # Pod network
+                  ufw allow from 10.96.0.0/12   # Service network
+                  ufw allow from 172.17.0.0/16  # Docker bridge
+                  
+                  # Log denied connections
+                  ufw logging on
+                  
+                  # Enable UFW
+                  ufw --force enable
+                  
+                  # Display status
+                  ufw status verbose
+                  
+                  # Keep container running
+                  tail -f /dev/null
+              securityContext:
+                privileged: true
+              volumeMounts:
+              - name: proc
+                mountPath: /host/proc
+                readOnly: true
+              - name: sys
+                mountPath: /host/sys
+                readOnly: true
+              resources:
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+            volumes:
+            - name: proc
+              hostPath:
+                path: /proc
+            - name: sys
+              hostPath:
+                path: /sys
+            tolerations:
+            - operator: Exists
+              effect: NoSchedule
+  register: ufw_daemonset
+
+- name: Wait for UFW configurator pods to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app=ufw-configurator"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+  register: ufw_pods
+
+- name: Create UFW monitoring ConfigMap
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: ufw-monitor-script
+        namespace: "{{ namespace }}"
+      data:
+        monitor-ufw.sh: |
+          #!/bin/bash
+          # UFW Status Monitoring Script
+          
+          echo "=== UFW Status Report ==="
+          echo "Date: $(date)"
+          echo "Node: $(hostname)"
+          echo ""
+          
+          # Check UFW status
+          if command -v ufw >/dev/null 2>&1; then
+              echo "UFW Status:"
+              ufw status verbose
+              echo ""
+              
+              echo "UFW Application Profiles:"
+              ufw app list 2>/dev/null || echo "No application profiles found"
+              echo ""
+              
+              echo "Recent UFW Log Entries:"
+              grep "UFW" /var/log/syslog | tail -10 2>/dev/null || echo "No recent UFW logs found"
+              echo ""
+          else
+              echo "UFW is not installed on this node"
+          fi
+          
+          # Check iptables rules
+          echo "Active iptables rules (sample):"
+          iptables -L INPUT -n --line-numbers | head -20
+          echo ""
+          
+          echo "=== End UFW Status Report ==="
+
+- name: Create UFW status check Job
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: ufw-status-check
+        namespace: "{{ namespace }}"
+      spec:
+        template:
+          spec:
+            hostNetwork: true
+            restartPolicy: OnFailure
+            containers:
+            - name: ufw-status
+              image: ubuntu:22.04
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  apt-get update && apt-get install -y ufw iptables
+                  ufw status verbose
+                  echo "UFW configuration completed successfully"
+              securityContext:
+                privileged: true
+            tolerations:
+            - operator: Exists
+              effect: NoSchedule
+  register: ufw_status_job
+
+- name: Wait for UFW status check to complete
+  kubernetes.core.k8s_info:
+    api_version: batch/v1
+    kind: Job
+    name: ufw-status-check
+    namespace: "{{ namespace }}"
+    wait: true
+    wait_condition:
+      type: Complete
+      status: "True"
+    wait_timeout: 120
+  register: ufw_job_status
+
+- name: Get UFW configuration status from one pod
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ ufw_pods.resources[0].metadata.name }}"
+    command:
+      - ufw
+      - status
+      - numbered
+  register: ufw_rules
+  failed_when: false
+
+- name: Create network security policy
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: openinfra-network-policy
+        namespace: "{{ namespace }}"
+      spec:
+        podSelector: {}
+        policyTypes:
+        - Ingress
+        - Egress
+        ingress:
+        - from:
+          - namespaceSelector:
+              matchLabels:
+                name: "{{ namespace }}"
+          - namespaceSelector:
+              matchLabels:
+                name: kube-system
+          - namespaceSelector:
+              matchLabels:
+                name: ingress-nginx
+        - from: []
+          ports:
+          - protocol: TCP
+            port: 80
+          - protocol: TCP
+            port: 443
+          - protocol: TCP
+            port: 8080
+        egress:
+        - {}  # Allow all egress traffic
+
+- name: Display UFW deployment status
+  debug:
+    msg: |
+      UFW Firewall configuration completed:
+      
+      🔥 Firewall Status:
+      - UFW DaemonSet: {{ ufw_daemonset.result.metadata.name }}
+      - Active Pods: {{ ufw_pods.resources | length }}
+      - Configuration Job: {{ ufw_job_status.result.status.conditions[0].type | default('Unknown') }}
+      
+      🛡️ Security Rules Applied:
+      - Default Policy: Deny incoming, Allow outgoing
+      - SSH Access: Port 22/tcp
+      - Web Services: Ports 80,443/tcp
+      - Kubernetes API: Port 6443/tcp
+      - LDAP/Samba4: Ports 389,636,88,464/tcp
+      - OpenVPN: Port 1194/udp
+      - Monitoring: Ports 9090,3000,9100/tcp
+      - Wazuh: Ports 1514,1515/tcp
+      
+      📊 Network Policy:
+      - Namespace isolation: Enabled
+      - Inter-service communication: Allowed
+      - External access: Controlled
+      
+      ⚠️  Note: UFW rules are applied at the host level on all nodes

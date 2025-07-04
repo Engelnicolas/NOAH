@@ -1,0 +1,121 @@
+1. Get the application URL by running these commands:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "oauth2-proxy.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "oauth2-proxy.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "oauth2-proxy.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.port }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "{{ include "oauth2-proxy.selectorLabels" . }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:4180 to access OAuth2 Proxy"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 4180:$CONTAINER_PORT
+{{- end }}
+
+2. OAuth2 Proxy Configuration:
+   OAuth2 Proxy is now running and configured to protect your applications.
+   
+   Provider: {{ .Values.config.provider | default "oidc" }}
+   {{- if .Values.config.oidcIssuerUrl }}
+   OIDC Issuer: {{ .Values.config.oidcIssuerUrl }}
+   {{- end }}
+   
+   Cookie Domain: {{ .Values.config.cookieDomain | default "Not specified" }}
+   Session Storage: {{ .Values.sessionStorage.type | default "cookie" }}
+
+3. Protected Applications:
+   OAuth2 Proxy is configured to protect the following upstreams:
+   {{- if .Values.config.upstreams }}
+   {{- range .Values.config.upstreams }}
+   - {{ . }}
+   {{- end }}
+   {{- else }}
+   No upstreams configured. Configure upstreams in values.yaml to protect your applications.
+   {{- end }}
+
+4. Authentication Configuration:
+   {{- if .Values.config.emailDomains }}
+   Allowed Email Domains:
+   {{- range .Values.config.emailDomains }}
+   - {{ . }}
+   {{- end }}
+   {{- else }}
+   ⚠️  No email domain restrictions configured. Any authenticated user can access protected resources.
+   {{- end }}
+
+5. Session Configuration:
+   {{- if eq .Values.sessionStorage.type "redis" }}
+   ✅ Redis session storage is configured for high availability and scalability.
+   {{- if .Values.redis.enabled }}
+   Using internal Redis: {{ include "oauth2-proxy.redis.fullname" . }}
+   {{- else }}
+   Using external Redis: {{ .Values.sessionStorage.redis.connectionUrl }}
+   {{- end }}
+   {{- else }}
+   📝 Using cookie-based sessions. Consider Redis for production with multiple replicas.
+   {{- end }}
+
+6. Security Configuration:
+   Cookie Security: {{ if .Values.config.cookieSecure }}✅ Secure{{ else }}⚠️  Not Secure{{ end }}
+   TLS Configuration: {{ if .Values.config.httpsAddress }}✅ HTTPS Enabled{{ else }}⚠️  HTTP Only{{ end }}
+   {{- if .Values.networkPolicy.enabled }}
+   Network Policy: ✅ Enabled for enhanced security
+   {{- else }}
+   Network Policy: ⚠️  Disabled - Consider enabling for production
+   {{- end }}
+
+7. Monitoring and Metrics:
+   {{- if .Values.serviceMonitor.enabled }}
+   ✅ Prometheus ServiceMonitor is enabled for monitoring.
+   {{- else }}
+   📊 To enable Prometheus monitoring, set serviceMonitor.enabled=true
+   {{- end }}
+   
+   Metrics endpoint: http://{{ include "oauth2-proxy.fullname" . }}:{{ .Values.service.metricsPort | default 44180 }}/metrics
+
+8. High Availability:
+   Replicas: {{ .Values.replicaCount | default 1 }}
+   {{- if .Values.autoscaling.enabled }}
+   ✅ Auto-scaling is enabled ({{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} replicas)
+   {{- else }}
+   📈 To enable auto-scaling, set autoscaling.enabled=true
+   {{- end }}
+   {{- if .Values.podDisruptionBudget.enabled }}
+   ✅ Pod Disruption Budget is configured for high availability
+   {{- end }}
+
+9. Integration with Applications:
+   To integrate OAuth2 Proxy with your applications, configure your Ingress with:
+   
+   annotations:
+     nginx.ingress.kubernetes.io/auth-url: "https://{{ if .Values.ingress.enabled }}{{ (index .Values.ingress.hosts 0).host }}{{ else }}oauth2-proxy.example.com{{ end }}/oauth2/auth"
+     nginx.ingress.kubernetes.io/auth-signin: "https://{{ if .Values.ingress.enabled }}{{ (index .Values.ingress.hosts 0).host }}{{ else }}oauth2-proxy.example.com{{ end }}/oauth2/start?rd=$escaped_request_uri"
+     nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Access-Token"
+
+10. Troubleshooting:
+   - Check pod logs: kubectl logs -n {{ .Release.Namespace }} deployment/{{ include "oauth2-proxy.fullname" . }}
+   - Verify OIDC configuration: Check that client ID/secret are correct
+   - Test authentication: kubectl exec -n {{ .Release.Namespace }} deployment/{{ include "oauth2-proxy.fullname" . }} -- wget -q -O- http://localhost:4180/ping
+   - View events: kubectl get events -n {{ .Release.Namespace }} --sort-by='.metadata.creationTimestamp'
+
+11. Configuration Notes:
+   {{- if not .Values.config.oidcIssuerUrl }}
+   ⚠️  OIDC Issuer URL not configured. Set config.oidcIssuerUrl in values.yaml.
+   {{- end }}
+   {{- if not .Values.config.upstreams }}
+   ⚠️  No upstream services configured. Configure upstreams to protect your applications.
+   {{- end }}
+   {{- if not .Values.config.cookieDomain }}
+   ⚠️  Cookie domain not set. Configure cookieDomain for proper session handling.
+   {{- end }}
+
+For more information, visit: https://oauth2-proxy.github.io/oauth2-proxy/

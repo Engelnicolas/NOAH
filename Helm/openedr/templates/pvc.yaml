@@ -1,0 +1,103 @@
+---
+# OpenEDR Data PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "openedr.fullname" . }}-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openedr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data
+  {{- with .Values.persistence.data.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- range .Values.persistence.data.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- if .Values.persistence.data.storageClass }}
+  storageClassName: {{ .Values.persistence.data.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.data.size | quote }}
+
+---
+# OpenEDR Logs PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "openedr.fullname" . }}-logs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openedr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logs
+  {{- with .Values.persistence.logs.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- range .Values.persistence.logs.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- if .Values.persistence.logs.storageClass }}
+  storageClassName: {{ .Values.persistence.logs.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.logs.size | quote }}
+
+---
+# OpenEDR Quarantine PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "openedr.fullname" . }}-quarantine
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openedr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: quarantine
+  {{- with .Values.persistence.quarantine.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- range .Values.persistence.quarantine.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- if .Values.persistence.quarantine.storageClass }}
+  storageClassName: {{ .Values.persistence.quarantine.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.quarantine.size | quote }}
+
+---
+# OpenEDR Agents PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "openedr.fullname" . }}-agents
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openedr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agents
+  {{- with .Values.persistence.agents.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- range .Values.persistence.agents.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- if .Values.persistence.agents.storageClass }}
+  storageClassName: {{ .Values.persistence.agents.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.agents.size | quote }}

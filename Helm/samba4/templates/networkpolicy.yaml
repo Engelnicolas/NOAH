@@ -1,0 +1,188 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "samba4.fullname" . }}
+  labels:
+    {{- include "samba4.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "samba4.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow LDAP connections from same namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Release.Namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.ports.ldap }}
+        - protocol: TCP
+          port: {{ .Values.service.ports.ldaps }}
+    
+    # Allow LDAP connections from specified namespaces
+    {{- if .Values.networkPolicy.ingress.allowedNamespaces }}
+    {{- range .Values.networkPolicy.ingress.allowedNamespaces }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ . }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.service.ports.ldap }}
+        - protocol: TCP
+          port: {{ $.Values.service.ports.ldaps }}
+    {{- end }}
+    {{- end }}
+    
+    # Allow SMB/CIFS connections
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Release.Namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.ports.smb }}
+        - protocol: TCP
+          port: {{ .Values.service.ports.netbios }}
+        - protocol: UDP
+          port: {{ .Values.service.ports.netbios }}
+    
+    # Allow Kerberos connections
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Release.Namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.ports.kerberos }}
+        - protocol: UDP
+          port: {{ .Values.service.ports.kerberos }}
+        - protocol: TCP
+          port: {{ .Values.service.ports.kerberosAdmin }}
+    
+    # Allow DNS connections
+    {{- if .Values.dns.enabled }}
+    - from: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.ports.dns }}
+        - protocol: UDP
+          port: {{ .Values.service.ports.dns }}
+    {{- end }}
+    
+    # Allow Global Catalog connections
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Release.Namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.ports.globalCatalog }}
+        - protocol: TCP
+          port: {{ .Values.service.ports.globalCatalogSsl }}
+    
+    # Allow monitoring connections
+    {{- if .Values.serviceMonitor.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.monitoring.namespace | default "monitoring" }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.ports.metrics | default 9090 }}
+    {{- end }}
+    
+    # Allow ingress controller connections
+    {{- if .Values.ingress.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.ingress.fromNamespace | default "ingress-nginx" }}
+        - podSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.ingress.fromPodLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.ports.ldap }}
+    {{- end }}
+    
+    {{- if .Values.networkPolicy.ingress.additionalRules }}
+    {{- toYaml .Values.networkPolicy.ingress.additionalRules | nindent 4 }}
+    {{- end }}
+  
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    
+    # Allow NTP for time synchronization
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 123
+    
+    # Allow LDAP replication (if configured)
+    {{- if .Values.replication.enabled }}
+    {{- range .Values.replication.partners }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 389
+        - protocol: TCP
+          port: 636
+        - protocol: TCP
+          port: 88
+        - protocol: UDP
+          port: 88
+    {{- end }}
+    {{- end }}
+    
+    # Allow external DNS forwarders
+    {{- if .Values.samba.dnsForwarder }}
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- end }}
+    
+    # Allow HTTPS for certificate validation and updates
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+    
+    # Allow S3 backup uploads
+    {{- if .Values.backup.s3.enabled }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- end }}
+    
+    # Allow connections to specified external services
+    {{- if .Values.networkPolicy.egress.allowedHosts }}
+    {{- range .Values.networkPolicy.egress.allowedHosts }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .port }}
+    {{- end }}
+    {{- end }}
+    
+    {{- if .Values.networkPolicy.egress.additionalRules }}
+    {{- toYaml .Values.networkPolicy.egress.additionalRules | nindent 4 }}
+    {{- end }}
+{{- end }}

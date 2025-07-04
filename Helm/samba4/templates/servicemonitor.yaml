@@ -1,0 +1,74 @@
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "samba4.fullname" . }}
+  labels:
+    {{- include "samba4.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.serviceMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "samba4.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: {{ .Values.service.metricsPortName | default "metrics" }}
+      {{- if .Values.serviceMonitor.interval }}
+      interval: {{ .Values.serviceMonitor.interval }}
+      {{- end }}
+      {{- if .Values.serviceMonitor.scrapeTimeout }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+      {{- end }}
+      {{- if .Values.serviceMonitor.path }}
+      path: {{ .Values.serviceMonitor.path }}
+      {{- else }}
+      path: /metrics
+      {{- end }}
+      {{- if .Values.serviceMonitor.scheme }}
+      scheme: {{ .Values.serviceMonitor.scheme }}
+      {{- end }}
+      {{- if .Values.serviceMonitor.tlsConfig }}
+      tlsConfig:
+        {{- toYaml .Values.serviceMonitor.tlsConfig | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceMonitor.relabelings }}
+      relabelings:
+        {{- toYaml .Values.serviceMonitor.relabelings | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceMonitor.metricRelabelings }}
+      metricRelabelings:
+        {{- toYaml .Values.serviceMonitor.metricRelabelings | nindent 8 }}
+      {{- end }}
+  {{- if .Values.serviceMonitor.namespaceSelector }}
+  namespaceSelector:
+    {{- toYaml .Values.serviceMonitor.namespaceSelector | nindent 4 }}
+  {{- end }}
+  {{- if .Values.serviceMonitor.targetLabels }}
+  targetLabels:
+    {{- toYaml .Values.serviceMonitor.targetLabels | nindent 4 }}
+  {{- end }}
+  {{- if .Values.serviceMonitor.podTargetLabels }}
+  podTargetLabels:
+    {{- toYaml .Values.serviceMonitor.podTargetLabels | nindent 4 }}
+  {{- end }}
+  {{- if .Values.serviceMonitor.sampleLimit }}
+  sampleLimit: {{ .Values.serviceMonitor.sampleLimit }}
+  {{- end }}
+  {{- if .Values.serviceMonitor.targetLimit }}
+  targetLimit: {{ .Values.serviceMonitor.targetLimit }}
+  {{- end }}
+  {{- if .Values.serviceMonitor.labelLimit }}
+  labelLimit: {{ .Values.serviceMonitor.labelLimit }}
+  {{- end }}
+  {{- if .Values.serviceMonitor.labelNameLengthLimit }}
+  labelNameLengthLimit: {{ .Values.serviceMonitor.labelNameLengthLimit }}
+  {{- end }}
+  {{- if .Values.serviceMonitor.labelValueLengthLimit }}
+  labelValueLengthLimit: {{ .Values.serviceMonitor.labelValueLengthLimit }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,579 @@
+# =============================================================================
+# GitLab DevOps Platform Helm Chart Values Configuration
+# =============================================================================
+#
+# This file contains configuration values for deploying GitLab, a complete
+# DevOps platform that provides source code management, CI/CD pipelines,
+# issue tracking, wiki, and container registry capabilities.
+#
+# GitLab Features:
+# - Git repository management with advanced branching strategies
+# - Integrated CI/CD pipelines with GitLab Runner
+# - Issue tracking and project management
+# - Container registry for Docker images
+# - Wiki and documentation system
+# - Merge request workflows and code review
+# - Package registry for artifacts
+# - Security scanning and vulnerability management
+# - Integration with external authentication systems
+#
+# Chart Features:
+# - OIDC integration with Keycloak for SSO
+# - LDAP integration with Samba4 for user management
+# - PostgreSQL database integration
+# - Redis caching and session storage
+# - Persistent storage for repositories and artifacts
+# - Ingress configuration with TLS termination
+# - Auto-scaling and high availability support
+# - Comprehensive monitoring and health checks
+# - Backup and restore capabilities
+#
+# Dependencies:
+# - PostgreSQL: Primary database for GitLab data
+# - Redis: Caching, session storage, and job queues
+# - Keycloak: OIDC provider for single sign-on
+# - Samba4: LDAP directory for user authentication
+# - cert-manager: TLS certificate management
+# - ingress-nginx: External access and load balancing
+#
+# Documentation: https://docs.gitlab.com/
+# =============================================================================
+
+# =============================================================================
+# Global Configuration
+# =============================================================================
+# Shared settings that apply across all GitLab components
+
+global:
+  # Container image registry override (leave empty for GitLab registry)
+  imageRegistry: ""
+  
+  # Global image pull secrets for accessing private registries
+  imagePullSecrets: []
+  
+  # Default storage class for all persistent volumes
+  storageClass: ""
+  
+  # GitLab edition to deploy
+  # Options: ce (Community Edition), ee (Enterprise Edition)
+  edition: ce
+  
+# =============================================================================
+# GitLab Application Configuration
+# =============================================================================
+
+# Number of GitLab application replicas
+# For high availability, increase replicas and ensure proper database clustering
+replicaCount: 1
+
+# Container image configuration
+image:
+  # GitLab official container registry
+  registry: registry.gitlab.com
+  
+  # GitLab Community Edition image
+  # For Enterprise Edition, use: gitlab-org/gitlab-ee
+  repository: gitlab-org/gitlab-ce
+  
+  # GitLab version - pin to specific versions for production stability
+  # Format: X.Y.Z-ce.0 for Community Edition
+  tag: "16.7.0-ce.0"
+  
+  # Image pull policy
+  # IfNotPresent: Pull only if image doesn't exist locally (recommended)
+  pullPolicy: IfNotPresent
+  
+  # Image-specific pull secrets
+  pullSecrets: []
+
+# =============================================================================
+# GitLab Core Configuration
+# =============================================================================
+# Primary GitLab application settings and integrations
+
+gitlab:
+  # =============================================================================
+  # Administrative Configuration
+  # =============================================================================
+  
+  # GitLab root user password (leave empty to use existingSecret)
+  # SECURITY: Always use existingSecret in production environments
+  rootPassword: ""
+  
+  # Kubernetes secret containing root password
+  existingSecret: ""
+  rootPasswordKey: "gitlab-root-password"
+  
+  # =============================================================================
+  # External Access Configuration
+  # =============================================================================
+  
+  # Primary external URL for GitLab (used for cloning, API access, web UI)
+  # This URL must be accessible to all users and CI/CD runners
+  externalUrl: "https://gitlab.noah.local"
+  
+  # Hostname for GitLab service (should match externalUrl domain)
+  hostname: "gitlab.noah.local"
+  
+  # =============================================================================
+  # HTTPS and TLS Configuration
+  # =============================================================================
+  
+  # Enable HTTPS for GitLab access
+  # Required for production deployments and OIDC integration
+  https: true
+  
+  # HTTPS port for web interface
+  httpsPort: 443
+  
+  # =============================================================================
+  # SSH Configuration for Git Operations
+  # =============================================================================
+  
+  # SSH port for Git clone/push operations
+  # Standard port 22 or custom port for security
+  sshPort: 22
+  
+  # SSH hostname for Git operations (usually same as main hostname)
+  sshHost: "gitlab.noah.local"
+  
+  # =============================================================================
+  # Email and Notification Configuration
+  # =============================================================================
+  
+  # Email configuration for notifications and user management
+  email:
+    # Enable email functionality
+    enabled: true
+    
+    # From address for GitLab emails
+    from: "gitlab@noah.local"
+    
+    # Display name in email headers
+    displayName: "GitLab"
+    
+    # Reply-to address for user responses
+    replyTo: "noreply@noah.local"
+    
+    # Subject prefix for all GitLab emails
+    subjectSuffix: ""
+  
+  # SMTP server configuration for email delivery
+  smtp:
+    # Enable SMTP for email sending
+    enabled: false
+    
+    # SMTP server address
+    address: ""
+    
+    # SMTP server port (587 for STARTTLS, 465 for SSL)
+    port: 587
+    
+    # SMTP authentication username
+    username: ""
+    password: ""
+    domain: ""
+    authentication: "login"
+    enableStarttlsAuto: true
+    tls: false
+    
+  # Time zone
+  timeZone: "UTC"
+  
+  # GitLab Shell
+  shell:
+    sshPort: 22
+    httpSettings: {}
+
+# OIDC Authentication
+oidc:
+  enabled: true
+  name: "keycloak"
+  label: "Keycloak SSO"
+  issuer: "https://keycloak.noah.local/realms/noah"
+  clientId: "gitlab"
+  clientSecret: ""
+  existingSecret: ""
+  existingSecretKey: "oidc-client-secret"
+  scope: ["openid", "profile", "email", "groups"]
+  discoveryUrl: "https://keycloak.noah.local/realms/noah/.well-known/openid_configuration"
+  userInfoUrl: "https://keycloak.noah.local/realms/noah/protocol/openid-connect/userinfo"
+  authUrl: "https://keycloak.openinfra.local/realms/openinfra/protocol/openid-connect/auth"
+  tokenUrl: "https://keycloak.openinfra.local/realms/openinfra/protocol/openid-connect/token"
+  allowSingleSignOn: true
+  blockAutoCreatedUsers: false
+  autoLinkUser: true
+  
+# LDAP Authentication (fallback/additional)
+ldap:
+  enabled: true
+  label: "LDAP"
+  host: "samba4.openinfra.svc.cluster.local"
+  port: 389
+  uid: "sAMAccountName"
+  method: "plain"
+  bindDn: "cn=gitlab-service,cn=Users,dc=openinfra,dc=local"
+  password: ""
+  existingSecret: ""
+  existingSecretKey: "ldap-password"
+  baseDn: "dc=openinfra,dc=local"
+  userFilter: ""
+  groupBase: "cn=Groups,dc=openinfra,dc=local"
+  adminGroup: "cn=GitLab-Admins,cn=Groups,dc=openinfra,dc=local"
+  externalGroups: []
+  allowUsernameOrEmailLogin: true
+  blockAutoCreatedUsers: false
+  autoLinkUser: true
+  
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  httpsPort: 443
+  sshPort: 22
+  annotations: {}
+  sessionAffinity: None
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hostname: "gitlab.openinfra.local"
+  path: /
+  pathType: Prefix
+  tls:
+    enabled: true
+    secretName: gitlab-tls
+    
+# SSH Ingress (for Git operations)
+sshIngress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/tcp-services-configmap: "default/tcp-services"
+  hostname: "gitlab.openinfra.local"
+  port: 22
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 4000m
+    memory: 8Gi
+  requests:
+    cpu: 1000m
+    memory: 4Gi
+
+# Auto-scaling (disabled by default for GitLab)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Node selection
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Security Context
+podSecurityContext:
+  runAsNonRoot: false
+  runAsUser: 0
+  fsGroup: 0
+
+securityContext:
+  allowPrivilegeEscalation: true
+  capabilities:
+    add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+  readOnlyRootFilesystem: false
+
+# Probes
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /-/liveness
+    port: http
+  initialDelaySeconds: 200
+  periodSeconds: 60
+  timeoutSeconds: 30
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /-/readiness
+    port: http
+  initialDelaySeconds: 120
+  periodSeconds: 10
+  timeoutSeconds: 30
+  failureThreshold: 3
+
+startupProbe:
+  enabled: true
+  httpGet:
+    path: /-/liveness
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 30
+  failureThreshold: 40
+
+# Persistence
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 50Gi
+  annotations: {}
+  
+  # Separate volumes for different data types
+  volumes:
+    data:
+      size: 30Gi
+      path: /var/opt/gitlab
+    logs:
+      size: 10Gi
+      path: /var/log/gitlab
+    config:
+      size: 5Gi
+      path: /etc/gitlab
+    repositories:
+      size: 100Gi
+      path: /var/opt/gitlab/git-data
+
+# GitLab Runner
+runner:
+  enabled: true
+  replicas: 2
+  image:
+    registry: registry.gitlab.com
+    repository: gitlab-org/gitlab-runner
+    tag: "v16.7.0"
+  concurrent: 4
+  checkInterval: 30
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  cache:
+    enabled: true
+    type: s3
+    s3:
+      bucketName: "gitlab-runner-cache"
+      accessKey: ""
+      secretKey: ""
+      regionName: "us-east-1"
+
+# PostgreSQL dependency
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "postgres"
+    username: "gitlab"
+    password: "gitlab"
+    database: "gitlab"
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 500m
+      limits:
+        memory: 1Gi
+        cpu: 1000m
+
+# Redis dependency
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "redis"
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retention: "7d"
+  s3:
+    enabled: false
+    bucket: ""
+    region: ""
+    accessKey: ""
+    secretKey: ""
+
+# Monitoring
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: ""
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+  egress:
+    enabled: true
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Extra environment variables
+extraEnvVars: []
+extraEnvVarsSecret: ""
+extraEnvVarsConfigMap: ""
+
+# Extra volumes and mounts
+extraVolumes: []
+extraVolumeMounts: []
+
+# GitLab configuration template
+gitlabConfig: |
+  external_url '{{ .Values.gitlab.externalUrl }}'
+  
+  # PostgreSQL configuration
+  {{- if .Values.postgresql.enabled }}
+  postgresql['enable'] = false
+  gitlab_rails['db_adapter'] = 'postgresql'
+  gitlab_rails['db_encoding'] = 'utf8'
+  gitlab_rails['db_host'] = '{{ include "gitlab.postgresql.host" . }}'
+  gitlab_rails['db_port'] = 5432
+  gitlab_rails['db_database'] = '{{ .Values.postgresql.auth.database }}'
+  gitlab_rails['db_username'] = '{{ .Values.postgresql.auth.username }}'
+  gitlab_rails['db_password'] = '{{ .Values.postgresql.auth.password }}'
+  {{- end }}
+  
+  # Redis configuration
+  {{- if .Values.redis.enabled }}
+  redis['enable'] = false
+  gitlab_rails['redis_host'] = '{{ include "gitlab.redis.host" . }}'
+  gitlab_rails['redis_port'] = 6379
+  gitlab_rails['redis_password'] = '{{ .Values.redis.auth.password }}'
+  {{- end }}
+  
+  # OIDC configuration
+  {{- if .Values.oidc.enabled }}
+  gitlab_rails['omniauth_enabled'] = true
+  gitlab_rails['omniauth_allow_single_sign_on'] = ['{{ .Values.oidc.name }}']
+  gitlab_rails['omniauth_block_auto_created_users'] = {{ .Values.oidc.blockAutoCreatedUsers }}
+  gitlab_rails['omniauth_auto_link_user'] = [{{ .Values.oidc.autoLinkUser }}]
+  
+  gitlab_rails['omniauth_providers'] = [
+    {
+      'name' => '{{ .Values.oidc.name }}',
+      'label' => '{{ .Values.oidc.label }}',
+      'args' => {
+        'name' => '{{ .Values.oidc.name }}',
+        'scope' => {{ .Values.oidc.scope | toJson }},
+        'response_type' => 'code',
+        'issuer' => '{{ .Values.oidc.issuer }}',
+        'discovery' => true,
+        'client_auth_method' => 'query',
+        'uid_field' => 'preferred_username',
+        'client_options' => {
+          'identifier' => '{{ .Values.oidc.clientId }}',
+          'secret' => '{{ .Values.oidc.clientSecret }}',
+          'redirect_uri' => '{{ .Values.gitlab.externalUrl }}/users/auth/{{ .Values.oidc.name }}/callback'
+        }
+      }
+    }
+  ]
+  {{- end }}
+  
+  # LDAP configuration
+  {{- if .Values.ldap.enabled }}
+  gitlab_rails['ldap_enabled'] = true
+  gitlab_rails['ldap_servers'] = YAML.load <<-'EOS'
+    main:
+      label: '{{ .Values.ldap.label }}'
+      host: '{{ .Values.ldap.host }}'
+      port: {{ .Values.ldap.port }}
+      uid: '{{ .Values.ldap.uid }}'
+      method: '{{ .Values.ldap.method }}'
+      bind_dn: '{{ .Values.ldap.bindDn }}'
+      password: '{{ .Values.ldap.password }}'
+      base: '{{ .Values.ldap.baseDn }}'
+      user_filter: '{{ .Values.ldap.userFilter }}'
+      group_base: '{{ .Values.ldap.groupBase }}'
+      admin_group: '{{ .Values.ldap.adminGroup }}'
+      allow_username_or_email_login: {{ .Values.ldap.allowUsernameOrEmailLogin }}
+      block_auto_created_users: {{ .Values.ldap.blockAutoCreatedUsers }}
+      auto_link_user: {{ .Values.ldap.autoLinkUser }}
+  EOS
+  {{- end }}
+  
+  # Git data directory
+  git_data_dirs({"default" => {"path" => "/var/opt/gitlab/git-data"}})
+  
+  # Disable bundled services we're using external versions of
+  {{- if .Values.postgresql.enabled }}
+  postgresql['enable'] = false
+  {{- end }}
+  {{- if .Values.redis.enabled }}
+  redis['enable'] = false
+  {{- end }}
+  
+  # Performance and resource settings
+  puma['worker_processes'] = 4
+  puma['min_threads'] = 4
+  puma['max_threads'] = 16
+  puma['worker_memory_limit_mb'] = 2048
+  
+  # Security settings
+  nginx['ssl_certificate'] = "/etc/ssl/certs/gitlab.crt"
+  nginx['ssl_certificate_key'] = "/etc/ssl/private/gitlab.key"
+  nginx['ssl_protocols'] = "TLSv1.2 TLSv1.3"
+  nginx['ssl_ciphers'] = "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256"
+  nginx['ssl_prefer_server_ciphers'] = "on"
+  nginx['ssl_dhparam'] = "/etc/ssl/certs/dhparam.pem"
+  
+  # Monitoring
+  {{- if .Values.metrics.enabled }}
+  prometheus_monitoring['enable'] = true
+  gitlab_exporter['enable'] = true
+  {{- end }}
+
+# Pod annotations and labels
+podAnnotations: {}
+podLabels: {}
+
+# Common labels
+commonLabels: {}
+commonAnnotations: {}

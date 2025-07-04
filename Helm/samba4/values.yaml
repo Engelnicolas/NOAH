@@ -1,0 +1,321 @@
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# Samba4 AD configuration
+replicaCount: 1  # Single instance for AD consistency
+
+image:
+  registry: ""
+  repository: dperson/samba
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Alternative images (uncomment to use)
+# image:
+#   registry: ""
+#   repository: nowsci/samba-domain
+#   tag: "4.19.2"
+
+# Domain configuration
+domain:
+  name: "OPENINFRA"
+  realm: "OPENINFRA.LOCAL"
+  dnsForwarder: "8.8.8.8"
+  adminPassword: ""
+  existingSecret: ""
+  existingSecretKey: "admin-password"
+  
+  # Organizational Units
+  organizationalUnits:
+    - "Users"
+    - "Groups" 
+    - "Computers"
+    - "Service-Accounts"
+  
+  # Default groups
+  groups:
+    - name: "Domain Admins"
+      description: "Domain Administrators"
+    - name: "Keycloak-Admins"
+      description: "Keycloak Administrators"
+    - name: "GitLab-Admins"
+      description: "GitLab Administrators"
+    - name: "Grafana-Admins"
+      description: "Grafana Administrators"
+    - name: "Nextcloud-Users"
+      description: "Nextcloud Users"
+    - name: "Mattermost-Users"
+      description: "Mattermost Users"
+  
+  # Service accounts
+  serviceAccounts:
+    - username: "keycloak-service"
+      password: ""
+      groups: ["Domain Users"]
+    - username: "gitlab-service"
+      password: ""
+      groups: ["Domain Users"]
+    - username: "grafana-service"
+      password: ""
+      groups: ["Domain Users"]
+    - username: "nextcloud-service"
+      password: ""
+      groups: ["Domain Users"]
+    - username: "mattermost-service"
+      password: ""
+      groups: ["Domain Users"]
+
+# Service configuration
+service:
+  type: ClusterIP
+  annotations: {}
+  
+  # AD/LDAP ports
+  ldap:
+    port: 389
+  ldaps:
+    port: 636
+  
+  # Kerberos ports
+  kerberos:
+    port: 88
+    kadmin:
+      port: 464
+  
+  # DNS port
+  dns:
+    port: 53
+  
+  # SMB/CIFS ports (if needed)
+  smb:
+    enabled: false
+    port: 445
+
+# Ingress configuration (mainly for management)
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hostname: "samba4.openinfra.local"
+  path: /
+  pathType: Prefix
+  tls:
+    enabled: true
+    secretName: samba4-tls
+
+# Persistence configuration
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 20Gi
+  annotations: {}
+  
+  # Multiple volumes for different data types
+  volumes:
+    data:
+      size: 10Gi
+      path: /var/lib/samba
+    sysvol:
+      size: 5Gi
+      path: /var/lib/samba/sysvol
+    logs:
+      size: 5Gi
+      path: /var/log/samba
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+# Node selection
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Security Context
+podSecurityContext:
+  runAsNonRoot: false
+  runAsUser: 0
+  fsGroup: 0
+
+securityContext:
+  allowPrivilegeEscalation: true
+  capabilities:
+    add:
+      - NET_ADMIN
+      - NET_BIND_SERVICE
+      - SYS_ADMIN
+      - DAC_OVERRIDE
+      - CHOWN
+      - FOWNER
+      - SETGID
+      - SETUID
+  readOnlyRootFilesystem: false
+  runAsUser: 0
+
+# Probes
+livenessProbe:
+  enabled: true
+  tcpSocket:
+    port: ldap
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  tcpSocket:
+    port: ldap
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+startupProbe:
+  enabled: true
+  tcpSocket:
+    port: ldap
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+    allowedNamespaces:
+      - default
+      - kube-system
+    allowedPorts:
+      - 389  # LDAP
+      - 636  # LDAPS
+      - 88   # Kerberos
+      - 464  # Kadmin
+      - 53   # DNS
+  egress:
+    enabled: true
+
+# DNS Configuration
+dns:
+  enabled: true
+  forwarders:
+    - "8.8.8.8"
+    - "1.1.1.1"
+  
+  # Custom DNS records
+  customRecords: []
+  # Example:
+  # - name: "keycloak"
+  #   type: "A"
+  #   value: "10.96.100.1"
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retention: "7d"
+  s3:
+    enabled: false
+    bucket: ""
+    region: ""
+    accessKey: ""
+    secretKey: ""
+
+# Monitoring
+metrics:
+  enabled: false  # Samba doesn't have native Prometheus metrics
+  serviceMonitor:
+    enabled: false
+
+# Samba configuration template
+sambaConfig: |
+  [global]
+      netbios name = {{ upper .Values.domain.name }}
+      realm = {{ upper .Values.domain.realm }}
+      domain master = yes
+      domain logons = yes
+      preferred master = yes
+      os level = 255
+      wins support = yes
+      dns forwarder = {{ .Values.domain.dnsForwarder }}
+      server role = active directory domain controller
+      workgroup = {{ upper .Values.domain.name }}
+      
+      # Security settings
+      server min protocol = SMB2_10
+      client min protocol = SMB2_10
+      ntlm auth = mschapv2-and-ntlmv2-only
+      
+      # Logging
+      log level = 1
+      log file = /var/log/samba/log.%m
+      max log size = 1000
+      
+      # Performance
+      socket options = TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072
+      deadtime = 30
+      getwd cache = yes
+      
+      # DNS
+      allow dns updates = secure only
+      dns update command = /usr/bin/samba-tool dns update
+  
+  [sysvol]
+      path = /var/lib/samba/sysvol
+      read only = no
+  
+  [netlogon]
+      path = /var/lib/samba/sysvol/{{ lower .Values.domain.realm }}/scripts
+      read only = no
+
+# Environment variables
+extraEnvVars:
+  - name: DOMAIN
+    value: "{{ .Values.domain.realm }}"
+  - name: DOMAINPASS
+    valueFrom:
+      secretKeyRef:
+        name: "{{ include \"samba4.secretName\" . }}"
+        key: "{{ .Values.domain.existingSecretKey }}"
+  - name: DNSFORWARDER
+    value: "{{ .Values.domain.dnsForwarder }}"
+  - name: HOSTIP
+    valueFrom:
+      fieldRef:
+        fieldPath: status.podIP
+
+# Extra volumes and mounts
+extraVolumes: []
+extraVolumeMounts: []
+
+# Init containers for domain provisioning
+initContainers: []
+
+# Pod annotations and labels
+podAnnotations: {}
+podLabels: {}
+
+# Common labels
+commonLabels: {}
+commonAnnotations: {}

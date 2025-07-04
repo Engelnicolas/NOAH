@@ -1,0 +1,169 @@
+---
+# Ansible/roles/ldap_samba4/tasks/main.yml
+# Deploy Samba4 Active Directory Domain Controller
+
+- name: Deploy Samba4 using Helm
+  kubernetes.core.helm:
+    name: samba4
+    chart_ref: "{{ playbook_dir }}/../Helm/samba4"
+    release_namespace: "{{ namespace }}"
+    create_namespace: false
+    values:
+      replicaCount: 1
+      image:
+        repository: nowsci/samba-domain
+        tag: "4.17.0"
+        pullPolicy: IfNotPresent
+      
+      domain:
+        name: "{{ ldap_base_dn.split(',')[0].split('=')[1] }}.{{ ldap_base_dn.split(',')[1].split('=')[1] }}"
+        realm: "{{ ldap_base_dn.split(',')[0].split('=')[1] | upper }}.{{ ldap_base_dn.split(',')[1].split('=')[1] | upper }}"
+        adminPassword: "{{ ldap_bind_password }}"
+        
+      persistence:
+        enabled: true
+        storageClass: ""
+        size: 10Gi
+        
+      service:
+        type: ClusterIP
+        ldapPort: 389
+        ldapsPort: 636
+        kerberosPort: 88
+        
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+  register: samba4_deployment
+
+- name: Wait for Samba4 pod to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app=samba4"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+  register: samba4_pods
+
+- name: Verify Samba4 domain controller is running
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ samba4_pods.resources[0].metadata.name }}"
+    command:
+      - samba-tool
+      - domain
+      - info
+      - "{{ ldap_base_dn.split(',')[0].split('=')[1] }}.{{ ldap_base_dn.split(',')[1].split('=')[1] }}"
+  register: domain_info
+  retries: 5
+  delay: 30
+  until: domain_info.rc == 0
+
+- name: Create organizational units
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ samba4_pods.resources[0].metadata.name }}"
+    command:
+      - samba-tool
+      - ou
+      - create
+      - "{{ item }}"
+  loop:
+    - "OU=Users,{{ ldap_base_dn }}"
+    - "OU=Groups,{{ ldap_base_dn }}"
+    - "OU=Computers,{{ ldap_base_dn }}"
+    - "OU=Services,{{ ldap_base_dn }}"
+  register: ou_creation
+  failed_when: 
+    - ou_creation.rc != 0
+    - "'already exists' not in ou_creation.stderr"
+
+- name: Create service groups
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ samba4_pods.resources[0].metadata.name }}"
+    command:
+      - samba-tool
+      - group
+      - add
+      - "{{ item.name }}"
+      - --description="{{ item.description }}"
+      - --groupou="OU=Groups,{{ ldap_base_dn }}"
+  loop:
+    - name: "NextcloudUsers"
+      description: "Nextcloud Access Group"
+    - name: "MattermostUsers"
+      description: "Mattermost Access Group"
+    - name: "GitlabUsers"
+      description: "GitLab Access Group"
+    - name: "AdminUsers"
+      description: "Administrative Users"
+    - name: "VPNUsers"
+      description: "VPN Access Group"
+  register: group_creation
+  failed_when: 
+    - group_creation.rc != 0
+    - "'already exists' not in group_creation.stderr"
+
+- name: Create default service accounts
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ samba4_pods.resources[0].metadata.name }}"
+    command:
+      - samba-tool
+      - user
+      - create
+      - "{{ item.username }}"
+      - "{{ item.password }}"
+      - --description="{{ item.description }}"
+      - --userou="OU=Services,{{ ldap_base_dn }}"
+      - --must-change-at-next-login=False
+  loop:
+    - username: "keycloak-ldap"
+      password: "{{ keycloak_ldap_password | default('changeme123') }}"
+      description: "Keycloak LDAP Service Account"
+    - username: "nextcloud-ldap"
+      password: "{{ nextcloud_ldap_password | default('changeme123') }}"
+      description: "Nextcloud LDAP Service Account"
+    - username: "gitlab-ldap"
+      password: "{{ gitlab_ldap_password | default('changeme123') }}"
+      description: "GitLab LDAP Service Account"
+  register: service_account_creation
+  failed_when: 
+    - service_account_creation.rc != 0
+    - "'already exists' not in service_account_creation.stderr"
+
+- name: Configure DNS forwarding
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ samba4_pods.resources[0].metadata.name }}"
+    command:
+      - samba-tool
+      - dns
+      - zonecreate
+      - "{{ dns_server | default('127.0.0.1') }}"
+      - "{{ ldap_base_dn.split(',')[0].split('=')[1] }}.{{ ldap_base_dn.split(',')[1].split('=')[1] }}"
+  register: dns_zone_creation
+  failed_when: 
+    - dns_zone_creation.rc != 0
+    - "'already exists' not in dns_zone_creation.stderr"
+
+- name: Display Samba4 deployment status
+  debug:
+    msg: |
+      Samba4 Active Directory deployment completed:
+      - Domain: {{ ldap_base_dn.split(',')[0].split('=')[1] }}.{{ ldap_base_dn.split(',')[1].split('=')[1] }}
+      - LDAP URL: {{ ldap_url }}
+      - Admin DN: {{ ldap_bind_dn }}
+      - Pod: {{ samba4_pods.resources[0].metadata.name }}
+      - Service Groups: NextcloudUsers, MattermostUsers, GitlabUsers, AdminUsers, VPNUsers
+      - Service Accounts: keycloak-ldap, nextcloud-ldap, gitlab-ldap

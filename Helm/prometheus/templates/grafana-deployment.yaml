@@ -1,0 +1,135 @@
+{{- if .Values.grafana.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "prometheus.grafana.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  replicas: {{ .Values.grafana.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "grafana.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/grafana-configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/grafana-secret.yaml") . | sha256sum }}
+        {{- with .Values.grafana.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "grafana.selectorLabels" . | nindent 8 }}
+        {{- with .Values.grafana.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.grafana.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "prometheus.serviceAccountName" . }}
+      containers:
+        - name: grafana
+          image: "{{ .Values.grafana.image.registry }}/{{ .Values.grafana.image.repository }}:{{ .Values.grafana.image.tag }}"
+          imagePullPolicy: {{ .Values.grafana.image.pullPolicy }}
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: {{ .Values.grafana.auth.adminUser | quote }}
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grafana.secretName" . }}
+                  key: {{ .Values.grafana.auth.existingSecretPasswordKey }}
+            {{- if .Values.grafana.ldap.enabled }}
+            - name: GF_AUTH_LDAP_BIND_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grafana.secretName" . }}
+                  key: {{ .Values.grafana.ldap.existingSecretKey }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.grafana.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/grafana/grafana.ini
+              subPath: grafana.ini
+            {{- if .Values.grafana.ldap.enabled }}
+            - name: ldap-config
+              mountPath: /etc/grafana/ldap.toml
+              subPath: ldap.toml
+            {{- end }}
+            {{- if .Values.grafana.persistence.enabled }}
+            - name: storage
+              mountPath: /var/lib/grafana
+            {{- end }}
+            {{- if .Values.grafana.datasources.enabled }}
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            {{- end }}
+            {{- if .Values.grafana.dashboards.enabled }}
+            - name: dashboards-config
+              mountPath: /etc/grafana/provisioning/dashboards
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "prometheus.grafana.fullname" . }}-config
+        {{- if .Values.grafana.ldap.enabled }}
+        - name: ldap-config
+          configMap:
+            name: {{ include "prometheus.grafana.fullname" . }}-ldap
+        {{- end }}
+        {{- if .Values.grafana.persistence.enabled }}
+        - name: storage
+          persistentVolumeClaim:
+            claimName: {{ include "prometheus.grafana.fullname" . }}-storage
+        {{- else }}
+        - name: storage
+          emptyDir: {}
+        {{- end }}
+        {{- if .Values.grafana.datasources.enabled }}
+        - name: datasources
+          configMap:
+            name: {{ include "prometheus.grafana.fullname" . }}-datasources
+        {{- end }}
+        {{- if .Values.grafana.dashboards.enabled }}
+        - name: dashboards-config
+          configMap:
+            name: {{ include "prometheus.grafana.fullname" . }}-dashboards
+        {{- end }}
+      {{- with .Values.grafana.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.grafana.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.grafana.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

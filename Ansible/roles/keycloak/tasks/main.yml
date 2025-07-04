@@ -1,0 +1,269 @@
+---
+# =============================================================================
+# Keycloak Identity and Access Management Role - Main Tasks
+# =============================================================================
+#
+# This Ansible role handles the complete deployment and configuration of
+# Keycloak, an open-source Identity and Access Management solution that
+# provides single sign-on (SSO), user federation, and OAuth2/OIDC capabilities.
+#
+# Role Responsibilities:
+# - Deploy Keycloak using Helm chart with appropriate configuration
+# - Configure LDAP integration with Samba4 for user federation
+# - Set up OAuth2/OIDC clients for integrated applications
+# - Configure realms, users, and groups for organizational structure
+# - Establish security policies and authentication flows
+# - Enable monitoring and health checks
+# - Configure high availability and clustering (if enabled)
+#
+# Integration Points:
+# - Samba4 LDAP: User and group federation
+# - PostgreSQL: Primary database for Keycloak data
+# - Applications: OAuth2/OIDC clients (GitLab, Nextcloud, Mattermost, etc.)
+# - Monitoring: Prometheus metrics and health endpoints
+# - Load Balancer: Ingress configuration for external access
+#
+# Prerequisites:
+# - Kubernetes cluster with Helm support
+# - Samba4 LDAP server deployed and accessible
+# - PostgreSQL database available (for production)
+# - Ingress controller configured
+# - DNS resolution for Keycloak hostname
+#
+# Variables Required:
+# - namespace: Target Kubernetes namespace
+# - keycloak.admin_user: Initial admin username
+# - keycloak.admin_password: Initial admin password
+# - ldap_url: LDAP server connection URL
+# - ldap_base_dn: LDAP base distinguished name
+# - keycloak_ldap_password: LDAP bind password
+#
+# Author: OpenInfra Team
+# Version: 2.0.0
+# =============================================================================
+
+# =============================================================================
+# Keycloak Helm Chart Deployment
+# =============================================================================
+# Deploy Keycloak using the custom Helm chart with OpenInfra-specific configuration
+
+- name: Deploy Keycloak Identity Provider using Helm
+  kubernetes.core.helm:
+    # Helm release name for Keycloak deployment
+    name: keycloak
+    
+    # Path to the custom Keycloak Helm chart
+    chart_ref: "{{ playbook_dir }}/../Helm/keycloak"
+    
+    # Target namespace for deployment (must exist)
+    release_namespace: "{{ namespace }}"
+    create_namespace: false
+    
+    # Comprehensive Keycloak configuration values
+    values:
+      # =================================================================
+      # Application Scaling Configuration
+      # =================================================================
+      
+      # Number of Keycloak replicas
+      # Production: 2+ for high availability
+      # Development: 1 for resource efficiency
+      replicaCount: 1
+      
+      # =================================================================
+      # Container Image Configuration
+      # =================================================================
+      image:
+        # Official Keycloak image repository
+        repository: quay.io/keycloak/keycloak
+        
+        # Keycloak version (use stable releases for production)
+        tag: "22.0.1"
+        
+        # Image pull policy
+        pullPolicy: IfNotPresent
+      
+      # =================================================================
+      # Authentication and Administrative Access
+      # =================================================================
+      auth:
+        # Initial admin user for Keycloak management console
+        adminUser: "{{ keycloak.admin_user }}"
+        
+        # Admin password for initial setup
+        # SECURITY: Use strong passwords and rotate regularly
+        adminPassword: "{{ keycloak.admin_password }}"
+        
+      # =================================================================
+      # Database Configuration
+      # =================================================================
+      database:
+        # Database type for Keycloak data storage
+        # Options: h2 (development), postgres (production), mysql, oracle
+        # NOTE: H2 is for development only - use PostgreSQL for production
+        type: h2  # For production, use PostgreSQL
+        
+      # =================================================================
+      # LDAP Integration Configuration
+      # =================================================================
+      ldap:
+        # LDAP server URL for user federation
+        url: "{{ ldap_url }}"
+        
+        # LDAP bind DN for Keycloak service account
+        # This account must have read access to users and groups
+        bindDN: "cn=keycloak-ldap,OU=Services,{{ ldap_base_dn }}"
+        
+        # LDAP bind password for service account authentication
+        bindPassword: "{{ keycloak_ldap_password | default('changeme123') }}"
+        
+        # LDAP users base DN for user searches
+        usersDN: "OU=Users,{{ ldap_base_dn }}"
+        
+      # =================================================================
+      # Service Configuration
+      # =================================================================
+      service:
+        # Service type (ClusterIP for internal access with Ingress)
+        type: ClusterIP
+        
+        # Keycloak HTTP port
+        port: 8080
+        
+      # =================================================================
+      # Ingress Configuration for External Access
+      # =================================================================
+      ingress:
+        # Enable ingress for external access
+        enabled: true
+        
+        # Hostname for Keycloak access
+        hostname: keycloak.local
+        
+        # Enable TLS for secure communication
+        tls: true
+        
+      # =================================================================
+      # Resource Management
+      # =================================================================
+      resources:
+        # Resource limits to prevent resource exhaustion
+        limits:
+          cpu: 1000m      # Maximum CPU allocation
+          memory: 2Gi     # Maximum memory allocation
+        
+        # Resource requests for scheduling
+        requests:
+          cpu: 500m       # Minimum CPU requirement
+          memory: 1Gi     # Minimum memory requirement
+          
+  # Register deployment result for subsequent tasks
+  register: keycloak_deployment
+
+# =============================================================================
+# Deployment Verification and Health Checks
+# =============================================================================
+# Verify that Keycloak is properly deployed and accessible
+
+- name: Wait for Keycloak pod to be ready and healthy
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app=keycloak"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+  register: keycloak_pods
+
+- name: Wait for Keycloak service to be available
+  uri:
+    url: "http://{{ keycloak_pods.resources[0].status.podIP }}:8080/health/ready"
+    method: GET
+    status_code: 200
+  register: keycloak_health
+  until: keycloak_health.status == 200
+  retries: 20
+  delay: 15
+
+- name: Get admin access token
+  uri:
+    url: "http://{{ keycloak_pods.resources[0].status.podIP }}:8080/realms/master/protocol/openid-connect/token"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      grant_type: password
+      client_id: admin-cli
+      username: "{{ keycloak.admin_user }}"
+      password: "{{ keycloak.admin_password }}"
+  register: admin_token
+
+- name: Configure LDAP User Federation
+  uri:
+    url: "http://{{ keycloak_pods.resources[0].status.podIP }}:8080/admin/realms/{{ keycloak.realm }}/components"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ admin_token.json.access_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      name: "samba4-ldap"
+      providerId: "ldap"
+      providerType: "org.keycloak.storage.UserStorageProvider"
+      parentId: "{{ keycloak.realm }}"
+      config:
+        vendor: ["ad"]
+        connectionUrl: ["{{ ldap_url }}"]
+        bindDn: ["cn=keycloak-ldap,OU=Services,{{ ldap_base_dn }}"]
+        bindCredential: ["{{ keycloak_ldap_password | default('changeme123') }}"]
+        usersDn: ["OU=Users,{{ ldap_base_dn }}"]
+        usernameLDAPAttribute: ["sAMAccountName"]
+        rdnLDAPAttribute: ["cn"]
+        uuidLDAPAttribute: ["objectGUID"]
+        userObjectClasses: ["person", "organizationalPerson", "user"]
+        searchScope: ["2"]
+        useTruststoreSpi: ["ldapsOnly"]
+        priority: ["0"]
+        enabled: ["true"]
+    status_code: [201, 409]  # 409 if already exists
+  register: ldap_federation
+
+- name: Create OIDC clients for services
+  uri:
+    url: "http://{{ keycloak_pods.resources[0].status.podIP }}:8080/admin/realms/{{ keycloak.realm }}/clients"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ admin_token.json.access_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      clientId: "{{ item.name }}"
+      name: "{{ item.name | title }} Client"
+      description: "OIDC client for {{ item.name | title }}"
+      enabled: true
+      protocol: "openid-connect"
+      publicClient: false
+      standardFlowEnabled: true
+      implicitFlowEnabled: false
+      directAccessGrantsEnabled: true
+      serviceAccountsEnabled: false
+      redirectUris: ["{{ item.redirect_uri }}/*"]
+      webOrigins: ["{{ item.redirect_uri.split('/')[0] }}://{{ item.redirect_uri.split('/')[2] }}"]
+  loop: "{{ oidc_clients }}"
+  register: client_creation
+  failed_when: 
+    - client_creation.status not in [201, 409]
+
+- name: Display Keycloak deployment status
+  debug:
+    msg: |
+      Keycloak deployment completed:
+      - Admin Console: http://keycloak.local/admin
+      - Realm: {{ keycloak.realm }}
+      - Admin User: {{ keycloak.admin_user }}
+      - LDAP Federation: {{ ldap_federation.status == 201 | ternary('Configured', 'Already exists') }}
+      - OIDC Clients: {{ oidc_clients | map(attribute='name') | list | join(', ') }}
+      - Pod: {{ keycloak_pods.resources[0].metadata.name }}

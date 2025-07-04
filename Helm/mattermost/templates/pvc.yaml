@@ -1,0 +1,119 @@
+{{/*
+Mattermost Persistent Volume Claims Template
+
+This template dynamically generates PVCs for Mattermost based on the persistence
+configuration in values.yaml. It supports multiple volume types (data, config, logs, plugins)
+and provides enterprise-grade features like selectors, volume modes, and resource limits.
+
+Template Features:
+- Dynamic PVC generation from values.yaml configuration
+- Type safety with validation checks
+- Support for global and per-PVC storage class configuration
+- Advanced PVC features (selectors, volume modes, limits)
+- Consistent labeling and naming conventions
+- Flexible annotation support
+
+Usage:
+Add new volume types to values.yaml under persistence section and they will
+automatically be created without modifying this template.
+*/}}
+
+{{/*
+Iterate over all persistence configurations in values.yaml
+- $pvcType: The name of the PVC (e.g., "data", "config", "logs", "plugins")
+- $pvcConfig: The configuration object for this specific PVC
+*/}}
+{{- range $pvcType, $pvcConfig := .Values.persistence }}
+
+{{/*
+Safety checks to ensure we only process valid configurations:
+1. Check if $pvcConfig is a map (not a string or other type)
+2. Check if the PVC is enabled via the .enabled flag
+This prevents errors when values.yaml contains non-PVC configurations
+*/}}
+{{- if and (typeIs "map[string]interface {}" $pvcConfig) $pvcConfig.enabled }}
+---
+{{/* Standard Kubernetes PVC resource definition */}}
+# Mattermost {{ $pvcType | title }} PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+
+{{/* Metadata section with naming and labeling */}}
+metadata:
+  {{/* Generate consistent name using Helm fullname template + PVC type */}}
+  name: {{ include "mattermost.fullname" $ }}-{{ $pvcType }}
+  
+  {{/* Place in the same namespace as the Helm release */}}
+  namespace: {{ $.Release.Namespace }}
+  
+  {{/* Apply standard Mattermost labels + component-specific label */}}
+  labels:
+    {{- include "mattermost.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $pvcType }}
+  
+  {{/* 
+  Optional annotations from values.yaml
+  Useful for storage-specific metadata, backup policies, etc.
+  */}}
+  {{- with $pvcConfig.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+{{/* PVC specification section */}}
+spec:
+  {{/*
+  Access modes define how the volume can be mounted
+  Common values: ReadWriteOnce, ReadOnlyMany, ReadWriteMany
+  */}}
+  accessModes:
+    {{- range $pvcConfig.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  
+  {{/*
+  Storage class determines the type of storage provisioner to use
+  Priority: per-PVC storageClass > global storageClass > cluster default
+  */}}
+  {{- if or $pvcConfig.storageClass $.Values.global.storageClass }}
+  storageClassName: {{ $pvcConfig.storageClass | default $.Values.global.storageClass | quote }}
+  {{- end }}
+  
+  {{/*
+  Optional selector for binding to specific persistent volumes
+  Useful for pre-provisioned volumes or specific storage requirements
+  */}}
+  {{- with $pvcConfig.selector }}
+  selector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  
+  {{/*
+  Volume mode specifies if volume is file system or block device
+  Values: "Filesystem" (default) or "Block"
+  */}}
+  {{- if $pvcConfig.volumeMode }}
+  volumeMode: {{ $pvcConfig.volumeMode }}
+  {{- end }}
+  
+  {{/*
+  Resource requirements for the persistent volume
+  requests.storage is required, limits are optional for quota enforcement
+  */}}
+  resources:
+    requests:
+      storage: {{ $pvcConfig.size | quote }}
+    {{/*
+    Optional resource limits for storage quota enforcement
+    Useful in multi-tenant environments
+    */}}
+    {{- with $pvcConfig.limits }}
+    limits:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+{{/* End of safety check conditional */}}
+{{- end }}
+
+{{/* End of persistence configuration loop */}}
+{{- end }}

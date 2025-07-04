@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattermost
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: mattermost
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8065

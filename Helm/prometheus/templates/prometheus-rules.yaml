@@ -1,0 +1,30 @@
+{{- if and .Values.prometheus.enabled .Values.prometheus.rules.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "prometheus.prometheus.fullname" . }}-rules
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+data:
+  {{- range .Values.prometheus.rules.groups }}
+  {{ .name }}.yml: |
+    groups:
+      - name: {{ .name }}
+        rules:
+          {{- range .rules }}
+          - alert: {{ .alert }}
+            expr: {{ .expr }}
+            for: {{ .for }}
+            labels:
+              {{- range $key, $value := .labels }}
+              {{ $key }}: {{ $value | quote }}
+              {{- end }}
+            annotations:
+              {{- range $key, $value := .annotations }}
+              {{ $key }}: {{ $value | quote }}
+              {{- end }}
+          {{- end }}
+  {{- end }}
+{{- end }}

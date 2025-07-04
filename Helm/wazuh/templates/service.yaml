@@ -1,0 +1,133 @@
+---
+# Wazuh Manager Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wazuh.manager.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+  {{- with .Values.service.manager.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.manager.type }}
+  ports:
+    {{- range .Values.service.manager.ports }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      targetPort: {{ .targetPort }}
+      protocol: {{ .protocol }}
+    {{- end }}
+  selector:
+    {{- include "wazuh.manager.selectorLabels" . | nindent 4 }}
+
+---
+# Wazuh Manager Headless Service (for StatefulSet)
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wazuh.manager.fullname" . }}-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    {{- range .Values.service.manager.ports }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      targetPort: {{ .targetPort }}
+      protocol: {{ .protocol }}
+    {{- end }}
+  selector:
+    {{- include "wazuh.manager.selectorLabels" . | nindent 4 }}
+
+---
+{{- if .Values.dashboard.enabled }}
+# Wazuh Dashboard Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wazuh.dashboard.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+  {{- with .Values.service.dashboard.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.dashboard.type }}
+  ports:
+    {{- range .Values.service.dashboard.ports }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      targetPort: {{ .targetPort }}
+      protocol: {{ .protocol }}
+    {{- end }}
+  selector:
+    {{- include "wazuh.dashboard.selectorLabels" . | nindent 4 }}
+{{- end }}
+
+---
+{{- if .Values.indexer.enabled }}
+# Wazuh Indexer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wazuh.indexer.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: indexer
+  {{- with .Values.service.indexer.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.indexer.type }}
+  ports:
+    {{- range .Values.service.indexer.ports }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      targetPort: {{ .targetPort }}
+      protocol: {{ .protocol }}
+    {{- end }}
+  selector:
+    {{- include "wazuh.indexer.selectorLabels" . | nindent 4 }}
+
+---
+# Wazuh Indexer Headless Service (for StatefulSet)
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wazuh.indexer.fullname" . }}-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: indexer
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    {{- range .Values.service.indexer.ports }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      targetPort: {{ .targetPort }}
+      protocol: {{ .protocol }}
+    {{- end }}
+  selector:
+    {{- include "wazuh.indexer.selectorLabels" . | nindent 4 }}
+{{- end }}

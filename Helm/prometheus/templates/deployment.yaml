@@ -1,0 +1,131 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "prometheus.prometheus.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.prometheus.autoscaling.enabled }}
+  replicas: {{ .Values.prometheus.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "prometheus.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: prometheus
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/prometheus-configmap.yaml") . | sha256sum }}
+        checksum/rules: {{ include (print $.Template.BasePath "/prometheus-rules.yaml") . | sha256sum }}
+        {{- with .Values.prometheus.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "prometheus.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: prometheus
+        {{- with .Values.prometheus.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.prometheus.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "prometheus.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.prometheus.podSecurityContext | nindent 8 }}
+      containers:
+        - name: prometheus
+          securityContext:
+            {{- toYaml .Values.prometheus.securityContext | nindent 12 }}
+          image: "{{ .Values.prometheus.image.registry }}/{{ .Values.prometheus.image.repository }}:{{ .Values.prometheus.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.prometheus.image.pullPolicy }}
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus/
+            - --storage.tsdb.retention.time={{ .Values.prometheus.retention }}
+            {{- if .Values.prometheus.retentionSize }}
+            - --storage.tsdb.retention.size={{ .Values.prometheus.retentionSize }}
+            {{- end }}
+            {{- if .Values.prometheus.walCompression }}
+            - --storage.tsdb.wal-compression
+            {{- end }}
+            - --web.console.libraries=/etc/prometheus/console_libraries
+            - --web.console.templates=/etc/prometheus/consoles
+            - --web.enable-lifecycle
+            - --web.route-prefix=/
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          ports:
+            - name: http
+              containerPort: 9090
+              protocol: TCP
+          {{- if .Values.prometheus.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.prometheus.livenessProbe.httpGet.path }}
+              port: {{ .Values.prometheus.livenessProbe.httpGet.port }}
+            initialDelaySeconds: {{ .Values.prometheus.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.prometheus.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.prometheus.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.prometheus.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.prometheus.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.prometheus.readinessProbe.httpGet.path }}
+              port: {{ .Values.prometheus.readinessProbe.httpGet.port }}
+            initialDelaySeconds: {{ .Values.prometheus.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.prometheus.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.prometheus.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.prometheus.readinessProbe.failureThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.prometheus.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: rules
+              mountPath: /etc/prometheus/rules
+            {{- if .Values.prometheus.persistence.enabled }}
+            - name: storage
+              mountPath: /prometheus
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "prometheus.prometheus.fullname" . }}-config
+        - name: rules
+          configMap:
+            name: {{ include "prometheus.prometheus.fullname" . }}-rules
+        {{- if .Values.prometheus.persistence.enabled }}
+        - name: storage
+          persistentVolumeClaim:
+            claimName: {{ include "prometheus.prometheus.fullname" . }}-storage
+        {{- else }}
+        - name: storage
+          emptyDir: {}
+        {{- end }}
+      {{- with .Values.prometheus.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.prometheus.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.prometheus.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

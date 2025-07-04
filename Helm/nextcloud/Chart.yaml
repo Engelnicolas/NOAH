@@ -1,0 +1,29 @@
+apiVersion: v2
+name: nextcloud
+description: Production-ready Nextcloud file sharing and collaboration platform with OIDC/LDAP integration
+type: application
+version: 1.0.0
+appVersion: "28.0.1"
+keywords:
+  - nextcloud
+  - file-sharing
+  - collaboration
+  - cloud-storage
+  - oidc
+  - ldap
+  - productivity
+home: https://nextcloud.com/
+sources:
+  - https://github.com/nextcloud/server
+maintainers:
+  - name: N.O.A.H Team
+    email: admin@noah.local
+dependencies:
+  - name: postgresql
+    version: "12.12.10"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.4.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

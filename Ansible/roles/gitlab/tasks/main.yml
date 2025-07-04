@@ -1,0 +1,297 @@
+---
+# Ansible/roles/gitlab/tasks/main.yml
+# Deploy GitLab for code collaboration and CI/CD
+
+- name: Deploy GitLab using Helm
+  kubernetes.core.helm:
+    name: gitlab
+    chart_ref: "{{ playbook_dir }}/../Helm/gitlab"
+    release_namespace: "{{ namespace }}"
+    create_namespace: false
+    values:
+      replicaCount: 1
+      image:
+        repository: gitlab/gitlab-ce
+        tag: "16.6.1-ce.0"
+        pullPolicy: IfNotPresent
+      
+      gitlab:
+        externalUrl: "https://gitlab.local"
+        rootPassword: "{{ gitlab_root_password | default('changeme123') }}"
+        
+      ldap:
+        enabled: true
+        servers:
+          main:
+            label: "OpenInfra LDAP"
+            host: "{{ ldap_url.split('://')[1] }}"
+            port: 389
+            uid: "sAMAccountName"
+            encryption: "plain"
+            bind_dn: "cn=gitlab-ldap,OU=Services,{{ ldap_base_dn }}"
+            password: "{{ gitlab_ldap_password | default('changeme123') }}"
+            base: "{{ ldap_base_dn }}"
+            user_filter: "(&(objectCategory=person)(objectClass=user)(memberOf=cn=GitlabUsers,OU=Groups,{{ ldap_base_dn }}))"
+            attributes:
+              username: ["sAMAccountName"]
+              email: ["mail"]
+              name: ["displayName"]
+              first_name: ["givenName"]
+              last_name: ["sn"]
+            
+      oidc:
+        enabled: true
+        name: "keycloak"
+        label: "OpenInfra SSO"
+        issuer: "{{ keycloak.issuer_url }}"
+        discovery: true
+        client_id: "gitlab-client"
+        client_secret: "{{ gitlab_oidc_secret | default('changeme123') }}"
+        scope: ["openid", "profile", "email"]
+        
+      database:
+        type: postgresql
+        host: "gitlab-postgresql"
+        database: "gitlab"
+        username: "gitlab"
+        password: "{{ gitlab_db_password | default('changeme123') }}"
+        
+      redis:
+        host: "gitlab-redis"
+        port: 6379
+        
+      persistence:
+        enabled: true
+        size: 50Gi
+        storageClass: ""
+        
+      service:
+        type: ClusterIP
+        port: 80
+        
+      ingress:
+        enabled: true
+        hostname: gitlab.local
+        tls: true
+        
+      resources:
+        limits:
+          cpu: 2000m
+          memory: 4Gi
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+          
+      # GitLab Runner configuration
+      runner:
+        enabled: true
+        replicas: 2
+        image: gitlab/gitlab-runner:v16.6.1
+        privileged: true
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+  register: gitlab_deployment
+
+- name: Deploy GitLab PostgreSQL database
+  kubernetes.core.helm:
+    name: gitlab-postgresql
+    chart_ref: bitnami/postgresql
+    release_namespace: "{{ namespace }}"
+    create_namespace: false
+    values:
+      auth:
+        database: "gitlab"
+        username: "gitlab"
+        password: "{{ gitlab_db_password | default('changeme123') }}"
+      primary:
+        persistence:
+          enabled: true
+          size: 20Gi
+  register: gitlab_db_deployment
+
+- name: Deploy GitLab Redis cache
+  kubernetes.core.helm:
+    name: gitlab-redis
+    chart_ref: bitnami/redis
+    release_namespace: "{{ namespace }}"
+    create_namespace: false
+    values:
+      auth:
+        enabled: false
+      master:
+        persistence:
+          enabled: true
+          size: 5Gi
+  register: gitlab_redis_deployment
+
+- name: Wait for GitLab dependencies to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app.kubernetes.io/name in (postgresql,redis)"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
+- name: Wait for GitLab pod to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app=gitlab"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 900  # GitLab takes longer to start
+  register: gitlab_pods
+
+- name: Wait for GitLab Runner pods to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app=gitlab-runner"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+  register: gitlab_runner_pods
+
+- name: Configure GitLab LDAP integration via API
+  uri:
+    url: "http://{{ gitlab_pods.resources[0].status.podIP }}/api/v4/application_settings"
+    method: PUT
+    headers:
+      PRIVATE-TOKEN: "{{ gitlab_admin_token | default('') }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      signin_enabled: true
+      signup_enabled: false
+      require_two_factor_authentication: false
+      ldap_enabled: true
+    status_code: [200, 401]  # 401 if no admin token
+  register: gitlab_ldap_config
+  failed_when: false
+
+- name: Create GitLab CI/CD configuration template
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: gitlab-ci-templates
+        namespace: "{{ namespace }}"
+      data:
+        .gitlab-ci.yml: |
+          # Default GitLab CI/CD template for OpenInfra projects
+          stages:
+            - test
+            - build
+            - deploy
+          
+          variables:
+            DOCKER_DRIVER: overlay2
+            DOCKER_TLS_CERTDIR: "/certs"
+          
+          before_script:
+            - echo "Starting CI/CD pipeline for $CI_PROJECT_NAME"
+            - echo "Branch: $CI_COMMIT_REF_NAME"
+            - echo "Commit: $CI_COMMIT_SHA"
+          
+          test:
+            stage: test
+            script:
+              - echo "Running tests..."
+              - echo "Add your test commands here"
+            only:
+              - merge_requests
+              - main
+              - develop
+          
+          build:
+            stage: build
+            script:
+              - echo "Building application..."
+              - echo "Add your build commands here"
+            only:
+              - main
+              - develop
+          
+          deploy_staging:
+            stage: deploy
+            script:
+              - echo "Deploying to staging..."
+              - echo "kubectl apply -f k8s/staging/"
+            only:
+              - develop
+            when: manual
+          
+          deploy_production:
+            stage: deploy
+            script:
+              - echo "Deploying to production..."
+              - echo "kubectl apply -f k8s/production/"
+            only:
+              - main
+            when: manual
+
+- name: Verify GitLab health
+  uri:
+    url: "http://{{ gitlab_pods.resources[0].status.podIP }}/-/health"
+    method: GET
+    status_code: 200
+  register: gitlab_health
+  until: gitlab_health.status == 200
+  retries: 30
+  delay: 30
+
+- name: Verify GitLab Runner registration
+  uri:
+    url: "http://{{ gitlab_pods.resources[0].status.podIP }}/api/v4/runners"
+    method: GET
+    headers:
+      PRIVATE-TOKEN: "{{ gitlab_admin_token | default('') }}"
+    status_code: [200, 401]
+  register: gitlab_runners
+  failed_when: false
+
+- name: Display GitLab deployment status
+  debug:
+    msg: |
+      GitLab deployment completed:
+      
+      🦊 GitLab Instance:
+      - URL: https://gitlab.local
+      - Root Password: {{ gitlab_root_password | default('changeme123') }}
+      - LDAP Integration: {{ gitlab_ldap_config.status == 200 | ternary('Configured', 'Manual setup required') }}
+      - OIDC Integration: Configured
+      - Health: {{ gitlab_health.status == 200 | ternary('Healthy', 'Unhealthy') }}
+      - Pod: {{ gitlab_pods.resources[0].metadata.name }}
+      
+      🏃 GitLab Runners:
+      - Active Runners: {{ gitlab_runner_pods.resources | length }}
+      - Registration: {{ gitlab_runners.status == 200 | ternary('Success', 'Manual registration required') }}
+      
+      📊 Database & Cache:
+      - PostgreSQL: Deployed
+      - Redis: Deployed
+      
+      📝 Next Steps:
+      1. Access GitLab at https://gitlab.local
+      2. Login with root/{{ gitlab_root_password | default('changeme123') }}
+      3. Configure additional settings via Admin Area
+      4. Create projects and configure CI/CD pipelines

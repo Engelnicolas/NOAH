@@ -1,0 +1,474 @@
+---
+# Ansible/roles/openedr/tasks/main.yml
+# Deploy OpenEDR endpoint detection and response system
+
+- name: Deploy OpenEDR Server using Helm
+  kubernetes.core.helm:
+    name: openedr
+    chart_ref: "{{ playbook_dir }}/../Helm/openedr"
+    release_namespace: "{{ namespace }}"
+    create_namespace: false
+    values:
+      server:
+        replicaCount: 1
+        image:
+          repository: openedr/openedr-server
+          tag: "latest"
+          pullPolicy: IfNotPresent
+          
+        service:
+          type: ClusterIP
+          port: 8080
+          
+        ingress:
+          enabled: true
+          hostname: openedr.local
+          tls: true
+          
+        database:
+          type: postgresql
+          host: "openedr-postgresql"
+          port: 5432
+          name: "openedr"
+          username: "openedr"
+          password: "{{ openedr_db_password | default('changeme123') }}"
+          
+        config:
+          server:
+            port: 8080
+            host: "0.0.0.0"
+            
+          security:
+            jwt_secret: "{{ openedr_jwt_secret | default('changeme123456789') }}"
+            admin_password: "{{ openedr_admin_password | default('changeme123') }}"
+            
+          collection:
+            interval: 60
+            retention_days: 90
+            
+          alerts:
+            email_enabled: false
+            webhook_url: "{{ openedr_webhook_url | default('') }}"
+            
+        persistence:
+          enabled: true
+          size: 20Gi
+          storageClass: ""
+          
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+            
+      agent:
+        enabled: true
+        image:
+          repository: openedr/openedr-agent
+          tag: "latest"
+          pullPolicy: IfNotPresent
+          
+        config:
+          server_url: "https://openedr.local"
+          agent_id: "kubernetes-cluster"
+          collection_interval: 60
+          
+        daemonset:
+          enabled: true
+          hostNetwork: true
+          hostPID: true
+          privileged: true
+          
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+  register: openedr_deployment
+
+- name: Deploy OpenEDR PostgreSQL database
+  kubernetes.core.helm:
+    name: openedr-postgresql
+    chart_ref: bitnami/postgresql
+    release_namespace: "{{ namespace }}"
+    create_namespace: false
+    values:
+      auth:
+        database: "openedr"
+        username: "openedr"
+        password: "{{ openedr_db_password | default('changeme123') }}"
+        postgresPassword: "{{ openedr_db_root_password | default('changeme123') }}"
+      primary:
+        persistence:
+          enabled: true
+          size: 10Gi
+  register: openedr_db_deployment
+
+- name: Wait for OpenEDR PostgreSQL to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app.kubernetes.io/name=postgresql"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
+- name: Wait for OpenEDR Server to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app=openedr-server"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 600
+  register: openedr_server_pods
+
+- name: Deploy OpenEDR Agent DaemonSet
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: apps/v1
+      kind: DaemonSet
+      metadata:
+        name: openedr-agent
+        namespace: "{{ namespace }}"
+        labels:
+          app: openedr-agent
+      spec:
+        selector:
+          matchLabels:
+            app: openedr-agent
+        template:
+          metadata:
+            labels:
+              app: openedr-agent
+          spec:
+            hostNetwork: true
+            hostPID: true
+            containers:
+            - name: openedr-agent
+              image: openedr/openedr-agent:latest
+              env:
+              - name: OPENEDR_SERVER_URL
+                value: "http://openedr-server.{{ namespace }}.svc.cluster.local:8080"
+              - name: OPENEDR_AGENT_ID
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
+              - name: OPENEDR_COLLECTION_INTERVAL
+                value: "60"
+              - name: OPENEDR_LOG_LEVEL
+                value: "INFO"
+              securityContext:
+                privileged: true
+              volumeMounts:
+              - name: proc
+                mountPath: /host/proc
+                readOnly: true
+              - name: sys
+                mountPath: /host/sys
+                readOnly: true
+              - name: root
+                mountPath: /host/root
+                readOnly: true
+              - name: var-log
+                mountPath: /host/var/log
+                readOnly: true
+              - name: etc
+                mountPath: /host/etc
+                readOnly: true
+              - name: dev
+                mountPath: /host/dev
+                readOnly: true
+              resources:
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+            volumes:
+            - name: proc
+              hostPath:
+                path: /proc
+            - name: sys
+              hostPath:
+                path: /sys
+            - name: root
+              hostPath:
+                path: /
+            - name: var-log
+              hostPath:
+                path: /var/log
+            - name: etc
+              hostPath:
+                path: /etc
+            - name: dev
+              hostPath:
+                path: /dev
+            tolerations:
+            - operator: Exists
+              effect: NoSchedule
+  register: openedr_agent_deployment
+
+- name: Wait for OpenEDR Agent pods to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app=openedr-agent"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+  register: openedr_agent_pods
+
+- name: Create OpenEDR detection rules ConfigMap
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: openedr-detection-rules
+        namespace: "{{ namespace }}"
+      data:
+        rules.yaml: |
+          # OpenEDR Detection Rules for OpenInfra
+          rules:
+            - name: "Suspicious Process Execution"
+              type: "process"
+              severity: "high"
+              conditions:
+                - field: "process.name"
+                  operator: "regex"
+                  value: "(nc|netcat|ncat|telnet|wget|curl).*"
+                - field: "process.args"
+                  operator: "contains"
+                  value: "bash"
+              description: "Suspicious process execution detected"
+              
+            - name: "Privilege Escalation Attempt"
+              type: "process"
+              severity: "critical"
+              conditions:
+                - field: "process.name"
+                  operator: "in"
+                  value: ["sudo", "su", "doas"]
+                - field: "user.name"
+                  operator: "not_in"
+                  value: ["root", "admin"]
+              description: "Privilege escalation attempt detected"
+              
+            - name: "Unusual Network Connection"
+              type: "network"
+              severity: "medium"
+              conditions:
+                - field: "network.direction"
+                  operator: "equals"
+                  value: "outbound"
+                - field: "network.port"
+                  operator: "not_in"
+                  value: [80, 443, 53, 22, 3389]
+              description: "Unusual outbound network connection"
+              
+            - name: "File System Tampering"
+              type: "file"
+              severity: "high"
+              conditions:
+                - field: "file.path"
+                  operator: "regex"
+                  value: "/(etc|bin|sbin|usr/bin|usr/sbin)/.*"
+                - field: "file.action"
+                  operator: "in"
+                  value: ["modify", "delete", "create"]
+              description: "Critical system file modification detected"
+              
+            - name: "Container Escape Attempt"
+              type: "process"
+              severity: "critical"
+              conditions:
+                - field: "process.name"
+                  operator: "in"
+                  value: ["docker", "kubectl", "crictl", "runc"]
+                - field: "process.args"
+                  operator: "contains_any"
+                  value: ["--privileged", "--cap-add", "--security-opt"]
+              description: "Potential container escape attempt"
+              
+            - name: "Crypto Mining Activity"
+              type: "process"
+              severity: "high"
+              conditions:
+                - field: "process.name"
+                  operator: "regex"
+                  value: ".*(mine|miner|xmrig|cpuminer).*"
+                - field: "process.cpu_percent"
+                  operator: "greater_than"
+                  value: 80
+              description: "Cryptocurrency mining activity detected"
+
+- name: Initialize OpenEDR database schema
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ openedr_server_pods.resources[0].metadata.name }}"
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        
+        # Wait for database to be ready
+        until pg_isready -h openedr-postgresql -p 5432 -U openedr; do
+          echo "Waiting for PostgreSQL to be ready..."
+          sleep 5
+        done
+        
+        # Initialize database schema
+        python3 /app/manage.py migrate
+        
+        # Create admin user
+        python3 /app/manage.py shell -c "
+        from django.contrib.auth.models import User
+        if not User.objects.filter(username='admin').exists():
+            User.objects.create_superuser('admin', 'admin@openinfra.local', '{{ openedr_admin_password | default('changeme123') }}')
+            print('Admin user created')
+        else:
+            print('Admin user already exists')
+        "
+        
+        echo "OpenEDR initialization completed"
+  register: openedr_init
+  failed_when: openedr_init.rc != 0
+
+- name: Configure OpenEDR for Kubernetes monitoring
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ openedr_server_pods.resources[0].metadata.name }}"
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        
+        # Configure monitoring policies
+        cat > /tmp/k8s_policy.json << 'EOF'
+        {
+          "name": "Kubernetes Security Policy",
+          "description": "Security monitoring for Kubernetes cluster",
+          "rules": [
+            {
+              "name": "Container Runtime Security",
+              "enabled": true,
+              "severity": "high"
+            },
+            {
+              "name": "Pod Security Standards",
+              "enabled": true,
+              "severity": "medium"
+            },
+            {
+              "name": "Network Policy Violations",
+              "enabled": true,
+              "severity": "high"
+            }
+          ]
+        }
+        EOF
+        
+        # Apply monitoring policy
+        curl -X POST http://localhost:8080/api/v1/policies \
+          -H "Content-Type: application/json" \
+          -d @/tmp/k8s_policy.json \
+          -u admin:{{ openedr_admin_password | default('changeme123') }} || true
+        
+        echo "OpenEDR Kubernetes monitoring configured"
+  register: openedr_k8s_config
+  failed_when: false
+
+- name: Verify OpenEDR Server health
+  uri:
+    url: "http://{{ openedr_server_pods.resources[0].status.podIP }}:8080/api/v1/health"
+    method: GET
+    status_code: 200
+  register: openedr_health
+  until: openedr_health.status == 200
+  retries: 15
+  delay: 20
+
+- name: Check OpenEDR agent registration
+  uri:
+    url: "http://{{ openedr_server_pods.resources[0].status.podIP }}:8080/api/v1/agents"
+    method: GET
+    headers:
+      Authorization: "Basic {{ ('admin:' + (openedr_admin_password | default('changeme123'))) | b64encode }}"
+    status_code: 200
+  register: openedr_agents
+  until: openedr_agents.status == 200
+  retries: 10
+  delay: 15
+
+- name: Display OpenEDR deployment status
+  debug:
+    msg: |
+      OpenEDR endpoint detection and response deployment completed:
+      
+      🔍 OpenEDR Server:
+      - URL: https://openedr.local
+      - Admin User: admin
+      - Admin Password: {{ openedr_admin_password | default('changeme123') }}
+      - Health: {{ openedr_health.status == 200 | ternary('Healthy', 'Unhealthy') }}
+      - Pod: {{ openedr_server_pods.resources[0].metadata.name }}
+      - API Endpoint: /api/v1/
+      
+      🤖 OpenEDR Agents:
+      - DaemonSet: Deployed on all nodes
+      - Active Agents: {{ openedr_agent_pods.resources | length }}
+      - Registration: {{ openedr_agents.status == 200 | ternary('Success', 'Pending') }}
+      - Collection Interval: 60 seconds
+      
+      🗄️  Database:
+      - PostgreSQL: Deployed and initialized
+      - Schema: Created
+      - Storage: 10Gi
+      
+      🛡️  Detection Rules:
+      - Suspicious Process Execution
+      - Privilege Escalation Attempts
+      - Unusual Network Connections
+      - File System Tampering
+      - Container Escape Attempts
+      - Crypto Mining Activity
+      
+      📊 Monitoring Policies:
+      - Container Runtime Security
+      - Pod Security Standards
+      - Network Policy Violations
+      - Kubernetes Security Events
+      
+      📝 Next Steps:
+      1. Access web interface at https://openedr.local
+      2. Login with admin/{{ openedr_admin_password | default('changeme123') }}
+      3. Review agent registration status
+      4. Configure alert notifications
+      5. Customize detection rules
+      6. Set up incident response workflows
+      7. Monitor security events and alerts
+      
+      ⚠️  Security Notes:
+      - Change default admin password immediately
+      - Configure HTTPS certificates for production
+      - Set up proper backup for detection data
+      - Review and tune detection rules regularly

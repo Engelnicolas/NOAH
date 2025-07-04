@@ -1,0 +1,637 @@
+---
+# =============================================================================
+# OpenInfra - Master Deployment Playbook
+# =============================================================================
+#
+# This is the main Ansible playbook that orchestrates the complete deployment
+# of the OpenInfra open-source information system infrastructure.
+#
+# The playbook performs the following major phases:
+# 1. Prerequisites and environment validation
+# 2. Core infrastructure services (LDAP, database, storage)
+# 3. Identity and access management (Keycloak, OAuth2-Proxy)
+# 4. Collaboration platforms (Mattermost, GitLab, Nextcloud)
+# 5. Security tools (Wazuh SIEM, OpenEDR)
+# 6. Monitoring and observability (Prometheus, Grafana)
+# 7. Network services (OpenVPN, firewall configuration)
+#
+# Features:
+# - Modular role-based architecture
+# - Parallel deployment capabilities
+# - Comprehensive validation and health checks
+# - Rollback and recovery mechanisms
+# - Environment-specific configurations
+# - Integration testing and post-deployment validation
+#
+# Usage:
+#   ansible-playbook main.yml -i inventory
+#   ansible-playbook main.yml -i inventory --tags "core,monitoring"
+#   ansible-playbook main.yml -i inventory --limit "production"
+#
+# Author: OpenInfra Team
+# Version: 2.0
+# License: MIT
+# Documentation: ../Docs/README.md
+# =============================================================================
+
+- name: Deploy OpenInfra Complete Stack
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  become: false
+  
+  # Load global configuration variables
+  vars_files:
+    - vars/global.yml
+  
+  # Playbook-level variables for deployment tracking and control
+  vars:
+    # Record deployment start time for duration tracking
+    deployment_start_time: "{{ ansible_date_time.epoch }}"
+    
+    # Arrays to track deployment success/failure for reporting
+    failed_phases: []
+    successful_phases: []
+
+  # =============================================================================
+  # Pre-deployment Tasks - Environment Validation and Setup
+  # =============================================================================
+  pre_tasks:
+    - name: Display deployment banner
+      debug:
+        msg: |
+          ================================================================
+          🚀 OpenInfra - Complete Stack Deployment
+          ================================================================
+          Namespace: {{ namespace }}
+          Environment: {{ env | default('production') }}
+          Validation: {{ run_validation | ternary('enabled', 'disabled') }}
+          Parallel Deployment: {{ parallel_deployment | default(false) | ternary('enabled', 'disabled') }}
+          ================================================================
+
+    # Verify all prerequisites before starting deployment
+    - name: Verify prerequisites
+      block:
+        # Test Kubernetes cluster connectivity and access
+        - name: Check Kubernetes connectivity
+          kubernetes.core.k8s_info:
+            api_version: v1
+            kind: Namespace
+            name: "{{ namespace }}"
+          register: k8s_namespace
+          failed_when: false
+
+        # Create target namespace if it doesn't exist
+        - name: Create namespace if it doesn't exist
+          kubernetes.core.k8s:
+            name: "{{ namespace }}"
+            api_version: v1
+            kind: Namespace
+            state: present
+          when: k8s_namespace.resources | length == 0
+
+        # Verify Helm CLI is available and functional
+        - name: Verify Helm is available
+          command: helm version --short
+          register: helm_version
+          changed_when: false
+
+        - name: Check required Helm charts exist
+          stat:
+            path: "../Helm/{{ item }}"
+          register: helm_charts
+          loop:
+            - samba4
+            - keycloak
+            - oauth2-proxy
+            - nextcloud
+            - mattermost
+            - gitlab
+            - wazuh
+            - openedr
+            - prometheus
+            - grafana
+          failed_when: not helm_charts.results | selectattr('stat.exists') | list
+
+        - name: Display environment info
+          debug:
+            msg: |
+              Kubernetes namespace: {{ namespace }}
+              Helm version: {{ helm_version.stdout }}
+              Target services: {{ http_services | join(', ') }}
+              Available Helm charts: {{ helm_charts.results | selectattr('stat.exists') | map(attribute='item') | list | join(', ') }}
+
+      rescue:
+        - name: Prerequisites check failed
+          fail:
+            msg: "Prerequisites check failed. Please ensure Kubernetes is accessible and all Helm charts are present."
+
+  tasks:
+    # Phase 1: Core Infrastructure and Security (Sequential - Foundation)
+    - name: "Phase 1: Deploy Core Infrastructure"
+      block:
+        - name: Deploy firewall rules (UFW)
+          include_role:
+            name: ufw
+          tags: ['phase1', 'security', 'ufw']
+
+        - name: Deploy OpenVPN server
+          include_role:
+            name: openvpn
+          tags: ['phase1', 'security', 'openvpn']
+
+        - name: Phase 1 success
+          set_fact:
+            successful_phases: "{{ successful_phases + ['Phase 1: Core Infrastructure'] }}"
+
+      rescue:
+        - name: Phase 1 failure handler
+          set_fact:
+            failed_phases: "{{ failed_phases + ['Phase 1: Core Infrastructure'] }}"
+          
+        - name: Log Phase 1 failure
+          debug:
+            msg: "Phase 1 failed - Core infrastructure deployment failed"
+          
+        - name: Fail deployment on critical phase failure
+          fail:
+            msg: "Critical phase failed - cannot continue deployment"
+
+    # Phase 2: Identity and Authentication (Sequential - Core Services)
+    - name: "Phase 2: Deploy Identity Management"
+      block:
+        - name: Deploy LDAP/Samba4 directory service
+          include_role:
+            name: ldap_samba4
+          tags: ['phase2', 'identity', 'ldap']
+
+        - name: Wait for LDAP/Samba4 to be ready
+          kubernetes.core.k8s_info:
+            api_version: v1
+            kind: Pod
+            namespace: "{{ namespace }}"
+            label_selectors:
+              - "app=samba4"
+            wait: true
+            wait_condition:
+              type: Ready
+              status: "True"
+            wait_timeout: 300
+
+        - name: Deploy Keycloak identity provider
+          include_role:
+            name: keycloak
+          tags: ['phase2', 'identity', 'keycloak']
+
+        - name: Wait for Keycloak to be ready
+          kubernetes.core.k8s_info:
+            api_version: v1
+            kind: Pod
+            namespace: "{{ namespace }}"
+            label_selectors:
+              - "app=keycloak"
+            wait: true
+            wait_condition:
+              type: Ready
+              status: "True"
+            wait_timeout: 300
+
+        - name: Configure OAuth2 Proxy
+          include_role:
+            name: oauth2_proxy
+          tags: ['phase2', 'identity', 'oauth2']
+
+        - name: Phase 2 success
+          set_fact:
+            successful_phases: "{{ successful_phases + ['Phase 2: Identity Management'] }}"
+
+      rescue:
+        - name: Phase 2 failure handler
+          set_fact:
+            failed_phases: "{{ failed_phases + ['Phase 2: Identity Management'] }}"
+          
+        - name: Log Phase 2 failure
+          debug:
+            msg: "Phase 2 failed - Identity management deployment failed"
+          
+        - name: Fail deployment on critical phase failure
+          fail:
+            msg: "Critical phase failed - cannot continue deployment"
+
+    # Phase 3: Collaboration Platforms (Can be parallel if enabled)
+    - name: "Phase 3: Deploy Collaboration Services"
+      block:
+        - name: Deploy collaboration platforms (Nextcloud, Mattermost)
+          include_role:
+            name: collab_platforms
+          tags: ['phase3', 'collaboration', 'platforms']
+          async: "{{ parallel_deployment | default(false) | ternary(3600, 0) }}"
+          poll: "{{ parallel_deployment | default(false) | ternary(0, 5) }}"
+          register: collab_deployment
+
+        - name: Deploy GitLab for code collaboration
+          include_role:
+            name: gitlab
+          tags: ['phase3', 'collaboration', 'gitlab']
+          async: "{{ parallel_deployment | default(false) | ternary(3600, 0) }}"
+          poll: "{{ parallel_deployment | default(false) | ternary(0, 5) }}"
+          register: gitlab_deployment
+
+        - name: Wait for parallel deployments to complete
+          async_status:
+            jid: "{{ item.ansible_job_id }}"
+          loop:
+            - "{{ collab_deployment }}"
+            - "{{ gitlab_deployment }}"
+          when: 
+            - parallel_deployment | default(false)
+            - item.ansible_job_id is defined
+          register: deployment_results
+          until: deployment_results.finished
+          retries: 60
+          delay: 30
+
+        - name: Phase 3 success
+          set_fact:
+            successful_phases: "{{ successful_phases + ['Phase 3: Collaboration Services'] }}"
+
+      rescue:
+        - name: Phase 3 failure handler
+          set_fact:
+            failed_phases: "{{ failed_phases + ['Phase 3: Collaboration Services'] }}"
+          
+        - name: Log Phase 3 failure
+          debug:
+            msg: "Phase 3 failed - Collaboration services deployment failed"
+
+    # Phase 4: Security and Monitoring (Can be parallel if enabled)
+    - name: "Phase 4: Deploy Security and Monitoring"
+      block:
+        - name: Deploy Wazuh security monitoring
+          include_role:
+            name: wazuh
+          tags: ['phase4', 'security', 'wazuh']
+          async: "{{ parallel_deployment | default(false) | ternary(3600, 0) }}"
+          poll: "{{ parallel_deployment | default(false) | ternary(0, 5) }}"
+          register: wazuh_deployment
+
+        - name: Deploy OpenEDR endpoint detection
+          include_role:
+            name: openedr
+          tags: ['phase4', 'security', 'openedr']
+          async: "{{ parallel_deployment | default(false) | ternary(3600, 0) }}"
+          poll: "{{ parallel_deployment | default(false) | ternary(0, 5) }}"
+          register: openedr_deployment
+
+        - name: Deploy monitoring stack (Prometheus, Grafana)
+          include_role:
+            name: monitoring
+          tags: ['phase4', 'monitoring', 'prometheus']
+          async: "{{ parallel_deployment | default(false) | ternary(3600, 0) }}"
+          poll: "{{ parallel_deployment | default(false) | ternary(0, 5) }}"
+          register: monitoring_deployment
+
+        - name: Wait for parallel security/monitoring deployments
+          async_status:
+            jid: "{{ item.ansible_job_id }}"
+          loop:
+            - "{{ wazuh_deployment }}"
+            - "{{ openedr_deployment }}"
+            - "{{ monitoring_deployment }}"
+          when: 
+            - parallel_deployment | default(false)
+            - item.ansible_job_id is defined
+          register: security_deployment_results
+          until: security_deployment_results.finished
+          retries: 60
+          delay: 30
+
+        - name: Phase 4 success
+          set_fact:
+            successful_phases: "{{ successful_phases + ['Phase 4: Security and Monitoring'] }}"
+
+      rescue:
+        - name: Phase 4 failure handler
+          set_fact:
+            failed_phases: "{{ failed_phases + ['Phase 4: Security and Monitoring'] }}"
+          
+        - name: Log Phase 4 failure
+          debug:
+            msg: "Phase 4 failed - Security and monitoring deployment failed"
+
+    # Phase 5: Federation and Integration (Final configuration)
+    - name: "Phase 5: Configure Federation and SSO"
+      block:
+        - name: Configure OIDC federation between services
+          include_role:
+            name: federation
+          tags: ['phase5', 'federation', 'sso']
+
+        - name: Configure OpenVPN authentication with LDAP
+          include_role:
+            name: openvpn_auth
+          tags: ['phase5', 'vpn', 'auth']
+
+        - name: Phase 5 success
+          set_fact:
+            successful_phases: "{{ successful_phases + ['Phase 5: Federation and Integration'] }}"
+
+      rescue:
+        - name: Phase 5 failure handler
+          set_fact:
+            failed_phases: "{{ failed_phases + ['Phase 5: Federation and Integration'] }}"
+          
+        - name: Log Phase 5 failure
+          debug:
+            msg: "Phase 5 failed - Federation configuration failed"
+
+  post_tasks:
+    - name: Comprehensive health check
+      block:
+        - name: Wait for all core services to be ready
+          kubernetes.core.k8s_info:
+            api_version: v1
+            kind: Pod
+            namespace: "{{ namespace }}"
+            label_selectors:
+              - "app in (keycloak,nextcloud,mattermost,gitlab,wazuh,openedr,prometheus,grafana,samba4)"
+            wait: true
+            wait_condition:
+              type: Ready
+              status: "True"
+            wait_timeout: 600
+          register: pod_status
+          failed_when: false
+
+        - name: Check service endpoints
+          uri:
+            url: "https://{{ item }}/health"
+            method: GET
+            status_code: [200, 302, 401]  # Some services redirect to login
+            timeout: 10
+          loop: "{{ http_services }}"
+          register: endpoint_checks
+          failed_when: false
+
+        - name: Calculate deployment metrics
+          set_fact:
+            total_pods: "{{ pod_status.resources | length }}"
+            ready_pods: "{{ pod_status.resources | selectattr('status.containerStatuses.0.ready', 'equalto', true) | list | length }}"
+            deployment_duration: "{{ ansible_date_time.epoch | int - deployment_start_time | int }}"
+            healthy_endpoints: "{{ endpoint_checks.results | selectattr('status', 'equalto', 200) | list | length }}"
+
+    - name: Generate comprehensive deployment report
+      template:
+        src: deployment_report.j2
+        dest: "/tmp/openinfra_deployment_{{ ansible_date_time.epoch }}.txt"
+      vars:
+        deployment_time: "{{ ansible_date_time.iso8601 }}"
+        deployed_services: "{{ http_services }}"
+        deployment_summary:
+          total_pods: "{{ total_pods }}"
+          ready_pods: "{{ ready_pods }}"
+          duration_seconds: "{{ deployment_duration }}"
+          successful_phases: "{{ successful_phases }}"
+          failed_phases: "{{ failed_phases }}"
+
+    - name: Display comprehensive deployment status
+      debug:
+        msg: |
+          ================================================================
+          🎉 OpenInfra Deployment Summary
+          ================================================================
+          Deployment Duration: {{ deployment_duration }}s
+          
+          📊 Infrastructure Status:
+          - Total pods deployed: {{ total_pods }}
+          - Ready pods: {{ ready_pods }}
+          - Health check ratio: {{ ready_pods }}/{{ total_pods }}
+          
+          ✅ Successful Phases:
+          {% for phase in successful_phases %}
+          - {{ phase }}
+          {% endfor %}
+          
+          {% if failed_phases | length > 0 %}
+          ❌ Failed Phases:
+          {% for phase in failed_phases %}
+          - {{ phase }}
+          {% endfor %}
+          {% endif %}
+          
+          🌐 Services available at:
+          {% for service in http_services %}
+          - https://{{ service }}
+          {% endfor %}
+          
+          🔐 Default credentials:
+          - Keycloak Admin: {{ keycloak.admin_user }} / {{ keycloak.admin_password }}
+          - LDAP Admin: {{ ldap_bind_dn }} / {{ ldap_bind_password }}
+          ================================================================
+
+    - name: Run post-deployment validation
+      include_tasks: ../Test/post_deploy_validate.yml
+      when: run_validation | bool
+      tags: ['validation', 'testing']
+
+    - name: Send deployment notification
+      uri:
+        url: "{{ notification_webhook | default('') }}"
+        method: POST
+        body_format: json
+        body:
+          text: "OpenInfra deployment completed in {{ deployment_duration }}s. {{ successful_phases | length }} phases successful, {{ failed_phases | length }} phases failed."
+      when: notification_webhook is defined
+      failed_when: false
+
+  handlers:
+    - name: restart monitoring
+      kubernetes.core.k8s:
+        state: restarted
+        api_version: apps/v1
+        kind: Deployment
+        name: prometheus
+        namespace: "{{ namespace }}"
+
+    - name: restart keycloak
+      kubernetes.core.k8s:
+        state: restarted
+        api_version: apps/v1
+        kind: Deployment
+        name: keycloak
+        namespace: "{{ namespace }}"
+
+    - name: cleanup failed deployments
+      kubernetes.core.helm:
+        name: "{{ item }}"
+        release_namespace: "{{ namespace }}"
+        state: absent
+      loop: "{{ failed_deployments | default([]) }}"
+
+# Additional playbooks for specific operations
+---
+- name: Rollback OpenInfra Deployment
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - vars/global.yml
+  tasks:
+    - name: Display rollback warning
+      debug:
+        msg: |
+          ⚠️  WARNING: This will remove all OpenInfra services!
+          Namespace: {{ namespace }}
+          Services to remove: {{ helm_releases | join(', ') }}
+
+    - name: Confirm rollback
+      pause:
+        prompt: "Are you sure you want to rollback? Type 'yes' to continue"
+      register: rollback_confirmation
+      when: not auto_confirm | default(false)
+
+    - name: Uninstall all Helm releases
+      kubernetes.core.helm:
+        name: "{{ item }}"
+        release_namespace: "{{ namespace }}"
+        state: absent
+        wait: true
+        wait_timeout: 300
+      loop:
+        - gitlab
+        - nextcloud
+        - mattermost
+        - keycloak
+        - oauth2-proxy
+        - wazuh
+        - openedr
+        - prometheus
+        - grafana
+        - samba4
+      when: 
+        - rollback | default(false) | bool
+        - rollback_confirmation.user_input == "yes" or auto_confirm | default(false)
+      register: rollback_results
+
+    - name: Remove persistent volumes
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: PersistentVolumeClaim
+        namespace: "{{ namespace }}"
+        state: absent
+        name: "{{ item }}"
+      loop:
+        - samba4-data
+        - keycloak-data
+        - nextcloud-data
+        - gitlab-data
+        - prometheus-data
+        - grafana-data
+      when: 
+        - rollback | default(false) | bool
+        - remove_data | default(false) | bool
+        - rollback_confirmation.user_input == "yes" or auto_confirm | default(false)
+
+    - name: Display rollback summary
+      debug:
+        msg: |
+          🔄 Rollback completed
+          Removed services: {{ rollback_results.results | selectattr('changed') | map(attribute='item') | list | join(', ') }}
+          Data removal: {{ remove_data | default(false) | ternary('enabled', 'disabled') }}
+
+  tags: ['rollback']
+
+---
+- name: Scale OpenInfra Services
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - vars/global.yml
+  tasks:
+    - name: Display scaling configuration
+      debug:
+        msg: |
+          📈 Scaling OpenInfra Services
+          Target configurations: {{ scale_config | default([]) }}
+
+    - name: Scale deployments
+      kubernetes.core.k8s:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ item.name }}"
+        namespace: "{{ namespace }}"
+        definition:
+          spec:
+            replicas: "{{ item.replicas }}"
+      loop: "{{ scale_config | default([]) }}"
+      when: scale_services | default(false) | bool
+      register: scaling_results
+
+    - name: Wait for scaling to complete
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ item.name }}"
+        namespace: "{{ namespace }}"
+        wait: true
+        wait_condition:
+          type: Progressing
+          status: "True"
+        wait_timeout: 300
+      loop: "{{ scale_config | default([]) }}"
+      when: scale_services | default(false) | bool
+
+    - name: Display scaling summary
+      debug:
+        msg: |
+          📊 Scaling Summary
+          {% for result in scaling_results.results %}
+          - {{ result.item.name }}: {{ result.item.replicas }} replicas
+          {% endfor %}
+
+  tags: ['scaling']
+
+---
+- name: Backup OpenInfra Data
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - vars/global.yml
+  tasks:
+    - name: Create backup directory
+      file:
+        path: "{{ backup_path | default('/tmp/openinfra-backup') }}"
+        state: directory
+        mode: '0755'
+
+    - name: Backup persistent volume data
+      kubernetes.core.k8s_exec:
+        namespace: "{{ namespace }}"
+        pod: "{{ item.pod }}"
+        command: 
+          - tar
+          - czf
+          - "/tmp/{{ item.name }}-backup-{{ ansible_date_time.epoch }}.tar.gz"
+          - "{{ item.path }}"
+      loop:
+        - { name: "samba4", pod: "samba4-0", path: "/var/lib/samba" }
+        - { name: "keycloak", pod: "keycloak-0", path: "/opt/keycloak/data" }
+        - { name: "nextcloud", pod: "nextcloud-0", path: "/var/www/html" }
+        - { name: "gitlab", pod: "gitlab-0", path: "/var/opt/gitlab" }
+      when: backup_enabled | default(false) | bool
+      register: backup_results
+
+    - name: Copy backups to local storage
+      kubernetes.core.k8s_cp:
+        namespace: "{{ namespace }}"
+        pod: "{{ item.item.pod }}"
+        remote_path: "/tmp/{{ item.item.name }}-backup-{{ ansible_date_time.epoch }}.tar.gz"
+        local_path: "{{ backup_path | default('/tmp/openinfra-backup') }}/{{ item.item.name }}-backup-{{ ansible_date_time.epoch }}.tar.gz"
+      loop: "{{ backup_results.results }}"
+      when: 
+        - backup_enabled | default(false) | bool
+        - item.changed
+
+  tags: ['backup']

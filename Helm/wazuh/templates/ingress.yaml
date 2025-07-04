@@ -1,0 +1,91 @@
+---
+{{- if .Values.ingress.manager.enabled }}
+# Wazuh Manager API Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "wazuh.manager.fullname" . }}-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+  annotations:
+    {{- with .Values.ingress.manager.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.manager.className }}
+  ingressClassName: {{ .Values.ingress.manager.className }}
+  {{- end }}
+  {{- if .Values.ingress.manager.tls }}
+  tls:
+    {{- range .Values.ingress.manager.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.manager.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "wazuh.manager.fullname" $ }}
+                port:
+                  number: 55000
+          {{- end }}
+    {{- end }}
+{{- end }}
+
+---
+{{- if and .Values.dashboard.enabled .Values.ingress.dashboard.enabled }}
+# Wazuh Dashboard Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "wazuh.dashboard.fullname" . }}-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+  annotations:
+    {{- with .Values.ingress.dashboard.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.dashboard.className }}
+  ingressClassName: {{ .Values.ingress.dashboard.className }}
+  {{- end }}
+  {{- if .Values.ingress.dashboard.tls }}
+  tls:
+    {{- range .Values.ingress.dashboard.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.dashboard.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "wazuh.dashboard.fullname" $ }}
+                port:
+                  number: 5601
+          {{- end }}
+    {{- end }}
+{{- end }}

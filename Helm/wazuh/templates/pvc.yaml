@@ -1,0 +1,49 @@
+---
+{{- if and .Values.dashboard.enabled .Values.persistence.dashboard.enabled }}
+# Wazuh Dashboard Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wazuh.dashboard.fullname" . }}-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+  {{- with .Values.persistence.dashboard.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- range .Values.persistence.dashboard.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- if .Values.persistence.dashboard.storageClass }}
+  storageClassName: {{ .Values.persistence.dashboard.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.dashboard.size | quote }}
+{{- end }}
+
+---
+{{- if .Values.backup.enabled }}
+# Backup Storage PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wazuh.fullname" . }}-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.persistence.manager.storageClass }}
+  storageClassName: {{ .Values.persistence.manager.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: 50Gi
+{{- end }}

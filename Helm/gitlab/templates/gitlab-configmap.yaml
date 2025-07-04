@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gitlab.fullname" . }}-config
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "gitlab.labels" . | nindent 4 }}
+data:
+  gitlab.rb: |
+    # GitLab Configuration for N.O.A.H
+    {{- .Values.gitlabConfig | nindent 4 }}

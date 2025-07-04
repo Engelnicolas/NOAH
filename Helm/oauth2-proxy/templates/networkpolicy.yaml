@@ -1,0 +1,130 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "oauth2-proxy.fullname" . }}
+  labels:
+    {{- include "oauth2-proxy.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "oauth2-proxy.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from ingress controller
+    {{- if .Values.ingress.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.ingress.fromNamespace | default "ingress-nginx" }}
+        - podSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.ingress.fromPodLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+    {{- end }}
+    # Allow ingress from same namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Release.Namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+    # Allow ingress from monitoring namespace for Prometheus
+    {{- if .Values.serviceMonitor.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.monitoring.namespace | default "monitoring" }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.metricsPort | default 44180 }}
+    {{- end }}
+    # Allow ingress from protected services
+    {{- if .Values.networkPolicy.ingress.allowedServices }}
+    {{- range .Values.networkPolicy.ingress.allowedServices }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .namespace | default $.Release.Namespace }}
+        - podSelector:
+            matchLabels:
+              {{- toYaml .podLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.service.port }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.networkPolicy.ingress.additionalRules }}
+    {{- toYaml .Values.networkPolicy.ingress.additionalRules | nindent 4 }}
+    {{- end }}
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow connection to OIDC provider (Keycloak)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+      {{- if .Values.config.oidcIssuerUrl }}
+    # Specific egress for OIDC issuer
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.config.oidcPort | default 443 }}
+      {{- end }}
+    # Allow connection to Redis (if enabled)
+    {{- if .Values.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+      ports:
+        - protocol: TCP
+          port: {{ .Values.redis.master.service.ports.redis | default 6379 }}
+    {{- else if .Values.sessionStorage.redis.connectionUrl }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.sessionStorage.redis.port | default 6379 }}
+    {{- end }}
+    # Allow connection to upstream services (the services being protected)
+    {{- if .Values.networkPolicy.egress.allowedUpstreams }}
+    {{- range .Values.networkPolicy.egress.allowedUpstreams }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .namespace | default $.Release.Namespace }}
+        - podSelector:
+            matchLabels:
+              {{- toYaml .podLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .port }}
+    {{- end }}
+    {{- end }}
+    # Allow all HTTPS for external OIDC providers and upstream validation
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow HTTP for internal cluster communication
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 80
+    {{- if .Values.networkPolicy.egress.additionalRules }}
+    {{- toYaml .Values.networkPolicy.egress.additionalRules | nindent 4 }}
+    {{- end }}
+{{- end }}

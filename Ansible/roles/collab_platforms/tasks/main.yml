@@ -1,0 +1,261 @@
+---
+# Ansible/roles/collab_platforms/tasks/main.yml
+# Deploy Nextcloud and Mattermost collaboration platforms
+
+- name: Deploy Nextcloud using Helm
+  kubernetes.core.helm:
+    name: nextcloud
+    chart_ref: "{{ playbook_dir }}/../Helm/nextcloud"
+    release_namespace: "{{ namespace }}"
+    create_namespace: false
+    values:
+      replicaCount: 1
+      image:
+        repository: nextcloud
+        tag: "27-apache"
+        pullPolicy: IfNotPresent
+      
+      nextcloud:
+        host: nextcloud.local
+        username: admin
+        password: "{{ nextcloud_admin_password | default('changeme123') }}"
+        
+      database:
+        type: sqlite  # For production, use PostgreSQL
+        
+      persistence:
+        enabled: true
+        size: 20Gi
+        storageClass: ""
+        
+      ldap:
+        enabled: true
+        host: "{{ ldap_url.split('://')[1] }}"
+        port: 389
+        base: "{{ ldap_base_dn }}"
+        bindDN: "cn=nextcloud-ldap,OU=Services,{{ ldap_base_dn }}"
+        bindPassword: "{{ nextcloud_ldap_password | default('changeme123') }}"
+        userFilter: "(&(|(objectclass=person))(|(sAMAccountName=%uid)(|(mailPrimaryAddress=%uid)(mail=%uid))))"
+        groupFilter: "(&(|(objectclass=group))(|(cn=NextcloudUsers)))"
+        
+      service:
+        type: ClusterIP
+        port: 80
+        
+      ingress:
+        enabled: true
+        hostname: nextcloud.local
+        tls: true
+        
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+        requests:
+          cpu: 500m
+          memory: 512Mi
+  register: nextcloud_deployment
+
+- name: Deploy Mattermost using Helm
+  kubernetes.core.helm:
+    name: mattermost
+    chart_ref: "{{ playbook_dir }}/../Helm/mattermost"
+    release_namespace: "{{ namespace }}"
+    create_namespace: false
+    values:
+      replicaCount: 1
+      image:
+        repository: mattermost/mattermost-team-edition
+        tag: "7.10"
+        pullPolicy: IfNotPresent
+      
+      mattermost:
+        siteURL: "https://mattermost.local"
+        siteName: "OpenInfra Mattermost"
+        
+      database:
+        type: sqlite  # For production, use PostgreSQL
+        
+      ldap:
+        enabled: true
+        server: "{{ ldap_url.split('://')[1] }}"
+        port: 389
+        bindUsername: "cn=mattermost-ldap,OU=Services,{{ ldap_base_dn }}"
+        bindPassword: "{{ mattermost_ldap_password | default('changeme123') }}"
+        baseDN: "{{ ldap_base_dn }}"
+        userFilter: "(sAMAccountName=%v)"
+        groupFilter: "(|(cn=MattermostUsers))"
+        
+      oidc:
+        enabled: true
+        discoveryEndpoint: "{{ keycloak.issuer_url }}/.well-known/openid_configuration"
+        clientId: "mattermost-client"
+        clientSecret: "{{ mattermost_oidc_secret | default('changeme123') }}"
+        
+      persistence:
+        enabled: true
+        size: 10Gi
+        storageClass: ""
+        
+      service:
+        type: ClusterIP
+        port: 8065
+        
+      ingress:
+        enabled: true
+        hostname: mattermost.local
+        tls: true
+        
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+  register: mattermost_deployment
+
+- name: Wait for Nextcloud pod to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app=nextcloud"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 600
+  register: nextcloud_pods
+
+- name: Wait for Mattermost pod to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app=mattermost"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 600
+  register: mattermost_pods
+
+- name: Configure Nextcloud LDAP integration
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ nextcloud_pods.resources[0].metadata.name }}"
+    command:
+      - php
+      - occ
+      - app:enable
+      - user_ldap
+  register: nextcloud_ldap_enable
+  failed_when: 
+    - nextcloud_ldap_enable.rc != 0
+    - "'already enabled' not in nextcloud_ldap_enable.stderr"
+
+- name: Configure Nextcloud LDAP settings
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ nextcloud_pods.resources[0].metadata.name }}"
+    command:
+      - php
+      - occ
+      - ldap:create-empty-config
+  register: ldap_config_id
+  failed_when: false
+
+- name: Set Nextcloud LDAP configuration
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ nextcloud_pods.resources[0].metadata.name }}"
+    command:
+      - php
+      - occ
+      - ldap:set-config
+      - s01
+      - "{{ item.key }}"
+      - "{{ item.value }}"
+  loop:
+    - key: "ldapHost"
+      value: "{{ ldap_url.split('://')[1] }}"
+    - key: "ldapPort"
+      value: "389"
+    - key: "ldapAgentName"
+      value: "cn=nextcloud-ldap,OU=Services,{{ ldap_base_dn }}"
+    - key: "ldapAgentPassword"
+      value: "{{ nextcloud_ldap_password | default('changeme123') }}"
+    - key: "ldapBase"
+      value: "{{ ldap_base_dn }}"
+    - key: "ldapUserFilter"
+      value: "(&(|(objectclass=person))(|(memberof=cn=NextcloudUsers,OU=Groups,{{ ldap_base_dn }})))"
+    - key: "ldapUserDisplayName"
+      value: "displayName"
+    - key: "ldapLoginFilter"
+      value: "(&(|(objectclass=person))(|(sAMAccountName=%uid)(|(mailPrimaryAddress=%uid)(mail=%uid))))"
+    - key: "ldapConfigurationActive"
+      value: "1"
+  register: nextcloud_ldap_config
+  when: ldap_config_id.rc == 0
+
+- name: Configure Mattermost OIDC settings via API
+  uri:
+    url: "http://{{ mattermost_pods.resources[0].status.podIP }}:8065/api/v4/config"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ mattermost_admin_token | default('') }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      GitLabSettings:
+        Enable: true
+        Secret: "{{ mattermost_oidc_secret | default('changeme123') }}"
+        Id: "mattermost-client"
+        Scope: "{{ oidc_scope }}"
+        AuthEndpoint: "{{ keycloak.issuer_url }}/protocol/openid-connect/auth"
+        TokenEndpoint: "{{ keycloak.issuer_url }}/protocol/openid-connect/token"
+        UserApiEndpoint: "{{ keycloak.issuer_url }}/protocol/openid-connect/userinfo"
+    status_code: [200, 401]  # 401 if no admin token
+  register: mattermost_oidc_config
+  failed_when: false
+
+- name: Verify Nextcloud health
+  uri:
+    url: "http://{{ nextcloud_pods.resources[0].status.podIP }}/status.php"
+    method: GET
+    status_code: 200
+  register: nextcloud_health
+  until: nextcloud_health.status == 200
+  retries: 15
+  delay: 20
+
+- name: Verify Mattermost health
+  uri:
+    url: "http://{{ mattermost_pods.resources[0].status.podIP }}:8065/api/v4/system/ping"
+    method: GET
+    status_code: 200
+  register: mattermost_health
+  until: mattermost_health.status == 200
+  retries: 15
+  delay: 20
+
+- name: Display collaboration platforms deployment status
+  debug:
+    msg: |
+      Collaboration Platforms deployment completed:
+      
+      📁 Nextcloud:
+      - URL: https://nextcloud.local
+      - Admin User: admin
+      - LDAP Integration: {{ nextcloud_ldap_config.changed | default(false) | ternary('Configured', 'Failed') }}
+      - Health: {{ nextcloud_health.status == 200 | ternary('Healthy', 'Unhealthy') }}
+      - Pod: {{ nextcloud_pods.resources[0].metadata.name }}
+      
+      💬 Mattermost:
+      - URL: https://mattermost.local
+      - OIDC Integration: {{ mattermost_oidc_config.status == 200 | ternary('Configured', 'Manual setup required') }}
+      - Health: {{ mattermost_health.status == 200 | ternary('Healthy', 'Unhealthy') }}
+      - Pod: {{ mattermost_pods.resources[0].metadata.name }}

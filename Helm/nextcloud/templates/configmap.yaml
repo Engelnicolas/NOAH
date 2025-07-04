@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nextcloud.fullname" . }}-config
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "nextcloud.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  config.php: |
+    <?php
+    $CONFIG = array (
+      'memcache.local' => '\\OC\\Memcache\\APCu',
+      {{- if .Values.redis.enabled }}
+      'memcache.distributed' => '\\OC\\Memcache\\Redis',
+      'memcache.locking' => '\\OC\\Memcache\\Redis',
+      'redis' => array(
+        'host' => '{{ include "nextcloud.redis.host" . }}',
+        'port' => 6379,
+        {{- if .Values.redis.auth.enabled }}
+        'password' => getenv('REDIS_HOST_PASSWORD'),
+        {{- end }}
+      ),
+      {{- end }}
+      'trusted_proxies' => array(
+        '10.0.0.0/8',
+        '172.16.0.0/12',
+        '192.168.0.0/16',
+      ),
+      'overwriteprotocol' => '{{ .Values.nextcloud.protocol }}',
+      'overwritehost' => '{{ .Values.nextcloud.host }}',
+      'overwritewebroot' => '',
+      'overwrite.cli.url' => '{{ .Values.nextcloud.protocol }}://{{ .Values.nextcloud.host }}',
+      'htaccess.RewriteBase' => '/',
+      'default_phone_region' => 'US',
+      'maintenance_window_start' => 1,
+      {{- if .Values.oidc.enabled }}
+      // OIDC Configuration
+      'oidc_login_provider_url' => '{{ .Values.oidc.discoveryUrl }}',
+      'oidc_login_client_id' => '{{ .Values.oidc.clientId }}',
+      'oidc_login_client_secret' => getenv('OIDC_CLIENT_SECRET'),
+      'oidc_login_auto_redirect' => {{ .Values.oidc.config.autoRedirectOnLoginPage }},
+      'oidc_login_end_session_redirect' => {{ .Values.oidc.config.logoutUrl }},
+      'oidc_login_button_text' => '{{ .Values.oidc.config.loginButtonName }}',
+      'oidc_login_hide_password_form' => false,
+      'oidc_login_use_id_token' => true,
+      'oidc_login_attributes' => array (
+        'id' => '{{ .Values.oidc.config.userMappings.id }}',
+        'name' => '{{ .Values.oidc.config.userMappings.name }}',
+        'mail' => '{{ .Values.oidc.config.userMappings.mail }}',
+        'quota' => '{{ .Values.oidc.config.userMappings.quota }}',
+        'home' => '{{ .Values.oidc.config.userMappings.home }}',
+        'ldap_uid' => '{{ .Values.oidc.config.userMappings.ldap_uid }}',
+        'groups' => '{{ .Values.oidc.config.userMappings.groups }}',
+      ),
+      {{- if .Values.oidc.config.groupProvisioning }}
+      'oidc_login_default_group' => '{{ .Values.oidc.config.groupMappings.users }}',
+      'oidc_login_use_external_storage' => false,
+      'oidc_login_scope' => 'openid profile email groups',
+      'oidc_login_proxy_ldap' => {{ .Values.ldap.enabled }},
+      'oidc_login_disable_registration' => false,
+      'oidc_login_redir_fallback' => false,
+      'oidc_login_alt_login_page' => 'assets/login.php',
+      'oidc_login_tls_verify' => true,
+      {{- end }}
+      {{- end }}
+      {{- if .Values.ldap.enabled }}
+      // LDAP Configuration is handled by user_ldap app
+      {{- end }}
+      {{- if .Values.externalStorage.s3.enabled }}
+      // S3 External Storage Configuration
+      'objectstore' => array(
+        'class' => '\\OC\\Files\\ObjectStore\\S3',
+        'arguments' => array(
+          'bucket' => '{{ .Values.externalStorage.s3.bucket }}',
+          'hostname' => '{{ .Values.externalStorage.s3.hostname }}',
+          'port' => {{ .Values.externalStorage.s3.port }},
+          'use_ssl' => {{ .Values.externalStorage.s3.ssl }},
+          'key' => getenv('S3_ACCESS_KEY'),
+          'secret' => getenv('S3_SECRET_KEY'),
+          'use_path_style' => true,
+        ),
+      ),
+      {{- end }}
+    );
+    {{- .Values.nextcloud.config | nindent 4 }}
+  apps-config.json: |
+    {
+      "enabled": {{ .Values.apps.enabled | toJson }},
+      "additional": {{ .Values.apps.additional | toJson }}
+    }

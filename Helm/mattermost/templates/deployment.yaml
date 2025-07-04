@@ -1,0 +1,261 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mattermost.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mattermost.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "mattermost.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mattermost.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "mattermost.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "mattermost.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.initContainers }}
+      initContainers:
+        {{- toYaml .Values.initContainers | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mattermost
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ include "mattermost.image.repository" . }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8065
+              protocol: TCP
+            - name: gossip
+              containerPort: 8074
+              protocol: TCP
+          env:
+            - name: MM_SERVICESETTINGS_SITEURL
+              value: {{ .Values.mattermost.siteUrl | quote }}
+            - name: MM_SERVICESETTINGS_WEBSOCKETURL
+              value: {{ .Values.mattermost.servicesSettings.websocketURL | quote }}
+            - name: MM_SQLSETTINGS_DRIVERNAME
+              value: {{ .Values.mattermost.sqlSettings.driverName | quote }}
+            - name: MM_SQLSETTINGS_DATASOURCE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mattermost.fullname" . }}-database
+                  key: connection-string
+            {{- if .Values.redis.enabled }}
+            - name: MM_CLUSTERSETTINGS_ENABLE
+              value: "true"
+            - name: MM_CLUSTERSETTINGS_CLUSTERNAME
+              value: {{ include "mattermost.fullname" . }}
+            - name: MM_CLUSTERSETTINGS_REDISHOST
+              value: {{ include "mattermost.redis.host" . }}:6379
+            {{- if .Values.redis.auth.enabled }}
+            - name: MM_CLUSTERSETTINGS_REDISPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-redis
+                  key: redis-password
+            {{- end }}
+            {{- end }}
+            {{- if .Values.elasticsearch.enabled }}
+            - name: MM_ELASTICSEARCHSETTINGS_ENABLE
+              value: "true"
+            - name: MM_ELASTICSEARCHSETTINGS_CONNECTIONURL
+              value: "http://{{ include "mattermost.elasticsearch.host" . }}:9200"
+            {{- end }}
+            {{- if .Values.oidc.enabled }}
+            - name: MM_GITLABSETTINGS_ENABLE
+              value: "true"
+            - name: MM_GITLABSETTINGS_ID
+              value: {{ .Values.oidc.clientId | quote }}
+            - name: MM_GITLABSETTINGS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mattermost.oidcSecretName" . }}
+                  key: {{ .Values.oidc.existingSecretKey | default "oidc-client-secret" }}
+            - name: MM_GITLABSETTINGS_AUTHENDPOINT
+              value: {{ .Values.oidc.discoveryUrl | replace ".well-known/openid_configuration" "protocol/openid-connect/auth" | quote }}
+            - name: MM_GITLABSETTINGS_TOKENENDPOINT
+              value: {{ .Values.oidc.discoveryUrl | replace ".well-known/openid_configuration" "protocol/openid-connect/token" | quote }}
+            - name: MM_GITLABSETTINGS_USERAPIENDPOINT
+              value: {{ .Values.oidc.discoveryUrl | replace ".well-known/openid_configuration" "protocol/openid-connect/userinfo" | quote }}
+            {{- end }}
+            {{- if .Values.ldap.enabled }}
+            - name: MM_LDAPSETTINGS_ENABLE
+              value: "true"
+            - name: MM_LDAPSETTINGS_LDAPSERVER
+              value: {{ .Values.ldap.host | quote }}
+            - name: MM_LDAPSETTINGS_LDAPPORT
+              value: {{ .Values.ldap.port | quote }}
+            - name: MM_LDAPSETTINGS_BINDUSERNAME
+              value: {{ .Values.ldap.bindUser | quote }}
+            - name: MM_LDAPSETTINGS_BINDPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mattermost.ldapSecretName" . }}
+                  key: {{ .Values.ldap.existingSecretKey | default "ldap-password" }}
+            - name: MM_LDAPSETTINGS_BASEDN
+              value: {{ .Values.ldap.dn | quote }}
+            - name: MM_LDAPSETTINGS_USERFILTER
+              value: {{ .Values.ldap.userSearch.filter | quote }}
+            - name: MM_LDAPSETTINGS_GROUPFILTER
+              value: {{ .Values.ldap.groupSearch.filter | quote }}
+            {{- end }}
+            - name: MM_TEAMSETTINGS_SITENAME
+              value: {{ .Values.mattermost.teamSettings.siteName | quote }}
+            - name: MM_LOGSETTINGS_ENABLECONSOLE
+              value: {{ .Values.mattermost.logSettings.enableConsole | quote }}
+            - name: MM_LOGSETTINGS_CONSOLELEVEL
+              value: {{ .Values.mattermost.logSettings.consoleLevel | quote }}
+            - name: MM_FILESETTINGS_DRIVERNAME
+              value: {{ .Values.mattermost.fileSettings.driverName | quote }}
+            - name: MM_FILESETTINGS_DIRECTORY
+              value: {{ .Values.mattermost.fileSettings.directory | quote }}
+            - name: MM_PLUGINSETTINGS_ENABLE
+              value: {{ .Values.mattermost.pluginSettings.enable | quote }}
+            - name: MM_PLUGINSETTINGS_ENABLEUPLOADS
+              value: {{ .Values.mattermost.pluginSettings.enableUploads | quote }}
+            {{- if .Values.extraEnvVars }}
+            {{- toYaml .Values.extraEnvVars | nindent 12 }}
+            {{- end }}
+          {{- if .Values.extraEnvVarsSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.extraEnvVarsSecret }}
+          {{- end }}
+          {{- if .Values.extraEnvVarsConfigMap }}
+            - configMapRef:
+                name: {{ .Values.extraEnvVarsConfigMap }}
+          {{- end }}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.httpGet.path }}
+              port: {{ .Values.livenessProbe.httpGet.port }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.httpGet.path }}
+              port: {{ .Values.readinessProbe.httpGet.port }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.startupProbe.httpGet.path }}
+              port: {{ .Values.startupProbe.httpGet.port }}
+            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: mattermost-data
+              mountPath: /mattermost/data
+              subPath: data
+            - name: mattermost-config
+              mountPath: /mattermost/config
+              subPath: config
+            - name: mattermost-logs
+              mountPath: /mattermost/logs
+              subPath: logs
+            - name: mattermost-plugins
+              mountPath: /mattermost/plugins
+              subPath: plugins
+            - name: mattermost-client-plugins
+              mountPath: /mattermost/client/plugins
+              subPath: client-plugins
+            - name: mattermost-config-file
+              mountPath: /mattermost/config/config.json
+              subPath: config.json
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+        {{- if .Values.sidecarContainers }}
+        {{- toYaml .Values.sidecarContainers | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: mattermost-data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "mattermost.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: mattermost-config
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "mattermost.fullname" . }}-config
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: mattermost-logs
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "mattermost.fullname" . }}-logs
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: mattermost-plugins
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "mattermost.fullname" . }}-plugins
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: mattermost-client-plugins
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "mattermost.fullname" . }}-client-plugins
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: mattermost-config-file
+          configMap:
+            name: {{ include "mattermost.fullname" . }}-config
+        {{- if .Values.extraVolumes }}
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

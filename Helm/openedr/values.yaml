@@ -1,0 +1,503 @@
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# OpenEDR configuration
+replicaCount: 1
+
+image:
+  registry: ""
+  repository: openedr/manager
+  tag: "1.2.0"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# OpenEDR Manager configuration
+openedr:
+  # Basic configuration
+  serverUrl: "https://openedr.noah.local"
+  serverPort: 8443
+  
+  # Manager settings
+  manager:
+    adminUser: "admin"
+    adminPassword: ""
+    existingSecret: ""
+    existingSecretPasswordKey: "admin-password"
+    
+    # Database configuration
+    database:
+      host: ""
+      port: 5432
+      name: "openedr"
+      user: "openedr"
+      password: ""
+      existingSecret: ""
+      existingSecretPasswordKey: "database-password"
+      
+    # API settings
+    api:
+      enabled: true
+      port: 8080
+      authentication: true
+      rateLimit: 1000
+      maxConnections: 500
+      
+    # SSL/TLS settings
+    ssl:
+      enabled: true
+      certificateFile: "/opt/openedr/certs/server.crt"
+      privateKeyFile: "/opt/openedr/certs/server.key"
+      caCertificateFile: "/opt/openedr/certs/ca.crt"
+      
+    # Logging settings
+    logging:
+      level: "INFO"
+      maxFileSize: "100MB"
+      maxFiles: 10
+      format: "json"
+      enableAudit: true
+      auditLogPath: "/opt/openedr/logs/audit.log"
+      
+    # Agent settings
+    agent:
+      downloadPath: "/opt/openedr/agents"
+      updateInterval: "24h"
+      autoUpdate: true
+      maxAgents: 10000
+      heartbeatInterval: "30s"
+      
+    # Threat detection settings
+    detection:
+      enableRealTime: true
+      enableBehavioralAnalysis: true
+      enableMLDetection: true
+      maxAlertsPerHour: 1000
+      alertRetentionDays: 365
+      
+    # Incident response settings
+    response:
+      enableAutoResponse: true
+      enableQuarantine: true
+      enableProcessTermination: true
+      enableNetworkIsolation: true
+      maxResponseActions: 100
+      
+    # Reporting settings
+    reporting:
+      enableScheduledReports: true
+      reportRetentionDays: 90
+      maxReportsPerUser: 50
+      enableEmailReports: true
+      
+    # Integration settings
+    integration:
+      syslog:
+        enabled: true
+        server: "syslog.noah.local"
+        port: 514
+        protocol: "UDP"
+        facility: "LOG_LOCAL0"
+      
+      smtp:
+        enabled: true
+        server: "smtp.noah.local"
+        port: 587
+        username: "openedr@noah.local"
+        password: ""
+        encryption: "STARTTLS"
+        fromAddress: "openedr@noah.local"
+        
+      webhook:
+        enabled: true
+        maxWebhooks: 10
+        timeout: "30s"
+        retryCount: 3
+
+# LDAP Authentication
+ldap:
+  enabled: true
+  host: "samba4.noah.svc.cluster.local"
+  port: 389
+  dn: "dc=noah,dc=local"
+  bindUser: "cn=openedr-service,cn=Users,dc=noah,dc=local"
+  bindPassword: ""
+  existingSecret: ""
+  existingSecretKey: "ldap-password"
+  
+  # User configuration
+  userSearch:
+    base: "cn=Users,dc=noah,dc=local"
+    filter: "(&(objectClass=user)(sAMAccountName=%s))"
+    attributes:
+      username: "sAMAccountName"
+      email: "mail"
+      firstName: "givenName"
+      lastName: "sn"
+      displayName: "displayName"
+      
+  # Group configuration
+  groupSearch:
+    base: "cn=Groups,dc=noah,dc=local"
+    filter: "(&(objectClass=group))"
+    memberAttribute: "member"
+    adminGroups:
+      - "OpenEDR-Admins"
+      - "Domain Admins"
+    userGroups:
+      - "OpenEDR-Users"
+      - "Domain Users"
+
+# Service configuration
+service:
+  type: ClusterIP
+  ports:
+    https: 8443
+    api: 8080
+    agent: 8090
+  annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/proxy-ssl-verify: "off"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hostname: "openedr.noah.local"
+  path: /
+  pathType: Prefix
+  tls:
+    enabled: true
+    secretName: openedr-tls
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 4000m
+    memory: 8Gi
+  requests:
+    cpu: 1000m
+    memory: 4Gi
+
+# Auto-scaling
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Node selection
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Security Context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsUser: 1000
+
+# Probes
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /health
+    port: api
+    scheme: HTTP
+  initialDelaySeconds: 120
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /ready
+    port: api
+    scheme: HTTP
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+startupProbe:
+  enabled: true
+  httpGet:
+    path: /health
+    port: api
+    scheme: HTTP
+  initialDelaySeconds: 30
+  periodSeconds: 15
+  timeoutSeconds: 10
+  failureThreshold: 20
+
+# Persistence
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 100Gi
+  annotations: {}
+  
+  # Additional volumes
+  volumes:
+    data:
+      size: 50Gi
+      path: /opt/openedr/data
+    logs:
+      size: 20Gi
+      path: /opt/openedr/logs
+    config:
+      size: 5Gi
+      path: /opt/openedr/config
+    agents:
+      size: 10Gi
+      path: /opt/openedr/agents
+    certs:
+      size: 1Gi
+      path: /opt/openedr/certs
+    quarantine:
+      size: 20Gi
+      path: /opt/openedr/quarantine
+
+# PostgreSQL dependency
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "postgres"
+    username: "openedr"
+    password: "openedr"
+    database: "openedr"
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi
+    resources:
+      requests:
+        memory: 1Gi
+        cpu: 500m
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+
+# Redis dependency (for caching and session management)
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "openedr"
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 250m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+
+# Elasticsearch dependency (for log storage and analysis)
+elasticsearch:
+  enabled: true
+  clusterName: "openedr-elasticsearch"
+  nodeGroup: "master"
+  masterService: "openedr-elasticsearch"
+  roles:
+    master: "true"
+    ingest: "true"
+    data: "true"
+  replicas: 1
+  minimumMasterNodes: 1
+  esMajorVersion: ""
+  esConfig:
+    elasticsearch.yml: |
+      cluster.name: "openedr-elasticsearch"
+      network.host: 0.0.0.0
+      discovery.type: single-node
+      xpack.security.enabled: false
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  volumeClaimTemplate:
+    accessModes: [ "ReadWriteOnce" ]
+    resources:
+      requests:
+        storage: 100Gi
+
+# Monitoring
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: ""
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+  egress:
+    enabled: true
+
+# Pod annotations and labels
+podAnnotations: {}
+podLabels: {}
+
+# Common labels
+commonLabels: {}
+commonAnnotations: {}
+
+# Extra environment variables
+extraEnvVars: []
+extraEnvVarsSecret: ""
+extraEnvVarsConfigMap: ""
+
+# Extra volumes and mounts
+extraVolumes: []
+extraVolumeMounts: []
+
+# Init containers
+initContainers: []
+
+# Sidecar containers
+sidecarContainers: []
+
+# SSL/TLS certificates
+certificates:
+  enabled: true
+  # Use cert-manager to generate certificates
+  certManager:
+    enabled: true
+    issuer: "letsencrypt-prod"
+  # Or provide existing certificate
+  existingSecret: ""
+  
+# Agent configuration
+agents:
+  # Default agent configuration
+  defaultConfig:
+    enableRealTimeProtection: true
+    enableBehavioralAnalysis: true
+    enableMLDetection: true
+    scanInterval: "1h"
+    quarantineEnabled: true
+    networkMonitoring: true
+    processMonitoring: true
+    fileMonitoring: true
+    registryMonitoring: true
+    
+  # Agent groups
+  groups:
+    - name: "servers"
+      config:
+        scanInterval: "30m"
+        priority: "high"
+    - name: "workstations"
+      config:
+        scanInterval: "2h"
+        priority: "medium"
+    - name: "critical"
+      config:
+        scanInterval: "15m"
+        priority: "critical"
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 1 * * *"
+  retention: "30d"
+  s3:
+    enabled: false
+    bucket: ""
+    region: ""
+    accessKey: ""
+    secretKey: ""
+
+# Alert configuration
+alerts:
+  # Email alerts
+  email:
+    enabled: true
+    smtpServer: "smtp.noah.local"
+    smtpPort: 587
+    username: "alerts@noah.local"
+    password: ""
+    fromAddress: "openedr-alerts@noah.local"
+    recipients:
+      - "security@noah.local"
+      - "admin@noah.local"
+      
+  # Webhook alerts
+  webhook:
+    enabled: true
+    urls:
+      - "https://mattermost.noah.local/hooks/security-alerts"
+      - "https://webhook.site/unique-id"
+      
+  # Syslog alerts
+  syslog:
+    enabled: true
+    server: "syslog.noah.local"
+    port: 514
+    protocol: "UDP"
+    facility: "LOG_LOCAL1"
+
+# Threat intelligence
+threatIntelligence:
+  enabled: true
+  feeds:
+    - name: "abuse.ch"
+      url: "https://urlhaus.abuse.ch/downloads/csv/"
+      format: "csv"
+      updateInterval: "6h"
+    - name: "malware-domains"
+      url: "https://malware-domains.com/files/domains.txt"
+      format: "txt"
+      updateInterval: "12h"
+      
+  # Custom indicators
+  customIndicators:
+    enabled: true
+    maxIndicators: 10000
+    
+# Compliance
+compliance:
+  enabled: true
+  frameworks:
+    - "PCI-DSS"
+    - "SOX"
+    - "HIPAA"
+    - "ISO27001"
+    - "NIST"
+  reportSchedule: "0 0 * * 0"  # Weekly on Sunday

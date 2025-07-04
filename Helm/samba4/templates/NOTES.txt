@@ -1,0 +1,176 @@
+1. Get the Samba4 Active Directory status:
+   kubectl get pod --namespace {{ .Release.Namespace }} -l "{{ include "samba4.selectorLabels" . }}"
+
+2. Samba4 Domain Controller Information:
+   Domain: {{ .Values.samba.workgroup | upper }}
+   Realm: {{ .Values.samba.realm | upper }}
+   NetBIOS Name: {{ .Values.samba.netbiosName | upper }}
+   Server Role: {{ .Values.samba.serverRole }}
+
+3. Administrator Credentials:
+   Username: Administrator
+   Password: Use the following command to retrieve the password:
+   kubectl get secret --namespace {{ .Release.Namespace }} {{ include "samba4.secretName" . }} -o jsonpath="{.data.admin-password}" | base64 --decode
+
+4. Domain Services Access:
+   
+   {{- if .Values.ingress.enabled }}
+   # LDAP over HTTPS (via Ingress)
+   {{- range $host := .Values.ingress.hosts }}
+   LDAP URL: ldaps://{{ $host.host }}:636
+   {{- end }}
+   {{- else if contains "NodePort" .Values.service.type }}
+   # NodePort Access
+   export NODE_PORT_LDAP=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[?(@.name=='ldap')].nodePort}" services {{ include "samba4.fullname" . }})
+   export NODE_PORT_LDAPS=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[?(@.name=='ldaps')].nodePort}" services {{ include "samba4.fullname" . }})
+   export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+   
+   LDAP URL: ldap://$NODE_IP:$NODE_PORT_LDAP
+   LDAPS URL: ldaps://$NODE_IP:$NODE_PORT_LDAPS
+   {{- else if contains "LoadBalancer" .Values.service.type }}
+   # LoadBalancer Access
+   NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+   export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "samba4.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+   
+   LDAP URL: ldap://$SERVICE_IP:{{ .Values.service.ports.ldap }}
+   LDAPS URL: ldaps://$SERVICE_IP:{{ .Values.service.ports.ldaps }}
+   {{- else if contains "ClusterIP" .Values.service.type }}
+   # Internal Cluster Access
+   LDAP URL: ldap://{{ include "samba4.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.ports.ldap }}
+   LDAPS URL: ldaps://{{ include "samba4.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.ports.ldaps }}
+   
+   # Port Forward for External Access
+   kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "samba4.fullname" . }} 389:{{ .Values.service.ports.ldap }} 636:{{ .Values.service.ports.ldaps }}
+   {{- end }}
+
+5. Service Connection Details:
+   
+   # LDAP Connection
+   Server: {{ include "samba4.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+   Port: {{ .Values.service.ports.ldap }} (LDAP), {{ .Values.service.ports.ldaps }} (LDAPS)
+   Base DN: dc={{ .Values.samba.realm | lower | replace "." ",dc=" }}
+   
+   # Kerberos Configuration
+   Realm: {{ .Values.samba.realm | upper }}
+   KDC: {{ include "samba4.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.ports.kerberos }}
+   
+   {{- if .Values.dns.enabled }}
+   # DNS Service
+   DNS Server: {{ include "samba4.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.ports.dns }}
+   {{- end }}
+
+6. Integration with OpenInfra Services:
+   
+   # Keycloak LDAP Integration
+   Connection URL: ldap://{{ include "samba4.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.ports.ldap }}
+   Users DN: cn=Users,dc={{ .Values.samba.realm | lower | replace "." ",dc=" }}
+   Bind DN: cn=Administrator,cn=Users,dc={{ .Values.samba.realm | lower | replace "." ",dc=" }}
+   
+   # Other Services LDAP Configuration
+   Host: {{ include "samba4.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+   Port: {{ .Values.service.ports.ldap }}
+   Base DN: dc={{ .Values.samba.realm | lower | replace "." ",dc=" }}
+   User Filter: (objectClass=user)
+   Group Filter: (objectClass=group)
+
+7. File Shares:
+   {{- if .Values.samba.shares }}
+   The following SMB/CIFS shares are available:
+   {{- range .Values.samba.shares }}
+   
+   Share: \\{{ $.Values.samba.netbiosName | upper }}\{{ .name }}
+   Path: {{ .path }}
+   {{- if .comment }}
+   Description: {{ .comment }}
+   {{- end }}
+   {{- if .readOnly }}
+   Access: Read-Only
+   {{- else }}
+   Access: Read-Write
+   {{- end }}
+   {{- end }}
+   {{- else }}
+   No custom file shares configured.
+   {{- end }}
+
+8. User Management:
+   
+   # Add a new user
+   kubectl exec -n {{ .Release.Namespace }} statefulset/{{ include "samba4.fullname" . }} -- samba-tool user create <username> <password>
+   
+   # List users
+   kubectl exec -n {{ .Release.Namespace }} statefulset/{{ include "samba4.fullname" . }} -- samba-tool user list
+   
+   # Add user to group
+   kubectl exec -n {{ .Release.Namespace }} statefulset/{{ include "samba4.fullname" . }} -- samba-tool group addmembers "<group>" <username>
+
+9. Backup Information:
+   {{- if .Values.backup.enabled }}
+   ✅ Automated backup is configured with schedule: {{ .Values.backup.schedule }}
+   {{- if .Values.backup.s3.enabled }}
+   📦 Backups include AD database, sysvol, configuration, and DNS zones
+   📦 S3 Bucket: {{ .Values.backup.s3.bucket }}
+   {{- end }}
+   Retention: {{ .Values.backup.retentionDays | default 30 }} days
+   {{- else }}
+   💾 To enable automated backups, set backup.enabled=true in your values.yaml
+   {{- end }}
+
+10. Monitoring:
+    {{- if .Values.serviceMonitor.enabled }}
+    ✅ Prometheus ServiceMonitor is enabled for domain controller monitoring.
+    {{- else }}
+    📊 To enable Prometheus monitoring, set serviceMonitor.enabled=true
+    {{- end }}
+    
+    # Check domain controller status
+    kubectl exec -n {{ .Release.Namespace }} statefulset/{{ include "samba4.fullname" . }} -- samba-tool domain info {{ .Values.samba.realm | upper }}
+
+11. Security Notes:
+    {{- if not .Values.samba.tls.enabled }}
+    ⚠️  WARNING: TLS is not enabled. Consider enabling TLS for production deployments.
+    {{- end }}
+    {{- if not .Values.networkPolicy.enabled }}
+    ⚠️  WARNING: NetworkPolicy is not enabled. Consider enabling network policies for enhanced security.
+    {{- end }}
+    - Change the default Administrator password immediately
+    - Configure proper DNS forwarders for external name resolution
+    - Set up time synchronization (NTP) for Kerberos authentication
+    - Review and customize group policies as needed
+
+12. DNS Configuration (if enabled):
+    {{- if .Values.dns.enabled }}
+    ✅ Internal DNS is enabled and integrated with Active Directory
+    DNS Forwarder: {{ .Values.samba.dnsForwarder | default "Not configured" }}
+    
+    # Test DNS resolution
+    kubectl exec -n {{ .Release.Namespace }} statefulset/{{ include "samba4.fullname" . }} -- nslookup {{ .Values.samba.realm | lower }}
+    {{- else }}
+    📝 DNS service is not enabled. Configure dns.enabled=true for full AD functionality.
+    {{- end }}
+
+13. Troubleshooting:
+    
+    # Check pod logs
+    kubectl logs -n {{ .Release.Namespace }} statefulset/{{ include "samba4.fullname" . }}
+    
+    # Check domain controller status  
+    kubectl exec -n {{ .Release.Namespace }} statefulset/{{ include "samba4.fullname" . }} -- samba-tool domain level show
+    
+    # Test LDAP connectivity
+    kubectl exec -n {{ .Release.Namespace }} statefulset/{{ include "samba4.fullname" . }} -- ldapsearch -H ldap://localhost -x -b "dc={{ .Values.samba.realm | lower | replace "." ",dc=" }}"
+    
+    # Check service status
+    kubectl get svc -n {{ .Release.Namespace }} {{ include "samba4.fullname" . }}
+    
+    # View events
+    kubectl get events -n {{ .Release.Namespace }} --sort-by='.metadata.creationTimestamp'
+
+14. Configuration Files:
+    Main configuration is stored in ConfigMap: {{ include "samba4.configMapName" . }}
+    Secrets are stored in Secret: {{ include "samba4.secretName" . }}
+    
+    To update configuration, modify values.yaml and upgrade the release.
+
+For more information about Samba4 configuration and management, visit:
+https://wiki.samba.org/index.php/Setting_up_Samba_as_an_Active_Directory_Domain_Controller

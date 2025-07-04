@@ -1,0 +1,85 @@
+{{- if .Values.cronjobs.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "nextcloud.fullname" . }}-cron
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "nextcloud.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cron
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  schedule: {{ .Values.cronjobs.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "nextcloud.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: cron
+        spec:
+          restartPolicy: OnFailure
+          {{- include "nextcloud.imagePullSecrets" . | nindent 10 }}
+          serviceAccountName: {{ include "nextcloud.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: nextcloud-cron
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              image: "{{ include "nextcloud.image.repository" . }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  php -f /var/www/html/cron.php
+              env:
+                {{- include "nextcloud.environment" . | nindent 16 }}
+              resources:
+                {{- toYaml .Values.cronjobs.resources | nindent 16 }}
+              volumeMounts:
+                - name: nextcloud-data
+                  mountPath: {{ .Values.nextcloud.dataDir }}
+                  subPath: data
+                - name: nextcloud-config
+                  mountPath: /var/www/html/config
+                  subPath: config
+                - name: nextcloud-apps
+                  mountPath: /var/www/html/custom_apps
+                  subPath: apps
+                - name: nextcloud-config-volume
+                  mountPath: /var/www/html/config/config.php
+                  subPath: config.php
+          volumes:
+            - name: nextcloud-data
+              {{- if .Values.persistence.enabled }}
+              persistentVolumeClaim:
+                claimName: {{ include "nextcloud.fullname" . }}-data
+              {{- else }}
+              emptyDir: {}
+              {{- end }}
+            - name: nextcloud-config
+              {{- if .Values.persistence.enabled }}
+              persistentVolumeClaim:
+                claimName: {{ include "nextcloud.fullname" . }}-config
+              {{- else }}
+              emptyDir: {}
+              {{- end }}
+            - name: nextcloud-apps
+              {{- if .Values.persistence.enabled }}
+              persistentVolumeClaim:
+                claimName: {{ include "nextcloud.fullname" . }}-apps
+              {{- else }}
+              emptyDir: {}
+              {{- end }}
+            - name: nextcloud-config-volume
+              configMap:
+                name: {{ include "nextcloud.fullname" . }}-config
+{{- end }}

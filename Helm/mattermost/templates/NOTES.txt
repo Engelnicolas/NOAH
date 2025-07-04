@@ -1,0 +1,202 @@
+1. Get the application URL by running these commands:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "mattermost.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "mattermost.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "mattermost.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.port }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "{{ include "mattermost.selectorLabels" . }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8065 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8065:$CONTAINER_PORT
+{{- end }}
+
+2. First-time Setup:
+   {{- if not .Values.mattermost.existingSecret }}
+   On first access, you'll need to create the initial system admin account.
+   Navigate to the Mattermost URL above and follow the setup wizard.
+   {{- else }}
+   Initial admin credentials are stored in the existing secret: {{ .Values.mattermost.existingSecret }}
+   {{- end }}
+
+3. Database Configuration:
+   {{- if .Values.postgresql.enabled }}
+   ✅ Using internal PostgreSQL database
+   Database: {{ .Values.postgresql.auth.database }}
+   {{- else }}
+   📊 Using external database: {{ .Values.externalDatabase.host }}:{{ .Values.externalDatabase.port }}
+   {{- end }}
+
+4. File Storage:
+   {{- if .Values.mattermost.fileStorage.driver }}
+   Storage Driver: {{ .Values.mattermost.fileStorage.driver }}
+   {{- if eq .Values.mattermost.fileStorage.driver "amazons3" }}
+   S3 Bucket: {{ .Values.mattermost.fileStorage.amazons3.bucket }}
+   S3 Region: {{ .Values.mattermost.fileStorage.amazons3.region }}
+   {{- else }}
+   Local Storage: {{ .Values.mattermost.fileStorage.local.directory }}
+   {{- end }}
+   {{- else }}
+   📁 Using local file storage
+   {{- end }}
+
+5. Authentication Integration:
+   {{- if .Values.mattermost.oauth.enabled }}
+   ✅ OAuth2 authentication is configured
+   {{- if .Values.mattermost.oauth.gitlab.enabled }}
+   GitLab OAuth: {{ .Values.mattermost.oauth.gitlab.id }}
+   {{- end }}
+   {{- if .Values.mattermost.oauth.google.enabled }}
+   Google OAuth: {{ .Values.mattermost.oauth.google.id }}
+   {{- end }}
+   {{- if .Values.mattermost.oauth.office365.enabled }}
+   Office365 OAuth: {{ .Values.mattermost.oauth.office365.id }}
+   {{- end }}
+   {{- if .Values.mattermost.oauth.openid.enabled }}
+   OpenID Connect: {{ .Values.mattermost.oauth.openid.discoveryEndpoint }}
+   {{- end }}
+   {{- else }}
+   📝 OAuth authentication not configured. Users will need to create local accounts.
+   {{- end }}
+
+   {{- if .Values.mattermost.ldap.enabled }}
+   ✅ LDAP authentication is configured
+   LDAP Server: {{ .Values.mattermost.ldap.server }}:{{ .Values.mattermost.ldap.port }}
+   Base DN: {{ .Values.mattermost.ldap.baseDN }}
+   {{- else }}
+   📝 LDAP authentication not configured.
+   {{- end }}
+
+6. Email Configuration:
+   {{- if .Values.mattermost.smtp.enabled }}
+   ✅ SMTP is configured for email notifications
+   SMTP Server: {{ .Values.mattermost.smtp.server }}:{{ .Values.mattermost.smtp.port }}
+   From Address: {{ .Values.mattermost.smtp.fromAddress }}
+   {{- else }}
+   📧 SMTP not configured. Email notifications will not work.
+   {{- end }}
+
+7. Plugin Configuration:
+   {{- if .Values.mattermost.plugins.enabled }}
+   ✅ Plugin system is enabled
+   {{- if .Values.mattermost.plugins.directory }}
+   Plugin Directory: {{ .Values.mattermost.plugins.directory }}
+   {{- end }}
+   {{- range .Values.mattermost.plugins.install }}
+   - {{ .name }} ({{ .version }})
+   {{- end }}
+   {{- else }}
+   🔌 Plugin system is disabled
+   {{- end }}
+
+8. High Availability:
+   Replicas: {{ .Values.replicaCount | default 1 }}
+   {{- if .Values.autoscaling.enabled }}
+   ✅ Auto-scaling is enabled ({{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} replicas)
+   {{- else }}
+   📈 To enable auto-scaling, set autoscaling.enabled=true
+   {{- end }}
+   
+   {{- if .Values.podDisruptionBudget.enabled }}
+   ✅ Pod Disruption Budget is configured for high availability
+   {{- end }}
+
+9. Caching:
+   {{- if .Values.redis.enabled }}
+   ✅ Redis caching is enabled for improved performance
+   Redis Server: {{ include "mattermost.redis.fullname" . }}
+   {{- else if .Values.externalRedis.enabled }}
+   ✅ External Redis caching is configured
+   Redis Server: {{ .Values.externalRedis.host }}:{{ .Values.externalRedis.port }}
+   {{- else }}
+   📝 Redis caching not configured. Consider enabling for better performance.
+   {{- end }}
+
+10. Search Configuration:
+    {{- if .Values.elasticsearch.enabled }}
+    ✅ Elasticsearch is enabled for advanced search
+    Elasticsearch Cluster: {{ include "mattermost.elasticsearch.fullname" . }}
+    {{- else if .Values.externalElasticsearch.enabled }}
+    ✅ External Elasticsearch is configured
+    Elasticsearch: {{ .Values.externalElasticsearch.host }}:{{ .Values.externalElasticsearch.port }}
+    {{- else }}
+    🔍 Elasticsearch not configured. Database search will be used.
+    {{- end }}
+
+11. Monitoring and Metrics:
+    {{- if .Values.serviceMonitor.enabled }}
+    ✅ Prometheus ServiceMonitor is enabled for monitoring.
+    {{- else }}
+    📊 To enable Prometheus monitoring, set serviceMonitor.enabled=true
+    {{- end }}
+    
+    Metrics endpoint: http://{{ include "mattermost.fullname" . }}:{{ .Values.service.metricsPort | default 8067 }}/metrics
+
+12. Security Configuration:
+    {{- if .Values.networkPolicy.enabled }}
+    ✅ Network Policy is enabled for enhanced security
+    {{- else }}
+    ⚠️  Network Policy is disabled. Consider enabling for production.
+    {{- end }}
+    
+    {{- if .Values.mattermost.security.enableTLS }}
+    ✅ TLS is enabled for secure communications
+    {{- else }}
+    ⚠️  TLS is not enabled. Consider enabling for production.
+    {{- end }}
+
+13. Backup Information:
+    {{- if .Values.backup.enabled }}
+    ✅ Automated backup is configured
+    Schedule: {{ .Values.backup.schedule }}
+    {{- if .Values.backup.s3.enabled }}
+    S3 Bucket: {{ .Values.backup.s3.bucket }}
+    {{- end }}
+    {{- else }}
+    💾 Automated backup not configured. Consider enabling for data protection.
+    {{- end }}
+
+14. Team and Channel Management:
+    - Access the System Console at: /admin_console
+    - Default team creation: {{ if .Values.mattermost.team.restrictCreationToDomains }}Restricted{{ else }}Open{{ end }}
+    - Public channel creation: {{ if .Values.mattermost.team.restrictPublicChannelCreation }}Restricted{{ else }}Open{{ end }}
+    - Private channel creation: {{ if .Values.mattermost.team.restrictPrivateChannelCreation }}Restricted{{ else }}Open{{ end }}
+
+15. Troubleshooting:
+    - Check pod logs: kubectl logs -n {{ .Release.Namespace }} deployment/{{ include "mattermost.fullname" . }}
+    - Verify database connectivity: kubectl exec -n {{ .Release.Namespace }} deployment/{{ include "mattermost.fullname" . }} -- pg_isready -h {{ if .Values.postgresql.enabled }}{{ include "mattermost.postgresql.fullname" . }}{{ else }}{{ .Values.externalDatabase.host }}{{ end }}
+    - Check service status: kubectl get svc -n {{ .Release.Namespace }} {{ include "mattermost.fullname" . }}
+    - View configuration: kubectl get configmap -n {{ .Release.Namespace }} {{ include "mattermost.fullname" . }} -o yaml
+    - Test health endpoint: kubectl exec -n {{ .Release.Namespace }} deployment/{{ include "mattermost.fullname" . }} -- curl -f http://localhost:8065/api/v4/system/ping
+
+16. Configuration Management:
+    Main configuration is stored in ConfigMap: {{ include "mattermost.fullname" . }}
+    Secrets are stored in Secret: {{ include "mattermost.secretName" . }}
+    
+    To update configuration, modify values.yaml and upgrade the release:
+    helm upgrade {{ .Release.Name }} noah/mattermost -f values.yaml
+
+17. Important Notes:
+    {{- if not .Values.mattermost.smtp.enabled }}
+    ⚠️  Email notifications are disabled. Users won't receive email alerts.
+    {{- end }}
+    {{- if not .Values.mattermost.oauth.enabled and not .Values.mattermost.ldap.enabled }}
+    ⚠️  No external authentication configured. Users must create local accounts.
+    {{- end }}
+    {{- if eq .Values.mattermost.fileStorage.driver "local" and .Values.replicaCount | default 1 | int | lt 2 }}
+    ⚠️  Using local file storage with multiple replicas may cause issues. Consider S3 storage.
+    {{- end }}
+
+For more information and advanced configuration, visit:
+- Mattermost Documentation: https://docs.mattermost.com/
+- Mattermost Administrator's Guide: https://docs.mattermost.com/guides/administrator.html

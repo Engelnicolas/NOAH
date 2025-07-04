@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: openedr
+spec:
+  selector:
+    app: openedr
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8443
+  type: {{ .Values.service.type }}

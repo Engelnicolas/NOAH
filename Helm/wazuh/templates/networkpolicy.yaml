@@ -1,0 +1,114 @@
+---
+{{- if .Values.networkPolicy.enabled }}
+# Wazuh Network Policy
+apiVersion: {{ include "wazuh.networkPolicy.apiVersion" . }}
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wazuh.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "wazuh.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  
+  ingress:
+    # Allow traffic from ingress controller
+    {{- range .Values.networkPolicy.ingress }}
+    - from:
+        {{- if .from }}
+        {{- toYaml .from | nindent 8 }}
+        {{- end }}
+      {{- if .ports }}
+      ports:
+        {{- range .ports }}
+        - protocol: {{ .protocol }}
+          port: {{ .port }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    
+    # Allow internal cluster communication
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "wazuh.name" . }}
+      ports:
+        - protocol: TCP
+          port: 1514
+        - protocol: TCP
+          port: 1515
+        - protocol: TCP
+          port: 1516
+        - protocol: TCP
+          port: 55000
+        - protocol: TCP
+          port: 5601
+        - protocol: TCP
+          port: 9200
+        - protocol: TCP
+          port: 9300
+    
+    # Allow monitoring scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+        - protocol: TCP
+          port: 5601
+        - protocol: TCP
+          port: 9200
+  
+  egress:
+    # Allow DNS resolution
+    {{- range .Values.networkPolicy.egress }}
+    - to:
+        {{- if .to }}
+        {{- toYaml .to | nindent 8 }}
+        {{- end }}
+      {{- if .ports }}
+      ports:
+        {{- range .ports }}
+        - protocol: {{ .protocol }}
+          port: {{ .port }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    
+    # Allow internal cluster communication
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "wazuh.name" . }}
+    
+    # Allow communication with LDAP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Release.Namespace }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ldap
+      ports:
+        - protocol: TCP
+          port: 389
+        - protocol: TCP
+          port: 636
+    
+    # Allow communication with Elasticsearch if external
+    {{- if not .Values.elasticsearch.enabled }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 9200
+        - protocol: TCP
+          port: 9300
+    {{- end }}
+{{- end }}

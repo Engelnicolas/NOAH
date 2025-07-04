@@ -1,0 +1,45 @@
+================================================================
+OpenInfra Deployment Report
+================================================================
+Generated: {{ deployment_time }}
+Namespace: {{ namespace }}
+Duration: {{ deployment_summary.duration_seconds }}s
+
+INFRASTRUCTURE STATUS:
+- Total pods deployed: {{ deployment_summary.total_pods }}
+- Ready pods: {{ deployment_summary.ready_pods }}
+- Success ratio: {{ (deployment_summary.ready_pods / deployment_summary.total_pods * 100) | round(1) }}%
+
+DEPLOYMENT PHASES:
+{% for phase in deployment_summary.successful_phases %}
+✅ {{ phase }}
+{% endfor %}
+{% for phase in deployment_summary.failed_phases %}
+❌ {{ phase }}
+{% endfor %}
+
+SERVICES DEPLOYED:
+{% for service in deployed_services %}
+- https://{{ service }}
+{% endfor %}
+
+HELM CHARTS INSTALLED:
+{% for chart in ['samba4', 'keycloak', 'oauth2-proxy', 'nextcloud', 'mattermost', 'gitlab', 'wazuh', 'openedr', 'prometheus', 'grafana'] %}
+- {{ chart }}
+{% endfor %}
+
+CONFIGURATION SUMMARY:
+- LDAP URL: {{ ldap_url }}
+- Keycloak Realm: {{ keycloak.realm }}
+- OAuth2 Scope: {{ oidc_scope }}
+
+NEXT STEPS:
+1. Verify all services are accessible
+2. Configure DNS entries for external access
+3. Set up monitoring alerts
+4. Configure backup schedules
+5. Update default passwords
+
+For support, please check the documentation at:
+https://github.com/openinfra/openinfra/docs
+================================================================

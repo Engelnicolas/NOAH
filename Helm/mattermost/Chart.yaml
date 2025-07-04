@@ -1,0 +1,34 @@
+apiVersion: v2
+name: mattermost
+description: Production-ready Mattermost collaboration platform with OIDC/LDAP integration and enterprise features
+type: application
+version: 1.0.0
+appVersion: "9.2.0"
+keywords:
+  - mattermost
+  - collaboration
+  - chat
+  - messaging
+  - team-communication
+  - oidc
+  - ldap
+  - devops
+home: https://mattermost.com/
+sources:
+  - https://github.com/mattermost/mattermost-server
+maintainers:
+  - name: N.O.A.H Team
+    email: admin@noah.local
+dependencies:
+  - name: postgresql
+    version: "12.12.10"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.4.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+  - name: elasticsearch
+    version: "8.5.1"
+    repository: https://helm.elastic.co
+    condition: elasticsearch.enabled

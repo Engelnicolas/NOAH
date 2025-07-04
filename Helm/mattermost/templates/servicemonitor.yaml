@@ -1,0 +1,171 @@
+---
+{{- if .Values.serviceMonitor.enabled }}
+# Mattermost Service Monitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "mattermost.fullname" . }}
+  namespace: {{ .Values.serviceMonitor.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "mattermost.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  jobLabel: {{ include "mattermost.fullname" . }}
+  selector:
+    matchLabels:
+      {{- include "mattermost.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+      {{- if .Values.serviceMonitor.tlsConfig }}
+      tlsConfig:
+        {{- toYaml .Values.serviceMonitor.tlsConfig | nindent 8 }}
+      {{- end }}
+{{- end }}
+
+---
+{{- if and .Values.monitoring.enabled .Values.monitoring.grafana_dashboard.enabled }}
+# Grafana Dashboard ConfigMap for Mattermost
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mattermost.fullname" . }}-grafana-dashboard
+  namespace: {{ .Values.serviceMonitor.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "mattermost.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+    grafana_folder: {{ .Values.monitoring.grafana_dashboard.folder | quote }}
+data:
+  mattermost-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Mattermost Team Collaboration Platform",
+        "tags": ["mattermost", "collaboration", "chat"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Mattermost Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "up{job=\"mattermost\"}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "green", "value": 1}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Active Users",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "mattermost_system_total_users",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(container_cpu_usage_seconds_total{pod=~\"{{ include "mattermost.fullname" . }}-.*\"}[5m]) * 100",
+                "refId": "A",
+                "legendFormat": "{{`{{pod}}`}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Percentage",
+                "max": 100,
+                "min": 0
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+          },
+          {
+            "id": 4,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "container_memory_usage_bytes{pod=~\"{{ include "mattermost.fullname" . }}-.*\"} / 1024 / 1024",
+                "refId": "A",
+                "legendFormat": "{{`{{pod}}`}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "MB",
+                "min": 0
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}
+          },
+          {
+            "id": 5,
+            "title": "HTTP Requests Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(mattermost_http_requests_total[5m])",
+                "refId": "A",
+                "legendFormat": "{{`{{method}} {{status}}`}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12}
+          },
+          {
+            "id": 6,
+            "title": "Response Time",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(mattermost_http_request_duration_seconds_bucket[5m]))",
+                "refId": "A",
+                "legendFormat": "95th percentile"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Seconds",
+                "min": 0
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12}
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+{{- end }}

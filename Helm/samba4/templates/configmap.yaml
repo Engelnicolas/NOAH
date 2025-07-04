@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "samba4.fullname" . }}
+  labels:
+    {{- include "samba4.labels" . | nindent 4 }}
+data:
+  smb.conf: |
+    {{- include "samba4.sambaConfig" . | nindent 4 }}
+  
+  krb5.conf: |
+    {{- include "samba4.krb5Config" . | nindent 4 }}
+  
+  {{- if .Values.dns.enabled }}
+  named.conf.local: |
+    {{- include "samba4.dnsZones" . | nindent 4 }}
+  {{- end }}
+  
+  samba-init.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Initializing Samba4 AD Domain Controller..."
+    
+    # Check if domain already exists
+    if [ ! -f /var/lib/samba/private/sam.ldb ]; then
+        echo "Provisioning new AD domain..."
+        
+        # Provision the domain
+        samba-tool domain provision \
+            --realm={{ .Values.samba.realm | upper }} \
+            --domain={{ .Values.samba.workgroup | upper }} \
+            --adminpass="{{ .Values.samba.adminPassword }}" \
+            --server-role=dc \
+            {{- if .Values.samba.dnsBackend }}
+            --dns-backend={{ .Values.samba.dnsBackend }} \
+            {{- end }}
+            {{- if .Values.samba.dnsForwarder }}
+            --option="dns forwarder={{ .Values.samba.dnsForwarder }}" \
+            {{- end }}
+            --use-rfc2307
+        
+        echo "Domain provisioned successfully"
+        
+        {{- if .Values.samba.users }}
+        # Create additional users
+        {{- range .Values.samba.users }}
+        echo "Creating user {{ .username }}..."
+        samba-tool user create {{ .username }} "{{ .password }}" \
+            {{- if .firstName }}--given-name="{{ .firstName }}"{{ end }} \
+            {{- if .lastName }}--surname="{{ .lastName }}"{{ end }} \
+            {{- if .email }}--mail-address="{{ .email }}"{{ end }} \
+            {{- if .description }}--description="{{ .description }}"{{ end }}
+        
+        {{- if .groups }}
+        # Add user to groups
+        {{- range .groups }}
+        samba-tool group addmembers "{{ . }}" {{ $.username }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        
+        {{- if .Values.samba.groups }}
+        # Create additional groups
+        {{- range .Values.samba.groups }}
+        echo "Creating group {{ .name }}..."
+        samba-tool group add "{{ .name }}" \
+            {{- if .description }}--description="{{ .description }}"{{ end }} \
+            {{- if .gidNumber }}--gid-number={{ .gidNumber }}{{ end }}
+        {{- end }}
+        {{- end }}
+        
+    else
+        echo "Domain already exists, skipping provisioning"
+    fi
+    
+    # Set DNS forwarder if specified
+    {{- if .Values.samba.dnsForwarder }}
+    echo "Setting DNS forwarder..."
+    samba-tool dns forwarder {{ .Values.samba.dnsForwarder }}
+    {{- end }}
+    
+    # Create shares directories
+    {{- range .Values.samba.shares }}
+    echo "Creating share directory {{ .path }}..."
+    mkdir -p {{ .path }}
+    {{- if .owner }}
+    chown {{ .owner }}:{{ .group | default .owner }} {{ .path }}
+    {{- end }}
+    {{- if .permissions }}
+    chmod {{ .permissions }} {{ .path }}
+    {{- end }}
+    {{- end }}
+    
+    echo "Samba4 initialization completed"
+  
+  {{- if .Values.backup.enabled }}
+  backup.sh: |
+    {{- include "samba4.backupScript" . | nindent 4 }}
+  {{- end }}
+  
+  healthcheck.sh: |
+    #!/bin/bash
+    
+    # Check if Samba is running
+    if ! pgrep -f samba > /dev/null; then
+        echo "Samba process not running"
+        exit 1
+    fi
+    
+    # Check if AD is responding
+    if ! samba-tool domain info {{ .Values.samba.realm | upper }} > /dev/null 2>&1; then
+        echo "AD domain not responding"
+        exit 1
+    fi
+    
+    # Check DNS if enabled
+    {{- if .Values.dns.enabled }}
+    if ! nslookup {{ .Values.samba.realm | lower }} 127.0.0.1 > /dev/null 2>&1; then
+        echo "DNS not responding"
+        exit 1
+    fi
+    {{- end }}
+    
+    # Check Kerberos
+    if ! klist -k /etc/krb5.keytab > /dev/null 2>&1; then
+        echo "Kerberos keytab not accessible"
+        exit 1
+    fi
+    
+    echo "All health checks passed"
+    exit 0
+  
+  {{- with .Values.extraConfigMaps }}
+  {{- range $key, $value := . }}
+  {{ $key }}: |
+    {{- $value | nindent 4 }}
+  {{- end }}
+  {{- end }}

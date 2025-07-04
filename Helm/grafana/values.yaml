@@ -1,0 +1,13 @@
+replicaCount: 1
+
+image:
+  repository: grafana/grafana
+  tag: 10.2.0
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+
+adminUser: admin
+adminPassword: admin

@@ -1,0 +1,20 @@
+apiVersion: v2
+name: samba4
+description: Production-ready Samba4 Active Directory Domain Controller for N.O.A.H identity management
+type: application
+version: 1.0.0
+appVersion: "4.19.2"
+keywords:
+  - samba
+  - active-directory
+  - ldap
+  - dns
+  - identity
+  - authentication
+  - domain-controller
+home: https://www.samba.org/
+sources:
+  - https://github.com/samba-team/samba
+maintainers:
+  - name: N.O.A.H Team
+    email: admin@noah.local

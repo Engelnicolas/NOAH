@@ -1,0 +1,68 @@
+---
+{{- if .Values.podDisruptionBudget.manager.enabled }}
+# Wazuh Manager Pod Disruption Budget
+apiVersion: {{ include "wazuh.podDisruptionBudget.apiVersion" . }}
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "wazuh.manager.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+spec:
+  {{- if .Values.podDisruptionBudget.manager.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.manager.minAvailable }}
+  {{- end }}
+  {{- if .Values.podDisruptionBudget.manager.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.manager.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "wazuh.manager.selectorLabels" . | nindent 6 }}
+{{- end }}
+
+---
+{{- if and .Values.dashboard.enabled .Values.podDisruptionBudget.dashboard.enabled }}
+# Wazuh Dashboard Pod Disruption Budget
+apiVersion: {{ include "wazuh.podDisruptionBudget.apiVersion" . }}
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "wazuh.dashboard.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+spec:
+  {{- if .Values.podDisruptionBudget.dashboard.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.dashboard.minAvailable }}
+  {{- end }}
+  {{- if .Values.podDisruptionBudget.dashboard.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.dashboard.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "wazuh.dashboard.selectorLabels" . | nindent 6 }}
+{{- end }}
+
+---
+{{- if and .Values.indexer.enabled .Values.podDisruptionBudget.indexer.enabled }}
+# Wazuh Indexer Pod Disruption Budget
+apiVersion: {{ include "wazuh.podDisruptionBudget.apiVersion" . }}
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "wazuh.indexer.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: indexer
+spec:
+  {{- if .Values.podDisruptionBudget.indexer.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.indexer.minAvailable }}
+  {{- end }}
+  {{- if .Values.podDisruptionBudget.indexer.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.indexer.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "wazuh.indexer.selectorLabels" . | nindent 6 }}
+{{- end }}

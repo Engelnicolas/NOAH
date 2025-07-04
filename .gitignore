@@ -1,0 +1,430 @@
+# N.O.A.H - Next Open-source Architecture Hub
+# Git ignore file for infrastructure project
+
+# =============================================================================
+# Operating System Files
+# =============================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# IDE and Editor Files
+# =============================================================================
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.vimrc.local
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# =============================================================================
+# Ansible
+# =============================================================================
+
+# Ansible retry files
+*.retry
+
+# Ansible vault password files
+.vault_pass*
+vault_pass*
+.ansible_vault_password*
+
+# Ansible temporary files
+.ansible/
+ansible.log
+*.log
+
+# Galaxy roles (if using requirements.yml)
+roles/galaxy/
+collections/
+
+# Host key checking
+.known_hosts
+
+# =============================================================================
+# Terraform
+# =============================================================================
+
+# Local .terraform directories
+**/.terraform/*
+.terraform.lock.hcl
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+
+# Exclude all .tfvars files, which are likely to contain sentitive data
+*.tfvars
+*.tfvars.json
+
+# Ignore override files as they are usually used to override resources locally
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Include override files you do wish to add to version control using negated pattern
+# !example_override.tf
+
+# Include tfplan files to ignore the plan output of command: terraform plan -out=tfplan
+*tfplan*
+
+# =============================================================================
+# Kubernetes and Helm
+# =============================================================================
+
+# Helm
+*.tgz
+charts/*.tgz
+requirements.lock
+Chart.lock
+
+# Helm dependency charts
+charts/*/charts/
+
+# Kubernetes secrets (NEVER commit secrets!)
+*secret*.yaml
+*secret*.yml
+*-secret.yaml
+*-secret.yml
+
+# Rendered Kubernetes manifests
+rendered/
+output/
+generated/
+
+# Kubeconfig files
+kubeconfig*
+.kube/
+*.kubeconfig
+
+# =============================================================================
+# Docker and Container Images
+# =============================================================================
+
+# Docker
+Dockerfile*
+!Dockerfile
+docker-compose.override.yml
+.dockerignore
+
+# Container runtime
+*.tar
+*.docker
+
+# =============================================================================
+# Certificates and Security
+# =============================================================================
+
+# SSL/TLS certificates
+*.pem
+*.key
+*.crt
+*.cert
+*.ca-bundle
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.truststore
+
+# SSH keys
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.pub
+known_hosts
+
+# GPG keys
+*.gpg
+*.asc
+
+# =============================================================================
+# Secrets and Credentials
+# =============================================================================
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# Credential files
+credentials*
+*credentials*
+*password*
+*passwd*
+*token*
+*api-key*
+*secret*
+
+# Database credentials
+.pgpass
+.my.cnf
+
+# Cloud provider credentials
+.aws/
+.azure/
+.gcp/
+gcloud/
+
+# =============================================================================
+# Logs and Temporary Files
+# =============================================================================
+
+# Log files
+*.log
+logs/
+log/
+*.out
+*.err
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Backup files
+*.bak
+*.backup
+*.old
+*~
+
+# =============================================================================
+# Build and Distribution
+# =============================================================================
+
+# Build directories
+build/
+dist/
+target/
+bin/
+obj/
+
+# Package files
+*.rpm
+*.deb
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.zip
+*.jar
+*.war
+*.ear
+
+# =============================================================================
+# Monitoring and Metrics
+# =============================================================================
+
+# Prometheus
+prometheus.yml.bak
+alerts.yml.bak
+
+# Grafana
+grafana.db
+grafana.log
+
+# Elasticsearch
+elasticsearch.yml.bak
+
+# =============================================================================
+# Backup and Recovery
+# =============================================================================
+
+# Database dumps
+*.sql
+*.dump
+*.bak
+*backup*
+
+# Archive files
+*.tar
+*.gz
+*.bz2
+*.xz
+*.7z
+*.rar
+
+# =============================================================================
+# Test Results and Reports
+# =============================================================================
+
+# Test reports
+test-results/
+test-output/
+*.xml
+*.html
+coverage/
+.coverage
+.nyc_output/
+
+# Performance test results
+*.jmx
+*.jtl
+
+# Security scan results
+security-report*
+vulnerability-report*
+scan-results*
+
+# =============================================================================
+# Local Development
+# =============================================================================
+
+# Local configuration overrides
+local/
+local.yml
+local.yaml
+*.local
+
+# Development databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Node.js (if any JavaScript tools are used)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (if any Python tools are used)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+
+# N.O.A.H specific temporary files
+noah-temp/
+.noah/
+
+# Deployment artifacts
+deployment-artifacts/
+release/
+
+# Custom values files with sensitive data
+values-prod.yaml
+values-staging.yaml
+values-dev.yaml
+values.local.yaml
+
+# Inventory files with real server IPs
+inventory.ini
+hosts.ini
+production.ini
+staging.ini
+
+# =============================================================================
+# Documentation Build
+# =============================================================================
+
+# Generated documentation
+docs/_build/
+docs/build/
+site/
+_site/
+
+# =============================================================================
+# Cache and Index Files
+# =============================================================================
+
+# General cache
+.cache/
+cache/
+*.cache
+
+# Index files
+.index
+*.idx
+
+# Lock files
+*.lock
+.lock
+
+# =============================================================================
+# Network and Communication
+# =============================================================================
+
+# VPN configurations
+*.ovpn
+*.conf
+openvpn/
+
+# Networking
+*.pcap
+*.cap
+
+# =============================================================================
+# End of .gitignore
+# =============================================================================

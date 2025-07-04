@@ -1,0 +1,30 @@
+apiVersion: v2
+name: gitlab
+description: Production-ready GitLab CE with OIDC/LDAP integration, CI/CD, and persistent storage
+type: application
+version: 1.0.0
+appVersion: "16.7.0"
+keywords:
+  - git
+  - gitlab
+  - devops
+  - ci
+  - cd
+  - repository
+  - oidc
+  - ldap
+home: https://about.gitlab.com/
+sources:
+  - https://github.com/gitlabhq/gitlabhq
+maintainers:
+  - name: N.O.A.H Team
+    email: admin@noah.local
+dependencies:
+  - name: postgresql
+    version: "12.12.10"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.4.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

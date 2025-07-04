@@ -1,0 +1,20 @@
+apiVersion: v2
+name: prometheus
+description: Production-ready Prometheus monitoring stack with Grafana, AlertManager, and service discovery
+type: application
+version: 1.0.0
+appVersion: "2.48.1"
+keywords:
+  - monitoring
+  - prometheus
+  - grafana
+  - alerting
+  - metrics
+  - observability
+home: https://prometheus.io/
+sources:
+  - https://github.com/prometheus/prometheus
+  - https://github.com/grafana/grafana
+maintainers:
+  - name: N.O.A.H Team
+    email: admin@noah.local

@@ -1,0 +1,144 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openedr.fullname" . }}
+  labels:
+    {{- include "openedr.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "openedr.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from ingress controller
+    {{- if .Values.ingress.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.ingress.fromNamespace | default "ingress-nginx" }}
+        - podSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.ingress.fromPodLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+    {{- end }}
+    # Allow ingress from same namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Release.Namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+    # Allow ingress from monitoring namespace for Prometheus
+    {{- if .Values.serviceMonitor.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.monitoring.namespace | default "monitoring" }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.metricsPort | default 9090 }}
+    {{- end }}
+    # Allow agent connections from OpenEDR agents
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: agent
+              app.kubernetes.io/part-of: {{ include "openedr.name" . }}
+      ports:
+        - protocol: TCP
+          port: 8443
+        - protocol: TCP
+          port: 5671
+    {{- if .Values.networkPolicy.ingress.additionalRules }}
+    {{- toYaml .Values.networkPolicy.ingress.additionalRules | nindent 4 }}
+    {{- end }}
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow connection to PostgreSQL
+    {{- if .Values.postgresql.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - protocol: TCP
+          port: {{ .Values.postgresql.primary.service.ports.postgresql | default 5432 }}
+    {{- else if .Values.externalDatabase.host }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.externalDatabase.port | default 5432 }}
+    {{- end }}
+    # Allow connection to Redis
+    {{- if .Values.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+      ports:
+        - protocol: TCP
+          port: {{ .Values.redis.master.service.ports.redis | default 6379 }}
+    {{- else if .Values.externalRedis.host }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.externalRedis.port | default 6379 }}
+    {{- end }}
+    # Allow connection to Elasticsearch
+    {{- if .Values.elasticsearch.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: elasticsearch
+      ports:
+        - protocol: TCP
+          port: 9200
+    {{- else if .Values.externalElasticsearch.host }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.externalElasticsearch.port | default 9200 }}
+    {{- end }}
+    # Allow LDAP connections
+    {{- if .Values.ldap.enabled }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.ldap.port | default 389 }}
+        {{- if .Values.ldap.tlsEnabled }}
+        - protocol: TCP
+          port: {{ .Values.ldap.tlsPort | default 636 }}
+        {{- end }}
+    {{- end }}
+    # Allow SMTP connections
+    {{- if .Values.smtp.enabled }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.smtp.port | default 587 }}
+    {{- end }}
+    # Allow threat intelligence feed updates
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    {{- if .Values.networkPolicy.egress.additionalRules }}
+    {{- toYaml .Values.networkPolicy.egress.additionalRules | nindent 4 }}
+    {{- end }}
+{{- end }}

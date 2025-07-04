@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: samba4
+  labels:
+    app: samba4
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: samba4
+  template:
+    metadata:
+      labels:
+        app: samba4
+    spec:
+      containers:
+        - name: samba4
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 389
+              name: ldap
+          args:
+            - "-s"
+            - "-u"
+            - "user1;password1"
+            - "-g"
+            - "group1"

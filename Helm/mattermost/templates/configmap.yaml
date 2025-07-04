@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mattermost.fullname" . }}-config
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mattermost.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {
+      "ServiceSettings": {
+        "SiteURL": "{{ .Values.mattermost.siteUrl }}",
+        "WebsocketURL": "{{ .Values.mattermost.servicesSettings.websocketURL }}",
+        "EnableIncomingWebhooks": {{ .Values.mattermost.servicesSettings.enableIncomingWebhooks }},
+        "EnableOutgoingWebhooks": {{ .Values.mattermost.servicesSettings.enableOutgoingWebhooks }},
+        "EnableCommands": {{ .Values.mattermost.servicesSettings.enableCommands }},
+        "EnableOAuthServiceProvider": {{ .Values.mattermost.servicesSettings.enableOAuthServiceProvider }},
+        "EnableMultifactorAuthentication": {{ .Values.mattermost.servicesSettings.enableMultifactorAuthentication }},
+        "MaxFileSize": {{ .Values.mattermost.servicesSettings.maxFileSize }}
+      },
+      "TeamSettings": {
+        "SiteName": "{{ .Values.mattermost.teamSettings.siteName }}",
+        "MaxUsersPerTeam": {{ .Values.mattermost.teamSettings.maxUsersPerTeam }},
+        "EnableTeamCreation": {{ .Values.mattermost.teamSettings.enableTeamCreation }},
+        "EnableUserCreation": {{ .Values.mattermost.teamSettings.enableUserCreation }}
+      },
+      "SqlSettings": {
+        "DriverName": "{{ .Values.mattermost.sqlSettings.driverName }}",
+        "MaxIdleConns": {{ .Values.mattermost.sqlSettings.maxIdleConns }},
+        "MaxOpenConns": {{ .Values.mattermost.sqlSettings.maxOpenConns }}
+      },
+      "LogSettings": {
+        "EnableConsole": {{ .Values.mattermost.logSettings.enableConsole }},
+        "ConsoleLevel": "{{ .Values.mattermost.logSettings.consoleLevel }}",
+        "EnableFile": {{ .Values.mattermost.logSettings.enableFile }},
+        "FileLevel": "{{ .Values.mattermost.logSettings.fileLevel }}"
+      },
+      "FileSettings": {
+        "DriverName": "{{ .Values.mattermost.fileSettings.driverName }}",
+        "Directory": "{{ .Values.mattermost.fileSettings.directory }}",
+        "MaxFileSize": {{ .Values.mattermost.fileSettings.maxFileSize }}
+      },
+      "PluginSettings": {
+        "Enable": {{ .Values.mattermost.pluginSettings.enable }},
+        "EnableUploads": {{ .Values.mattermost.pluginSettings.enableUploads }},
+        "EnableMarketplace": {{ .Values.mattermost.pluginSettings.enableMarketplace }}
+      }
+    }

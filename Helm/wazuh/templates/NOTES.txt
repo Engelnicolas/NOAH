@@ -1,0 +1,109 @@
+1. Get the Wazuh Dashboard URL by running these commands:
+{{- if .Values.ingress.dashboard.enabled }}
+{{- range $host := .Values.ingress.dashboard.hosts }}
+  {{- range .paths }}
+  https://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.dashboard.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "wazuh.dashboard.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo https://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.dashboard.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "wazuh.dashboard.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "wazuh.dashboard.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo https://$SERVICE_IP:{{ .Values.service.dashboard.ports | first | .port }}
+{{- else if contains "ClusterIP" .Values.service.dashboard.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "{{ include "wazuh.dashboard.selectorLabels" . | replace ": " "=" | replace "\n" "," }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit https://127.0.0.1:5601 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 5601:$CONTAINER_PORT
+{{- end }}
+
+2. Get the Wazuh Manager API URL by running these commands:
+{{- if .Values.ingress.manager.enabled }}
+{{- range $host := .Values.ingress.manager.hosts }}
+  {{- range .paths }}
+  https://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.manager.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "wazuh.manager.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo https://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.manager.type }}
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "wazuh.manager.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo https://$SERVICE_IP:{{ (index .Values.service.manager.ports 0).port }}
+{{- else if contains "ClusterIP" .Values.service.manager.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "{{ include "wazuh.manager.selectorLabels" . | replace ": " "=" | replace "\n" "," }}" -o jsonpath="{.items[0].metadata.name}")
+  echo "Visit https://127.0.0.1:55000 to use the Wazuh API"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 55000:55000
+{{- end }}
+
+3. Login credentials:
+   - Default Wazuh API username: {{ .Values.secrets.api.username | default "wazuh" }}
+   - Default Wazuh API password: Run this command to get the password:
+     kubectl get secret --namespace {{ .Release.Namespace }} {{ include "wazuh.fullname" . }}-secret -o jsonpath="{.data.api-password}" | base64 --decode
+
+   - Default Dashboard username: {{ .Values.dashboard.config.opensearch.username }}
+   - Default Dashboard password: Run this command to get the password:
+     kubectl get secret --namespace {{ .Release.Namespace }} {{ include "wazuh.fullname" . }}-secret -o jsonpath="{.data.elasticsearch-password}" | base64 --decode
+
+4. To connect agents to the Wazuh Manager:
+   - Manager Address: {{ include "wazuh.manager.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+   - Port: {{ (index .Values.service.manager.ports 1).port }}
+   - Protocol: {{ .Values.agent.config.protocol | upper }}
+
+5. Monitoring:
+{{- if .Values.serviceMonitor.enabled }}
+   - Prometheus ServiceMonitor has been created for metrics collection
+   - Metrics are available at:
+     - Manager: http://{{ include "wazuh.manager.fullname" . }}:9090/metrics
+     - Dashboard: http://{{ include "wazuh.dashboard.fullname" . }}:5601/api/status
+{{- end }}
+{{- if and .Values.monitoring.enabled .Values.monitoring.grafana_dashboard.enabled }}
+   - Grafana dashboard has been created in the {{ .Values.monitoring.grafana_dashboard.folder }} folder
+{{- end }}
+
+6. Security Features:
+{{- if .Values.networkPolicy.enabled }}
+   - Network policies have been applied to restrict network traffic
+{{- end }}
+{{- if .Values.podDisruptionBudget.manager.enabled }}
+   - Pod disruption budgets are configured for high availability
+{{- end }}
+{{- if .Values.autoscaling.manager.enabled }}
+   - Horizontal pod autoscaling is enabled for the Manager
+{{- end }}
+
+7. Backup:
+{{- if .Values.backup.enabled }}
+   - Backup is scheduled to run: {{ .Values.backup.schedule }}
+   - Backup retention: {{ .Values.backup.retention }}
+   {{- if eq .Values.backup.storage.type "s3" }}
+   - Backups are stored in S3 bucket: {{ .Values.backup.storage.s3.bucket }}
+   {{- else }}
+   - Backups are stored in persistent volume: {{ include "wazuh.fullname" . }}-backup
+   {{- end }}
+{{- end }}
+
+8. Troubleshooting:
+   - Check pod status: kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "wazuh.name" . }}
+   - View logs: kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "wazuh.name" . }} -f
+   - Describe resources: kubectl describe deployment,statefulset,service -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "wazuh.name" . }}
+
+{{- if .Values.elasticsearch.enabled }}
+9. Elasticsearch Information:
+   - Elasticsearch is deployed as part of this release
+   - Access Elasticsearch at: http://{{ include "wazuh.fullname" . }}-elasticsearch:9200
+{{- else }}
+9. External Elasticsearch:
+   - Ensure your external Elasticsearch is configured to accept connections from Wazuh
+   - Wazuh will connect to: {{ .Values.manager.config.database_output.hosts | join ", " }}
+{{- end }}
+
+For more information about Wazuh configuration and usage, visit:
+- Documentation: https://documentation.wazuh.com/
+- Community: https://wazuh.com/community/
+- GitHub: https://github.com/wazuh/wazuh

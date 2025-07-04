@@ -1,0 +1,140 @@
+---
+{{- if .Values.backup.enabled }}
+# Wazuh Backup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "wazuh.fullname" . }}-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "wazuh.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          serviceAccountName: {{ include "wazuh.manager.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: "alpine:3.18"
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  
+                  # Install required tools
+                  apk add --no-cache tar gzip aws-cli
+                  
+                  # Create backup directory
+                  BACKUP_DIR="/tmp/wazuh-backup-$(date +%Y%m%d-%H%M%S)"
+                  mkdir -p "$BACKUP_DIR"
+                  
+                  echo "Starting Wazuh backup at $(date)"
+                  
+                  # Copy Wazuh configuration and data
+                  {{- range .Values.backup.includes }}
+                  if [ -d "{{ . }}" ]; then
+                    echo "Backing up {{ . }}"
+                    cp -r "{{ . }}" "$BACKUP_DIR/"
+                  fi
+                  {{- end }}
+                  
+                  # Create compressed archive
+                  ARCHIVE_NAME="wazuh-backup-$(date +%Y%m%d-%H%M%S).tar.gz"
+                  tar -czf "/tmp/$ARCHIVE_NAME" -C "$BACKUP_DIR" .
+                  
+                  # Upload to S3 if configured
+                  {{- if eq .Values.backup.storage.type "s3" }}
+                  echo "Uploading backup to S3"
+                  aws s3 cp "/tmp/$ARCHIVE_NAME" "s3://{{ .Values.backup.storage.s3.bucket }}/$ARCHIVE_NAME"
+                  {{- else }}
+                  # Store locally in PVC
+                  cp "/tmp/$ARCHIVE_NAME" "/backup/$ARCHIVE_NAME"
+                  {{- end }}
+                  
+                  # Cleanup old backups (keep retention period)
+                  {{- if eq .Values.backup.storage.type "s3" }}
+                  aws s3 ls s3://{{ .Values.backup.storage.s3.bucket }}/ | \
+                    awk '{print $4}' | \
+                    head -n -{{ .Values.backup.retention | trimSuffix "d" }} | \
+                    xargs -I {} aws s3 rm s3://{{ .Values.backup.storage.s3.bucket }}/{}
+                  {{- else }}
+                  find /backup -name "wazuh-backup-*.tar.gz" -mtime +{{ .Values.backup.retention | trimSuffix "d" }} -delete
+                  {{- end }}
+                  
+                  echo "Backup completed successfully at $(date)"
+              env:
+                {{- if eq .Values.backup.storage.type "s3" }}
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "wazuh.fullname" . }}-backup-secret
+                      key: aws-access-key-id
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "wazuh.fullname" . }}-backup-secret
+                      key: aws-secret-access-key
+                - name: AWS_DEFAULT_REGION
+                  value: {{ .Values.backup.storage.s3.region | quote }}
+                {{- end }}
+              volumeMounts:
+                # Mount Wazuh data volumes
+                - name: wazuh-manager-master
+                  mountPath: /var/ossec
+                  readOnly: true
+                {{- if ne .Values.backup.storage.type "s3" }}
+                - name: backup-storage
+                  mountPath: /backup
+                {{- end }}
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+          volumes:
+            - name: wazuh-manager-master
+              persistentVolumeClaim:
+                claimName: wazuh-manager-master-{{ include "wazuh.manager.fullname" . }}-0
+            {{- if ne .Values.backup.storage.type "s3" }}
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: {{ include "wazuh.fullname" . }}-backup
+            {{- end }}
+
+---
+{{- if eq .Values.backup.storage.type "s3" }}
+# S3 Backup Credentials Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "wazuh.fullname" . }}-backup-secret
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "wazuh.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+type: Opaque
+data:
+  aws-access-key-id: {{ .Values.backup.storage.s3.accessKey | b64enc | quote }}
+  aws-secret-access-key: {{ .Values.backup.storage.s3.secretKey | b64enc | quote }}
+{{- end }}
+{{- end }}

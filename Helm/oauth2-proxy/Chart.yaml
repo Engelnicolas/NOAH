@@ -1,0 +1,25 @@
+apiVersion: v2
+name: oauth2-proxy
+description: Production-ready OAuth2 Proxy for protecting services with OIDC authentication
+type: application
+version: 1.0.0
+appVersion: "7.6.0"
+keywords:
+  - oauth2
+  - oidc
+  - proxy
+  - authentication
+  - authorization
+  - keycloak
+  - security
+home: https://oauth2-proxy.github.io/oauth2-proxy/
+sources:
+  - https://github.com/oauth2-proxy/oauth2-proxy
+maintainers:
+  - name: N.O.A.H Team
+    email: admin@noah.local
+dependencies:
+  - name: redis
+    version: "18.4.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

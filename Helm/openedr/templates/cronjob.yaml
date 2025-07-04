@@ -1,0 +1,233 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "openedr.fullname" . }}-backup
+  labels:
+    {{- include "openedr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  {{- if .Values.backup.timeZone }}
+  timeZone: {{ .Values.backup.timeZone }}
+  {{- end }}
+  concurrencyPolicy: {{ .Values.backup.concurrencyPolicy | default "Forbid" }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit | default 3 }}
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit | default 3 }}
+  {{- if .Values.backup.startingDeadlineSeconds }}
+  startingDeadlineSeconds: {{ .Values.backup.startingDeadlineSeconds }}
+  {{- end }}
+  jobTemplate:
+    spec:
+      {{- if .Values.backup.activeDeadlineSeconds }}
+      activeDeadlineSeconds: {{ .Values.backup.activeDeadlineSeconds }}
+      {{- end }}
+      {{- if .Values.backup.ttlSecondsAfterFinished }}
+      ttlSecondsAfterFinished: {{ .Values.backup.ttlSecondsAfterFinished }}
+      {{- end }}
+      template:
+        metadata:
+          labels:
+            {{- include "openedr.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+          {{- with .Values.backup.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        spec:
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "openedr.serviceAccountName" . }}
+          restartPolicy: {{ .Values.backup.restartPolicy | default "OnFailure" }}
+          securityContext:
+            {{- toYaml .Values.backup.podSecurityContext | nindent 12 }}
+          containers:
+            - name: backup
+              image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag | default "latest" }}"
+              imagePullPolicy: {{ .Values.backup.image.pullPolicy | default "IfNotPresent" }}
+              securityContext:
+                {{- toYaml .Values.backup.securityContext | nindent 16 }}
+              env:
+                # Database connection
+                {{- if .Values.postgresql.enabled }}
+                - name: PGHOST
+                  value: {{ include "openedr.postgresql.fullname" . }}
+                - name: PGPORT
+                  value: "{{ .Values.postgresql.primary.service.ports.postgresql | default 5432 }}"
+                - name: PGDATABASE
+                  value: {{ .Values.postgresql.auth.database }}
+                - name: PGUSER
+                  value: {{ .Values.postgresql.auth.username }}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "openedr.secretName" . }}
+                      key: database-password
+                {{- else }}
+                - name: PGHOST
+                  value: {{ .Values.externalDatabase.host }}
+                - name: PGPORT
+                  value: "{{ .Values.externalDatabase.port | default 5432 }}"
+                - name: PGDATABASE
+                  value: {{ .Values.externalDatabase.database }}
+                - name: PGUSER
+                  value: {{ .Values.externalDatabase.username }}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "openedr.secretName" . }}
+                      key: database-password
+                {{- end }}
+                # S3 configuration for backup storage
+                {{- if .Values.backup.s3.enabled }}
+                - name: S3_ENDPOINT
+                  value: {{ .Values.backup.s3.endpoint }}
+                - name: S3_BUCKET
+                  value: {{ .Values.backup.s3.bucket }}
+                - name: S3_REGION
+                  value: {{ .Values.backup.s3.region | default "us-east-1" }}
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "openedr.secretName" . }}
+                      key: s3-access-key
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "openedr.secretName" . }}
+                      key: s3-secret-key
+                {{- end }}
+                # Retention settings
+                - name: BACKUP_RETENTION_DAYS
+                  value: "{{ .Values.backup.retentionDays | default 30 }}"
+                - name: BACKUP_PREFIX
+                  value: "{{ .Values.backup.prefix | default "openedr" }}"
+                # OpenEDR specific settings
+                {{- with .Values.backup.env }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -e
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_FILE="${BACKUP_PREFIX}_${TIMESTAMP}.sql"
+                  
+                  echo "Starting OpenEDR backup at $(date)"
+                  
+                  # Create database backup
+                  echo "Creating database backup..."
+                  pg_dump --no-password --clean --if-exists --create > /tmp/${BACKUP_FILE}
+                  
+                  # Compress backup
+                  echo "Compressing backup..."
+                  gzip /tmp/${BACKUP_FILE}
+                  BACKUP_FILE="${BACKUP_FILE}.gz"
+                  
+                  {{- if .Values.backup.s3.enabled }}
+                  # Upload to S3
+                  echo "Uploading to S3..."
+                  aws s3 cp /tmp/${BACKUP_FILE} s3://${S3_BUCKET}/database/${BACKUP_FILE} --region ${S3_REGION}
+                  
+                  # Clean old backups from S3
+                  echo "Cleaning old S3 backups..."
+                  aws s3 ls s3://${S3_BUCKET}/database/ | awk '{print $4}' | grep "^${BACKUP_PREFIX}" | head -n -${BACKUP_RETENTION_DAYS} | while read file; do
+                    if [ ! -z "$file" ]; then
+                      echo "Deleting old backup: $file"
+                      aws s3 rm s3://${S3_BUCKET}/database/$file --region ${S3_REGION}
+                    fi
+                  done
+                  {{- end }}
+                  
+                  # Copy config and logs if enabled
+                  {{- if .Values.backup.includeConfig }}
+                  echo "Backing up configuration..."
+                  tar -czf /tmp/openedr_config_${TIMESTAMP}.tar.gz -C /opt/openedr config/
+                  {{- if .Values.backup.s3.enabled }}
+                  aws s3 cp /tmp/openedr_config_${TIMESTAMP}.tar.gz s3://${S3_BUCKET}/config/ --region ${S3_REGION}
+                  {{- end }}
+                  {{- end }}
+                  
+                  {{- if .Values.backup.includeLogs }}
+                  echo "Backing up logs..."
+                  tar -czf /tmp/openedr_logs_${TIMESTAMP}.tar.gz -C /opt/openedr logs/
+                  {{- if .Values.backup.s3.enabled }}
+                  aws s3 cp /tmp/openedr_logs_${TIMESTAMP}.tar.gz s3://${S3_BUCKET}/logs/ --region ${S3_REGION}
+                  {{- end }}
+                  {{- end }}
+                  
+                  echo "Backup completed successfully at $(date)"
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+                {{- if .Values.persistence.enabled }}
+                - name: data
+                  mountPath: /opt/openedr
+                  readOnly: true
+                {{- end }}
+                {{- with .Values.backup.extraVolumeMounts }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+          volumes:
+            - name: backup-storage
+              {{- if .Values.backup.persistence.enabled }}
+              persistentVolumeClaim:
+                claimName: {{ include "openedr.fullname" . }}-backup
+              {{- else }}
+              emptyDir: {}
+              {{- end }}
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              persistentVolumeClaim:
+                claimName: {{ include "openedr.fullname" . }}
+            {{- end }}
+            {{- with .Values.backup.extraVolumes }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.backup.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.backup.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.backup.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+{{- if .Values.backup.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "openedr.fullname" . }}-backup
+  labels:
+    {{- include "openedr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  accessModes:
+    {{- range .Values.backup.persistence.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.persistence.size | quote }}
+  {{- if .Values.backup.persistence.storageClass }}
+  {{- if (eq "-" .Values.backup.persistence.storageClass) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.backup.persistence.storageClass | quote }}
+  {{- end }}
+  {{- end }}
+  {{- with .Values.backup.persistence.selector }}
+  selector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

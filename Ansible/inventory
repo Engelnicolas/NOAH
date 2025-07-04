@@ -1,0 +1,48 @@
+# OpenInfra Inventory File
+# Defines target environments and their configurations
+
+[local]
+localhost ansible_connection=local
+
+[production]
+# Add production hosts here if deploying to remote clusters
+# prod-k8s-master ansible_host=10.0.1.10 ansible_user=ubuntu
+# prod-k8s-worker1 ansible_host=10.0.1.11 ansible_user=ubuntu
+# prod-k8s-worker2 ansible_host=10.0.1.12 ansible_user=ubuntu
+
+[staging]
+# Add staging hosts here
+# staging-k8s-master ansible_host=10.0.2.10 ansible_user=ubuntu
+
+[development]
+# Add development hosts here
+# dev-k8s-master ansible_host=10.0.3.10 ansible_user=ubuntu
+
+# Group variables for different environments
+[production:vars]
+env=production
+namespace=openinfra-prod
+parallel_deployment=false
+run_validation=true
+backup_enabled=true
+
+[staging:vars]
+env=staging
+namespace=openinfra-staging
+parallel_deployment=true
+run_validation=true
+backup_enabled=false
+
+[development:vars]
+env=development
+namespace=openinfra-dev
+parallel_deployment=true
+run_validation=false
+backup_enabled=false
+
+[local:vars]
+env=local
+namespace=openinfra-local
+parallel_deployment=false
+run_validation=true
+backup_enabled=false

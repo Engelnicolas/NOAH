@@ -1,0 +1,131 @@
+---
+# OpenEDR Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "openedr.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openedr.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {
+      "server": {
+        "host": "0.0.0.0",
+        "port": {{ .Values.service.port }},
+        "ssl": {
+          "enabled": {{ .Values.config.ssl.enabled }},
+          "cert": "{{ .Values.config.ssl.cert }}",
+          "key": "{{ .Values.config.ssl.key }}",
+          "ca": "{{ .Values.config.ssl.ca }}"
+        }
+      },
+      "database": {
+        "type": "{{ .Values.config.database.type }}",
+        "host": "{{ .Values.config.database.host }}",
+        "port": {{ .Values.config.database.port }},
+        "name": "{{ .Values.config.database.name }}",
+        "username": "{{ .Values.config.database.username }}",
+        "password": "$(DATABASE_PASSWORD)",
+        "ssl": {{ .Values.config.database.ssl }},
+        "pool": {
+          "min": {{ .Values.config.database.pool.min }},
+          "max": {{ .Values.config.database.pool.max }}
+        }
+      },
+      "redis": {
+        "host": "{{ .Values.config.redis.host }}",
+        "port": {{ .Values.config.redis.port }},
+        "password": "$(REDIS_PASSWORD)",
+        "db": {{ .Values.config.redis.db }},
+        "ssl": {{ .Values.config.redis.ssl }}
+      },
+      "elasticsearch": {
+        "enabled": {{ .Values.config.elasticsearch.enabled }},
+        "hosts": {{ .Values.config.elasticsearch.hosts | toJson }},
+        "username": "{{ .Values.config.elasticsearch.username }}",
+        "password": "$(ELASTICSEARCH_PASSWORD)",
+        "index_prefix": "{{ .Values.config.elasticsearch.index_prefix }}",
+        "ssl": {
+          "enabled": {{ .Values.config.elasticsearch.ssl.enabled }},
+          "verify": {{ .Values.config.elasticsearch.ssl.verify }}
+        }
+      },
+      "ldap": {
+        "enabled": {{ .Values.config.ldap.enabled }},
+        "host": "{{ .Values.config.ldap.host }}",
+        "port": {{ .Values.config.ldap.port }},
+        "bind_dn": "{{ .Values.config.ldap.bind_dn }}",
+        "bind_password": "$(LDAP_BIND_PASSWORD)",
+        "base_dn": "{{ .Values.config.ldap.base_dn }}",
+        "user_filter": "{{ .Values.config.ldap.user_filter }}",
+        "group_filter": "{{ .Values.config.ldap.group_filter }}",
+        "ssl": {{ .Values.config.ldap.ssl }}
+      },
+      "threat_detection": {
+        "enabled": {{ .Values.config.threat_detection.enabled }},
+        "engines": {{ .Values.config.threat_detection.engines | toJson }},
+        "quarantine": {
+          "enabled": {{ .Values.config.threat_detection.quarantine.enabled }},
+          "path": "{{ .Values.config.threat_detection.quarantine.path }}"
+        },
+        "machine_learning": {
+          "enabled": {{ .Values.config.threat_detection.machine_learning.enabled }},
+          "model_path": "{{ .Values.config.threat_detection.machine_learning.model_path }}"
+        }
+      },
+      "incident_response": {
+        "enabled": {{ .Values.config.incident_response.enabled }},
+        "auto_containment": {{ .Values.config.incident_response.auto_containment }},
+        "escalation": {
+          "enabled": {{ .Values.config.incident_response.escalation.enabled }},
+          "thresholds": {{ .Values.config.incident_response.escalation.thresholds | toJson }}
+        }
+      },
+      "compliance": {
+        "frameworks": {{ .Values.config.compliance.frameworks | toJson }},
+        "reporting": {
+          "enabled": {{ .Values.config.compliance.reporting.enabled }},
+          "schedule": "{{ .Values.config.compliance.reporting.schedule }}",
+          "retention": "{{ .Values.config.compliance.reporting.retention }}"
+        }
+      },
+      "alerting": {
+        "email": {
+          "enabled": {{ .Values.config.alerting.email.enabled }},
+          "smtp_host": "{{ .Values.config.alerting.email.smtp_host }}",
+          "smtp_port": {{ .Values.config.alerting.email.smtp_port }},
+          "username": "{{ .Values.config.alerting.email.username }}",
+          "password": "$(EMAIL_PASSWORD)",
+          "from": "{{ .Values.config.alerting.email.from }}",
+          "to": {{ .Values.config.alerting.email.to | toJson }}
+        },
+        "webhook": {
+          "enabled": {{ .Values.config.alerting.webhook.enabled }},
+          "url": "{{ .Values.config.alerting.webhook.url }}",
+          "secret": "$(WEBHOOK_SECRET)"
+        },
+        "syslog": {
+          "enabled": {{ .Values.config.alerting.syslog.enabled }},
+          "host": "{{ .Values.config.alerting.syslog.host }}",
+          "port": {{ .Values.config.alerting.syslog.port }},
+          "protocol": "{{ .Values.config.alerting.syslog.protocol }}"
+        }
+      },
+      "agents": {
+        "auto_update": {{ .Values.config.agents.auto_update }},
+        "update_interval": "{{ .Values.config.agents.update_interval }}",
+        "config_distribution": {{ .Values.config.agents.config_distribution }},
+        "heartbeat_interval": "{{ .Values.config.agents.heartbeat_interval }}"
+      },
+      "threat_intelligence": {
+        "enabled": {{ .Values.config.threat_intelligence.enabled }},
+        "feeds": {{ .Values.config.threat_intelligence.feeds | toJson }},
+        "update_interval": "{{ .Values.config.threat_intelligence.update_interval }}"
+      },
+      "logging": {
+        "level": "{{ .Values.config.logging.level }}",
+        "format": "{{ .Values.config.logging.format }}",
+        "output": "{{ .Values.config.logging.output }}"
+      }
+    }

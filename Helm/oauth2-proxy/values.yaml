@@ -1,0 +1,260 @@
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# OAuth2 Proxy configuration
+replicaCount: 2
+
+image:
+  registry: quay.io
+  repository: oauth2-proxy/oauth2-proxy
+  tag: "v7.6.0"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 4180
+  annotations: {}
+  sessionAffinity: ClientIP
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hostname: "oauth2-proxy.noah.local"
+  path: /oauth2
+  pathType: Prefix
+  tls:
+    enabled: true
+    secretName: oauth2-proxy-tls
+
+# OAuth2 Proxy Authentication Configuration
+oauth2:
+  # Provider configuration
+  provider: "oidc"
+  oidcIssuerUrl: "https://keycloak.noah.local/realms/noah"
+  clientId: "oauth2-proxy"
+  clientSecret: ""
+  existingSecret: ""
+  existingSecretKey: "client-secret"
+  
+  # Cookie configuration
+  cookieSecret: ""
+  cookieSecretExistingSecret: ""
+  cookieSecretExistingSecretKey: "cookie-secret"
+  cookieName: "_oauth2_proxy"
+  cookieDomain: ".noah.local"
+  cookieExpire: "168h"  # 7 days
+  cookieRefresh: "1h"
+  cookieSecure: true
+  cookieHttpOnly: true
+  cookieSameSite: "lax"
+  
+  # Session configuration
+  sessionStorageType: "redis"
+  
+  # Authorization configuration
+  emailDomains:
+    - "*"
+  
+  # Additional scopes
+  scope: "openid profile email groups"
+  
+  # Upstream configuration
+  upstreams:
+    - "static://202"  # Default upstream for health checks
+  
+  # Skip authentication for specific paths
+  skipAuthRegex:
+    - "^/oauth2/"
+    - "^/ping$"
+    - "^/health$"
+  
+  # Pass authorization headers
+  passAuthorizationHeader: true
+  passAccessToken: true
+  passUserHeaders: true
+  setAuthorizationHeader: true
+  setXAuthRequestHeaders: true
+  
+  # Logging
+  requestLogging: true
+  standardLogging: true
+  authLogging: true
+  
+  # Security
+  forceHttps: true
+  insecureOidcAllowUnverifiedEmail: false
+  insecureOidcSkipIssuerVerification: false
+  skipJwtBearerTokens: false
+  
+  # Timeouts
+  flushInterval: "1s"
+  
+  # Custom configuration
+  extraArgs: []
+  extraEnv: []
+
+# Redis configuration for session storage
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "oauth2proxy"
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+
+# External Redis configuration (if redis.enabled = false)
+externalRedis:
+  host: ""
+  port: 6379
+  password: ""
+  existingSecret: ""
+  existingSecretPasswordKey: "redis-password"
+  database: 0
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Auto-scaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Node selection
+nodeSelector: {}
+tolerations: []
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: oauth2-proxy
+          topologyKey: kubernetes.io/hostname
+
+# Security Context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 2000
+  runAsGroup: 2000
+  fsGroup: 2000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 2000
+
+# Probes
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /ping
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /ping
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+startupProbe:
+  enabled: true
+  httpGet:
+    path: /ping
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+  egress:
+    enabled: true
+
+# Monitoring
+metrics:
+  enabled: true
+  port: 44180
+  serviceMonitor:
+    enabled: true
+    namespace: ""
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Pod annotations and labels
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "44180"
+  prometheus.io/path: "/metrics"
+
+podLabels: {}
+
+# Common labels
+commonLabels: {}
+commonAnnotations: {}
+
+# Extra volumes and mounts
+extraVolumes: []
+extraVolumeMounts: []
+
+# Init containers
+initContainers: []
+
+# Sidecar containers
+sidecarContainers: []

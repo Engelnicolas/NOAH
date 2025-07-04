@@ -1,0 +1,420 @@
+name: N.O.A.H CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  ANSIBLE_VERSION: '>=6.0.0'
+  HELM_VERSION: 'v3.12.0'
+  KUBECTL_VERSION: 'v1.27.0'
+
+jobs:
+  # Job 1: Lint and validate code
+  lint-and-validate:
+    name: Lint and Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Ansible and dependencies
+        run: |
+          pip install ansible${{ env.ANSIBLE_VERSION }} ansible-lint yamllint jinja2-cli
+          pip install kubernetes requests
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Lint Ansible playbooks
+        run: |
+          cd Ansible
+          echo "Running ansible-lint on playbooks..."
+          ansible-lint main.yml --exclude=roles/*/files/ || true
+          
+          echo "Running yamllint on YAML files..."
+          find . -name "*.yml" -o -name "*.yaml" | xargs yamllint -d relaxed || true
+
+      - name: Validate Ansible syntax
+        run: |
+          cd Ansible
+          ansible-playbook --syntax-check main.yml
+
+      - name: Lint Helm charts
+        run: |
+          echo "Linting all Helm charts..."
+          cd Helm
+          for chart in */; do
+            if [ -f "${chart}Chart.yaml" ]; then
+              echo "Linting ${chart}..."
+              helm lint "${chart}" || exit 1
+            fi
+          done
+
+      - name: Validate Helm templates
+        run: |
+          cd Helm
+          for chart in */; do
+            if [ -f "${chart}Chart.yaml" ]; then
+              echo "Validating templates for ${chart}..."
+              helm template test "${chart}" --debug --dry-run > /dev/null || exit 1
+            fi
+          done
+
+      - name: Check shell scripts syntax
+        run: |
+          echo "Checking shell scripts syntax..."
+          find Script/ Test/ -name "*.sh" -exec bash -n {} \; || exit 1
+
+      - name: Validate Makefiles
+        run: |
+          echo "Validating Makefiles..."
+          make -n -f Script/Makefile help > /dev/null
+          make -n -f Ansible/Makefile help > /dev/null
+
+  # Job 2: Helm Chart Tests
+  helm-tests:
+    name: Helm Chart Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-validate
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Setup Kind (Kubernetes in Docker)
+        uses: helm/kind-action@v1.8.0
+        with:
+          config: |
+            kind: Cluster
+            apiVersion: kind.x-k8s.io/v1alpha4
+            nodes:
+            - role: control-plane
+              kubeadmConfigPatches:
+              - |
+                kind: InitConfiguration
+                nodeRegistration:
+                  kubeletExtraArgs:
+                    node-labels: "ingress-ready=true"
+              extraPortMappings:
+              - containerPort: 80
+                hostPort: 80
+                protocol: TCP
+              - containerPort: 443
+                hostPort: 443
+                protocol: TCP
+
+      - name: Run Helm chart tests
+        run: |
+          chmod +x Test/helm_chart_tests.sh
+          cd Test
+          ./helm_chart_tests.sh --environment ci
+
+      - name: Package Helm charts
+        run: |
+          mkdir -p ./helm-packages
+          cd Helm
+          for chart in */; do
+            if [ -f "${chart}Chart.yaml" ]; then
+              echo "Packaging ${chart}..."
+              helm package "${chart}" -d ../helm-packages/
+            fi
+          done
+
+      - name: Upload Helm packages as artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: helm-packages
+          path: ./helm-packages/
+
+  # Job 3: Security Tests
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-validate
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Install security scanning tools
+        run: |
+          # Install Checkov for Infrastructure as Code scanning
+          pip install checkov
+          
+          # Install semgrep for static analysis
+          pip install semgrep
+
+      - name: Run Checkov IaC security scan
+        run: |
+          echo "Running Checkov security scan..."
+          checkov -d . --framework helm,yaml,dockerfile --output cli || true
+
+      - name: Run semgrep security scan
+        run: |
+          echo "Running semgrep security scan..."
+          semgrep --config=auto . --json --output=semgrep-results.json || true
+
+      - name: Run custom security tests
+        run: |
+          if [ -f "Test/security_tests.sh" ]; then
+            chmod +x Test/security_tests.sh
+            cd Test
+            ./security_tests.sh --environment ci || true
+          fi
+
+  # Job 4: Integration Tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-validate, helm-tests]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Ansible and dependencies
+        run: |
+          pip install ansible${{ env.ANSIBLE_VERSION }}
+          pip install kubernetes requests
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Setup Kind cluster
+        uses: helm/kind-action@v1.8.0
+        with:
+          config: |
+            kind: Cluster
+            apiVersion: kind.x-k8s.io/v1alpha4
+            nodes:
+            - role: control-plane
+            - role: worker
+            - role: worker
+
+      - name: Run integration tests
+        run: |
+          if [ -f "Test/integration_tests.sh" ]; then
+            chmod +x Test/integration_tests.sh
+            cd Test
+            ./integration_tests.sh --environment ci
+          fi
+
+      - name: Run post-deploy validation
+        run: |
+          if [ -f "Test/post_deploy_validate.sh" ]; then
+            chmod +x Test/post_deploy_validate.sh
+            cd Test
+            ./post_deploy_validate.sh --environment ci
+          fi
+
+  # Job 5: Build Documentation
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install documentation tools
+        run: |
+          pip install mkdocs mkdocs-material mkdocs-mermaid2-plugin
+
+      - name: Generate Helm chart documentation
+        run: |
+          mkdir -p docs/charts
+          for chart in Helm/*/; do
+            if [ -f "${chart}Chart.yaml" ]; then
+              chart_name=$(basename "$chart")
+              echo "# ${chart_name} Chart" > "docs/charts/${chart_name}.md"
+              echo "" >> "docs/charts/${chart_name}.md"
+              
+              if [ -f "${chart}README.md" ]; then
+                cat "${chart}README.md" >> "docs/charts/${chart_name}.md"
+              fi
+              
+              echo "## Values" >> "docs/charts/${chart_name}.md"
+              echo '```yaml' >> "docs/charts/${chart_name}.md"
+              cat "${chart}values.yaml" >> "docs/charts/${chart_name}.md"
+              echo '```' >> "docs/charts/${chart_name}.md"
+            fi
+          done
+
+      - name: Generate Ansible role documentation
+        run: |
+          mkdir -p docs/ansible
+          for role in Ansible/roles/*/; do
+            if [ -d "$role" ]; then
+              role_name=$(basename "$role")
+              echo "# ${role_name} Role" > "docs/ansible/${role_name}.md"
+              echo "" >> "docs/ansible/${role_name}.md"
+              
+              if [ -f "${role}README.md" ]; then
+                cat "${role}README.md" >> "docs/ansible/${role_name}.md"
+              fi
+              
+              if [ -f "${role}tasks/main.yml" ]; then
+                echo "## Tasks" >> "docs/ansible/${role_name}.md"
+                echo '```yaml' >> "docs/ansible/${role_name}.md"
+                head -50 "${role}tasks/main.yml" >> "docs/ansible/${role_name}.md"
+                echo '```' >> "docs/ansible/${role_name}.md"
+              fi
+            fi
+          done
+
+      - name: Upload documentation artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: documentation
+          path: docs/
+
+  # Job 6: Compliance and Quality Gates
+  compliance-check:
+    name: Compliance Check
+    runs-on: ubuntu-latest
+    needs: [lint-and-validate, security-tests]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check license headers
+        run: |
+          echo "Checking for license headers..."
+          # Add license check logic here if needed
+
+      - name: Run compliance tests
+        run: |
+          if [ -f "Test/compliance_tests.sh" ]; then
+            chmod +x Test/compliance_tests.sh
+            cd Test
+            ./compliance_tests.sh --environment ci
+          fi
+
+      - name: Generate compliance report
+        run: |
+          echo "Generating compliance report..."
+          mkdir -p reports
+          echo "# N.O.A.H Compliance Report" > reports/compliance.md
+          echo "Generated on: $(date)" >> reports/compliance.md
+          echo "Commit: ${GITHUB_SHA}" >> reports/compliance.md
+
+  # Job 7: Release preparation (only on main branch)
+  prepare-release:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    needs: [helm-tests, security-tests, integration-tests, compliance-check]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Helm packages
+        uses: actions/download-artifact@v3
+        with:
+          name: helm-packages
+          path: ./helm-packages/
+
+      - name: Create release assets
+        run: |
+          mkdir -p release-assets
+          
+          # Copy Helm packages
+          cp -r helm-packages/* release-assets/ 2>/dev/null || true
+          
+          # Create deployment bundle
+          tar -czf release-assets/noah-deployment-bundle.tar.gz \
+            Ansible/ Helm/ Script/ Test/ --exclude='*.git*'
+          
+          # Create checksums
+          cd release-assets
+          sha256sum * > checksums.txt
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-assets
+          path: release-assets/
+
+  # Job 8: Notification
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [helm-tests, security-tests, integration-tests, compliance-check]
+    if: always()
+    steps:
+      - name: Determine overall status
+        id: status
+        run: |
+          if [[ "${{ needs.helm-tests.result }}" == "success" && 
+                "${{ needs.security-tests.result }}" == "success" && 
+                "${{ needs.integration-tests.result }}" == "success" && 
+                "${{ needs.compliance-check.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=✅ All CI checks passed successfully!" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "message=❌ Some CI checks failed. Please review the logs." >> $GITHUB_OUTPUT
+          fi
+
+      - name: Summary
+        run: |
+          echo "## N.O.A.H CI/CD Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Message:** ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Job Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- Helm Tests: ${{ needs.helm-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Security Tests: ${{ needs.security-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Integration Tests: ${{ needs.integration-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Compliance Check: ${{ needs.compliance-check.result }}" >> $GITHUB_STEP_SUMMARY

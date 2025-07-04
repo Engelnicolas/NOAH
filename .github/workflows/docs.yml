@@ -1,0 +1,421 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Docs/**'
+      - 'README.md'
+      - 'Helm/**/README.md'
+      - 'Helm/**/Chart.yaml'
+      - 'Helm/**/values.yaml'
+  pull_request:
+    paths:
+      - 'Docs/**'
+      - 'README.md'
+      - 'Helm/**/README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install documentation tools
+        run: |
+          pip install \
+            mkdocs \
+            mkdocs-material \
+            mkdocs-mermaid2-plugin \
+            mkdocs-git-revision-date-localized-plugin \
+            mkdocs-git-committers-plugin-2 \
+            pymdown-extensions
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.12.0'
+
+      - name: Setup documentation structure
+        run: |
+          mkdir -p docs/charts
+          mkdir -p docs/ansible
+          mkdir -p docs/scripts
+          mkdir -p docs/assets
+
+      - name: Generate Helm chart documentation
+        run: |
+          echo "Generating Helm chart documentation..."
+          
+          # Create charts index
+          cat > docs/charts/index.md << 'EOF'
+          # Helm Charts
+          
+          This section contains documentation for all Helm charts in the N.O.A.H project.
+          
+          ## Available Charts
+          
+          EOF
+          
+          for chart in Helm/*/; do
+            if [ -f "${chart}Chart.yaml" ]; then
+              chart_name=$(basename "$chart")
+              echo "Processing chart: $chart_name"
+              
+              # Add to index
+              echo "- [$chart_name]($chart_name.md)" >> docs/charts/index.md
+              
+              # Create chart documentation
+              cat > "docs/charts/${chart_name}.md" << EOF
+          # $chart_name Chart
+          
+          EOF
+              
+              # Add description from Chart.yaml
+              if [ -f "${chart}Chart.yaml" ]; then
+                description=$(grep -E '^description:' "${chart}Chart.yaml" | sed 's/description: *//')
+                if [ -n "$description" ]; then
+                  echo "$description" >> "docs/charts/${chart_name}.md"
+                  echo "" >> "docs/charts/${chart_name}.md"
+                fi
+                
+                version=$(grep -E '^version:' "${chart}Chart.yaml" | sed 's/version: *//')
+                appVersion=$(grep -E '^appVersion:' "${chart}Chart.yaml" | sed 's/appVersion: *//')
+                
+                echo "**Chart Version:** $version" >> "docs/charts/${chart_name}.md"
+                echo "**App Version:** $appVersion" >> "docs/charts/${chart_name}.md"
+                echo "" >> "docs/charts/${chart_name}.md"
+              fi
+              
+              # Include README if exists
+              if [ -f "${chart}README.md" ]; then
+                echo "## Overview" >> "docs/charts/${chart_name}.md"
+                echo "" >> "docs/charts/${chart_name}.md"
+                cat "${chart}README.md" >> "docs/charts/${chart_name}.md"
+                echo "" >> "docs/charts/${chart_name}.md"
+              fi
+              
+              # Add values documentation
+              if [ -f "${chart}values.yaml" ]; then
+                echo "## Configuration" >> "docs/charts/${chart_name}.md"
+                echo "" >> "docs/charts/${chart_name}.md"
+                echo "The following table lists the configurable parameters and their default values:" >> "docs/charts/${chart_name}.md"
+                echo "" >> "docs/charts/${chart_name}.md"
+                echo '```yaml' >> "docs/charts/${chart_name}.md"
+                cat "${chart}values.yaml" >> "docs/charts/${chart_name}.md"
+                echo '```' >> "docs/charts/${chart_name}.md"
+                echo "" >> "docs/charts/${chart_name}.md"
+              fi
+              
+              # Add installation instructions
+              cat >> "docs/charts/${chart_name}.md" << EOF
+          ## Installation
+          
+          ### Using Helm
+          
+          \`\`\`bash
+          # Add the N.O.A.H Helm repository
+          helm repo add noah https://$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]').github.io/${{ github.event.repository.name }}/
+          helm repo update
+          
+          # Install the chart
+          helm install my-$chart_name noah/$chart_name
+          \`\`\`
+          
+          ### Using local chart
+          
+          \`\`\`bash
+          # Clone the repository
+          git clone https://github.com/${{ github.repository }}.git
+          cd ${{ github.event.repository.name }}/Helm/$chart_name
+          
+          # Install the chart
+          helm install my-$chart_name .
+          \`\`\`
+          EOF
+            fi
+          done
+
+      - name: Generate Ansible documentation
+        run: |
+          echo "Generating Ansible documentation..."
+          
+          # Create ansible index
+          cat > docs/ansible/index.md << 'EOF'
+          # Ansible Roles and Playbooks
+          
+          This section contains documentation for all Ansible roles and playbooks in the N.O.A.H project.
+          
+          ## Available Roles
+          
+          EOF
+          
+          for role in Ansible/roles/*/; do
+            if [ -d "$role" ]; then
+              role_name=$(basename "$role")
+              echo "Processing role: $role_name"
+              
+              # Add to index
+              echo "- [$role_name]($role_name.md)" >> docs/ansible/index.md
+              
+              # Create role documentation
+              cat > "docs/ansible/${role_name}.md" << EOF
+          # $role_name Role
+          
+          EOF
+              
+              # Include README if exists
+              if [ -f "${role}README.md" ]; then
+                cat "${role}README.md" >> "docs/ansible/${role_name}.md"
+                echo "" >> "docs/ansible/${role_name}.md"
+              else
+                echo "Ansible role for $role_name configuration and deployment." >> "docs/ansible/${role_name}.md"
+                echo "" >> "docs/ansible/${role_name}.md"
+              fi
+              
+              # Add tasks overview
+              if [ -f "${role}tasks/main.yml" ]; then
+                echo "## Tasks" >> "docs/ansible/${role_name}.md"
+                echo "" >> "docs/ansible/${role_name}.md"
+                echo '```yaml' >> "docs/ansible/${role_name}.md"
+                head -100 "${role}tasks/main.yml" >> "docs/ansible/${role_name}.md"
+                echo '```' >> "docs/ansible/${role_name}.md"
+                echo "" >> "docs/ansible/${role_name}.md"
+              fi
+              
+              # Add variables if exists
+              if [ -f "${role}defaults/main.yml" ]; then
+                echo "## Default Variables" >> "docs/ansible/${role_name}.md"
+                echo "" >> "docs/ansible/${role_name}.md"
+                echo '```yaml' >> "docs/ansible/${role_name}.md"
+                cat "${role}defaults/main.yml" >> "docs/ansible/${role_name}.md"
+                echo '```' >> "docs/ansible/${role_name}.md"
+                echo "" >> "docs/ansible/${role_name}.md"
+              fi
+            fi
+          done
+
+      - name: Generate scripts documentation
+        run: |
+          echo "Generating scripts documentation..."
+          
+          cat > docs/scripts/index.md << 'EOF'
+          # Deployment Scripts
+          
+          This section contains documentation for deployment and utility scripts.
+          
+          ## Available Scripts
+          
+          EOF
+          
+          for script in Script/*.sh; do
+            if [ -f "$script" ]; then
+              script_name=$(basename "$script" .sh)
+              echo "Processing script: $script_name"
+              
+              # Add to index
+              echo "- [$script_name]($script_name.md)" >> docs/scripts/index.md
+              
+              # Create script documentation
+              cat > "docs/scripts/${script_name}.md" << EOF
+          # $script_name.sh
+          
+          EOF
+              
+              # Extract description from script comments
+              description=$(head -20 "$script" | grep -E '^#' | grep -v '^#!/' | sed 's/^# *//' | head -5)
+              if [ -n "$description" ]; then
+                echo "$description" >> "docs/scripts/${script_name}.md"
+                echo "" >> "docs/scripts/${script_name}.md"
+              fi
+              
+              # Add usage
+              usage=$(grep -E "^# Usage:|^# USAGE:" "$script" -A 5 | sed 's/^# *//')
+              if [ -n "$usage" ]; then
+                echo "## Usage" >> "docs/scripts/${script_name}.md"
+                echo "" >> "docs/scripts/${script_name}.md"
+                echo '```bash' >> "docs/scripts/${script_name}.md"
+                echo "$usage" >> "docs/scripts/${script_name}.md"
+                echo '```' >> "docs/scripts/${script_name}.md"
+                echo "" >> "docs/scripts/${script_name}.md"
+              fi
+            fi
+          done
+
+      - name: Create mkdocs.yml
+        run: |
+          cat > mkdocs.yml << 'EOF'
+          site_name: N.O.A.H Documentation
+          site_description: Next Open-source Architecture Hub - Comprehensive Infrastructure Automation
+          site_author: N.O.A.H Team
+          site_url: https://github.com/${{ github.repository }}
+          
+          repo_name: ${{ github.repository }}
+          repo_url: https://github.com/${{ github.repository }}
+          edit_uri: edit/main/docs/
+          
+          theme:
+            name: material
+            palette:
+              - scheme: default
+                primary: indigo
+                accent: indigo
+                toggle:
+                  icon: material/brightness-7
+                  name: Switch to dark mode
+              - scheme: slate
+                primary: indigo
+                accent: indigo
+                toggle:
+                  icon: material/brightness-4
+                  name: Switch to light mode
+            features:
+              - navigation.tabs
+              - navigation.sections
+              - navigation.expand
+              - navigation.top
+              - search.highlight
+              - search.share
+              - content.code.copy
+          
+          plugins:
+            - search
+            - git-revision-date-localized:
+                type: date
+            - mermaid2
+          
+          markdown_extensions:
+            - pymdownx.highlight:
+                anchor_linenums: true
+            - pymdownx.inlinehilite
+            - pymdownx.snippets
+            - pymdownx.superfences:
+                custom_fences:
+                  - name: mermaid
+                    class: mermaid
+                    format: !!python/name:pymdownx.superfences.fence_code_format
+            - pymdownx.tabbed:
+                alternate_style: true
+            - admonition
+            - pymdownx.details
+            - pymdownx.mark
+            - pymdownx.caret
+            - pymdownx.keys
+            - pymdownx.tilde
+            - attr_list
+            - md_in_html
+          
+          nav:
+            - Home: index.md
+            - User Guide: USER_GUIDE.md
+            - Helm Charts:
+                - charts/index.md
+            - Ansible:
+                - ansible/index.md
+            - Scripts:
+                - scripts/index.md
+            - Contributing: CONTRIBUTING.md
+          EOF
+
+      - name: Copy existing documentation
+        run: |
+          # Copy main README as index
+          cp README.md docs/index.md
+          
+          # Copy existing docs
+          if [ -d "Docs" ]; then
+            cp -r Docs/* docs/ 2>/dev/null || true
+          fi
+
+      - name: Build documentation
+        run: |
+          mkdocs build --strict
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: ./site
+
+  deploy-docs:
+    name: Deploy Documentation
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-docs
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
+
+  validate-links:
+    name: Validate Documentation Links
+    runs-on: ubuntu-latest
+    needs: build-docs
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download built site
+        uses: actions/download-artifact@v3
+        with:
+          name: github-pages
+          path: ./site-artifact
+
+      - name: Extract site
+        run: |
+          cd site-artifact
+          tar -xf artifact.tar
+          mv * ../site/ 2>/dev/null || true
+          cd ..
+
+      - name: Install link checker
+        run: |
+          npm install -g markdown-link-check
+
+      - name: Check documentation links
+        run: |
+          echo "Checking documentation links..."
+          find docs/ -name "*.md" -exec markdown-link-check {} \; || true
+
+  notify-docs:
+    name: Notify Documentation Update
+    runs-on: ubuntu-latest
+    needs: [build-docs, deploy-docs, validate-links]
+    if: always() && github.ref == 'refs/heads/main'
+    steps:
+      - name: Documentation Summary
+        run: |
+          echo "## Documentation Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ needs.deploy-docs.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Updated Documentation:" >> $GITHUB_STEP_SUMMARY
+          echo "- 📖 Main documentation site" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 Helm chart documentation" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔧 Ansible role documentation" >> $GITHUB_STEP_SUMMARY
+          echo "- 📜 Script documentation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.deploy-docs.result }}" == "success" ]; then
+            echo "📖 **Documentation is now available at:** https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
+          fi

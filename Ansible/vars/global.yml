@@ -97,14 +97,14 @@ openvpn_ldap_password: changeme123
 keycloak:
   # Keycloak admin console administrator username
   admin_user: admin
-  
+
   # Keycloak admin console administrator password
   # SECURITY: Change this default password before production deployment
   admin_password: admin
-  
+
   # Primary realm for NOAH user management
   realm: master
-  
+
   # OIDC issuer URL for OAuth2/OpenID Connect flows
   issuer_url: https://keycloak.local/realms/master
 
@@ -117,11 +117,11 @@ oidc_clients:
   # Nextcloud OIDC integration
   - name: nextcloud-client
     redirect_uri: https://nextcloud.local/oidc
-    
+
   # Mattermost OIDC integration
   - name: mattermost-client
     redirect_uri: https://mattermost.local/oidc
-    
+
   # GitLab OIDC integration
   - name: gitlab-client
     redirect_uri: https://gitlab.local/oidc

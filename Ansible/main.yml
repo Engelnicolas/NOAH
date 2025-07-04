@@ -39,16 +39,16 @@
   connection: local
   gather_facts: yes
   become: false
-  
+
   # Load global configuration variables
   vars_files:
     - vars/global.yml
-  
+
   # Playbook-level variables for deployment tracking and control
   vars:
     # Record deployment start time for duration tracking
     deployment_start_time: "{{ ansible_date_time.epoch }}"
-    
+
     # Arrays to track deployment success/failure for reporting
     failed_phases: []
     successful_phases: []
@@ -148,11 +148,11 @@
         - name: Phase 1 failure handler
           set_fact:
             failed_phases: "{{ failed_phases + ['Phase 1: Core Infrastructure'] }}"
-          
+
         - name: Log Phase 1 failure
           debug:
             msg: "Phase 1 failed - Core infrastructure deployment failed"
-          
+
         - name: Fail deployment on critical phase failure
           fail:
             msg: "Critical phase failed - cannot continue deployment"
@@ -209,11 +209,11 @@
         - name: Phase 2 failure handler
           set_fact:
             failed_phases: "{{ failed_phases + ['Phase 2: Identity Management'] }}"
-          
+
         - name: Log Phase 2 failure
           debug:
             msg: "Phase 2 failed - Identity management deployment failed"
-          
+
         - name: Fail deployment on critical phase failure
           fail:
             msg: "Critical phase failed - cannot continue deployment"
@@ -239,7 +239,7 @@
           loop:
             - "{{ collab_deployment }}"
             - "{{ gitlab_deployment }}"
-          when: 
+          when:
             - parallel_deployment | default(false)
             - item.ansible_job_id is defined
           register: deployment_results
@@ -255,7 +255,7 @@
         - name: Phase 3 failure handler
           set_fact:
             failed_phases: "{{ failed_phases + ['Phase 3: Collaboration Services'] }}"
-          
+
         - name: Log Phase 3 failure
           debug:
             msg: "Phase 3 failed - Collaboration services deployment failed"
@@ -288,7 +288,7 @@
             - "{{ wazuh_deployment }}"
             - "{{ openedr_deployment }}"
             - "{{ monitoring_deployment }}"
-          when: 
+          when:
             - parallel_deployment | default(false)
             - item.ansible_job_id is defined
           register: security_deployment_results
@@ -304,7 +304,7 @@
         - name: Phase 4 failure handler
           set_fact:
             failed_phases: "{{ failed_phases + ['Phase 4: Security and Monitoring'] }}"
-          
+
         - name: Log Phase 4 failure
           debug:
             msg: "Phase 4 failed - Security and monitoring deployment failed"
@@ -330,7 +330,7 @@
         - name: Phase 5 failure handler
           set_fact:
             failed_phases: "{{ failed_phases + ['Phase 5: Federation and Integration'] }}"
-          
+
         - name: Log Phase 5 failure
           debug:
             msg: "Phase 5 failed - Federation configuration failed"
@@ -391,29 +391,29 @@
           🎉 NOAH Deployment Summary
           ================================================================
           Deployment Duration: {{ deployment_duration }}s
-          
+
           📊 Infrastructure Status:
           - Total pods deployed: {{ total_pods }}
           - Ready pods: {{ ready_pods }}
           - Health check ratio: {{ ready_pods }}/{{ total_pods }}
-          
+
           ✅ Successful Phases:
           {% for phase in successful_phases %}
           - {{ phase }}
           {% endfor %}
-          
+
           {% if failed_phases | length > 0 %}
           ❌ Failed Phases:
           {% for phase in failed_phases %}
           - {{ phase }}
           {% endfor %}
           {% endif %}
-          
+
           🌐 Services available at:
           {% for service in http_services %}
           - https://{{ service }}
           {% endfor %}
-          
+
           🔐 Default credentials:
           - Keycloak Admin: {{ keycloak.admin_user }} / {{ keycloak.admin_password }}
           - LDAP Admin: {{ ldap_bind_dn }} / {{ ldap_bind_password }}

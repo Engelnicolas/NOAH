@@ -13,9 +13,21 @@ jobs:
         with:
           fetch-depth: 0
           
-      - name: Install Helm
+      - name: Generate changelog
         run: |
-          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD > CHANGELOG.md
+          
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            Helm/**/*.tgz
+            Script/*.sh
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Package Helm charts
         run: |
@@ -26,20 +38,9 @@ jobs:
             fi
           done
           
-      - name: Generate changelog
-        run: |
-          echo "## What's Changed" > CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> CHANGELOG.md || echo "- Initial release" >> CHANGELOG.md
-          
-      - name: Create release
+      - name: Upload Helm packages
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            releases/*.tgz
-            Script/*.sh
-          body_path: CHANGELOG.md
-          draft: false
-          prerelease: false
+          files: releases/*.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

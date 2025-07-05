@@ -2,32 +2,66 @@
 
 ## 🚀 Quick Start Commands
 
-### Initial Setup
+### Main CLI Interface
 ```bash
-# Setup infrastructure (development)
-make setup
+# Show all available commands
+./noah help
 
-# Setup infrastructure (production)
-make setup ENVIRONMENT=prod
+# Check project status
+./noah validate
 
-# Or directly
-./setup_infra.sh --environment prod --cluster-type existing
+# Fix common issues
+./noah fix --verbose
 ```
 
-### Deployment
+### Infrastructure Management
 ```bash
-# Deploy all services
-make helm-install
+# Check infrastructure status
+./noah infra status
 
-# Deploy specific services
-./deploy_and_verify_helm.sh --charts gitlab,keycloak
+# Setup development environment
+./noah infra setup --environment dev
 
-# Deploy with monitoring
-make all
+# Deploy to development
+./noah infra deploy --environment dev --verbose
+
+# Deploy to production
+./noah infra deploy --environment prod
+
+# Teardown (with safety check)
+./noah infra teardown --dry-run
+./noah infra teardown --environment dev
 ```
 
-### Monitoring
+### Validation and Fixing
 ```bash
+# Validate everything
+./noah validate
+
+# Validate specific components
+./noah validate --scope yaml
+./noah validate --scope ansible
+./noah validate --scope helm
+./noah validate --scope scripts
+
+# Fix issues automatically
+./noah fix
+./noah fix --dry-run              # See what would be fixed
+./noah fix --types yaml          # Only fix YAML files
+./noah fix specific-file.yml     # Fix specific file
+```
+
+### Monitoring Stack
+```bash
+# Deploy monitoring (Prometheus + Grafana)
+./noah monitoring deploy
+
+# Check monitoring status
+./noah monitoring status
+
+# Remove monitoring stack
+./noah monitoring teardown
+```
 # Deploy monitoring stack
 make monitoring-up
 

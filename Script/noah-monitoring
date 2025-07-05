@@ -1,0 +1,200 @@
+#!/bin/bash
+
+# =======================
+# NOAH - Unified Monitoring Script
+# =======================
+# Combines: deploy_monitoring_stack.sh, teardown_monitoring_stack.sh
+# Purpose: Single script for monitoring stack management
+
+set -euo pipefail
+
+# Script metadata
+SCRIPT_VERSION="3.0.0"
+SCRIPT_NAME="noah-monitoring"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Configuration
+ENVIRONMENT="dev"
+NAMESPACE="noah-monitoring"
+ACTION="status"  # deploy, teardown, status
+DRY_RUN=false
+VERBOSE=false
+
+# Color codes
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[0;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m'
+
+# Logging functions
+log() { echo -e "${GREEN}[INFO]${NC} $(date '+%H:%M:%S') - $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $(date '+%H:%M:%S') - $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $(date '+%H:%M:%S') - $1" >&2; }
+
+# Help function
+show_help() {
+    cat << 'EOF'
+NOAH Unified Monitoring Script
+
+USAGE:
+    ./noah-monitoring ACTION [OPTIONS]
+
+ACTIONS:
+    deploy          Deploy monitoring stack (Prometheus, Grafana)
+    teardown        Remove monitoring stack
+    status          Check monitoring stack status
+
+OPTIONS:
+    -e, --environment ENV    Environment (dev, staging, prod) (default: dev)
+    -n, --namespace NS       Namespace (default: noah-monitoring)
+    -v, --verbose           Enable verbose output
+    --dry-run              Show what would be done
+    -h, --help             Show this help message
+
+EXAMPLES:
+    ./noah-monitoring deploy               # Deploy monitoring stack
+    ./noah-monitoring status               # Check status
+    ./noah-monitoring teardown --dry-run   # Show what would be removed
+
+EOF
+}
+
+# Deploy monitoring stack
+deploy_monitoring() {
+    log "Deploying monitoring stack to namespace: $NAMESPACE"
+    
+    if [ "$DRY_RUN" = true ]; then
+        log "DRY RUN: Would deploy monitoring stack"
+        return 0
+    fi
+    
+    # Create namespace
+    kubectl create namespace "$NAMESPACE" 2>/dev/null || true
+    
+    # Deploy Prometheus if chart exists
+    if [ -d "Helm/prometheus" ]; then
+        log "Deploying Prometheus..."
+        helm upgrade --install prometheus-$ENVIRONMENT Helm/prometheus \
+            --namespace "$NAMESPACE" \
+            --wait --timeout 300s || {
+            log_error "Failed to deploy Prometheus"
+            return 1
+        }
+        log "✅ Prometheus deployed successfully"
+    fi
+    
+    # Deploy Grafana if chart exists
+    if [ -d "Helm/grafana" ]; then
+        log "Deploying Grafana..."
+        helm upgrade --install grafana-$ENVIRONMENT Helm/grafana \
+            --namespace "$NAMESPACE" \
+            --wait --timeout 300s || {
+            log_error "Failed to deploy Grafana"
+            return 1
+        }
+        log "✅ Grafana deployed successfully"
+    fi
+    
+    log "Monitoring stack deployment completed"
+}
+
+# Check monitoring status
+check_monitoring_status() {
+    log "Checking monitoring stack status in namespace: $NAMESPACE"
+    
+    if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+        log_warn "Monitoring namespace does not exist: $NAMESPACE"
+        return 1
+    fi
+    
+    echo ""
+    echo "📊 Monitoring Stack Status"
+    echo "========================="
+    echo "Namespace: $NAMESPACE"
+    echo ""
+    
+    # Helm releases
+    echo "🚀 Monitoring Releases:"
+    helm list -n "$NAMESPACE" 2>/dev/null || echo "No releases found"
+    echo ""
+    
+    # Pods
+    echo "📦 Monitoring Pods:"
+    kubectl get pods -n "$NAMESPACE" 2>/dev/null || echo "No pods found"
+    echo ""
+    
+    # Services
+    echo "🌐 Monitoring Services:"
+    kubectl get services -n "$NAMESPACE" 2>/dev/null || echo "No services found"
+    echo ""
+}
+
+# Teardown monitoring stack
+teardown_monitoring() {
+    log "Tearing down monitoring stack in namespace: $NAMESPACE"
+    
+    if [ "$DRY_RUN" = true ]; then
+        log "DRY RUN: Would teardown monitoring stack"
+        return 0
+    fi
+    
+    # Uninstall Helm releases
+    local releases=$(helm list -n "$NAMESPACE" -q 2>/dev/null || true)
+    if [ -n "$releases" ]; then
+        echo "$releases" | while read -r release; do
+            if [ -n "$release" ]; then
+                log "Uninstalling: $release"
+                helm uninstall "$release" -n "$NAMESPACE" || true
+            fi
+        done
+    fi
+    
+    # Delete namespace
+    log "Deleting namespace: $NAMESPACE"
+    kubectl delete namespace "$NAMESPACE" --timeout=60s || true
+    
+    log "Monitoring stack teardown completed"
+}
+
+# Main execution
+main() {
+    case "$ACTION" in
+        "deploy")
+            deploy_monitoring
+            ;;
+        "status")
+            check_monitoring_status
+            ;;
+        "teardown")
+            teardown_monitoring
+            ;;
+        *)
+            log_error "Invalid action: $ACTION"
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# Parse arguments
+if [ $# -eq 0 ]; then
+    show_help
+    exit 0
+fi
+
+ACTION="$1"
+shift
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -e|--environment) ENVIRONMENT="$2"; shift 2 ;;
+        -n|--namespace) NAMESPACE="$2"; shift 2 ;;
+        -v|--verbose) VERBOSE=true; shift ;;
+        --dry-run) DRY_RUN=true; shift ;;
+        -h|--help) show_help; exit 0 ;;
+        *) log_error "Unknown option: $1"; show_help; exit 1 ;;
+    esac
+done
+
+main

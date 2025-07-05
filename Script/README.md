@@ -1,53 +1,116 @@
-# NOAH - Enhanced Script Section
+# NOAH Scripts - Unified CLI Interface
 
-This directory contains production-ready deployment and automation scripts for the NOAH infrastructure platform. All scripts have been completely enhanced with robust error handling, comprehensive logging, configuration management, and advanced operational features.
+This directory contains the simplified, unified script interface for the NOAH infrastructure platform. The scripts have been consolidated into a powerful CLI tool that provides all functionality through a single entry point.
 
-## 📋 Overview
+## 🚀 Quick Start
 
-The enhanced script section provides a complete suite of automation tools for:
-- Infrastructure setup and configuration
-- Helm chart deployment and management
-- Monitoring stack deployment
-- Backup and restore operations
-- System validation and health checks
-- Comprehensive status monitoring
+### Main CLI Interface
+```bash
+# Show all available commands
+./noah help
 
-## 🚀 Scripts Overview
+# Validate the entire project
+./noah validate
 
-### Core Deployment Scripts
+# Fix common issues automatically
+./noah fix --verbose
 
-#### 1. `setup_infra.sh` - Infrastructure Setup
-**Enhanced production-ready infrastructure setup script**
+# Check infrastructure status
+./noah infra status
 
-**Features:**
-- Multi-OS support (Fedora, Ubuntu, Debian, Arch)
-- Multiple Kubernetes cluster types (Minikube, Kind, K3s, existing)
-- Comprehensive dependency management
-- System requirements validation
-- Environment-specific configuration
-- Automatic service enablement and configuration
+# Deploy infrastructure
+./noah infra deploy --environment dev
+```
+
+## 📋 Unified Scripts Overview
+
+### 1. `noah` - Main CLI Entry Point
+**Single command interface for all NOAH operations**
 
 **Usage:**
 ```bash
-# Basic setup
-./setup_infra.sh
-
-# Production setup with existing cluster
-./setup_infra.sh --environment prod --cluster-type existing
-
-# Development setup with Kind
-./setup_infra.sh --environment dev --cluster-type kind --verbose
-
-# Force reinstall all components
-./setup_infra.sh --force-reinstall --verbose
+./noah COMMAND [OPTIONS]
 ```
 
-**Options:**
-- `-e, --environment ENV`: Target environment (dev/staging/prod)
-- `-c, --cluster-type TYPE`: Cluster type (minikube/kind/k3s/existing)
-- `-k, --kube-version VERSION`: Kubernetes version
-- `-f, --force-reinstall`: Force reinstall existing components
-- `-v, --verbose`: Enable detailed logging
+**Available Commands:**
+- `validate` - Project validation (YAML, Ansible, Helm, scripts)
+- `fix` - Automatically fix common issues
+- `infra` - Infrastructure management
+- `monitoring` - Monitoring stack management
+- `backup` - Backup and restore operations
+
+### 2. `noah-validate` - Unified Validation
+**Comprehensive project validation with scope control**
+
+**Features:**
+- YAML syntax validation
+- Ansible playbook validation  
+- Helm chart validation
+- Shell script validation
+- Project structure validation
+- Auto-fix capability
+
+**Usage:**
+```bash
+./noah validate                    # Validate everything
+./noah validate --scope yaml      # Only YAML files
+./noah validate --scope helm      # Only Helm charts
+./noah validate --fix             # Validate and fix issues
+./noah validate --verbose         # Detailed output
+```
+
+### 3. `noah-fix.py` - Unified Fix Tool
+**Automatically fix common code issues**
+
+**Features:**
+- YAML syntax fixing (trailing spaces, indentation)
+- Shell script fixing (shebangs, syntax)
+- MkDocs configuration validation
+- Dry-run mode for safe testing
+- File type filtering
+
+**Usage:**
+```bash
+./noah fix                        # Fix all issues
+./noah fix --dry-run             # Show what would be fixed
+./noah fix --types yaml          # Only fix YAML files
+./noah fix specific-file.yml     # Fix specific file
+```
+
+### 4. `noah-infra` - Infrastructure Management
+**Complete infrastructure lifecycle management**
+
+**Features:**
+- Infrastructure setup with prerequisites
+- Helm chart deployment
+- Status monitoring and health checks
+- Infrastructure teardown
+- Environment management (dev/staging/prod)
+- Dry-run mode for safe operations
+
+**Usage:**
+```bash
+./noah infra status                    # Check current status
+./noah infra setup --environment dev   # Set up dev environment
+./noah infra deploy --verbose          # Deploy with verbose output
+./noah infra teardown --dry-run        # Show what would be removed
+```
+
+### 5. `noah-monitoring` - Monitoring Management
+**Monitoring stack lifecycle management**
+
+**Features:**
+- Deploy Prometheus and Grafana
+- Monitor stack health and status
+- Teardown monitoring components
+- Environment-specific deployments
+
+**Usage:**
+```bash
+./noah monitoring deploy             # Deploy monitoring stack
+./noah monitoring status             # Check monitoring status
+./noah monitoring teardown           # Remove monitoring stack
+```
 
 #### 2. `deploy_and_verify_helm.sh` - Helm Deployment
 **Comprehensive Helm chart deployment with verification**

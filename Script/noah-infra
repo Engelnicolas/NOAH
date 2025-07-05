@@ -1,0 +1,351 @@
+#!/bin/bash
+
+# =======================
+# NOAH - Unified Infrastructure Management Script
+# =======================
+# Combines: setup_infra.sh, deploy_and_verify_helm.sh, status_check.sh
+# Purpose: Single script for infrastructure deployment and management
+
+set -euo pipefail
+
+# Script metadata
+SCRIPT_VERSION="3.0.0"
+SCRIPT_NAME="noah-infra"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Configuration
+ENVIRONMENT="dev"
+NAMESPACE_PREFIX="noah"
+HELM_TIMEOUT="600s"
+VERBOSE=false
+DRY_RUN=false
+ACTION="status"  # setup, deploy, status, teardown
+
+# Color codes
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[0;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m'
+
+# Logging functions
+log() {
+    echo -e "${GREEN}[INFO]${NC} $(date '+%H:%M:%S') - $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $(date '+%H:%M:%S') - $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $(date '+%H:%M:%S') - $1" >&2
+}
+
+log_debug() {
+    if [[ "$VERBOSE" == "true" ]]; then
+        echo -e "${BLUE}[DEBUG]${NC} $(date '+%H:%M:%S') - $1"
+    fi
+}
+
+# Help function
+show_help() {
+    cat << 'EOF'
+NOAH Unified Infrastructure Management Script
+
+USAGE:
+    ./noah-infra ACTION [OPTIONS]
+
+ACTIONS:
+    setup           Set up infrastructure prerequisites
+    deploy          Deploy Helm charts
+    status          Check infrastructure status
+    teardown        Remove deployed infrastructure
+
+OPTIONS:
+    -e, --environment ENV    Environment (dev, staging, prod) (default: dev)
+    -n, --namespace PREFIX   Namespace prefix (default: noah)
+    -t, --timeout TIMEOUT    Helm timeout (default: 600s)
+    -v, --verbose           Enable verbose output
+    --dry-run              Show what would be done without executing
+    -h, --help             Show this help message
+
+EXAMPLES:
+    ./noah-infra status                    # Check current status
+    ./noah-infra setup --environment dev   # Set up development environment
+    ./noah-infra deploy --verbose          # Deploy with verbose output
+    ./noah-infra teardown --dry-run        # Show what would be removed
+
+EOF
+}
+
+# Check prerequisites
+check_prerequisites() {
+    log "Checking prerequisites..."
+    
+    local missing_tools=()
+    
+    # Check required tools
+    command -v kubectl >/dev/null 2>&1 || missing_tools+=("kubectl")
+    command -v helm >/dev/null 2>&1 || missing_tools+=("helm")
+    command -v ansible >/dev/null 2>&1 || missing_tools+=("ansible")
+    
+    if [ ${#missing_tools[@]} -gt 0 ]; then
+        log_error "Missing required tools: ${missing_tools[*]}"
+        log "Please install missing tools and try again"
+        return 1
+    fi
+    
+    # Check Kubernetes connectivity
+    if ! kubectl cluster-info >/dev/null 2>&1; then
+        log_warn "Kubernetes cluster not accessible"
+        log "Make sure kubectl is configured and cluster is running"
+        return 1
+    fi
+    
+    log "Prerequisites check passed"
+    return 0
+}
+
+# Setup infrastructure
+setup_infrastructure() {
+    log "Setting up infrastructure for environment: $ENVIRONMENT"
+    
+    if [ "$DRY_RUN" = true ]; then
+        log "DRY RUN: Would set up infrastructure"
+        return 0
+    fi
+    
+    # Create namespace if it doesn't exist
+    local namespace="${NAMESPACE_PREFIX}-${ENVIRONMENT}"
+    if ! kubectl get namespace "$namespace" >/dev/null 2>&1; then
+        log "Creating namespace: $namespace"
+        kubectl create namespace "$namespace"
+    else
+        log "Namespace already exists: $namespace"
+    fi
+    
+    # Run Ansible setup if playbook exists
+    if [ -f "Ansible/main.yml" ]; then
+        log "Running Ansible setup playbook..."
+        cd Ansible
+        ansible-playbook main.yml -i inventory --limit "$ENVIRONMENT" || {
+            log_error "Ansible playbook failed"
+            cd ..
+            return 1
+        }
+        cd ..
+    fi
+    
+    log "Infrastructure setup completed"
+}
+
+# Deploy Helm charts
+deploy_charts() {
+    log "Deploying Helm charts to environment: $ENVIRONMENT"
+    
+    local namespace="${NAMESPACE_PREFIX}-${ENVIRONMENT}"
+    local deployed=0
+    local failed=0
+    
+    for chart_dir in Helm/*/; do
+        if [ -f "${chart_dir}Chart.yaml" ]; then
+            local chart_name=$(basename "$chart_dir")
+            local release_name="${chart_name}-${ENVIRONMENT}"
+            
+            log "Deploying chart: $chart_name"
+            
+            if [ "$DRY_RUN" = true ]; then
+                log "DRY RUN: Would deploy $chart_name"
+                continue
+            fi
+            
+            # Update dependencies if Chart.lock exists
+            if [ -f "${chart_dir}Chart.lock" ]; then
+                log_debug "Updating dependencies for $chart_name"
+                helm dependency update "$chart_dir" >/dev/null 2>&1 || true
+            fi
+            
+            # Deploy chart
+            if helm upgrade --install "$release_name" "$chart_dir" \
+                --namespace "$namespace" \
+                --timeout "$HELM_TIMEOUT" \
+                --wait >/dev/null 2>&1; then
+                log "✅ Successfully deployed: $chart_name"
+                ((deployed++))
+            else
+                log_error "❌ Failed to deploy: $chart_name"
+                ((failed++))
+            fi
+        fi
+    done
+    
+    log "Deployment summary: $deployed successful, $failed failed"
+    return $failed
+}
+
+# Check infrastructure status
+check_status() {
+    log "Checking infrastructure status for environment: $ENVIRONMENT"
+    
+    local namespace="${NAMESPACE_PREFIX}-${ENVIRONMENT}"
+    
+    # Check if namespace exists
+    if ! kubectl get namespace "$namespace" >/dev/null 2>&1; then
+        log_warn "Namespace does not exist: $namespace"
+        return 1
+    fi
+    
+    echo ""
+    echo "📊 Infrastructure Status"
+    echo "======================="
+    echo "Environment: $ENVIRONMENT"
+    echo "Namespace: $namespace"
+    echo ""
+    
+    # Helm releases
+    echo "🚀 Helm Releases:"
+    if command -v helm >/dev/null 2>&1; then
+        helm list -n "$namespace" 2>/dev/null || echo "No Helm releases found"
+    else
+        echo "Helm not available"
+    fi
+    echo ""
+    
+    # Pods status
+    echo "📦 Pods:"
+    kubectl get pods -n "$namespace" 2>/dev/null || echo "No pods found"
+    echo ""
+    
+    # Services
+    echo "🌐 Services:"
+    kubectl get services -n "$namespace" 2>/dev/null || echo "No services found"
+    echo ""
+    
+    # Ingresses
+    echo "🔗 Ingresses:"
+    kubectl get ingress -n "$namespace" 2>/dev/null || echo "No ingresses found"
+    echo ""
+    
+    # Check for failed pods
+    local failed_pods=$(kubectl get pods -n "$namespace" --field-selector=status.phase=Failed -o name 2>/dev/null | wc -l)
+    local pending_pods=$(kubectl get pods -n "$namespace" --field-selector=status.phase=Pending -o name 2>/dev/null | wc -l)
+    
+    if [ "$failed_pods" -gt 0 ]; then
+        log_warn "$failed_pods pods in Failed state"
+    fi
+    
+    if [ "$pending_pods" -gt 0 ]; then
+        log_warn "$pending_pods pods in Pending state"
+    fi
+    
+    if [ "$failed_pods" -eq 0 ] && [ "$pending_pods" -eq 0 ]; then
+        log "✅ All pods appear healthy"
+    fi
+}
+
+# Teardown infrastructure
+teardown_infrastructure() {
+    log "Tearing down infrastructure for environment: $ENVIRONMENT"
+    
+    local namespace="${NAMESPACE_PREFIX}-${ENVIRONMENT}"
+    
+    if [ "$DRY_RUN" = true ]; then
+        log "DRY RUN: Would teardown infrastructure in namespace: $namespace"
+        return 0
+    fi
+    
+    # Uninstall Helm releases
+    if command -v helm >/dev/null 2>&1; then
+        local releases=$(helm list -n "$namespace" -q 2>/dev/null || true)
+        if [ -n "$releases" ]; then
+            log "Uninstalling Helm releases..."
+            echo "$releases" | while read -r release; do
+                if [ -n "$release" ]; then
+                    log "Uninstalling release: $release"
+                    helm uninstall "$release" -n "$namespace" >/dev/null 2>&1 || true
+                fi
+            done
+        fi
+    fi
+    
+    # Delete namespace
+    if kubectl get namespace "$namespace" >/dev/null 2>&1; then
+        log "Deleting namespace: $namespace"
+        kubectl delete namespace "$namespace" --timeout=60s >/dev/null 2>&1 || {
+            log_warn "Namespace deletion may be stuck, consider manual cleanup"
+        }
+    fi
+    
+    log "Infrastructure teardown completed"
+}
+
+# Main execution logic
+main() {
+    case "$ACTION" in
+        "setup")
+            check_prerequisites || exit 1
+            setup_infrastructure || exit 1
+            ;;
+        "deploy")
+            check_prerequisites || exit 1
+            deploy_charts || exit 1
+            ;;
+        "status")
+            check_status
+            ;;
+        "teardown")
+            teardown_infrastructure
+            ;;
+        *)
+            log_error "Invalid action: $ACTION"
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# Parse command line arguments
+if [ $# -eq 0 ]; then
+    show_help
+    exit 0
+fi
+
+ACTION="$1"
+shift
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -e|--environment)
+            ENVIRONMENT="$2"
+            shift 2
+            ;;
+        -n|--namespace)
+            NAMESPACE_PREFIX="$2"
+            shift 2
+            ;;
+        -t|--timeout)
+            HELM_TIMEOUT="$2"
+            shift 2
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Execute main function
+main

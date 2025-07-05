@@ -120,7 +120,7 @@ show-config: ## Show current configuration settings and environment details
 
 setup: check-deps ## Setup infrastructure prerequisites
 	@echo "$(BLUE)🚀 Setting up infrastructure...$(NC)"
-	@bash setup_infra.sh --environment $(ENVIRONMENT)
+	@./noah infra setup --environment $(ENVIRONMENT)
 
 deploy: check-deps ## Run full Ansible deployment
 	@echo "$(BLUE)🚀 Running Ansible full deployment...$(NC)"
@@ -131,11 +131,11 @@ deploy: check-deps ## Run full Ansible deployment
 
 test: ## Run post-deployment validation tests
 	@echo "$(BLUE)🧪 Running post-deployment tests...$(NC)"
-	@bash ../Test/post_deploy_validate.sh --environment $(ENVIRONMENT)
+	@./noah validate all --environment $(ENVIRONMENT)
 
 validate: ## Validate Helm charts and Ansible playbooks
 	@echo "$(BLUE)🔍 Validating Helm charts...$(NC)"
-	@bash validate_charts.sh
+	@./noah validate charts
 	@echo "$(BLUE)🔍 Validating Ansible playbooks...$(NC)"
 	ansible-playbook --syntax-check ../Ansible/main.yml
 
@@ -152,43 +152,44 @@ lint: ## Lint Helm charts and Ansible playbooks
 
 helm-install: check-deps ## Install all Helm charts
 	@echo "$(BLUE)☸️ Installing all Helm charts...$(NC)"
-	@bash deploy_and_verify_helm.sh --environment $(ENVIRONMENT) --namespace-prefix $(NAMESPACE_PREFIX)
+	@./noah infra deploy --environment $(ENVIRONMENT) --namespace-prefix $(NAMESPACE_PREFIX)
 
 helm-upgrade: check-deps ## Upgrade all Helm charts
 	@echo "$(BLUE)⬆️ Upgrading all Helm charts...$(NC)"
-	@bash deploy_and_verify_helm.sh --upgrade --environment $(ENVIRONMENT) --namespace-prefix $(NAMESPACE_PREFIX)
+	@./noah infra upgrade --environment $(ENVIRONMENT) --namespace-prefix $(NAMESPACE_PREFIX)
 
 helm-uninstall: ## Uninstall all Helm charts
 	@echo "$(BLUE)❌ Uninstalling all Helm charts...$(NC)"
-	@bash uninstall_helm_charts.sh --environment $(ENVIRONMENT) --namespace-prefix $(NAMESPACE_PREFIX)
+	@./noah infra teardown --environment $(ENVIRONMENT) --namespace-prefix $(NAMESPACE_PREFIX)
 
 monitoring-up: check-deps ## Deploy monitoring stack
 	@echo "$(BLUE)📈 Deploying monitoring stack...$(NC)"
-	@bash deploy_monitoring_stack.sh --environment $(ENVIRONMENT)
+	@./noah monitoring deploy --environment $(ENVIRONMENT)
 
 monitoring-down: ## Teardown monitoring stack
 	@echo "$(BLUE)📉 Tearing down monitoring stack...$(NC)"
-	@bash teardown_monitoring_stack.sh --environment $(ENVIRONMENT)
+	@./noah monitoring teardown --environment $(ENVIRONMENT)
 
 status: ## Show deployment status
 	@echo "$(BLUE)📊 Deployment Status:$(NC)"
-	@bash status_check.sh --environment $(ENVIRONMENT)
+	@./noah infra status --environment $(ENVIRONMENT)
 
 backup: ## Create backup of persistent volumes and configurations
 	@echo "$(BLUE)💾 Creating backup...$(NC)"
-	@bash backup_restore.sh --action backup --environment $(ENVIRONMENT)
+	@echo "$(YELLOW)Backup functionality moved to noah CLI - run: ./noah backup create${NC}"
+	@./noah infra status --environment $(ENVIRONMENT)
 
 restore: ## Restore from backup
 	@echo "$(BLUE)♻️ Restoring from backup...$(NC)"
-	@bash backup_restore.sh --action restore --environment $(ENVIRONMENT)
+	@echo "$(YELLOW)Restore functionality moved to noah CLI - run: ./noah backup restore${NC}"
 
 rollback: ## Rollback infrastructure to previous state
 	@echo "$(BLUE)⏪ Rolling back infrastructure...$(NC)"
-	@bash rollback.sh --environment $(ENVIRONMENT)
+	@echo "$(YELLOW)Use Helm rollback commands or: ./noah infra rollback${NC}"
 
 clean: helm-uninstall monitoring-down ## Clean up all resources
 	@echo "$(BLUE)🧹 Cleaning up all resources...$(NC)"
-	@bash cleanup.sh --environment $(ENVIRONMENT)
+	@echo "$(GREEN)Infrastructure cleanup completed via teardown commands${NC}"
 
 # Development targets
 dev-deploy: ENVIRONMENT=dev

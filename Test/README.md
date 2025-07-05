@@ -23,7 +23,7 @@ The N.O.A.H (Next Open-source Architecture Hub) testing suite provides comprehen
   - Security policy checks
   - Dependency verification
 
-### 3. Post-Deploy Validation (`post_deploy_validate.sh`)
+### 3. Post-Deploy Validation (via `../Script/noah validate`)
 - **Purpose**: Infrastructure and service validation
 - **Coverage**:
   - Pod health and readiness
@@ -135,7 +135,7 @@ The N.O.A.H (Next Open-source Architecture Hub) testing suite provides comprehen
 ./helm_chart_tests.sh
 
 # Post-deployment validation
-./post_deploy_validate.sh
+../Script/noah validate all
 
 # Integration testing
 ./integration_tests.sh
@@ -249,7 +249,7 @@ All test scripts generate comprehensive HTML reports including:
 
 ```bash
 # Non-disruptive testing only
-./post_deploy_validate.sh
+../Script/noah validate all
 ./security_tests.sh --read-only
 ./compliance_tests.sh
 

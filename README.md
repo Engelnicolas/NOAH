@@ -21,7 +21,6 @@
 ### Key Features
 
 This project automates the full-stack deployment of an open source secure information system using:
-- 🏗️ **Terraform** for infrastructure provisioning and state management
 - 🛠️ **Ansible** for configuration management and service deployment
 - ☸️ **Kubernetes + Helm** for container orchestration and application lifecycle
 - 🔒 **Samba4 AD & Keycloak** for centralized identity and access management
@@ -66,62 +65,39 @@ This project automates the full-stack deployment of an open source secure inform
 
 ---
 
-## 🚀 Quick Start
+## 🔐 Security & Identity Management
 
-### Prerequisites
+### Single Sign-On (SSO) Architecture
 
-- **Operating System**: Linux (Ubuntu 20.04+ or CentOS 8+ recommended)
-- **Hardware**: Minimum 16GB RAM, 4 CPU cores, 100GB storage
-- **Software**: Docker, Terraform (≥1.0), Ansible (≥2.9), kubectl
-- **Network**: Internet access for initial setup and package downloads
+N.O.A.H implements a comprehensive identity management system using:
 
-### 1. Clone and Setup
+- **🏢 Samba4 Active Directory**: Primary identity provider with LDAP protocol
+- **🔑 Keycloak**: Modern identity broker supporting OIDC, SAML, and social logins
+- **🛡️ Role-Based Access Control (RBAC)**: Granular permissions for all services
+- **🔒 Multi-Factor Authentication (MFA)**: TOTP, WebAuthn, and SMS support
 
-```bash
-# Clone the repository
-git clone https://github.com/your-org/noah.git
-cd noah
+### Integrated Services with SSO
 
-# Make setup script executable and run initial configuration
-chmod +x scripts/setup.sh
-./scripts/setup.sh
-```
+All platform services are pre-configured with Keycloak integration:
 
-### 2. Infrastructure Deployment
+| Service | Protocol | Features |
+|---------|----------|----------|
+| **Nextcloud** | OIDC | File sharing, calendar, contacts |
+| **Mattermost** | OIDC | Team messaging, file sharing |
+| **Grafana** | OIDC | Monitoring dashboards, alerting |
+| **Wazuh** | SAML | Security monitoring, threat detection |
+| **GitLab** | OIDC | Source code management, CI/CD |
 
-```bash
-# Initialize Terraform workspace
-cd terraform/
-terraform init
+### Security Hardening Features
 
-# Plan and apply infrastructure changes
-terraform plan -var-file="environments/dev.tfvars"
-terraform apply -var-file="environments/dev.tfvars"
-```
+- **🔥 Firewall Rules**: Automated UFW configuration with service-specific rules
+- **🛡️ Network Segmentation**: Isolated networks for different service tiers
+- **🔍 Security Monitoring**: Real-time threat detection with Wazuh SIEM
+- **📊 Compliance Reporting**: Automated compliance checks and reporting
+- **🚫 Zero-Trust Architecture**: Default-deny policies with explicit allow rules
 
-### 3. Service Configuration
-
-```bash
-# Deploy all services using Ansible
-cd ../ansible/
-ansible-playbook -i inventories/dev/hosts deploy_all.yml
-
-# Verify deployment status
-ansible-playbook -i inventories/dev/hosts test_post_deploy.yml
-```
-
-### 4. Access Your Services
-
-Once deployment is complete, access your services at:
-- **Keycloak**: `https://auth.your-domain.com`
-- **Nextcloud**: `https://cloud.your-domain.com`
-- **Mattermost**: `https://chat.your-domain.com`
-- **Grafana**: `https://monitoring.your-domain.com`
-
-> 💡 **Tip**: Check the `docs/` folder for detailed configuration guides and troubleshooting.
 
 ---
-
 ## 🎭 Use Cases by Context
 
 ### 👤 Individual Developer / DevOps Engineer
@@ -168,77 +144,11 @@ Once deployment is complete, access your services at:
 
 ---
 
-## 🔐 Security & Identity Management
-
-### Single Sign-On (SSO) Architecture
-
-N.O.A.H implements a comprehensive identity management system using:
-
-- **🏢 Samba4 Active Directory**: Primary identity provider with LDAP protocol
-- **🔑 Keycloak**: Modern identity broker supporting OIDC, SAML, and social logins
-- **🛡️ Role-Based Access Control (RBAC)**: Granular permissions for all services
-- **🔒 Multi-Factor Authentication (MFA)**: TOTP, WebAuthn, and SMS support
-
-### Integrated Services with SSO
-
-All platform services are pre-configured with Keycloak integration:
-
-| Service | Protocol | Features |
-|---------|----------|----------|
-| **Nextcloud** | OIDC | File sharing, calendar, contacts |
-| **Mattermost** | OIDC | Team messaging, file sharing |
-| **Grafana** | OIDC | Monitoring dashboards, alerting |
-| **Wazuh** | SAML | Security monitoring, threat detection |
-| **GitLab** | OIDC | Source code management, CI/CD |
-
-### Security Hardening Features
-
-- **🔥 Firewall Rules**: Automated UFW configuration with service-specific rules
-- **🛡️ Network Segmentation**: Isolated networks for different service tiers
-- **🔍 Security Monitoring**: Real-time threat detection with Wazuh SIEM
-- **📊 Compliance Reporting**: Automated compliance checks and reporting
-- **🚫 Zero-Trust Architecture**: Default-deny policies with explicit allow rules
-
----
-
-## 📊 Monitoring & Operations
-
-### Observability Stack
-
-- **📈 Prometheus**: Metrics collection and time-series database
-- **📊 Grafana**: Visualization, dashboards, and alerting
-- **🔍 Elasticsearch**: Log aggregation and search (via Wazuh)
-- **📋 Alertmanager**: Alert routing and notification management
-
-### Pre-configured Dashboards
-
-- **Infrastructure Overview**: CPU, memory, disk, and network metrics
-- **Kubernetes Cluster**: Pod status, resource utilization, cluster health
-- **Application Performance**: Service response times, error rates, throughput
-- **Security Dashboard**: Failed logins, suspicious activities, compliance status
-
-### Automated Backup & Recovery
-
-- **📦 Velero**: Kubernetes backup and disaster recovery
-- **💾 Database Backups**: Automated PostgreSQL and MySQL backups
-- **🔄 Configuration Backups**: Automated backup of Ansible inventories and Terraform state
-- **⚡ Point-in-Time Recovery**: Granular recovery options for critical data
-
----
-
 ## 📚 Documentation & Support
 
 ### Available Documentation
 
 - **📖 [USER_GUIDE.md](docs/USER_GUIDE.md)**: Complete step-by-step deployment guide
-
-
-### Getting Help
-
-- **🐛 Issues**: Report bugs or request features via [GitHub Issues](https://github.com/your-org/noah/issues)
-- **💬 Discussions**: Join the community in [GitHub Discussions](https://github.com/your-org/noah/discussions)
-- **📧 Email**: Contact the maintainers at noah-support@your-domain.com
-- **📖 Wiki**: Additional resources and community contributions in the [project wiki](https://github.com/your-org/noah/wiki)
 
 ---
 
@@ -250,44 +160,8 @@ We welcome contributions from the community! Please see our [CONTRIBUTING.md](CO
 - **📝 Documentation**: Improving and expanding documentation
 - **🐛 Bug Reports**: How to report issues effectively
 - **💡 Feature Requests**: Proposing new features and enhancements
-- **🧪 Testing**: Contributing to our test suite
+- **🧪 Testing**: Contributing to our simplified test suite
 
-### Development Environment
-
-```bash
-# Fork and clone the repository
-git clone https://github.com/your-username/noah.git
-cd noah
-
-# Set up development environment
-./scripts/dev-setup.sh
-
-# Run tests
-./scripts/run-tests.sh
-```
-
----
-
-## 📄 License
-
-This project is licensed under the **GNU General Public License v3.0**.
-
-- ✅ **Freedom to Use**: Use the software for any purpose
-- ✅ **Freedom to Study**: Examine and learn from the source code
-- ✅ **Freedom to Modify**: Adapt the software to your needs
-- ✅ **Freedom to Share**: Distribute copies and modifications
-
-See the [LICENSE](LICENSE) file for complete terms and conditions.
-
-### Third-Party Licenses
-
-This project includes components with their own licenses:
-- **Kubernetes**: Apache License 2.0
-- **Terraform**: Mozilla Public License 2.0
-- **Ansible**: GNU General Public License v3.0
-- **Prometheus**: Apache License 2.0
-
----
 
 ## 👨‍💻 Author
 
@@ -303,7 +177,6 @@ This project includes components with their own licenses:
 
 Special thanks to the open-source community and the maintainers of all the incredible tools that make N.O.A.H possible:
 
-- **HashiCorp** for Terraform
 - **Red Hat** for Ansible
 - **CNCF** for Kubernetes, Prometheus, and the cloud-native ecosystem
 - **Keycloak Team** for identity and access management

@@ -3,7 +3,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "openedr.fullname" . }}-data
+  name: "{{ include \"openedr.fullname\" . }}-data"
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "openedr.labels" . | nindent 4 }}
@@ -29,7 +29,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "openedr.fullname" . }}-logs
+  name: "{{ include \"openedr.fullname\" . }}-logs"
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "openedr.labels" . | nindent 4 }}
@@ -55,7 +55,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "openedr.fullname" . }}-quarantine
+  name: "{{ include \"openedr.fullname\" . }}-quarantine"
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "openedr.labels" . | nindent 4 }}
@@ -81,7 +81,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "openedr.fullname" . }}-agents
+  name: "{{ include \"openedr.fullname\" . }}-agents"
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "openedr.labels" . | nindent 4 }}

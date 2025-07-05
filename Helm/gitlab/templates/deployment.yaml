@@ -1,268 +1,95 @@
-{{/*
-=============================================================================
-GitLab DevOps Platform Deployment Template
-=============================================================================
-
-This template creates a Kubernetes Deployment for GitLab, providing a complete
-DevOps platform with source code management, CI/CD pipelines, issue tracking,
-and container registry capabilities.
-
-GitLab Deployment Features:
-- Complete DevOps platform in a single container
-- Git repository management with advanced workflows
-- Integrated CI/CD pipelines with GitLab Runner support
-- Issue tracking and project management
-- Container registry for Docker images
-- Wiki and documentation system
-- Package registry for artifacts
-- Security scanning and vulnerability management
-
-Template Features:
-- Configurable replica count with auto-scaling support
-- Configuration management via ConfigMaps and environment variables
-- Secret management for sensitive credentials
-- Health checks and monitoring integration
-- Resource management and security context
-- OIDC and LDAP integration support
-- Persistent storage for repositories and data
-- High availability clustering (enterprise features)
-
-Configuration Sources:
-- ConfigMap: GitLab Omnibus configuration (gitlab.rb equivalent)
-- Secret: Database credentials, OIDC secrets, admin passwords
-- Environment Variables: Runtime configuration overrides
-- PersistentVolumes: Repository data, logs, configuration
-
-Dependencies:
-- ConfigMap: GitLab configuration (gitlab-configmap.yaml)
-- Secret: Credentials and integration secrets (gitlab-secret.yaml)
-- ServiceAccount: RBAC permissions (serviceaccount.yaml)
-- PVC: Persistent storage (gitlab-pvc.yaml)
-- Service: Network access (gitlab-service.yaml)
-
-Health Checks:
-- Startup Probe: Initial GitLab initialization (can take several minutes)
-- Liveness Probe: Application health monitoring
-- Readiness Probe: Traffic readiness verification
-
-Usage:
-This template is automatically rendered when installing the GitLab Helm chart.
-Configuration is managed through values.yaml parameters and can include:
-- External database configuration (PostgreSQL recommended)
-- Redis cache configuration
-- LDAP/OIDC authentication setup
-- Ingress and TLS configuration
-- Resource limits and auto-scaling
-=============================================================================
-*/}}
-
-# Kubernetes Deployment resource for GitLab DevOps Platform
 apiVersion: apps/v1
 kind: Deployment
-
-# =============================================================================
-# Metadata Section - Resource identification and management
-# =============================================================================
 metadata:
-  # Generate consistent deployment name using Helm naming conventions
-  name: {{ include "gitlab.fullname" . }}
-  
-  # Deploy in the target namespace
-  namespace: {{ .Release.Namespace | quote }}
-  
-  # Apply standard Kubernetes labels for resource management
+  name: {{ include "noah.fullname" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "gitlab.labels" . | nindent 4 }}
-  
-  # Optional common annotations for operational metadata
-  {{- with .Values.commonAnnotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-
-# =============================================================================
-# Deployment Specification - Desired state configuration
-# =============================================================================
+    {{- include "noah.labels" . | nindent 4 }}
 spec:
-  # Number of GitLab replicas (disabled when auto-scaling is enabled)
-  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  {{- end }}
-  
-  # Pod selector criteria - must match template labels
   selector:
     matchLabels:
-      {{- include "gitlab.selectorLabels" . | nindent 6 }}
-  
-  # =============================================================================
-  # Pod Template - Definition of GitLab pods
-  # =============================================================================
+      {{- include "noah.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      # Annotations for configuration change detection and pod metadata
-      annotations:
-        # Force pod restart when GitLab configuration changes
-        checksum/config: {{ .Values.gitlab.config | default "default-config" | sha256sum }}
-        
-        # Force pod restart when secrets change (credentials, API keys, etc.)
-        {{- if include "gitlab.createSecret" . }}
-        checksum/secret: {{ .Values.gitlab.rootPassword | default "changeme" | sha256sum }}
-        {{- end }}
-        
-        # Additional pod annotations from values
-        {{- with .Values.podAnnotations }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-      
-      # Pod labels for service selection and organization
       labels:
-        {{- include "gitlab.selectorLabels" . | nindent 8 }}
-        {{- with .Values.podLabels }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-    
-    # =============================================================================
-    # Pod Specification - Container and runtime configuration
-    # =============================================================================
+        {{- include "noah.selectorLabels" . | nindent 8 }}
     spec:
-      # Image pull secrets for private container registries
-      {{- with .Values.image.pullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      
-      # Service account for Kubernetes RBAC permissions
-      serviceAccountName: {{ include "gitlab.serviceAccountName" . }}
-      
-      # Pod-level security context (user/group IDs, filesystem permissions)
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      
-      # =============================================================================
-      # GitLab Application Container
-      # =============================================================================
+        {{- include "noah.podSecurityContext" . | nindent 8 }}
       containers:
-        - name: gitlab
-          # Container-level security context
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          
-          # GitLab container image with dynamic tag resolution
-          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          
-          # =============================================================================
-          # Environment Variables - Runtime configuration
-          # =============================================================================
-          env:
-            # GitLab Omnibus configuration (equivalent to gitlab.rb)
-            - name: GITLAB_OMNIBUS_CONFIG
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "gitlab.fullname" . }}-config
-                  key: gitlab.rb
-            - name: GITLAB_ROOT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "gitlab.secretName" . }}
-                  key: {{ .Values.gitlab.rootPasswordKey }}
-            {{- if .Values.oidc.enabled }}
-            - name: OIDC_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "gitlab.oidcSecretName" . }}
-                  key: {{ .Values.oidc.existingSecretKey }}
-            {{- end }}
-            {{- if .Values.ldap.enabled }}
-            - name: LDAP_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "gitlab.ldapSecretName" . }}
-                  key: {{ .Values.ldap.existingSecretKey }}
-            {{- end }}
-            {{- with .Values.extraEnvVars }}
-            {{- toYaml . | nindent 12 }}
-            {{- end }}
-          ports:
-            - name: http
-              containerPort: 80
-              protocol: TCP
-            - name: https
-              containerPort: 443
-              protocol: TCP
-            - name: ssh
-              containerPort: 22
-              protocol: TCP
-          {{- if .Values.livenessProbe.enabled }}
-          livenessProbe:
-            httpGet:
-              path: {{ .Values.livenessProbe.httpGet.path }}
-              port: {{ .Values.livenessProbe.httpGet.port }}
-            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
-          {{- end }}
-          {{- if .Values.readinessProbe.enabled }}
-          readinessProbe:
-            httpGet:
-              path: {{ .Values.readinessProbe.httpGet.path }}
-              port: {{ .Values.readinessProve.httpGet.port }}
-            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
-          {{- end }}
-          {{- if .Values.startupProbe.enabled }}
-          startupProbe:
-            httpGet:
-              path: {{ .Values.startupProbe.httpGet.path }}
-              port: {{ .Values.startupProbe.httpGet.port }}
-            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
-          {{- end }}
-          resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-          volumeMounts:
-            - name: gitlab-config
-              mountPath: /etc/gitlab
-            {{- range $key, $volume := .Values.persistence.volumes }}
-            - name: {{ $key }}
-              mountPath: {{ $volume.path }}
-            {{- end }}
-            {{- with .Values.extraVolumeMounts }}
-            {{- toYaml . | nindent 12 }}
-            {{- end }}
-      volumes:
-        - name: gitlab-config
-          configMap:
-            name: {{ include "gitlab.fullname" . }}-config
+      - name: gitlab
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          {{- include "noah.securityContext" . | nindent 10 }}
+        ports:
+        {{- range .Values.service.ports }}
+        - name: {{ .name }}
+          containerPort: {{ .port }}
+          protocol: {{ .protocol }}
+        {{- end }}
+        env:
+        - name: GITLAB_ROOT_PASSWORD
+          value: {{ .Values.gitlab.rootPassword | quote }}
+        - name: GITLAB_TIMEZONE
+          value: {{ .Values.gitlab.timezone | quote }}
+        {{- if .Values.postgresql.enabled }}
+        - name: GITLAB_DATABASE_ADAPTER
+          value: "postgresql"
+        - name: GITLAB_DATABASE_HOST
+          value: {{ include "noah.fullname" . }}-postgresql
+        - name: GITLAB_DATABASE_PORT
+          value: "5432"
+        - name: GITLAB_DATABASE_NAME
+          value: {{ .Values.postgresql.auth.database }}
+        - name: GITLAB_DATABASE_USERNAME
+          value: {{ .Values.postgresql.auth.username }}
+        - name: GITLAB_DATABASE_PASSWORD
+          value: {{ .Values.postgresql.auth.password }}
+        {{- end }}
+        {{- if .Values.redis.enabled }}
+        - name: GITLAB_REDIS_HOST
+          value: {{ include "noah.fullname" . }}-redis
+        - name: GITLAB_REDIS_PORT
+          value: "6379"
+        {{- end }}
+        volumeMounts:
+        - name: gitlab-data
+          mountPath: /var/opt/gitlab
         {{- if .Values.persistence.enabled }}
-        {{- range $key, $volume := .Values.persistence.volumes }}
-        - name: {{ $key }}
-          persistentVolumeClaim:
-            claimName: {{ include "gitlab.fullname" $ }}-{{ $key }}
+        - name: gitlab-config
+          mountPath: /etc/gitlab
+        - name: gitlab-logs
+          mountPath: /var/log/gitlab
         {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /-/liveness
+            port: http
+          initialDelaySeconds: 180
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /-/readiness
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      volumes:
+      - name: gitlab-data
+        {{- if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "noah.fullname" . }}-data
         {{- else }}
-        {{- range $key, $volume := .Values.persistence.volumes }}
-        - name: {{ $key }}
-          emptyDir: {}
+        emptyDir: {}
         {{- end }}
-        {{- end }}
-        {{- with .Values.extraVolumes }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
+      {{- if .Values.persistence.enabled }}
+      - name: gitlab-config
+        persistentVolumeClaim:
+          claimName: {{ include "noah.fullname" . }}-config
+      - name: gitlab-logs
+        persistentVolumeClaim:
+          claimName: {{ include "noah.fullname" . }}-logs
       {{- end }}

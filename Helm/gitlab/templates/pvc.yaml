@@ -1,0 +1,53 @@
+{{- if .Values.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "noah.fullname" . }}-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "noah.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+  {{- with (include "noah.storageClass" .) }}
+  storageClassName: {{ . }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "noah.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "noah.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.accessMode }}
+  resources:
+    requests:
+      storage: 1Gi
+  {{- with (include "noah.storageClass" .) }}
+  storageClassName: {{ . }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "noah.fullname" . }}-logs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "noah.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.accessMode }}
+  resources:
+    requests:
+      storage: 5Gi
+  {{- with (include "noah.storageClass" .) }}
+  storageClassName: {{ . }}
+  {{- end }}
+{{- end }}

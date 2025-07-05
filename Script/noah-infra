@@ -20,6 +20,8 @@ HELM_TIMEOUT="600s"
 VERBOSE=false
 DRY_RUN=false
 ACTION="status"  # setup, deploy, status, teardown
+USE_SIMPLIFIED_CHARTS=true  # New: Use simplified chart structure
+VALUES_DIR="../Helm/values"  # New: Environment-specific values directory
 
 # Color codes
 readonly RED='\033[0;31m'
@@ -157,6 +159,28 @@ deploy_charts() {
             if [ "$DRY_RUN" = true ]; then
                 log "DRY RUN: Would deploy $chart_name"
                 continue
+            fi
+            
+            if [ "$USE_SIMPLIFIED_CHARTS" = true ]; then
+                # Use simplified chart structure with environment-specific values
+                local values_file="${VALUES_DIR}/${ENVIRONMENT}.yaml"
+                
+                if [ -f "$values_file" ]; then
+                    log "Using values file: $values_file"
+                    helm upgrade --install "$release_name" "$chart_dir" \
+                        --namespace "$namespace" \
+                        --timeout "$HELM_TIMEOUT" \
+                        --wait \
+                        -f "$values_file" >/dev/null 2>&1 && {
+                        log "✅ Successfully deployed: $chart_name"
+                        ((deployed++))
+                        continue
+                    }
+                else
+                    log_error "❌ Values file not found: $values_file"
+                    ((failed++))
+                    continue
+                fi
             fi
             
             # Update dependencies if Chart.lock exists

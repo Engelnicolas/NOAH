@@ -1,0 +1,47 @@
+# =======================================
+# NOAH Minimal Installation Values
+# =======================================
+# Bare minimum resources for testing
+
+# Single replica
+replicaCount: 1
+
+# Minimal resources
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+# No persistence (ephemeral)
+persistence:
+  enabled: false
+
+# Embedded SQLite (no external DB)
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
+
+# No external access
+ingress:
+  enabled: false
+
+# Minimal security
+securityContext:
+  runAsUser: 1000
+  readOnlyRootFilesystem: false
+
+# No monitoring
+serviceMonitor:
+  enabled: false
+
+networkPolicy:
+  enabled: false
+
+# No autoscaling
+autoscaling:
+  enabled: false

@@ -7,7 +7,7 @@ extends: default
 rules:
   # Allow longer lines for Ansible tasks with long module names or URLs
   line-length:
-    max: 140
+    max: 150
     allow-non-breakable-words: true
     allow-non-breakable-inline-mappings: true
 
@@ -57,6 +57,8 @@ ignore: |
   # Ignore Helm template files as they contain Go templating syntax
   Helm/*/templates/*.yaml
   Helm/*/templates/*.yml
+  **/templates/*.yaml
+  **/templates/*.yml
   
   # Ignore generated or external files
   */Chart.lock

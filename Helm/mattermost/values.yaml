@@ -102,7 +102,6 @@ mattermost:
     enableDeveloper: false
     enableSecurityFixAlert: true
     enableInsecureOutgoingConnections: false
-    allowedUntrustedInternalConnections: ""
     enableMultifactorAuthentication: true
     enforceMultifactorAuthentication: false
     enableUserAccessTokens: true

@@ -308,7 +308,6 @@ ldap:
   # Advanced settings
   editMode: "WRITABLE"
   syncRegistrations: true
-  vendor: "ad"
 
   # Import settings
   importUsers: true
@@ -339,7 +338,6 @@ realm:
   enabled: true
   name: "noah"
   displayName: "NOAH"
-  enabled: true
 
   # OIDC clients will be configured via Ansible
   clients: []

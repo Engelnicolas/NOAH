@@ -49,10 +49,10 @@
 global:
   # Container image registry override (leave empty for Docker Hub)
   imageRegistry: ""
-  
+
   # Global image pull secrets for private registries
   imagePullSecrets: []
-  
+
   # Default storage class for persistent volumes
   # Critical for file storage performance and reliability
   storageClass: ""
@@ -70,18 +70,18 @@ replicaCount: 1
 image:
   # Container registry (leave empty for Docker Hub)
   registry: ""
-  
+
   # Official Nextcloud Docker image
   repository: nextcloud
-  
+
   # Nextcloud version - use stable releases for production
   # Format: major.minor.patch (e.g., 28.0.1)
   tag: "28.0.1"
-  
+
   # Image pull policy
   # IfNotPresent: Only pull if image doesn't exist locally
   pullPolicy: IfNotPresent
-  
+
   # Image pull secrets for this specific image
   pullSecrets: []
 
@@ -94,64 +94,64 @@ nextcloud:
   # =============================================================================
   # Administrative User Configuration
   # =============================================================================
-  
+
   # Initial admin username (created during first installation)
   adminUser: admin
-  
+
   # Admin password (leave empty to use existingSecret)
   # SECURITY: Always use existingSecret in production
   adminPassword: ""
-  
+
   # Kubernetes secret containing admin credentials
   existingSecret: ""
   existingSecretUsernameKey: "nextcloud-admin-username"
   existingSecretPasswordKey: "nextcloud-admin-password"
-  
+
   # =============================================================================
   # External Access Configuration
   # =============================================================================
-  
+
   # Primary hostname for Nextcloud access
   # This must match the ingress hostname and certificate
   host: "nextcloud.noah.local"
-  
+
   # Protocol for external access (https recommended for production)
   protocol: "https"
-  
+
   # Trusted domains for Nextcloud access
   # All domains that users will use to access Nextcloud
-  trustedDomains: 
+  trustedDomains:
     - "nextcloud.noah.local"
-  
+
   # =============================================================================
   # File Storage Configuration
   # =============================================================================
-  
+
   # Data directory inside the container for user files
   # This directory will be mounted to persistent storage
   dataDir: "/var/www/html/data"
-  
+
   # =============================================================================
   # Advanced Configuration (config.php)
   # =============================================================================
   # Raw PHP configuration for advanced Nextcloud settings
-  
+
   config: |
     <?php
     $CONFIG = array (
       // =================================================================
       // Caching Configuration for Performance Optimization
       // =================================================================
-      
+
       // Local caching using APCu for single-server setups
       'memcache.local' => '\\OC\\Memcache\\APCu',
-      
+
       // Distributed caching using Redis for multi-server setups
       'memcache.distributed' => '\\OC\\Memcache\\Redis',
-      
+
       // File locking using Redis to prevent conflicts in shared storage
       'memcache.locking' => '\\OC\\Memcache\\Redis',
-      
+
       // Redis connection configuration
       'redis' => array(
         'host' => '{{ include "nextcloud.redis.host" . }}',
@@ -160,11 +160,11 @@ nextcloud:
         'password' => '{{ .Values.redis.auth.password }}',
         {{- end }}
       ),
-      
+
       // =================================================================
       // Network and Proxy Configuration
       // =================================================================
-      
+
       // Trusted proxy networks (for ingress controllers and load balancers)
       'trusted_proxies' => array(
         '10.0.0.0/8',
@@ -189,7 +189,7 @@ oidc:
   existingSecret: ""
   existingSecretKey: "oidc-client-secret"
   discoveryUrl: "https://keycloak.noah.local/realms/noah/.well-known/openid_configuration"
-  
+
   # OIDC Configuration
   config:
     use_pkce: true
@@ -197,7 +197,7 @@ oidc:
     autoRedirectOnLoginPage: false
     redirectUrl: "https://nextcloud.noah.local/apps/oidc_login/oidc"
     logoutUrl: "https://keycloak.noah.local/realms/noah/protocol/openid-connect/logout"
-    
+
     # User mapping
     userMappings:
       id: "preferred_username"
@@ -207,7 +207,7 @@ oidc:
       home: "home_directory"
       ldap_uid: "preferred_username"
       groups: "groups"
-    
+
     # Group provisioning
     groupProvisioning: true
     groupMappings:
@@ -224,7 +224,7 @@ ldap:
   bindPassword: ""
   existingSecret: ""
   existingSecretKey: "ldap-password"
-  
+
   # User configuration
   userSearch:
     base: "cn=Users,dc=noah,dc=local"
@@ -234,7 +234,7 @@ ldap:
       email: "mail"
       quota: "description"
       home: "homeDirectory"
-      
+
   # Group configuration
   groupSearch:
     base: "cn=Groups,dc=noah,dc=local"
@@ -381,7 +381,7 @@ persistence:
     - ReadWriteOnce
   size: 100Gi
   annotations: {}
-  
+
   # Separate volumes for different data types
   volumes:
     data:
@@ -417,7 +417,7 @@ apps:
     - "settings"
     - "user_status"
     - "workflowengine"
-    
+
   # Additional apps
   additional:
     - "calendar"

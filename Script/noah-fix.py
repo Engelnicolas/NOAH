@@ -50,29 +50,54 @@ class NoahFixer:
             if content and not content.endswith('\n'):
                 content += '\n'
             
-            # Fix indentation issues (basic)
+            # Add document start if missing (for .yml files that don't start with ---)
+            if not content.startswith('---') and not content.startswith('#'):
+                content = '---\n' + content
+            
+            # Fix indentation issues and line length
             lines = content.split('\n')
             fixed_lines = []
             for line in lines:
                 # Replace tabs with spaces
                 line = line.replace('\t', '  ')
+                
+                # Fix common indentation patterns
+                if line.strip().startswith('- name:'):
+                    # Ensure task items are properly indented
+                    if not line.startswith('  - name:') and not line.startswith('- name:'):
+                        line = re.sub(r'^(\s*)- name:', r'\1- name:', line)
+                
+                # Fix line length issues by breaking long lines
+                if len(line) > 80 and ':' in line and not line.strip().startswith('#'):
+                    # Try to break long lines at appropriate points
+                    if 'ansible.builtin.' in line or 'community.' in line:
+                        # Module lines
+                        match = re.match(r'^(\s+)(\w+):\s*(.+)$', line)
+                        if match:
+                            indent, key, value = match.groups()
+                            if len(value) > 60:
+                                line = f"{indent}{key}: >\n{indent}  {value}"
+                
                 fixed_lines.append(line)
             content = '\n'.join(fixed_lines)
             
-            # Try to parse YAML to ensure validity
-            try:
-                yaml.safe_load(content)
-                if content != original_content:
-                    if not self.dry_run:
-                        with open(file_path, 'w') as f:
-                            f.write(content)
-                    self.log(f"Fixed YAML syntax in {file_path}", "SUCCESS")
-                    self.fixes_applied += 1
-                else:
-                    self.log(f"YAML file is already valid: {file_path}", "INFO")
-            except yaml.YAMLError as e:
-                self.log(f"YAML syntax error in {file_path}: {e}", "ERROR")
-                self.errors_found += 1
+            # Try to parse YAML to ensure validity (skip Helm templates)
+            if not ('{{' in content and '}}' in content):
+                try:
+                    yaml.safe_load(content)
+                except yaml.YAMLError as e:
+                    self.log(f"YAML syntax error in {file_path}: {e}", "ERROR")
+                    self.errors_found += 1
+                    return
+            
+            if content != original_content:
+                if not self.dry_run:
+                    with open(file_path, 'w') as f:
+                        f.write(content)
+                self.log(f"Fixed YAML syntax in {file_path}", "SUCCESS")
+                self.fixes_applied += 1
+            else:
+                self.log(f"YAML file is already valid: {file_path}", "INFO")
                 
         except Exception as e:
             self.log(f"Error processing {file_path}: {e}", "ERROR")

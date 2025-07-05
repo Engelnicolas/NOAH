@@ -1,3 +1,4 @@
+---
 {{/*
 =============================================================================
 Keycloak Deployment Template
@@ -47,14 +48,14 @@ kind: Deployment
 metadata:
   # Generate consistent name using Helm naming template
   name: {{ include "keycloak.fullname" . }}
-  
+
   # Place in the target namespace
   namespace: {{ .Release.Namespace | quote }}
-  
+
   # Apply standard labels for resource management and selection
   labels:
     {{- include "keycloak.labels" . | nindent 4 }}
-  
+
   # Optional common annotations for operational metadata
   {{- with .Values.commonAnnotations }}
   annotations:
@@ -69,12 +70,12 @@ spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
-  
+
   # Pod selection criteria - must match template labels
   selector:
     matchLabels:
       {{- include "keycloak.selectorLabels" . | nindent 6 }}
-  
+
   # =============================================================================
   # Pod Template - Definition of pods to be created
   # =============================================================================
@@ -84,24 +85,24 @@ spec:
       annotations:
         # Force pod restart when configuration changes
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        
+
         # Force pod restart when database secrets change
         {{- if .Values.postgresql.enabled }}
         checksum/secret-postgresql: {{ include (print $.Template.BasePath "/secret-postgresql.yaml") . | sha256sum }}
         {{- end }}
-        
+
         # Additional pod annotations from values
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      
+
       # Pod labels for identification and service selection
       labels:
         {{- include "keycloak.selectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-    
+
     # =============================================================================
     # Pod Specification - Container and security configuration
     # =============================================================================
@@ -111,14 +112,14 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      
+
       # Service account for RBAC permissions
       serviceAccountName: {{ include "keycloak.serviceAccountName" . }}
-      
+
       # Pod-level security context (user/group IDs, filesystem permissions)
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      
+
       # Optional init containers for setup tasks (database migration, etc.)
       {{- with .Values.initContainers }}
       initContainers:

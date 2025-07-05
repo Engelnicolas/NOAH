@@ -1,3 +1,4 @@
+---
 {{- if .Values.datasources.prometheus.enabled }}
 apiVersion: v1
 kind: ConfigMap
@@ -9,7 +10,7 @@ metadata:
 data:
   prometheus.yaml: |
     apiVersion: 1
-    
+
     datasources:
     - name: Prometheus
       type: prometheus

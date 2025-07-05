@@ -119,7 +119,8 @@
               Kubernetes namespace: {{ k8s_namespace }}
               Helm version: {{ helm_version.stdout }}
               Target services: {{ http_services | join(', ') }}
-              Available Helm charts: {{ helm_charts.results | selectattr('stat.exists') | map(attribute='item') | list | join(', ') }}
+              Available Helm charts: >-
+                {{ helm_charts.results | selectattr('stat.exists') | map(attribute='item') | list | join(', ') }}
 
       rescue:
         - name: Prerequisites check failed
@@ -366,9 +367,13 @@
         - name: Calculate deployment metrics
           set_fact:
             total_pods: "{{ pod_status.resources | length }}"
-            ready_pods: "{{ pod_status.resources | selectattr('status.containerStatuses.0.ready', 'equalto', true) | list | length }}"
+            ready_pods: >-
+              {{ pod_status.resources |
+                 selectattr('status.containerStatuses.0.ready', 'equalto', true) |
+                 list | length }}
             deployment_duration: "{{ ansible_date_time.epoch | int - deployment_start_time | int }}"
-            healthy_endpoints: "{{ endpoint_checks.results | selectattr('status', 'equalto', 200) | list | length }}"
+            healthy_endpoints: >-
+              {{ endpoint_checks.results | selectattr('status', 'equalto', 200) | list | length }}
 
     - name: Generate comprehensive deployment report
       template:
@@ -430,7 +435,10 @@
         method: POST
         body_format: json
         body:
-          text: "NOAH deployment completed in {{ deployment_duration }}s. {{ successful_phases | length }} phases successful, {{ failed_phases | length }} phases failed."
+          text: >-
+            NOAH deployment completed in {{ deployment_duration }}s.
+            {{ successful_phases | length }} phases successful,
+            {{ failed_phases | length }} phases failed.
       when: notification_webhook is defined
       failed_when: false
 
@@ -457,4 +465,3 @@
         release_namespace: "{{ k8s_namespace }}"
         state: absent
       loop: "{{ failed_deployments | default([]) }}"
-

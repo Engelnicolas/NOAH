@@ -1,3 +1,4 @@
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -12,25 +13,25 @@ data:
     {{- if .Values.config.server.rootUrl }}
     root_url = {{ .Values.config.server.rootUrl }}
     {{- end }}
-    
+
     [database]
     type = {{ .Values.config.database.type }}
-    
+
     [users]
     allow_sign_up = false
     allow_org_create = false
     auto_assign_org = true
     auto_assign_org_role = Viewer
-    
+
     [auth]
     disable_login_form = false
-    
+
     {{- if .Values.auth.ldap.enabled }}
     [auth.ldap]
     enabled = true
     config_file = /etc/grafana/ldap.toml
     {{- end }}
-    
+
     {{- if .Values.auth.oidc.enabled }}
     [auth.generic_oauth]
     enabled = true
@@ -43,10 +44,10 @@ data:
     token_url = {{ .Values.auth.oidc.tokenUrl }}
     api_url = {{ .Values.auth.oidc.apiUrl }}
     {{- end }}
-    
+
     [security]
     admin_user = {{ .Values.auth.admin.username }}
-    
+
     {{- if .Values.config.smtp.enabled }}
     [smtp]
     enabled = true
@@ -55,10 +56,10 @@ data:
     password = {{ .Values.config.smtp.password }}
     from_address = {{ .Values.config.smtp.fromAddress }}
     {{- end }}
-    
+
     [metrics]
     enabled = true
-    
+
     [log]
     mode = console
     level = info

@@ -1,3 +1,4 @@
+---
 {{/*
 Mattermost Persistent Volume Claims Template
 
@@ -42,16 +43,16 @@ kind: PersistentVolumeClaim
 metadata:
   {{/* Generate consistent name using Helm fullname template + PVC type */}}
   name: {{ include "mattermost.fullname" $ }}-{{ $pvcType }}
-  
+
   {{/* Place in the same namespace as the Helm release */}}
   namespace: {{ $.Release.Namespace }}
-  
+
   {{/* Apply standard Mattermost labels + component-specific label */}}
   labels:
     {{- include "mattermost.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $pvcType }}
-  
-  {{/* 
+
+  {{/*
   Optional annotations from values.yaml
   Useful for storage-specific metadata, backup policies, etc.
   */}}
@@ -70,7 +71,7 @@ spec:
     {{- range $pvcConfig.accessModes }}
     - {{ . | quote }}
     {{- end }}
-  
+
   {{/*
   Storage class determines the type of storage provisioner to use
   Priority: per-PVC storageClass > global storageClass > cluster default
@@ -78,7 +79,7 @@ spec:
   {{- if or $pvcConfig.storageClass $.Values.global.storageClass }}
   storageClassName: {{ $pvcConfig.storageClass | default $.Values.global.storageClass | quote }}
   {{- end }}
-  
+
   {{/*
   Optional selector for binding to specific persistent volumes
   Useful for pre-provisioned volumes or specific storage requirements
@@ -87,7 +88,7 @@ spec:
   selector:
     {{- toYaml . | nindent 4 }}
   {{- end }}
-  
+
   {{/*
   Volume mode specifies if volume is file system or block device
   Values: "Filesystem" (default) or "Block"
@@ -95,7 +96,7 @@ spec:
   {{- if $pvcConfig.volumeMode }}
   volumeMode: {{ $pvcConfig.volumeMode }}
   {{- end }}
-  
+
   {{/*
   Resource requirements for the persistent volume
   requests.storage is required, limits are optional for quota enforcement

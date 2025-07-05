@@ -14,11 +14,11 @@
         repository: gitlab/gitlab-ce
         tag: "16.6.1-ce.0"
         pullPolicy: IfNotPresent
-      
+
       gitlab:
         externalUrl: "https://gitlab.local"
         rootPassword: "{{ gitlab_root_password | default('changeme123') }}"
-        
+
       ldap:
         enabled: true
         servers:
@@ -38,7 +38,7 @@
               name: ["displayName"]
               first_name: ["givenName"]
               last_name: ["sn"]
-            
+
       oidc:
         enabled: true
         name: "keycloak"
@@ -48,32 +48,32 @@
         client_id: "gitlab-client"
         client_secret: "{{ gitlab_oidc_secret | default('changeme123') }}"
         scope: ["openid", "profile", "email"]
-        
+
       database:
         type: postgresql
         host: "gitlab-postgresql"
         database: "gitlab"
         username: "gitlab"
         password: "{{ gitlab_db_password | default('changeme123') }}"
-        
+
       redis:
         host: "gitlab-redis"
         port: 6379
-        
+
       persistence:
         enabled: true
         size: 50Gi
         storageClass: ""
-        
+
       service:
         type: ClusterIP
         port: 80
-        
+
       ingress:
         enabled: true
         hostname: gitlab.local
         tls: true
-        
+
       resources:
         limits:
           cpu: 2000m
@@ -81,7 +81,7 @@
         requests:
           cpu: 1000m
           memory: 2Gi
-          
+
       # GitLab Runner configuration
       runner:
         enabled: true
@@ -202,16 +202,16 @@
             - test
             - build
             - deploy
-          
+
           variables:
             DOCKER_DRIVER: overlay2
             DOCKER_TLS_CERTDIR: "/certs"
-          
+
           before_script:
             - echo "Starting CI/CD pipeline for $CI_PROJECT_NAME"
             - echo "Branch: $CI_COMMIT_REF_NAME"
             - echo "Commit: $CI_COMMIT_SHA"
-          
+
           test:
             stage: test
             script:
@@ -221,7 +221,7 @@
               - merge_requests
               - main
               - develop
-          
+
           build:
             stage: build
             script:
@@ -230,7 +230,7 @@
             only:
               - main
               - develop
-          
+
           deploy_staging:
             stage: deploy
             script:
@@ -239,7 +239,7 @@
             only:
               - develop
             when: manual
-          
+
           deploy_production:
             stage: deploy
             script:
@@ -273,7 +273,7 @@
   debug:
     msg: |
       GitLab deployment completed:
-      
+
       🦊 GitLab Instance:
       - URL: https://gitlab.local
       - Root Password: {{ gitlab_root_password | default('changeme123') }}
@@ -281,15 +281,15 @@
       - OIDC Integration: Configured
       - Health: {{ gitlab_health.status == 200 | ternary('Healthy', 'Unhealthy') }}
       - Pod: {{ gitlab_pods.resources[0].metadata.name }}
-      
+
       🏃 GitLab Runners:
       - Active Runners: {{ gitlab_runner_pods.resources | length }}
       - Registration: {{ gitlab_runners.status == 200 | ternary('Success', 'Manual registration required') }}
-      
+
       📊 Database & Cache:
       - PostgreSQL: Deployed
       - Redis: Deployed
-      
+
       📝 Next Steps:
       1. Access GitLab at https://gitlab.local
       2. Login with root/{{ gitlab_root_password | default('changeme123') }}

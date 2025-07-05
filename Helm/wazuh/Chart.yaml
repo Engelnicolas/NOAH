@@ -1,3 +1,4 @@
+---
 apiVersion: v2
 name: wazuh
 description: Production-ready Wazuh SIEM platform with manager, agents, and Elasticsearch integration

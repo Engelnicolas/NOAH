@@ -52,45 +52,45 @@ manager:
   # Multiple managers provide load balancing and failover capability
   # Minimum 2 recommended for production environments
   replicaCount: 2
-  
+
   # Container image configuration
   image:
     # Official Wazuh Manager image repository
     repository: wazuh/wazuh-manager
-    
+
     # Wazuh version - use stable releases for production
     # Format: X.Y.Z (e.g., 4.7.1)
     tag: "4.7.1"
-    
+
     # Image pull policy
     pullPolicy: IfNotPresent
-  
+
   # Resource allocation for Manager components
   # Manager is CPU and memory intensive for rule processing
   resources:
     requests:
       # Minimum memory required for rule engine and data processing
       memory: "2Gi"
-      
+
       # Minimum CPU for real-time event processing
       cpu: "1000m"
     limits:
       # Maximum memory allocation to prevent OOM issues
       memory: "4Gi"
-      
+
       # Maximum CPU allocation for resource management
       cpu: "2000m"
-  
+
   # Kubernetes scheduling configuration
   nodeSelector: {}   # Node selection constraints
   tolerations: []    # Tolerate specific node taints
   affinity: {}      # Pod affinity and anti-affinity rules
-  
+
   # =============================================================================
   # Wazuh Manager Core Configuration
   # =============================================================================
   # Security rules, clustering, and authentication settings
-  
+
   config:
     # =============================================================================
     # Cluster Configuration for High Availability
@@ -98,30 +98,30 @@ manager:
     cluster:
       # Enable clustering for multi-manager deployments
       enabled: true
-      
+
       # Unique node name for this manager instance
       node_name: "wazuh-manager"
-      
+
       # Node type in cluster hierarchy
       # Options: master, worker, client
       node_type: "master"
-      
+
       # Cluster communication encryption key
       # SECURITY: Change this default key before production deployment
       key: "c98b62a9b6169ac5f67dae55ae4a9088"
-      
+
       # IP address to bind for cluster communication
       bind_addr: "0.0.0.0"
-      
+
       # Port for cluster communication between managers
       port: 1516
-      
+
       # Hide this node from cluster status (for load balancers)
       hidden: "no"
-      
+
       # Disable this node from active participation
       disabled: "no"
-    
+
     # =============================================================================
     # Authentication and Authorization Configuration
     # =============================================================================
@@ -129,65 +129,65 @@ manager:
       # Authentication provider for Wazuh users
       # Options: ldap, internal, api
       auth_provider: "ldap"
-      
+
       # LDAP server URL for user authentication
       ldap_url: "ldap://ldap.noah.svc.cluster.local:389"
-      
+
       # LDAP base distinguished name for user searches
       ldap_base_dn: "dc=noah,dc=local"
-      
+
       # LDAP bind DN for authentication queries
       ldap_bind_dn: "cn=admin,dc=noah,dc=local"
-      
+
       # LDAP search filter for user authentication
       ldap_user_search: "(uid={username})"
-      
+
       # LDAP search filter for user group membership
       ldap_group_search: "(memberUid={username})"
-    
+
     # =============================================================================
     # Vulnerability Detection Configuration
     # =============================================================================
     vulnerability_detector:
       # Enable vulnerability assessment capabilities
       enabled: true
-      
+
       # Interval between vulnerability scans
       interval: "5m"
-      
+
       # Time to ignore repeated vulnerability findings
       ignore_time: "6h"
-      
+
       # Run vulnerability scan on manager startup
       run_on_start: true
-      
+
       # Vulnerability feed providers to use
       providers:
         - "canonical"    # Ubuntu/Canonical vulnerability feeds
         - "debian"       # Debian security advisories
         - "redhat"
         - "arch"
-    
+
     # Active response
     active_response:
       disabled: false
       ca_store: "/var/ossec/etc/rootca.pem"
       ca_verification: true
-    
+
     # Rule testing
     rule_test:
       enabled: true
       threads: 1
       max_sessions: 64
       session_timeout: 15
-    
+
     # Monitoring
     monitoring:
       enabled: true
       frequency: 120
       compress: true
       day_wait: 7
-    
+
     # Email notification
     email_notification:
       enabled: true
@@ -195,7 +195,7 @@ manager:
       email_from: "wazuh@noah.local"
       email_to: "admin@noah.local"
       format: "plain"
-    
+
     # Integration with external tools
     integrations:
       slack:
@@ -208,12 +208,12 @@ manager:
       virustotal:
         enabled: false
         api_key: ""
-    
+
     # Logging configuration
     logging:
       level: "info"
       use_geoip: true
-    
+
     # Database output (for Elasticsearch)
     database_output:
       enabled: true
@@ -238,7 +238,7 @@ dashboard:
     repository: wazuh/wazuh-dashboard
     tag: "4.7.1"
     pullPolicy: IfNotPresent
-  
+
   resources:
     requests:
       memory: "1Gi"
@@ -246,11 +246,11 @@ dashboard:
     limits:
       memory: "2Gi"
       cpu: "1000m"
-  
+
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  
+
   config:
     server:
       host: "0.0.0.0"
@@ -259,7 +259,7 @@ dashboard:
         enabled: true
         certificate: "/usr/share/wazuh-dashboard/certs/cert.pem"
         key: "/usr/share/wazuh-dashboard/certs/cert-key.pem"
-    
+
     opensearch:
       hosts: ["https://elasticsearch.noah.svc.cluster.local:9200"]
       username: "kibanaserver"
@@ -267,7 +267,7 @@ dashboard:
       ssl:
         verificationMode: "certificate"
         certificateAuthorities: ["/usr/share/wazuh-dashboard/certs/root-ca.pem"]
-    
+
     wazuh:
       api:
         url: "https://wazuh-manager.noah.svc.cluster.local"
@@ -275,19 +275,19 @@ dashboard:
         username: "wazuh-wui"
         password: ""  # Set via secret
         run_as: false
-    
+
     # Security configuration
     security:
       showAdvancedSettings: false
       allowLeadingWildcards: true
       disabledCapabilities: []
-    
+
     # Monitoring
     monitoring:
       enabled: true
       ui_enabled: true
       cluster_alerts_index: ".wazuh-monitoring-*"
-    
+
     # Logging
     logging:
       silent: false
@@ -302,11 +302,11 @@ elasticsearch:
   enabled: true
   clusterName: "wazuh-cluster"
   nodeGroup: "master"
-  
+
   image: "elasticsearch"
   imageTag: "8.12.0"
   imagePullPolicy: "IfNotPresent"
-  
+
   esConfig:
     elasticsearch.yml: |
       cluster.name: wazuh-cluster
@@ -314,7 +314,7 @@ elasticsearch:
       bootstrap.memory_lock: false
       discovery.seed_hosts: "elasticsearch-master-headless"
       cluster.initial_master_nodes: "elasticsearch-master-0,elasticsearch-master-1"
-      
+
       # Security configuration
       xpack.security.enabled: true
       xpack.security.transport.ssl.enabled: true
@@ -324,10 +324,10 @@ elasticsearch:
       xpack.security.http.ssl.enabled: true
       xpack.security.http.ssl.keystore.path: certs/elastic-stack-ca.p12
       xpack.monitoring.collection.enabled: true
-  
+
   replicas: 3
   minimumMasterNodes: 2
-  
+
   resources:
     requests:
       cpu: "1000m"
@@ -335,14 +335,14 @@ elasticsearch:
     limits:
       cpu: "2000m"
       memory: "4Gi"
-  
+
   volumeClaimTemplate:
     accessModes: ["ReadWriteOnce"]
     storageClassName: "fast-ssd"
     resources:
       requests:
         storage: 100Gi
-  
+
   esJavaOpts: "-Xmx2g -Xms2g"
 
 # Wazuh Indexer Configuration (alternative to Elasticsearch)
@@ -353,7 +353,7 @@ indexer:
     repository: wazuh/wazuh-indexer
     tag: "4.7.1"
     pullPolicy: IfNotPresent
-  
+
   resources:
     requests:
       memory: "2Gi"
@@ -361,12 +361,12 @@ indexer:
     limits:
       memory: "4Gi"
       cpu: "2000m"
-  
+
   persistence:
     enabled: true
     storageClass: "fast-ssd"
     size: 100Gi
-  
+
   config:
     cluster.name: "wazuh-indexer-cluster"
     network.host: "0.0.0.0"
@@ -388,7 +388,7 @@ agent:
     repository: wazuh/wazuh-agent
     tag: "4.7.1"
     pullPolicy: IfNotPresent
-  
+
   resources:
     requests:
       memory: "256Mi"
@@ -396,7 +396,7 @@ agent:
     limits:
       memory: "512Mi"
       cpu: "500m"
-  
+
   config:
     manager_address: "wazuh-manager.noah.svc.cluster.local"
     protocol: "tcp"
@@ -405,13 +405,13 @@ agent:
     time_reconnect: 60
     auto_restart: "yes"
     crypto_method: "aes"
-    
+
     # Active response
     active_response:
       disabled: false
       ca_store: "/var/ossec/etc/rootca.pem"
       ca_verification: true
-    
+
     # Monitoring
     localfile:
       - log_format: "syslog"
@@ -443,7 +443,7 @@ service:
         targetPort: 1516
         protocol: TCP
     annotations: {}
-    
+
   dashboard:
     type: ClusterIP
     ports:
@@ -452,7 +452,7 @@ service:
         targetPort: 5601
         protocol: TCP
     annotations: {}
-    
+
   indexer:
     type: ClusterIP
     ports:
@@ -487,7 +487,7 @@ ingress:
       - secretName: wazuh-api-tls
         hosts:
           - wazuh-api.noah.local
-  
+
   dashboard:
     enabled: true
     className: "nginx"
@@ -519,7 +519,7 @@ persistence:
       - ReadWriteOnce
     size: 20Gi
     annotations: {}
-  
+
   dashboard:
     enabled: true
     storageClass: "fast-ssd"
@@ -534,23 +534,23 @@ secrets:
   api:
     username: "wazuh"
     password: ""  # Generated if empty
-  
+
   # Wazuh WUI credentials
   wui:
     username: "wazuh-wui"
     password: ""  # Generated if empty
-  
+
   # Elasticsearch/Indexer credentials
   elastic:
     username: "elastic"
     password: ""  # Generated if empty
     kibana_username: "kibanaserver"
     kibana_password: ""  # Generated if empty
-  
+
   # LDAP bind credentials
   ldap:
     bind_password: ""
-  
+
   # TLS Certificates
   tls:
     create: true
@@ -622,7 +622,7 @@ autoscaling:
           value: 2
           periodSeconds: 60
         selectPolicy: Max
-  
+
   dashboard:
     enabled: true
     minReplicas: 2
@@ -635,11 +635,11 @@ podDisruptionBudget:
   manager:
     enabled: true
     minAvailable: "50%"
-  
+
   dashboard:
     enabled: true
     minAvailable: 1
-  
+
   indexer:
     enabled: true
     minAvailable: 2
@@ -750,7 +750,7 @@ backup:
       region: "us-east-1"
       accessKey: ""
       secretKey: ""
-  
+
   # Backup what to include
   includes:
     - "/var/ossec/etc/"
@@ -765,11 +765,11 @@ monitoring:
     enabled: true
     port: 9090
     path: /metrics
-  
+
   grafana_dashboard:
     enabled: true
     folder: "Wazuh"
-  
+
   alerts:
     - name: "WazuhManagerDown"
       severity: "critical"
@@ -797,7 +797,7 @@ healthCheck:
     timeoutSeconds: 10
     successThreshold: 1
     failureThreshold: 3
-  
+
   readinessProbe:
     httpGet:
       path: /

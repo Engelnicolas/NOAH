@@ -1,3 +1,4 @@
+---
 {{- if .Values.backup.enabled }}
 apiVersion: batch/v1
 kind: CronJob
@@ -115,23 +116,23 @@ spec:
                   set -e
                   TIMESTAMP=$(date +%Y%m%d_%H%M%S)
                   BACKUP_FILE="${BACKUP_PREFIX}_${TIMESTAMP}.sql"
-                  
+
                   echo "Starting OpenEDR backup at $(date)"
-                  
+
                   # Create database backup
                   echo "Creating database backup..."
                   pg_dump --no-password --clean --if-exists --create > /tmp/${BACKUP_FILE}
-                  
+
                   # Compress backup
                   echo "Compressing backup..."
                   gzip /tmp/${BACKUP_FILE}
                   BACKUP_FILE="${BACKUP_FILE}.gz"
-                  
+
                   {{- if .Values.backup.s3.enabled }}
                   # Upload to S3
                   echo "Uploading to S3..."
                   aws s3 cp /tmp/${BACKUP_FILE} s3://${S3_BUCKET}/database/${BACKUP_FILE} --region ${S3_REGION}
-                  
+
                   # Clean old backups from S3
                   echo "Cleaning old S3 backups..."
                   aws s3 ls s3://${S3_BUCKET}/database/ | awk '{print $4}' | grep "^${BACKUP_PREFIX}" | head -n -${BACKUP_RETENTION_DAYS} | while read file; do
@@ -141,7 +142,7 @@ spec:
                     fi
                   done
                   {{- end }}
-                  
+
                   # Copy config and logs if enabled
                   {{- if .Values.backup.includeConfig }}
                   echo "Backing up configuration..."
@@ -150,7 +151,7 @@ spec:
                   aws s3 cp /tmp/openedr_config_${TIMESTAMP}.tar.gz s3://${S3_BUCKET}/config/ --region ${S3_REGION}
                   {{- end }}
                   {{- end }}
-                  
+
                   {{- if .Values.backup.includeLogs }}
                   echo "Backing up logs..."
                   tar -czf /tmp/openedr_logs_${TIMESTAMP}.tar.gz -C /opt/openedr logs/
@@ -158,7 +159,7 @@ spec:
                   aws s3 cp /tmp/openedr_logs_${TIMESTAMP}.tar.gz s3://${S3_BUCKET}/logs/ --region ${S3_REGION}
                   {{- end }}
                   {{- end }}
-                  
+
                   echo "Backup completed successfully at $(date)"
               volumeMounts:
                 - name: backup-storage

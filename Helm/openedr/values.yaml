@@ -19,14 +19,14 @@ openedr:
   # Basic configuration
   serverUrl: "https://openedr.noah.local"
   serverPort: 8443
-  
+
   # Manager settings
   manager:
     adminUser: "admin"
     adminPassword: ""
     existingSecret: ""
     existingSecretPasswordKey: "admin-password"
-    
+
     # Database configuration
     database:
       host: ""
@@ -36,7 +36,7 @@ openedr:
       password: ""
       existingSecret: ""
       existingSecretPasswordKey: "database-password"
-      
+
     # API settings
     api:
       enabled: true
@@ -44,14 +44,14 @@ openedr:
       authentication: true
       rateLimit: 1000
       maxConnections: 500
-      
+
     # SSL/TLS settings
     ssl:
       enabled: true
       certificateFile: "/opt/openedr/certs/server.crt"
       privateKeyFile: "/opt/openedr/certs/server.key"
       caCertificateFile: "/opt/openedr/certs/ca.crt"
-      
+
     # Logging settings
     logging:
       level: "INFO"
@@ -60,7 +60,7 @@ openedr:
       format: "json"
       enableAudit: true
       auditLogPath: "/opt/openedr/logs/audit.log"
-      
+
     # Agent settings
     agent:
       downloadPath: "/opt/openedr/agents"
@@ -68,7 +68,7 @@ openedr:
       autoUpdate: true
       maxAgents: 10000
       heartbeatInterval: "30s"
-      
+
     # Threat detection settings
     detection:
       enableRealTime: true
@@ -76,7 +76,7 @@ openedr:
       enableMLDetection: true
       maxAlertsPerHour: 1000
       alertRetentionDays: 365
-      
+
     # Incident response settings
     response:
       enableAutoResponse: true
@@ -84,14 +84,14 @@ openedr:
       enableProcessTermination: true
       enableNetworkIsolation: true
       maxResponseActions: 100
-      
+
     # Reporting settings
     reporting:
       enableScheduledReports: true
       reportRetentionDays: 90
       maxReportsPerUser: 50
       enableEmailReports: true
-      
+
     # Integration settings
     integration:
       syslog:
@@ -100,7 +100,7 @@ openedr:
         port: 514
         protocol: "UDP"
         facility: "LOG_LOCAL0"
-      
+
       smtp:
         enabled: true
         server: "smtp.noah.local"
@@ -109,7 +109,7 @@ openedr:
         password: ""
         encryption: "STARTTLS"
         fromAddress: "openedr@noah.local"
-        
+
       webhook:
         enabled: true
         maxWebhooks: 10
@@ -126,7 +126,7 @@ ldap:
   bindPassword: ""
   existingSecret: ""
   existingSecretKey: "ldap-password"
-  
+
   # User configuration
   userSearch:
     base: "cn=Users,dc=noah,dc=local"
@@ -137,7 +137,7 @@ ldap:
       firstName: "givenName"
       lastName: "sn"
       displayName: "displayName"
-      
+
   # Group configuration
   groupSearch:
     base: "cn=Groups,dc=noah,dc=local"
@@ -254,7 +254,7 @@ persistence:
     - ReadWriteOnce
   size: 100Gi
   annotations: {}
-  
+
   # Additional volumes
   volumes:
     data:
@@ -402,7 +402,7 @@ certificates:
     issuer: "letsencrypt-prod"
   # Or provide existing certificate
   existingSecret: ""
-  
+
 # Agent configuration
 agents:
   # Default agent configuration
@@ -416,7 +416,7 @@ agents:
     processMonitoring: true
     fileMonitoring: true
     registryMonitoring: true
-    
+
   # Agent groups
   groups:
     - name: "servers"
@@ -457,14 +457,14 @@ alerts:
     recipients:
       - "security@noah.local"
       - "admin@noah.local"
-      
+
   # Webhook alerts
   webhook:
     enabled: true
     urls:
       - "https://mattermost.noah.local/hooks/security-alerts"
       - "https://webhook.site/unique-id"
-      
+
   # Syslog alerts
   syslog:
     enabled: true
@@ -485,12 +485,12 @@ threatIntelligence:
       url: "https://malware-domains.com/files/domains.txt"
       format: "txt"
       updateInterval: "12h"
-      
+
   # Custom indicators
   customIndicators:
     enabled: true
     maxIndicators: 10000
-    
+
 # Compliance
 compliance:
   enabled: true

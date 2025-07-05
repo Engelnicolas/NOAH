@@ -1,3 +1,4 @@
+---
 apiVersion: v2
 name: oauth2-proxy
 description: Production-ready OAuth2 Proxy for protecting services with OIDC authentication

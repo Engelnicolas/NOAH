@@ -15,7 +15,7 @@ spec:
   policyTypes:
     - Ingress
     - Egress
-  
+
   ingress:
     # Allow traffic from ingress controller
     - from:
@@ -27,7 +27,7 @@ spec:
           port: 8065
         - protocol: TCP
           port: 8067
-    
+
     # Allow traffic from OAuth2 Proxy
     - from:
         - namespaceSelector:
@@ -39,7 +39,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8065
-    
+
     # Allow monitoring scraping
     - from:
         - namespaceSelector:
@@ -48,7 +48,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8067
-  
+
   egress:
     # Allow DNS resolution
     - to: []
@@ -57,7 +57,7 @@ spec:
           port: 53
         - protocol: UDP
           port: 53
-    
+
     # Allow HTTPS traffic
     - to: []
       ports:
@@ -65,7 +65,7 @@ spec:
           port: 443
         - protocol: TCP
           port: 80
-    
+
     # Allow database connections
     - to:
         - namespaceSelector:
@@ -78,7 +78,7 @@ spec:
           port: 6379  # Redis
         - protocol: TCP
           port: 9200  # Elasticsearch
-    
+
     # Allow LDAP connections
     - to:
         - namespaceSelector:
@@ -92,7 +92,7 @@ spec:
           port: 389
         - protocol: TCP
           port: 636
-    
+
     # Allow OIDC connections
     - to:
         - namespaceSelector:

@@ -1,3 +1,4 @@
+---
 {{- if .Values.backup.enabled }}
 apiVersion: batch/v1
 kind: CronJob
@@ -60,7 +61,7 @@ spec:
                     secretKeyRef:
                       name: {{ include "samba4.secretName" . }}
                       key: admin-password
-                
+
                 # S3 configuration for backup storage
                 {{- if .Values.backup.s3.enabled }}
                 - name: S3_ENDPOINT
@@ -80,13 +81,13 @@ spec:
                       name: {{ include "samba4.secretName" . }}
                       key: s3-secret-key
                 {{- end }}
-                
+
                 # Retention settings
                 - name: BACKUP_RETENTION_DAYS
                   value: "{{ .Values.backup.retentionDays | default 30 }}"
                 - name: BACKUP_PREFIX
                   value: "{{ .Values.backup.prefix | default "samba4" }}"
-                
+
                 {{- with .Values.backup.env }}
                 {{- toYaml . | nindent 16 }}
                 {{- end }}
@@ -97,37 +98,37 @@ spec:
                   set -e
                   TIMESTAMP=$(date +%Y%m%d_%H%M%S)
                   BACKUP_DIR="/backup"
-                  
+
                   echo "Starting Samba4 AD backup at $(date)"
-                  
+
                   # Create AD database backup
                   echo "Creating AD database backup..."
                   mkdir -p ${BACKUP_DIR}/ad_${TIMESTAMP}
                   samba-tool domain backup offline --targetdir=${BACKUP_DIR}/ad_${TIMESTAMP}
-                  
+
                   # Backup sysvol
                   echo "Backing up sysvol..."
                   tar -czf ${BACKUP_DIR}/sysvol_${TIMESTAMP}.tar.gz -C /var/lib/samba sysvol/
-                  
+
                   # Backup configuration
                   echo "Backing up configuration..."
                   tar -czf ${BACKUP_DIR}/config_${TIMESTAMP}.tar.gz -C /etc samba/
-                  
+
                   # Backup DNS zones
                   echo "Backing up DNS zones..."
                   tar -czf ${BACKUP_DIR}/dns_${TIMESTAMP}.tar.gz -C /var/lib/samba/private dns/
-                  
+
                   {{- if .Values.backup.s3.enabled }}
                   # Upload to S3
                   echo "Uploading AD backup to S3..."
                   tar -czf ${BACKUP_DIR}/ad_${TIMESTAMP}.tar.gz -C ${BACKUP_DIR} ad_${TIMESTAMP}/
                   aws s3 cp ${BACKUP_DIR}/ad_${TIMESTAMP}.tar.gz s3://${S3_BUCKET}/ad/ --region ${S3_REGION}
-                  
+
                   echo "Uploading other backups to S3..."
                   aws s3 cp ${BACKUP_DIR}/sysvol_${TIMESTAMP}.tar.gz s3://${S3_BUCKET}/sysvol/ --region ${S3_REGION}
                   aws s3 cp ${BACKUP_DIR}/config_${TIMESTAMP}.tar.gz s3://${S3_BUCKET}/config/ --region ${S3_REGION}
                   aws s3 cp ${BACKUP_DIR}/dns_${TIMESTAMP}.tar.gz s3://${S3_BUCKET}/dns/ --region ${S3_REGION}
-                  
+
                   # Clean old backups from S3
                   echo "Cleaning old S3 backups..."
                   for prefix in ad sysvol config dns; do
@@ -139,11 +140,11 @@ spec:
                     done
                   done
                   {{- end }}
-                  
+
                   # Clean local backups
                   find ${BACKUP_DIR} -name "ad_*" -type d -mtime +{{ .Values.backup.retentionDays | default 7 }} -exec rm -rf {} \;
                   find ${BACKUP_DIR} -name "*.tar.gz" -mtime +{{ .Values.backup.retentionDays | default 7 }} -delete
-                  
+
                   echo "Backup completed successfully at $(date)"
               volumeMounts:
                 - name: backup-storage

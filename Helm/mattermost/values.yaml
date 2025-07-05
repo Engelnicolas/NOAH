@@ -1,7 +1,7 @@
 # =============================================================================
 # Mattermost Helm Chart Values Configuration
 # =============================================================================
-# 
+#
 # This file contains the configuration values for the Mattermost Helm chart.
 # Mattermost is an open-source collaboration platform designed for team
 # communication, file sharing, and project coordination.
@@ -25,10 +25,10 @@
 global:
   # Container image registry override (leave empty to use default)
   imageRegistry: ""
-  
+
   # Global image pull secrets for private registries
   imagePullSecrets: []
-  
+
   # Default storage class for all persistent volumes
   # If not specified, cluster default storage class will be used
   storageClass: ""
@@ -45,19 +45,19 @@ replicaCount: 1
 image:
   # Override global registry if needed
   registry: ""
-  
+
   # Mattermost Docker image repository
   # Available editions: mattermost-team-edition, mattermost-enterprise-edition
   repository: mattermost/mattermost-team-edition
-  
+
   # Mattermost version tag
   # It's recommended to pin to specific versions for production
   tag: "9.2.0"
-  
+
   # Image pull policy
   # Options: Always, IfNotPresent, Never
   pullPolicy: IfNotPresent
-  
+
   # Image pull secrets for this specific image
   pullSecrets: []
 
@@ -71,7 +71,7 @@ mattermost:
   # =============================================================================
   # Basic Configuration
   # =============================================================================
-  
+
   # Primary site URL - MUST be accessible to all users
   # This URL is used for:
   # - Email notifications and links
@@ -79,7 +79,7 @@ mattermost:
   # - API endpoint discovery
   # - OAuth redirect URLs
   siteUrl: "https://mattermost.noah.local"
-  
+
   # =============================================================================
   # Service Settings - Core server behavior
   # =============================================================================
@@ -127,7 +127,7 @@ mattermost:
     publicLinkSalt: ""
     enableUploads: true
     allowedFileTypes: ""
-    
+
   # Team settings
   teamSettings:
     siteName: "NOAH Mattermost"
@@ -161,7 +161,7 @@ mattermost:
     experimentalTownSquareIsReadOnly: false
     experimentalPrimaryTeam: ""
     experimentalDefaultChannels: []
-    
+
   # SQL settings
   sqlSettings:
     driverName: "postgres"
@@ -175,7 +175,7 @@ mattermost:
     atRestEncryptKey: ""
     queryTimeout: 30
     disableDatabaseSearch: false
-    
+
   # Log settings
   logSettings:
     enableConsole: true
@@ -187,7 +187,7 @@ mattermost:
     fileLocation: ""
     enableWebhookDebugging: true
     enableDiagnostics: true
-    
+
   # File settings
   fileSettings:
     enableFileAttachments: true
@@ -214,7 +214,7 @@ mattermost:
     amazonS3SignV2: false
     amazonS3SSE: false
     amazonS3Trace: false
-    
+
   # Email settings
   emailSettings:
     enableSignUpWithEmail: true
@@ -243,7 +243,7 @@ mattermost:
     enablePreviewModeBanner: true
     enableLoginWithEmail: true
     enableLoginWithUsername: true
-    
+
   # Rate limit settings
   rateLimitSettings:
     enable: true
@@ -253,12 +253,12 @@ mattermost:
     varyByRemoteAddr: true
     varyByUser: false
     varyByHeader: ""
-    
+
   # Privacy settings
   privacySettings:
     showEmailAddress: true
     showFullName: true
-    
+
   # Support settings
   supportSettings:
     termsOfServiceLink: "https://mattermost.com/terms-of-service/"
@@ -270,7 +270,7 @@ mattermost:
     customTermsOfServiceEnabled: false
     customTermsOfServiceReAcceptancePeriod: 365
     enableAskCommunityLink: true
-    
+
   # Announcement settings
   announcementSettings:
     enableBanner: false
@@ -278,14 +278,14 @@ mattermost:
     bannerColor: "#f2a93b"
     bannerTextColor: "#333333"
     allowBannerDismissal: true
-    
+
   # Theme settings
   themeSettings:
     enableThemeSelection: true
     defaultTheme: "default"
     allowCustomThemes: true
     allowedThemes: []
-    
+
   # Git settings
   gitLabSettings:
     enable: false
@@ -295,7 +295,7 @@ mattermost:
     authEndpoint: ""
     tokenEndpoint: ""
     userApiEndpoint: ""
-    
+
   # Plugin settings
   pluginSettings:
     enable: true
@@ -320,28 +320,28 @@ mattermost:
 oidc:
   # Enable OIDC authentication
   enabled: true
-  
+
   # OIDC provider name (displayed to users)
   provider: "Keycloak"
-  
+
   # OAuth2 client ID registered in Keycloak
   clientId: "mattermost"
-  
+
   # OAuth2 client secret (leave empty if using existingSecret)
   clientSecret: ""
-  
+
   # Use existing Kubernetes secret for client secret
   existingSecret: ""
   existingSecretKey: "oidc-client-secret"
-  
+
   # OIDC discovery URL for automatic configuration
   # This URL provides all necessary OIDC endpoints and keys
   discoveryUrl: "https://keycloak.noah.local/realms/noah/.well-known/openid_configuration"
-  
+
   # Login button customization
   buttonText: "Login with Keycloak"
   buttonColor: "#145dbf"
-  
+
 # =============================================================================
 # LDAP Authentication (Fallback/Additional)
 # =============================================================================
@@ -357,7 +357,7 @@ ldap:
   bindPassword: ""
   existingSecret: ""
   existingSecretKey: "ldap-password"
-  
+
   # User configuration
   userSearch:
     base: "cn=Users,dc=noah,dc=local"
@@ -370,14 +370,14 @@ ldap:
       lastName: "sn"
       nickname: "displayName"
       position: "title"
-      
+
   # Group configuration
   groupSearch:
     base: "cn=Groups,dc=noah,dc=local"
     filter: "(&(objectClass=group))"
     groupDisplayNameAttribute: "cn"
     groupIdAttribute: "cn"
-    
+
   # Sync settings
   syncIntervalMinutes: 60
   maxPageSize: 2000
@@ -501,26 +501,26 @@ persistence:
   data:
     # Enable persistent storage for application data
     enabled: true
-    
+
     # Storage class for this specific volume (overrides global.storageClass)
     storageClass: ""
-    
+
     # Volume access modes
     # ReadWriteOnce: Single node read-write access (recommended for most storage)
     # ReadWriteMany: Multi-node read-write access (requires shared storage)
     accessModes:
       - ReadWriteOnce
-    
+
     # Volume size - stores user uploads, files, and application data
     # Recommendation: Start with 20Gi, monitor usage and scale as needed
     size: 20Gi
-    
+
     # Additional annotations for the PVC (storage-specific metadata)
     annotations: {}
-    
+
     # Mount path inside the container
     path: /mattermost/data
-    
+
   # =============================================================================
   # Config Volume - Configuration files and customizations
   # =============================================================================
@@ -530,13 +530,13 @@ persistence:
     storageClass: ""
     accessModes:
       - ReadWriteOnce
-    
+
     # Volume size - stores configuration files and customizations
     # Recommendation: 5Gi is typically sufficient for configuration data
     size: 5Gi
     annotations: {}
     path: /mattermost/config
-    
+
   # =============================================================================
   # Logs Volume - Application logs and audit trails
   # =============================================================================
@@ -546,13 +546,13 @@ persistence:
     storageClass: ""
     accessModes:
       - ReadWriteOnce
-    
+
     # Volume size - stores application logs for debugging and audit
     # Recommendation: 10Gi with log rotation enabled
     size: 10Gi
     annotations: {}
     path: /mattermost/logs
-    
+
   # =============================================================================
   # Plugins Volume - Mattermost plugins and extensions
   # =============================================================================
@@ -562,7 +562,7 @@ persistence:
     storageClass: ""
     accessModes:
       - ReadWriteOnce
-    
+
     # Volume size - stores installed plugins and their data
     # Recommendation: 10Gi allows for multiple plugins and their assets
     size: 10Gi

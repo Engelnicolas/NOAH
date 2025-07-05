@@ -1,3 +1,4 @@
+---
 apiVersion: v2
 name: nextcloud
 description: Production-ready Nextcloud file sharing and collaboration platform with OIDC/LDAP integration

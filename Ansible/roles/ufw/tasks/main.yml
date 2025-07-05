@@ -31,74 +31,74 @@
                 - -c
                 - |
                   set -e
-                  
+
                   # Install UFW if not present
                   apt-get update && apt-get install -y ufw
-                  
+
                   # Reset UFW to default state
                   ufw --force reset
-                  
+
                   # Set default policies
                   ufw default deny incoming
                   ufw default allow outgoing
-                  
+
                   # Allow SSH (essential for management)
                   ufw allow 22/tcp
-                  
+
                   # Allow HTTP/HTTPS for web services
                   ufw allow 80/tcp
                   ufw allow 443/tcp
-                  
+
                   # Allow Kubernetes API server
                   ufw allow 6443/tcp
-                  
+
                   # Allow kubelet API
                   ufw allow 10250/tcp
-                  
+
                   # Allow NodePort services range
                   ufw allow 30000:32767/tcp
-                  
+
                   # Allow DNS
                   ufw allow 53/tcp
                   ufw allow 53/udp
-                  
+
                   # Allow NTP
                   ufw allow 123/udp
-                  
+
                   # Allow LDAP/Samba4
                   ufw allow 389/tcp
                   ufw allow 636/tcp
                   ufw allow 88/tcp
                   ufw allow 464/tcp
                   ufw allow 53/tcp
-                  
+
                   # Allow OpenVPN
                   ufw allow 1194/udp
-                  
+
                   # Allow monitoring ports
                   ufw allow 9090/tcp  # Prometheus
                   ufw allow 3000/tcp  # Grafana
                   ufw allow 9100/tcp  # Node Exporter
-                  
+
                   # Allow Wazuh agent communication
                   ufw allow 1514/tcp
                   ufw allow 1515/tcp
                   ufw allow 514/udp
-                  
+
                   # Allow internal cluster communication
                   ufw allow from 10.244.0.0/16  # Pod network
                   ufw allow from 10.96.0.0/12   # Service network
                   ufw allow from 172.17.0.0/16  # Docker bridge
-                  
+
                   # Log denied connections
                   ufw logging on
-                  
+
                   # Enable UFW
                   ufw --force enable
-                  
+
                   # Display status
                   ufw status verbose
-                  
+
                   # Keep container running
                   tail -f /dev/null
               securityContext:
@@ -155,34 +155,34 @@
         monitor-ufw.sh: |
           #!/bin/bash
           # UFW Status Monitoring Script
-          
+
           echo "=== UFW Status Report ==="
           echo "Date: $(date)"
           echo "Node: $(hostname)"
           echo ""
-          
+
           # Check UFW status
           if command -v ufw >/dev/null 2>&1; then
               echo "UFW Status:"
               ufw status verbose
               echo ""
-              
+
               echo "UFW Application Profiles:"
               ufw app list 2>/dev/null || echo "No application profiles found"
               echo ""
-              
+
               echo "Recent UFW Log Entries:"
               grep "UFW" /var/log/syslog | tail -10 2>/dev/null || echo "No recent UFW logs found"
               echo ""
           else
               echo "UFW is not installed on this node"
           fi
-          
+
           # Check iptables rules
           echo "Active iptables rules (sample):"
           iptables -L INPUT -n --line-numbers | head -20
           echo ""
-          
+
           echo "=== End UFW Status Report ==="
 
 - name: Create UFW status check Job
@@ -278,12 +278,12 @@
   debug:
     msg: |
       UFW Firewall configuration completed:
-      
+
       🔥 Firewall Status:
       - UFW DaemonSet: {{ ufw_daemonset.result.metadata.name }}
       - Active Pods: {{ ufw_pods.resources | length }}
       - Configuration Job: {{ ufw_job_status.result.status.conditions[0].type | default('Unknown') }}
-      
+
       🛡️ Security Rules Applied:
       - Default Policy: Deny incoming, Allow outgoing
       - SSH Access: Port 22/tcp
@@ -293,10 +293,10 @@
       - OpenVPN: Port 1194/udp
       - Monitoring: Ports 9090,3000,9100/tcp
       - Wazuh: Ports 1514,1515/tcp
-      
+
       📊 Network Policy:
       - Namespace isolation: Enabled
       - Inter-service communication: Allowed
       - External access: Controlled
-      
+
       ⚠️  Note: UFW rules are applied at the host level on all nodes

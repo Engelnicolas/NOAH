@@ -1,3 +1,4 @@
+---
 apiVersion: v2
 name: mattermost
 description: Production-ready Mattermost collaboration platform with OIDC/LDAP integration and enterprise features

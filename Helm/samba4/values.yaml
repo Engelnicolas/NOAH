@@ -28,14 +28,14 @@ domain:
   adminPassword: ""
   existingSecret: ""
   existingSecretKey: "admin-password"
-  
+
   # Organizational Units
   organizationalUnits:
     - "Users"
-    - "Groups" 
+    - "Groups"
     - "Computers"
     - "Service-Accounts"
-  
+
   # Default groups
   groups:
     - name: "Domain Admins"
@@ -50,7 +50,7 @@ domain:
       description: "Nextcloud Users"
     - name: "Mattermost-Users"
       description: "Mattermost Users"
-  
+
   # Service accounts
   serviceAccounts:
     - username: "keycloak-service"
@@ -73,23 +73,23 @@ domain:
 service:
   type: ClusterIP
   annotations: {}
-  
+
   # AD/LDAP ports
   ldap:
     port: 389
   ldaps:
     port: 636
-  
+
   # Kerberos ports
   kerberos:
     port: 88
     kadmin:
       port: 464
-  
+
   # DNS port
   dns:
     port: 53
-  
+
   # SMB/CIFS ports (if needed)
   smb:
     enabled: false
@@ -117,7 +117,7 @@ persistence:
     - ReadWriteOnce
   size: 20Gi
   annotations: {}
-  
+
   # Multiple volumes for different data types
   volumes:
     data:
@@ -222,7 +222,7 @@ dns:
   forwarders:
     - "8.8.8.8"
     - "1.1.1.1"
-  
+
   # Custom DNS records
   customRecords: []
   # Example:
@@ -261,30 +261,30 @@ sambaConfig: |
       dns forwarder = {{ .Values.domain.dnsForwarder }}
       server role = active directory domain controller
       workgroup = {{ upper .Values.domain.name }}
-      
+
       # Security settings
       server min protocol = SMB2_10
       client min protocol = SMB2_10
       ntlm auth = mschapv2-and-ntlmv2-only
-      
+
       # Logging
       log level = 1
       log file = /var/log/samba/log.%m
       max log size = 1000
-      
+
       # Performance
       socket options = TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072
       deadtime = 30
       getwd cache = yes
-      
+
       # DNS
       allow dns updates = secure only
       dns update command = /usr/bin/samba-tool dns update
-  
+
   [sysvol]
       path = /var/lib/samba/sysvol
       read only = no
-  
+
   [netlogon]
       path = /var/lib/samba/sysvol/{{ lower .Values.domain.realm }}/scripts
       read only = no

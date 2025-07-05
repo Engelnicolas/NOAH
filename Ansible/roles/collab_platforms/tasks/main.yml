@@ -14,20 +14,20 @@
         repository: nextcloud
         tag: "27-apache"
         pullPolicy: IfNotPresent
-      
+
       nextcloud:
         host: nextcloud.local
         username: admin
         password: "{{ nextcloud_admin_password | default('changeme123') }}"
-        
+
       database:
         type: sqlite  # For production, use PostgreSQL
-        
+
       persistence:
         enabled: true
         size: 20Gi
         storageClass: ""
-        
+
       ldap:
         enabled: true
         host: "{{ ldap_url.split('://')[1] }}"
@@ -37,16 +37,16 @@
         bindPassword: "{{ nextcloud_ldap_password | default('changeme123') }}"
         userFilter: "(&(|(objectclass=person))(|(sAMAccountName=%uid)(|(mailPrimaryAddress=%uid)(mail=%uid))))"
         groupFilter: "(&(|(objectclass=group))(|(cn=NextcloudUsers)))"
-        
+
       service:
         type: ClusterIP
         port: 80
-        
+
       ingress:
         enabled: true
         hostname: nextcloud.local
         tls: true
-        
+
       resources:
         limits:
           cpu: 1000m
@@ -68,14 +68,14 @@
         repository: mattermost/mattermost-team-edition
         tag: "7.10"
         pullPolicy: IfNotPresent
-      
+
       mattermost:
         siteURL: "https://mattermost.local"
         siteName: "NOAH Mattermost"
-        
+
       database:
         type: sqlite  # For production, use PostgreSQL
-        
+
       ldap:
         enabled: true
         server: "{{ ldap_url.split('://')[1] }}"
@@ -85,27 +85,27 @@
         baseDN: "{{ ldap_base_dn }}"
         userFilter: "(sAMAccountName=%v)"
         groupFilter: "(|(cn=MattermostUsers))"
-        
+
       oidc:
         enabled: true
         discoveryEndpoint: "{{ keycloak.issuer_url }}/.well-known/openid_configuration"
         clientId: "mattermost-client"
         clientSecret: "{{ mattermost_oidc_secret | default('changeme123') }}"
-        
+
       persistence:
         enabled: true
         size: 10Gi
         storageClass: ""
-        
+
       service:
         type: ClusterIP
         port: 8065
-        
+
       ingress:
         enabled: true
         hostname: mattermost.local
         tls: true
-        
+
       resources:
         limits:
           cpu: 1000m
@@ -153,7 +153,7 @@
       - app:enable
       - user_ldap
   register: nextcloud_ldap_enable
-  failed_when: 
+  failed_when:
     - nextcloud_ldap_enable.rc != 0
     - "'already enabled' not in nextcloud_ldap_enable.stderr"
 
@@ -246,14 +246,14 @@
   debug:
     msg: |
       Collaboration Platforms deployment completed:
-      
+
       📁 Nextcloud:
       - URL: https://nextcloud.local
       - Admin User: admin
       - LDAP Integration: {{ nextcloud_ldap_config.changed | default(false) | ternary('Configured', 'Failed') }}
       - Health: {{ nextcloud_health.status == 200 | ternary('Healthy', 'Unhealthy') }}
       - Pod: {{ nextcloud_pods.resources[0].metadata.name }}
-      
+
       💬 Mattermost:
       - URL: https://mattermost.local
       - OIDC Integration: {{ mattermost_oidc_config.status == 200 | ternary('Configured', 'Manual setup required') }}

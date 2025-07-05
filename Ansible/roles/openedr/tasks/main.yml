@@ -15,16 +15,16 @@
           repository: openedr/openedr-server
           tag: "latest"
           pullPolicy: IfNotPresent
-          
+
         service:
           type: ClusterIP
           port: 8080
-          
+
         ingress:
           enabled: true
           hostname: openedr.local
           tls: true
-          
+
         database:
           type: postgresql
           host: "openedr-postgresql"
@@ -32,29 +32,29 @@
           name: "openedr"
           username: "openedr"
           password: "{{ openedr_db_password | default('changeme123') }}"
-          
+
         config:
           server:
             port: 8080
             host: "0.0.0.0"
-            
+
           security:
             jwt_secret: "{{ openedr_jwt_secret | default('changeme123456789') }}"
             admin_password: "{{ openedr_admin_password | default('changeme123') }}"
-            
+
           collection:
             interval: 60
             retention_days: 90
-            
+
           alerts:
             email_enabled: false
             webhook_url: "{{ openedr_webhook_url | default('') }}"
-            
+
         persistence:
           enabled: true
           size: 20Gi
           storageClass: ""
-          
+
         resources:
           limits:
             cpu: 1000m
@@ -62,25 +62,25 @@
           requests:
             cpu: 500m
             memory: 1Gi
-            
+
       agent:
         enabled: true
         image:
           repository: openedr/openedr-agent
           tag: "latest"
           pullPolicy: IfNotPresent
-          
+
         config:
           server_url: "https://openedr.local"
           agent_id: "kubernetes-cluster"
           collection_interval: 60
-          
+
         daemonset:
           enabled: true
           hostNetwork: true
           hostPID: true
           privileged: true
-          
+
         resources:
           limits:
             cpu: 200m
@@ -259,7 +259,7 @@
                   operator: "contains"
                   value: "bash"
               description: "Suspicious process execution detected"
-              
+
             - name: "Privilege Escalation Attempt"
               type: "process"
               severity: "critical"
@@ -271,7 +271,7 @@
                   operator: "not_in"
                   value: ["root", "admin"]
               description: "Privilege escalation attempt detected"
-              
+
             - name: "Unusual Network Connection"
               type: "network"
               severity: "medium"
@@ -283,7 +283,7 @@
                   operator: "not_in"
                   value: [80, 443, 53, 22, 3389]
               description: "Unusual outbound network connection"
-              
+
             - name: "File System Tampering"
               type: "file"
               severity: "high"
@@ -295,7 +295,7 @@
                   operator: "in"
                   value: ["modify", "delete", "create"]
               description: "Critical system file modification detected"
-              
+
             - name: "Container Escape Attempt"
               type: "process"
               severity: "critical"
@@ -307,7 +307,7 @@
                   operator: "contains_any"
                   value: ["--privileged", "--cap-add", "--security-opt"]
               description: "Potential container escape attempt"
-              
+
             - name: "Crypto Mining Activity"
               type: "process"
               severity: "high"
@@ -329,16 +329,16 @@
       - -c
       - |
         set -e
-        
+
         # Wait for database to be ready
         until pg_isready -h openedr-postgresql -p 5432 -U openedr; do
           echo "Waiting for PostgreSQL to be ready..."
           sleep 5
         done
-        
+
         # Initialize database schema
         python3 /app/manage.py migrate
-        
+
         # Create admin user
         python3 /app/manage.py shell -c "
         from django.contrib.auth.models import User
@@ -348,7 +348,7 @@
         else:
             print('Admin user already exists')
         "
-        
+
         echo "OpenEDR initialization completed"
   register: openedr_init
   failed_when: openedr_init.rc != 0
@@ -362,7 +362,7 @@
       - -c
       - |
         set -e
-        
+
         # Configure monitoring policies
         cat > /tmp/k8s_policy.json << 'EOF'
         {
@@ -387,13 +387,13 @@
           ]
         }
         EOF
-        
+
         # Apply monitoring policy
         curl -X POST http://localhost:8080/api/v1/policies \
           -H "Content-Type: application/json" \
           -d @/tmp/k8s_policy.json \
           -u admin:{{ openedr_admin_password | default('changeme123') }} || true
-        
+
         echo "OpenEDR Kubernetes monitoring configured"
   register: openedr_k8s_config
   failed_when: false
@@ -424,7 +424,7 @@
   debug:
     msg: |
       OpenEDR endpoint detection and response deployment completed:
-      
+
       🔍 OpenEDR Server:
       - URL: https://openedr.local
       - Admin User: admin
@@ -432,18 +432,18 @@
       - Health: {{ openedr_health.status == 200 | ternary('Healthy', 'Unhealthy') }}
       - Pod: {{ openedr_server_pods.resources[0].metadata.name }}
       - API Endpoint: /api/v1/
-      
+
       🤖 OpenEDR Agents:
       - DaemonSet: Deployed on all nodes
       - Active Agents: {{ openedr_agent_pods.resources | length }}
       - Registration: {{ openedr_agents.status == 200 | ternary('Success', 'Pending') }}
       - Collection Interval: 60 seconds
-      
+
       🗄️  Database:
       - PostgreSQL: Deployed and initialized
       - Schema: Created
       - Storage: 10Gi
-      
+
       🛡️  Detection Rules:
       - Suspicious Process Execution
       - Privilege Escalation Attempts
@@ -451,13 +451,13 @@
       - File System Tampering
       - Container Escape Attempts
       - Crypto Mining Activity
-      
+
       📊 Monitoring Policies:
       - Container Runtime Security
       - Pod Security Standards
       - Network Policy Violations
       - Kubernetes Security Events
-      
+
       📝 Next Steps:
       1. Access web interface at https://openedr.local
       2. Login with admin/{{ openedr_admin_password | default('changeme123') }}
@@ -466,7 +466,7 @@
       5. Customize detection rules
       6. Set up incident response workflows
       7. Monitor security events and alerts
-      
+
       ⚠️  Security Notes:
       - Change default admin password immediately
       - Configure HTTPS certificates for production

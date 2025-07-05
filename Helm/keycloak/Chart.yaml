@@ -1,3 +1,4 @@
+---
 apiVersion: v2
 name: keycloak
 description: Production-ready Keycloak identity and access management with LDAP/AD integration, clustering, and persistence

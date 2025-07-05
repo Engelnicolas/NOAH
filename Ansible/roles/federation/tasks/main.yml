@@ -49,10 +49,10 @@
       implicitFlowEnabled: false
       directAccessGrantsEnabled: true
       serviceAccountsEnabled: false
-      redirectUris: 
+      redirectUris:
         - "https://auth.local/oauth2/callback"
         - "https://*.local/oauth2/callback"
-      webOrigins: 
+      webOrigins:
         - "https://*.local"
       attributes:
         "access.token.lifespan": "3600"
@@ -128,7 +128,7 @@
     - name: "grafana-oidc"
       redirect_uri: "https://grafana.local"
   register: service_clients
-  failed_when: 
+  failed_when:
     - service_clients.status not in [201, 409]
 
 - name: Configure client scopes for enhanced user information
@@ -286,7 +286,7 @@
       service: "monitoring"
       access_level: "viewer"
   register: role_creation
-  failed_when: 
+  failed_when:
     - role_creation.status not in [201, 409]
 
 - name: Create service integration configuration ConfigMap
@@ -310,17 +310,17 @@
             "response_types_supported": ["code", "token", "id_token"],
             "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token"]
           }
-        
+
         client-secrets.env: |
           # OAuth2 Proxy
           OAUTH2_PROXY_CLIENT_SECRET={{ oauth2_client_secret.json.value | default('changeme123') }}
-          
+
           # Service-specific client secrets (to be updated after client creation)
           NEXTCLOUD_OIDC_SECRET=changeme123
-          MATTERMOST_OIDC_SECRET=changeme123  
+          MATTERMOST_OIDC_SECRET=changeme123
           GITLAB_OIDC_SECRET=changeme123
           GRAFANA_OIDC_SECRET=changeme123
-          
+
         service-endpoints.json: |
           {
             "services": {
@@ -330,13 +330,13 @@
                 "auth_type": "oidc"
               },
               "mattermost": {
-                "url": "https://mattermost.local", 
+                "url": "https://mattermost.local",
                 "oidc_client_id": "mattermost-oidc",
                 "auth_type": "oidc"
               },
               "gitlab": {
                 "url": "https://gitlab.local",
-                "oidc_client_id": "gitlab-oidc", 
+                "oidc_client_id": "gitlab-oidc",
                 "auth_type": "oidc"
               },
               "grafana": {
@@ -368,36 +368,36 @@
   debug:
     msg: |
       OIDC Federation and SSO configuration completed:
-      
+
       🔐 Keycloak Identity Provider:
       - Issuer URL: {{ keycloak.issuer_url }}
       - Discovery Endpoint: {{ oidc_discovery.status == 200 | ternary('Available', 'Failed') }}
       - LDAP Integration: {{ ldap_idp_creation.status in [201, 409] | ternary('Configured', 'Failed') }}
-      
+
       🔧 OAuth2 Proxy:
       - Client ID: oauth2-proxy-client
       - Client Secret: {{ oauth2_client_secret.json.value | default('Not retrieved') }}
       - Redirect URIs: https://auth.local/oauth2/callback, https://*.local/oauth2/callback
-      
+
       🌐 Service OIDC Clients:
       {% for client in service_clients.results %}
       - {{ client.item.name }}: {{ client.status in [201, 409] | ternary('Configured', 'Failed') }}
       {% endfor %}
-      
+
       👥 Roles and Permissions:
       - nextcloud-admin, nextcloud-user
-      - mattermost-admin, mattermost-user  
+      - mattermost-admin, mattermost-user
       - gitlab-admin, gitlab-developer, gitlab-reporter
       - monitoring-admin, monitoring-viewer
-      
+
       📋 Client Scopes:
       - noah-roles: {{ client_scope_creation.status in [201, 409] | ternary('Created', 'Failed') }}
       - Standard scopes: openid, profile, email, roles, groups
-      
+
       🔗 LDAP Group Mapping:
       - Group Mapper: {{ group_mapper_creation.status in [201, 409] | ternary('Configured', 'Skipped') }}
       - Mapped Groups: NextcloudUsers, MattermostUsers, GitlabUsers, AdminUsers, VPNUsers
-      
+
       📝 Next Steps:
       1. Retrieve client secrets for each service
       2. Configure service-specific OIDC settings
@@ -405,7 +405,7 @@
       4. Assign users to appropriate groups/roles
       5. Configure logout URLs and session management
       6. Set up group-based access controls
-      
+
       ⚠️  Security Notes:
       - Client secrets are stored in oidc-federation-config ConfigMap
       - Update default passwords and secrets in production

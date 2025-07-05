@@ -45,7 +45,7 @@ oauth2:
   clientSecret: ""
   existingSecret: ""
   existingSecretKey: "client-secret"
-  
+
   # Cookie configuration
   cookieSecret: ""
   cookieSecretExistingSecret: ""
@@ -57,48 +57,48 @@ oauth2:
   cookieSecure: true
   cookieHttpOnly: true
   cookieSameSite: "lax"
-  
+
   # Session configuration
   sessionStorageType: "redis"
-  
+
   # Authorization configuration
   emailDomains:
     - "*"
-  
+
   # Additional scopes
   scope: "openid profile email groups"
-  
+
   # Upstream configuration
   upstreams:
     - "static://202"  # Default upstream for health checks
-  
+
   # Skip authentication for specific paths
   skipAuthRegex:
     - "^/oauth2/"
     - "^/ping$"
     - "^/health$"
-  
+
   # Pass authorization headers
   passAuthorizationHeader: true
   passAccessToken: true
   passUserHeaders: true
   setAuthorizationHeader: true
   setXAuthRequestHeaders: true
-  
+
   # Logging
   requestLogging: true
   standardLogging: true
   authLogging: true
-  
+
   # Security
   forceHttps: true
   insecureOidcAllowUnverifiedEmail: false
   insecureOidcSkipIssuerVerification: false
   skipJwtBearerTokens: false
-  
+
   # Timeouts
   flushInterval: "1s"
-  
+
   # Custom configuration
   extraArgs: []
   extraEnv: []

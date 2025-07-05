@@ -1,6 +1,7 @@
+---
 apiVersion: v2
 name: gitlab-simple
-description: Simplified GitLab CE Helm chart for NOAH infrastructure  
+description: Simplified GitLab CE Helm chart for NOAH infrastructure
 version: 1.0.0
 appVersion: "16.7.0"
 type: application

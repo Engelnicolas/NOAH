@@ -45,7 +45,7 @@ data:
     transport.tcp.port: 9300
     discovery.seed_hosts: {{ .Values.indexer.config.discovery.seed_hosts | toJson }}
     cluster.initial_master_nodes: {{ .Values.indexer.config.cluster.initial_master_nodes | toJson }}
-    
+
     # Security settings
     plugins.security.ssl.transport.pemcert_filepath: {{ .Values.indexer.config.plugins.security.ssl.transport.pemcert_filepath }}
     plugins.security.ssl.transport.pemkey_filepath: {{ .Values.indexer.config.plugins.security.ssl.transport.pemkey_filepath }}
@@ -66,14 +66,14 @@ data:
     plugins.security.restapi.roles_enabled: ["all_access", "security_rest_api_access"]
     cluster.routing.allocation.disk.threshold_enabled: false
     node.max_local_storage_nodes: 3
-    
+
     # Performance settings
     indices.query.bool.max_clause_count: 100000
     indices.fielddata.cache.size: 40%
     indices.requests.cache.size: 2%
     thread_pool.search.queue_size: 100000
     thread_pool.write.queue_size: 10000
-    
+
     # Monitoring
     plugins.security.audit.enable_rest: true
     plugins.security.audit.enable_transport: true
@@ -198,11 +198,11 @@ data:
         <disabled>no</disabled>
         <frequency>43200</frequency>
         <scan_on_start>yes</scan_on_start>
-        
+
         <!-- Directories to check -->
         <directories check_all="yes">/etc,/usr/bin,/usr/sbin</directories>
         <directories check_all="yes">/bin,/sbin,/boot</directories>
-        
+
         <!-- Files/directories to ignore -->
         <ignore>/etc/mtab</ignore>
         <ignore>/etc/hosts.deny</ignore>
@@ -216,23 +216,23 @@ data:
         <ignore>/etc/cups/certs</ignore>
         <ignore>/etc/dumpdates</ignore>
         <ignore>/etc/svc/volatile</ignore>
-        
+
         <!-- Scan network file systems -->
         <skip_nfs>yes</skip_nfs>
-        
+
         <!-- File types to ignore -->
         <ignore type="sregex">\.log$|\.swp$|\.tmp$</ignore>
-        
+
         <!-- Maximum file size to scan -->
         <max_file_size>50MB</max_file_size>
-        
+
         <!-- Scan symbolic links -->
         <follow_symbolic_links>no</follow_symbolic_links>
-        
+
         <!-- Audit settings -->
         <audit_key>wazuh_fim</audit_key>
         <audit_key>wazuh_audit</audit_key>
-        
+
         <!-- Kernel audit for file integrity monitoring -->
         <whodata>yes</whodata>
       </syscheck>

@@ -15,7 +15,7 @@ spec:
   policyTypes:
     - Ingress
     - Egress
-  
+
   ingress:
     # Allow traffic from ingress controller
     {{- range .Values.networkPolicy.ingress }}
@@ -31,7 +31,7 @@ spec:
         {{- end }}
       {{- end }}
     {{- end }}
-    
+
     # Allow internal cluster communication
     - from:
         - podSelector:
@@ -52,7 +52,7 @@ spec:
           port: 9200
         - protocol: TCP
           port: 9300
-    
+
     # Allow monitoring scraping
     - from:
         - namespaceSelector:
@@ -65,7 +65,7 @@ spec:
           port: 5601
         - protocol: TCP
           port: 9200
-  
+
   egress:
     # Allow DNS resolution
     {{- range .Values.networkPolicy.egress }}
@@ -81,13 +81,13 @@ spec:
         {{- end }}
       {{- end }}
     {{- end }}
-    
+
     # Allow internal cluster communication
     - to:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: {{ include "wazuh.name" . }}
-    
+
     # Allow communication with LDAP
     - to:
         - namespaceSelector:
@@ -101,7 +101,7 @@ spec:
           port: 389
         - protocol: TCP
           port: 636
-    
+
     # Allow communication with Elasticsearch if external
     {{- if not .Values.elasticsearch.enabled }}
     - to: []

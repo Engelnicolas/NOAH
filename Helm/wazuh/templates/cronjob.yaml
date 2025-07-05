@@ -38,16 +38,16 @@ spec:
                 - -c
                 - |
                   set -e
-                  
+
                   # Install required tools
                   apk add --no-cache tar gzip aws-cli
-                  
+
                   # Create backup directory
                   BACKUP_DIR="/tmp/wazuh-backup-$(date +%Y%m%d-%H%M%S)"
                   mkdir -p "$BACKUP_DIR"
-                  
+
                   echo "Starting Wazuh backup at $(date)"
-                  
+
                   # Copy Wazuh configuration and data
                   {{- range .Values.backup.includes }}
                   if [ -d "{{ . }}" ]; then
@@ -55,11 +55,11 @@ spec:
                     cp -r "{{ . }}" "$BACKUP_DIR/"
                   fi
                   {{- end }}
-                  
+
                   # Create compressed archive
                   ARCHIVE_NAME="wazuh-backup-$(date +%Y%m%d-%H%M%S).tar.gz"
                   tar -czf "/tmp/$ARCHIVE_NAME" -C "$BACKUP_DIR" .
-                  
+
                   # Upload to S3 if configured
                   {{- if eq .Values.backup.storage.type "s3" }}
                   echo "Uploading backup to S3"
@@ -68,7 +68,7 @@ spec:
                   # Store locally in PVC
                   cp "/tmp/$ARCHIVE_NAME" "/backup/$ARCHIVE_NAME"
                   {{- end }}
-                  
+
                   # Cleanup old backups (keep retention period)
                   {{- if eq .Values.backup.storage.type "s3" }}
                   aws s3 ls s3://{{ .Values.backup.storage.s3.bucket }}/ | \
@@ -78,7 +78,7 @@ spec:
                   {{- else }}
                   find /backup -name "wazuh-backup-*.tar.gz" -mtime +{{ .Values.backup.retention | trimSuffix "d" }} -delete
                   {{- end }}
-                  
+
                   echo "Backup completed successfully at $(date)"
               env:
                 {{- if eq .Values.backup.storage.type "s3" }}

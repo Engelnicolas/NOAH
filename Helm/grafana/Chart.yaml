@@ -1,3 +1,4 @@
+---
 apiVersion: v2
 name: grafana-simple
 description: Simplified Grafana dashboard Helm chart for NOAH infrastructure

@@ -14,7 +14,7 @@ all:
         parallel_deployment: false
         run_validation: true
         backup_enabled: false
-          
+
     production:
       hosts:
         # Add production hosts here if deploying to remote clusters
@@ -33,7 +33,7 @@ all:
         parallel_deployment: false
         run_validation: true
         backup_enabled: true
-        
+
     staging:
       hosts:
         # Add staging hosts here
@@ -46,7 +46,7 @@ all:
         parallel_deployment: true
         run_validation: true
         backup_enabled: false
-        
+
     development:
       hosts:
         # Add development hosts here

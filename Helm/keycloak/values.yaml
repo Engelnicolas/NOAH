@@ -30,10 +30,10 @@
 global:
   # Container image registry override (leave empty for default registries)
   imageRegistry: ""
-  
+
   # Global image pull secrets for accessing private registries
   imagePullSecrets: []
-  
+
   # Default storage class for persistent volumes
   storageClass: ""
 
@@ -50,18 +50,18 @@ replicaCount: 2
 image:
   # Keycloak official registry (Quay.io)
   registry: quay.io
-  
+
   # Official Keycloak container image
   repository: keycloak/keycloak
-  
+
   # Keycloak version - pin to specific versions for production stability
   # Latest stable versions provide security updates and bug fixes
   tag: "23.0.1"
-  
+
   # Image pull policy
   # IfNotPresent: Pull only if image doesn't exist locally (recommended)
   pullPolicy: IfNotPresent
-  
+
   # Image-specific pull secrets
   pullSecrets: []
 
@@ -73,11 +73,11 @@ image:
 auth:
   # Admin username for Keycloak management console
   adminUser: admin
-  
+
   # Admin password (leave empty to use existingSecret)
   # For production, always use existingSecret for security
   adminPassword: ""
-  
+
   # Use existing Kubernetes secret for admin credentials
   existingSecret: ""
   passwordSecretKey: admin-password
@@ -91,16 +91,16 @@ database:
   # Database vendor - PostgreSQL recommended for production
   # Supported: postgres, mysql, mariadb, mssql, oracle
   vendor: postgres
-  
+
   # Database connection details
   hostname: ""
   port: 5432
   database: keycloak
   username: keycloak
-  
+
   # Database password (leave empty to use existingSecret)
   password: ""
-  
+
   # Use existing secret for database credentials (recommended for production)
   existingSecret: ""
   existingSecretPasswordKey: password
@@ -115,16 +115,16 @@ service:
   # Service type - ClusterIP for internal access with Ingress
   # Options: ClusterIP, NodePort, LoadBalancer
   type: ClusterIP
-  
+
   # HTTP port for Keycloak service
   port: 8080
-  
+
   # HTTPS port (if TLS termination at service level)
   httpsPort: 8443
-  
+
   # Service annotations for cloud provider integrations
   annotations: {}
-  
+
   # Session affinity for load balancing
   # None: No session affinity (recommended with proper session replication)
   sessionAffinity: None
@@ -137,10 +137,10 @@ service:
 ingress:
   # Enable ingress for external access
   enabled: true
-  
+
   # Ingress class (nginx, traefik, etc.)
   className: nginx
-  
+
   # Ingress annotations for specific configurations
   annotations:
     # Increase buffer sizes for Keycloak's large authentication responses
@@ -255,19 +255,19 @@ configuration: |
   db-url-port={{ .Values.database.port }}
   db-url-database={{ .Values.database.database }}
   db-username={{ .Values.database.username }}
-  
+
   # HTTP/HTTPS
   http-enabled=true
   http-port=8080
   hostname-strict=false
   hostname-strict-https=false
-  
+
   # Production settings
   {{- if .Values.production.enabled }}
   hostname={{ .Values.ingress.hostname }}
   proxy=edge
   {{- end }}
-  
+
   # Metrics
   metrics-enabled=true
   health-enabled=true
@@ -290,33 +290,33 @@ ldap:
   bindCredential: ""
   existingSecret: ""
   existingSecretKey: ldap-password
-  
+
   # User mapping
   userObjectClasses: "person,organizationalPerson,user"
   usernameLDAPAttribute: "sAMAccountName"
   rdnLDAPAttribute: "cn"
   uuidLDAPAttribute: "objectGUID"
   userLDAPFilter: ""
-  
+
   # Group mapping
   groupsDN: "cn=Groups,dc=noah,dc=local"
   groupObjectClasses: "group"
   groupNameLDAPAttribute: "cn"
   groupMembershipLDAPAttribute: "member"
   membershipLDAPAttribute: "memberOf"
-  
+
   # Advanced settings
   editMode: "WRITABLE"
   syncRegistrations: true
   vendor: "ad"
-  
+
   # Import settings
   importUsers: true
   searchScope: "SUBTREE"
   useTruststoreSpi: "ldapsOnly"
   connectionPooling: true
   pagination: true
-  
+
   # Kerberos
   kerberos:
     enabled: false
@@ -340,7 +340,7 @@ realm:
   name: "noah"
   displayName: "NOAH"
   enabled: true
-  
+
   # OIDC clients will be configured via Ansible
   clients: []
 
@@ -406,7 +406,7 @@ extraVolumeMounts: []
 # Init containers
 initContainers: []
 
-# Sidecar containers  
+# Sidecar containers
 sidecarContainers: []
 
 # Pod annotations and labels

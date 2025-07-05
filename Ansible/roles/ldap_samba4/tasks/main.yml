@@ -14,23 +14,25 @@
         repository: nowsci/samba-domain
         tag: "4.17.0"
         pullPolicy: IfNotPresent
-      
+
       domain:
-        name: "{{ ldap_base_dn.split(',')[0].split('=')[1] }}.{{ ldap_base_dn.split(',')[1].split('=')[1] }}"
-        realm: "{{ ldap_base_dn.split(',')[0].split('=')[1] | upper }}.{{ ldap_base_dn.split(',')[1].split('=')[1] | upper }}"
+        name: >-
+          {{ ldap_base_dn.split(',')[0].split('=')[1] }}.{{ ldap_base_dn.split(',')[1].split('=')[1] }}
+        realm: >-
+          {{ ldap_base_dn.split(',')[0].split('=')[1] | upper }}.{{ ldap_base_dn.split(',')[1].split('=')[1] | upper }}
         adminPassword: "{{ ldap_bind_password }}"
-        
+
       persistence:
         enabled: true
         storageClass: ""
         size: 10Gi
-        
+
       service:
         type: ClusterIP
         ldapPort: 389
         ldapsPort: 636
         kerberosPort: 88
-        
+
       resources:
         limits:
           cpu: 1000m
@@ -83,7 +85,7 @@
     - "OU=Computers,{{ ldap_base_dn }}"
     - "OU=Services,{{ ldap_base_dn }}"
   register: ou_creation
-  failed_when: 
+  failed_when:
     - ou_creation.rc != 0
     - "'already exists' not in ou_creation.stderr"
 
@@ -110,7 +112,7 @@
     - name: "VPNUsers"
       description: "VPN Access Group"
   register: group_creation
-  failed_when: 
+  failed_when:
     - group_creation.rc != 0
     - "'already exists' not in group_creation.stderr"
 
@@ -138,7 +140,7 @@
       password: "{{ gitlab_ldap_password | default('changeme123') }}"
       description: "GitLab LDAP Service Account"
   register: service_account_creation
-  failed_when: 
+  failed_when:
     - service_account_creation.rc != 0
     - "'already exists' not in service_account_creation.stderr"
 
@@ -153,7 +155,7 @@
       - "{{ dns_server | default('127.0.0.1') }}"
       - "{{ ldap_base_dn.split(',')[0].split('=')[1] }}.{{ ldap_base_dn.split(',')[1].split('=')[1] }}"
   register: dns_zone_creation
-  failed_when: 
+  failed_when:
     - dns_zone_creation.rc != 0
     - "'already exists' not in dns_zone_creation.stderr"
 

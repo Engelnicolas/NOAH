@@ -1,3 +1,4 @@
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -7,20 +8,20 @@ metadata:
 data:
   oauth2_proxy.cfg: |
     # OAuth2 Proxy Configuration
-    
+
     # HTTP Settings
     http_address = "0.0.0.0:{{ .Values.service.targetPort | default 4180 }}"
     {{- if .Values.config.metricsAddress }}
     metrics_address = "{{ .Values.config.metricsAddress }}"
     {{- end }}
-    
+
     # HTTPS Settings
     {{- if .Values.config.httpsAddress }}
     https_address = "{{ .Values.config.httpsAddress }}"
     tls_cert_file = "{{ .Values.config.tlsCertFile | default "/etc/tls/tls.crt" }}"
     tls_key_file = "{{ .Values.config.tlsKeyFile | default "/etc/tls/tls.key" }}"
     {{- end }}
-    
+
     # Provider Configuration
     provider = "{{ .Values.config.provider | default "oidc" }}"
     {{- if .Values.config.oidcIssuerUrl }}
@@ -41,7 +42,7 @@ data:
     {{- if .Values.config.scope }}
     scope = "{{ .Values.config.scope }}"
     {{- end }}
-    
+
     # Upstream Configuration
     {{- if .Values.config.upstreams }}
     {{- range .Values.config.upstreams }}
@@ -50,7 +51,7 @@ data:
     ]
     {{- end }}
     {{- end }}
-    
+
     # Email Domain Restrictions
     {{- if .Values.config.emailDomains }}
     email_domains = [
@@ -59,7 +60,7 @@ data:
     {{- end }}
     ]
     {{- end }}
-    
+
     # Whitelist Configuration
     {{- if .Values.config.whitelist }}
     whitelist_domains = [
@@ -68,7 +69,7 @@ data:
     {{- end }}
     ]
     {{- end }}
-    
+
     # Cookie Settings
     cookie_name = "{{ .Values.config.cookieName | default "_oauth2_proxy" }}"
     cookie_domain = "{{ .Values.config.cookieDomain }}"
@@ -77,7 +78,7 @@ data:
     cookie_secure = {{ .Values.config.cookieSecure | default true }}
     cookie_httponly = {{ .Values.config.cookieHttpOnly | default true }}
     cookie_samesite = "{{ .Values.config.cookieSameSite | default "lax" }}"
-    
+
     # Session Storage
     {{- if eq .Values.sessionStorage.type "redis" }}
     session_store_type = "redis"
@@ -96,35 +97,35 @@ data:
     ]
     {{- end }}
     {{- end }}
-    
+
     # Request Logging
     request_logging = {{ .Values.config.requestLogging | default true }}
     {{- if .Values.config.requestLoggingFormat }}
     request_logging_format = "{{ .Values.config.requestLoggingFormat }}"
     {{- end }}
-    
+
     # Authentication Settings
     skip_auth_regex = [
     {{- range .Values.config.skipAuthRegex }}
       "{{ . }}",
     {{- end }}
     ]
-    
+
     skip_provider_button = {{ .Values.config.skipProviderButton | default false }}
     {{- if .Values.config.customTemplatesDir }}
     custom_templates_dir = "{{ .Values.config.customTemplatesDir }}"
     {{- end }}
-    
+
     # Security Settings
     reverse_proxy = {{ .Values.config.reverseProxy | default false }}
     real_client_ip_header = "{{ .Values.config.realClientIPHeader | default "X-Real-IP" }}"
-    
+
     # SSL Settings
     ssl_insecure_skip_verify = {{ .Values.config.sslInsecureSkipVerify | default false }}
     {{- if .Values.config.sslUpstreamInsecureSkipVerify }}
     ssl_upstream_insecure_skip_verify = {{ .Values.config.sslUpstreamInsecureSkipVerify }}
     {{- end }}
-    
+
     # Timeouts
     {{- if .Values.config.flushInterval }}
     flush_interval = "{{ .Values.config.flushInterval }}"
@@ -138,7 +139,7 @@ data:
     {{- if .Values.config.passUserHeaders }}
     pass_user_headers = {{ .Values.config.passUserHeaders }}
     {{- end }}
-    
+
     # Headers
     {{- if .Values.config.setAuthorizationHeader }}
     set_authorization_header = {{ .Values.config.setAuthorizationHeader }}
@@ -146,7 +147,7 @@ data:
     {{- if .Values.config.setXAuthRequestHeaders }}
     set_xauthrequest = {{ .Values.config.setXAuthRequestHeaders }}
     {{- end }}
-    
+
     # Banner and Footer
     {{- if .Values.config.banner }}
     banner = "{{ .Values.config.banner }}"
@@ -154,12 +155,12 @@ data:
     {{- if .Values.config.footer }}
     footer = "{{ .Values.config.footer }}"
     {{- end }}
-    
+
     # Additional Configuration
     {{- with .Values.config.extraConfig }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-  
+
   {{- if .Values.config.staticFiles }}
   # Static files configuration
   {{- range $filename, $content := .Values.config.staticFiles }}

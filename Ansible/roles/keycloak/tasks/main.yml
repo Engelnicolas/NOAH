@@ -51,49 +51,49 @@
   kubernetes.core.helm:
     # Helm release name for Keycloak deployment
     name: keycloak
-    
+
     # Path to the custom Keycloak Helm chart
     chart_ref: "{{ playbook_dir }}/../Helm/keycloak"
-    
+
     # Target namespace for deployment (must exist)
     release_namespace: "{{ namespace }}"
     create_namespace: false
-    
+
     # Comprehensive Keycloak configuration values
     values:
       # =================================================================
       # Application Scaling Configuration
       # =================================================================
-      
+
       # Number of Keycloak replicas
       # Production: 2+ for high availability
       # Development: 1 for resource efficiency
       replicaCount: 1
-      
+
       # =================================================================
       # Container Image Configuration
       # =================================================================
       image:
         # Official Keycloak image repository
         repository: quay.io/keycloak/keycloak
-        
+
         # Keycloak version (use stable releases for production)
         tag: "22.0.1"
-        
+
         # Image pull policy
         pullPolicy: IfNotPresent
-      
+
       # =================================================================
       # Authentication and Administrative Access
       # =================================================================
       auth:
         # Initial admin user for Keycloak management console
         adminUser: "{{ keycloak.admin_user }}"
-        
+
         # Admin password for initial setup
         # SECURITY: Use strong passwords and rotate regularly
         adminPassword: "{{ keycloak.admin_password }}"
-        
+
       # =================================================================
       # Database Configuration
       # =================================================================
@@ -102,47 +102,47 @@
         # Options: h2 (development), postgres (production), mysql, oracle
         # NOTE: H2 is for development only - use PostgreSQL for production
         type: h2  # For production, use PostgreSQL
-        
+
       # =================================================================
       # LDAP Integration Configuration
       # =================================================================
       ldap:
         # LDAP server URL for user federation
         url: "{{ ldap_url }}"
-        
+
         # LDAP bind DN for Keycloak service account
         # This account must have read access to users and groups
         bindDN: "cn=keycloak-ldap,OU=Services,{{ ldap_base_dn }}"
-        
+
         # LDAP bind password for service account authentication
         bindPassword: "{{ keycloak_ldap_password | default('changeme123') }}"
-        
+
         # LDAP users base DN for user searches
         usersDN: "OU=Users,{{ ldap_base_dn }}"
-        
+
       # =================================================================
       # Service Configuration
       # =================================================================
       service:
         # Service type (ClusterIP for internal access with Ingress)
         type: ClusterIP
-        
+
         # Keycloak HTTP port
         port: 8080
-        
+
       # =================================================================
       # Ingress Configuration for External Access
       # =================================================================
       ingress:
         # Enable ingress for external access
         enabled: true
-        
+
         # Hostname for Keycloak access
         hostname: keycloak.local
-        
+
         # Enable TLS for secure communication
         tls: true
-        
+
       # =================================================================
       # Resource Management
       # =================================================================
@@ -151,12 +151,12 @@
         limits:
           cpu: 1000m      # Maximum CPU allocation
           memory: 2Gi     # Maximum memory allocation
-        
+
         # Resource requests for scheduling
         requests:
           cpu: 500m       # Minimum CPU requirement
           memory: 1Gi     # Minimum memory requirement
-          
+
   # Register deployment result for subsequent tasks
   register: keycloak_deployment
 
@@ -254,7 +254,7 @@
       webOrigins: ["{{ item.redirect_uri.split('/')[0] }}://{{ item.redirect_uri.split('/')[2] }}"]
   loop: "{{ oidc_clients }}"
   register: client_creation
-  failed_when: 
+  failed_when:
     - client_creation.status not in [201, 409]
 
 - name: Display Keycloak deployment status

@@ -1,3 +1,4 @@
+---
 {{- if .Values.grafana.enabled }}
 apiVersion: v1
 kind: ConfigMap
@@ -13,41 +14,41 @@ data:
     domain = {{ .Values.grafana.config.server.domain }}
     root_url = {{ .Values.grafana.config.server.root_url }}
     serve_from_sub_path = {{ .Values.grafana.config.server.serve_from_sub_path }}
-    
+
     [database]
     type = {{ .Values.grafana.config.database.type }}
     {{- if eq .Values.grafana.config.database.type "sqlite3" }}
     path = {{ .Values.grafana.config.database.path }}
     {{- end }}
-    
+
     [security]
     admin_user = {{ .Values.grafana.config.security.admin_user }}
     admin_password = {{ .Values.grafana.config.security.admin_password }}
     secret_key = {{ .Values.grafana.config.security.secret_key }}
-    
+
     [auth]
     disable_login_form = {{ .Values.grafana.config.auth.disable_login_form }}
     disable_signout_menu = {{ .Values.grafana.config.auth.disable_signout_menu }}
-    
+
     {{- if .Values.grafana.ldap.enabled }}
     [auth.ldap]
     enabled = {{ .Values.grafana.config.auth.ldap.enabled }}
     config_file = {{ .Values.grafana.config.auth.ldap.config_file }}
     allow_sign_up = {{ .Values.grafana.config.auth.ldap.allow_sign_up }}
     {{- end }}
-    
+
     [users]
     allow_sign_up = {{ .Values.grafana.config.users.allow_sign_up }}
     auto_assign_org = {{ .Values.grafana.config.users.auto_assign_org }}
     auto_assign_org_role = {{ .Values.grafana.config.users.auto_assign_org_role }}
-    
+
     [alerting]
     enabled = {{ .Values.grafana.config.alerting.enabled }}
-    
+
     [log]
     mode = {{ .Values.grafana.config.log.mode }}
     level = {{ .Values.grafana.config.log.level }}
-    
+
     [metrics]
     enabled = {{ .Values.grafana.config.metrics.enabled }}
 {{- end }}

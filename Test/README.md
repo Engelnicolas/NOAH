@@ -422,7 +422,7 @@ source custom_test_config.sh
 
 - Review test logs for detailed error information
 - Check the troubleshooting section above
-- Consult the N.O.A.H documentation in `Docs/`
+- Consult the N.O.A.H documentation in `docs/`
 
 ### Contributing
 
@@ -433,4 +433,4 @@ source custom_test_config.sh
 
 ---
 
-For more information about the N.O.A.H project, see the main documentation in the `Docs/` directory.
+For more information about the N.O.A.H project, see the main documentation in the `docs/` directory.

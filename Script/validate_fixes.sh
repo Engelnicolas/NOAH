@@ -113,6 +113,13 @@ required_files=(
     "CONTRIBUTING.md"
     "LICENSE"
     "README.md"
+    "docs/index.md"
+    "docs/USER_GUIDE.md"
+    "docs/ENHANCEMENT_STATUS.md"
+    "docs/charts/index.md"
+    "docs/ansible/index.md"
+    "docs/scripts/index.md"
+    "mkdocs.yml"
     "Script/fix_yaml.py"
     "Script/fix_yaml_linting.sh"
     "Script/validate_project.sh"
@@ -136,6 +143,47 @@ if [ -z "$trailing_spaces" ]; then
     log_success "No trailing spaces found in YAML files"
 else
     log_error "Files with trailing spaces found: $trailing_spaces"
+fi
+
+echo ""
+echo "6. Documentation Merge Validation"
+echo "---------------------------------"
+
+# Check that old Docs/ directory has been removed
+if [ -d "Docs" ]; then
+    log_error "Old Docs/ directory still exists - should be removed after merge"
+else
+    log_success "Old Docs/ directory successfully removed"
+fi
+
+# Check that required files exist in docs/
+required_docs=(
+    "docs/index.md"
+    "docs/USER_GUIDE.md"
+    "docs/ENHANCEMENT_STATUS.md"
+    "docs/CONTRIBUTING.md"
+    "docs/LICENSE.md"
+    "docs/charts/index.md"
+    "docs/ansible/index.md"
+    "docs/scripts/index.md"
+    "docs/DIRECTORY_MERGE_SUMMARY.md"
+)
+
+for file in "${required_docs[@]}"; do
+    if [ -f "$file" ]; then
+        log_success "Documentation file exists: $file"
+    else
+        log_error "Missing documentation file: $file"
+    fi
+done
+
+# Check for any remaining references to old Docs/ directory
+docs_refs=$(grep -r "Docs/" . --exclude-dir=.git --exclude-dir=.venv --exclude="*.log" 2>/dev/null | grep -v "docs/" | grep -v "mkdocs" | grep -v "Documentation:" | head -5 || true)
+
+if [ -z "$docs_refs" ]; then
+    log_success "No remaining references to old Docs/ directory found"
+else
+    log_error "Found references to old Docs/ directory: $docs_refs"
 fi
 
 echo ""

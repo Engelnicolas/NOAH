@@ -40,7 +40,7 @@
 # Author: NOAH Team
 # Version: 2.0.0
 # License: MIT
-# Documentation: ../Docs/README.md
+# Documentation: ../docs/README.md
 # =============================================================================
 
 # Bash strict mode for robust error handling

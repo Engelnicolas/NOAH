@@ -31,7 +31,7 @@
 # Author: NOAH Team
 # Version: 2.0
 # License: MIT
-# Documentation: ../Docs/README.md
+# Documentation: ../docs/README.md
 # =============================================================================
 
 - name: Deploy NOAH Complete Stack

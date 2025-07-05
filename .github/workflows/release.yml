@@ -3,251 +3,43 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version (e.g., v1.0.0)'
-        required: true
-        type: string
-
-permissions:
-  contents: write
-  packages: write
-
-env:
-  HELM_VERSION: 'v3.12.0'
+      - 'v*'
 
 jobs:
-  create-release:
-    name: Create Release
+  release:
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.get_version.outputs.version }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Get version
-        id: get_version
+          
+      - name: Install Helm
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
-
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          
+      - name: Package Helm charts
+        run: |
+          mkdir -p releases
+          for chart in Helm/*/; do
+            if [ -f "$chart/Chart.yaml" ]; then
+              helm package "$chart" -d releases/
+            fi
+          done
+          
       - name: Generate changelog
-        id: changelog
         run: |
-          # Generate changelog from git commits
-          if [ "${{ github.event_name }}" == "push" ]; then
-            # For tag pushes, get commits since last tag
-            LAST_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
-            if [ -n "$LAST_TAG" ]; then
-              CHANGELOG=$(git log --pretty=format:"- %s" ${LAST_TAG}..HEAD)
-            else
-              CHANGELOG=$(git log --pretty=format:"- %s" --max-count=20)
-            fi
-          else
-            # For manual releases, get recent commits
-            CHANGELOG=$(git log --pretty=format:"- %s" --max-count=20)
-          fi
+          echo "## What's Changed" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> CHANGELOG.md || echo "- Initial release" >> CHANGELOG.md
           
-          echo "## What's Changed" > changelog.md
-          echo "" >> changelog.md
-          echo "$CHANGELOG" >> changelog.md
-          echo "" >> changelog.md            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$LAST_TAG...${{ steps.get_version.outputs.version }}" >> changelog.md
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - name: Create release
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.get_version.outputs.version }}
-          name: N.O.A.H ${{ steps.get_version.outputs.version }}
-          body_path: changelog.md
-          draft: false
-          prerelease: ${{ contains(steps.get_version.outputs.version, '-') }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  build-release-assets:
-    name: Build Release Assets
-    runs-on: ubuntu-latest
-    needs: create-release
-    strategy:
-      matrix:
-        include:
-          - asset_name: "helm-charts"
-            build_script: "build-helm-charts.sh"
-          - asset_name: "ansible-playbooks"
-            build_script: "build-ansible-bundle.sh"
-          - asset_name: "deployment-scripts"
-            build_script: "build-scripts-bundle.sh"
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: ${{ env.HELM_VERSION }}
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Ansible
-        run: |
-          pip install ansible>=6.0.0
-
-      - name: Build Helm Charts bundle
-        if: matrix.asset_name == 'helm-charts'
-        run: |
-          mkdir -p release-assets/helm-charts
-          cd Helm
-          for chart in */; do
-            if [ -f "${chart}Chart.yaml" ]; then
-              echo "Packaging ${chart}..."
-              helm package "${chart}" -d ../release-assets/helm-charts/
-            fi
-          done
-          
-          # Create Helm repository index
-          cd ../release-assets/helm-charts
-          helm repo index .
-          
-          # Create bundle
-          cd ..
-          tar -czf helm-charts-${{ needs.create-release.outputs.version }}.tar.gz \
-            helm-charts/
-
-      - name: Build Ansible bundle
-        if: matrix.asset_name == 'ansible-playbooks'
-        run: |
-          mkdir -p release-assets
-          tar -czf release-assets/ansible-playbooks-${{ needs.create-release.outputs.version }}.tar.gz \
-            Ansible/ --exclude='*.git*' --exclude='__pycache__'
-
-      - name: Build Scripts bundle
-        if: matrix.asset_name == 'deployment-scripts'
-        run: |
-          mkdir -p release-assets
-          tar -czf release-assets/deployment-scripts-${{ needs.create-release.outputs.version }}.tar.gz \
-            Script/ Test/ --exclude='*.git*'
-
-      - name: Generate checksums
-        run: |
-          cd release-assets
-          sha256sum *.tar.gz > checksums-${{ matrix.asset_name }}.txt
-
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.create-release.outputs.version }}
           files: |
-            release-assets/${{ matrix.asset_name }}-${{ needs.create-release.outputs.version }}.tar.gz
-            release-assets/checksums-${{ matrix.asset_name }}.txt
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-helm-charts:
-    name: Publish Helm Charts
-    runs-on: ubuntu-latest
-    needs: [create-release, build-release-assets]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: ${{ env.HELM_VERSION }}
-
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-
-      - name: Checkout gh-pages branch
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: gh-pages
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Package and publish Helm charts
-        run: |
-          mkdir -p helm-repo
-          cd Helm
-          
-          # Package all charts
-          for chart in */; do
-            if [ -f "${chart}Chart.yaml" ]; then
-              echo "Packaging ${chart}..."
-              helm package "${chart}" -d ../helm-repo/
-            fi
-          done
-          
-          cd ../helm-repo
-          
-          # Copy existing charts from gh-pages if they exist
-          if [ -d "../gh-pages" ]; then
-            cp ../gh-pages/*.tgz . 2>/dev/null || true
-            cp ../gh-pages/index.yaml . 2>/dev/null || true
-          fi
-          
-          # Generate/update repository index
-          helm repo index . --url https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-          
-          # Copy to gh-pages directory
-          mkdir -p ../gh-pages
-          cp -r * ../gh-pages/
-
-      - name: Commit and push to gh-pages
-        run: |
-          cd gh-pages
-          git add .
-          git commit -m "Release Helm charts for ${{ needs.create-release.outputs.version }}" || exit 0
-          git push origin gh-pages
-
-  notify-release:
-    name: Notify Release
-    runs-on: ubuntu-latest
-    needs: [create-release, build-release-assets, publish-helm-charts]
-    if: always()
-    steps:
-      - name: Determine status
-        id: status
-        run: |
-          if [[ "${{ needs.build-release-assets.result }}" == "success" && 
-                "${{ needs.publish-helm-charts.result }}" == "success" ]]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "message=✅ Release ${{ needs.create-release.outputs.version }} created successfully!" >> $GITHUB_OUTPUT
-          else
-            echo "status=failure" >> $GITHUB_OUTPUT
-            echo "message=❌ Release creation failed. Please check the logs." >> $GITHUB_OUTPUT
-          fi
-
-      - name: Release Summary
-        run: |
-          echo "## N.O.A.H Release ${{ needs.create-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Message:** ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Release Assets:" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Helm Charts Package" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Ansible Playbooks Bundle" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Deployment Scripts Bundle" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Helm Chart Repository Updated" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Installation:" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "# Add Helm repository" >> $GITHUB_STEP_SUMMARY
-          echo "helm repo add noah https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
-          echo "helm repo update" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# Download release assets" >> $GITHUB_STEP_SUMMARY
-          echo "wget https://github.com/${{ github.repository }}/releases/download/${{ needs.create-release.outputs.version }}/ansible-playbooks-${{ needs.create-release.outputs.version }}.tar.gz" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+            releases/*.tgz
+            Script/*.sh
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

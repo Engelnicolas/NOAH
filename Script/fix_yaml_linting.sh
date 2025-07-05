@@ -1,55 +1,34 @@
 #!/bin/bash
 
-# Script to fix YAML linting issues
-# Fixes: trailing spaces, missing newlines, and optionally long lines
+# Script to fix common YAML linting issues
+# - Remove trailing spaces
+# - Ensure files end with newline
 
-set -euo pipefail
+echo "Fixing YAML files in NOAH project..."
 
-echo "🔧 Fixing YAML linting issues..."
-
-# Find all YAML files
-yaml_files=$(find . -name "*.yml" -o -name "*.yaml" | grep -v node_modules | grep -v .git)
-
-echo "Found $(echo "$yaml_files" | wc -l) YAML files to process"
-
-fixed_count=0
-for file in $yaml_files; do
+# Function to fix a single file
+fix_yaml_file() {
+    local file="$1"
     echo "Processing: $file"
     
-    # Check if file has issues
-    has_trailing_spaces=$(grep -l '[[:space:]]$' "$file" 2>/dev/null || true)
-    has_no_final_newline=$(test "$(tail -c1 "$file" | wc -l)" -eq 0 && echo "true" || echo "false")
+    # Remove trailing spaces
+    sed -i 's/[[:space:]]*$//' "$file"
     
-    if [[ -n "$has_trailing_spaces" ]] || [[ "$has_no_final_newline" == "true" ]]; then
-        echo "  ⚠️  Fixing issues in $file"
-        
-        # Remove trailing spaces
-        sed -i 's/[[:space:]]*$//' "$file"
-        
-        # Ensure file ends with newline
-        if [[ "$has_no_final_newline" == "true" ]]; then
+    # Ensure file ends with newline (only if it's not empty)
+    if [ -s "$file" ]; then
+        # Check if file ends with newline
+        if [ "$(tail -c1 "$file" | wc -l)" -eq 0 ]; then
             echo "" >> "$file"
         fi
-        
-        ((fixed_count++))
-        echo "  ✅ Fixed $file"
-    else
-        echo "  ✓ $file is clean"
+    fi
+}
+
+# Find and fix all YAML files
+find . -name "*.yml" -o -name "*.yaml" | while read -r file; do
+    # Skip hidden directories like .git
+    if [[ "$file" != *"/.git/"* ]]; then
+        fix_yaml_file "$file"
     fi
 done
 
-echo ""
-echo "🎉 YAML linting fix complete!"
-echo "📊 Fixed $fixed_count files"
-echo ""
-echo "Running yamllint to verify fixes..."
-
-# Check if yamllint is available
-if command -v yamllint >/dev/null 2>&1; then
-    echo "Running yamllint on fixed files..."
-    yamllint . || echo "⚠️  Some yamllint issues remain (may need manual review)"
-else
-    echo "ℹ️  yamllint not installed. Install with: pip install yamllint"
-fi
-
-echo "✅ YAML fix script completed"
+echo "YAML files have been processed."

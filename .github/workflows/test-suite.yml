@@ -1,0 +1,45 @@
+name: N.O.A.H Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+    
+    - name: Install dependencies
+      run: |
+        cd Test
+        pip install -r requirements.txt
+    
+    - name: Run unified test suite
+      run: |
+        cd Test
+        chmod +x unified_tests.sh
+        ./unified_tests.sh
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: |
+          Test/*.json
+          /tmp/noah_tests_*.log

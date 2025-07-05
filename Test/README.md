@@ -1,10 +1,108 @@
-# N.O.A.H Testing Suite Documentation
+# N.O.A.H Testing Suite
 
 ## Overview
 
-The N.O.A.H (Next Open-source Architecture Hub) testing suite provides comprehensive validation, security testing, performance testing, and compliance auditing for the entire infrastructure stack. This documentation covers all testing components and their usage.
+The N.O.A.H testing suite provides comprehensive validation for the entire infrastructure stack with **just 2 simple scripts**.
 
-## Test Suite Components
+## Quick Start
+
+### Prerequisites
+
+- **Python 3.8+** with pip
+- **Helm 3.x** (optional, for advanced chart testing)
+
+### Installation
+
+```bash
+# Install dependencies
+cd Test
+make install
+```
+
+### Running Tests
+
+```bash
+# Run all tests (recommended)
+make test
+
+# Or run specific test types
+make test-python     # Python-based tests
+make test-shell      # Shell-based tests  
+make test-charts     # Helm chart tests only
+
+# Check what's available
+make check-deps
+```
+
+## Test Files (Only 4 files!)
+
+```
+Test/
+├── noah_test.py          # Python test suite
+├── unified_tests.sh      # Shell test suite  
+├── test_config.yaml      # Simple configuration
+├── requirements.txt      # Dependencies
+├── Makefile             # Easy commands
+└── README.md            # This file
+```
+
+## What Gets Tested
+
+### 🐍 **Python Tests** (`noah_test.py`)
+- ✅ Project structure validation
+- ✅ YAML syntax checking
+- ✅ Helm chart validation
+- ✅ Basic security checks
+
+### 🐚 **Shell Tests** (`unified_tests.sh`)
+- ✅ Dependency checking
+- ✅ Helm chart linting
+- ✅ Template rendering tests
+- ✅ Basic integration tests
+- ✅ Security scanning
+
+## Command Options
+
+### Python Test Options
+```bash
+python3 noah_test.py -v              # Verbose output
+python3 noah_test.py --charts-only   # Helm charts only
+python3 noah_test.py --structure-only # Structure only
+```
+
+### Shell Test Options
+```bash
+./unified_tests.sh --deps-only       # Check dependencies
+./unified_tests.sh --python-only     # Python tests
+./unified_tests.sh --helm-only       # Helm tests
+./unified_tests.sh --yaml-only       # YAML tests
+./unified_tests.sh --security-only   # Security tests
+./unified_tests.sh --integration     # Integration tests
+```
+
+## CI/CD Integration
+
+The test suite runs automatically on:
+- Push to main/develop branches  
+- Pull requests to main
+- Uses the unified test approach
+
+## Output
+
+Both scripts generate:
+- 📊 Console output with progress
+- 📄 JSON reports (Python)
+- 📝 Log files (Shell)
+- ✅ Clear pass/fail status
+
+## Migration from Complex Setup
+
+We've simplified from **12+ test files** to just **2 main scripts**:
+
+**Before**: 8 shell scripts + 3 Python files + complex config
+**After**: 1 shell script + 1 Python file + simple config
+
+Same functionality, much simpler maintenance!
 
 ### 1. Master Test Runner (`run_all_tests.sh`)
 - **Purpose**: Orchestrates all testing phases

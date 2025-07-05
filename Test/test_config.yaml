@@ -1,0 +1,25 @@
+# N.O.A.H Simple Test Configuration
+# =================================
+
+# Basic test settings
+test_namespace: "noah-test"
+timeout_seconds: 300
+cleanup_after_tests: true
+
+# Helm charts to test
+helm_charts:
+  - gitlab
+  - grafana
+  - keycloak
+  - mattermost
+  - nextcloud
+  - oauth2-proxy
+  - openedr
+  - prometheus
+  - samba4
+  - wazuh
+
+# Test options
+run_security_tests: true
+run_performance_tests: false
+generate_reports: true

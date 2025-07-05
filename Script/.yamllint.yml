@@ -63,3 +63,7 @@ ignore: |
   # Ignore generated or external files
   */Chart.lock
   */requirements.lock
+  
+  # Ignore GitHub Actions workflows (they have different validation rules)
+  .github/workflows/*.yml
+  .github/workflows/*.yaml

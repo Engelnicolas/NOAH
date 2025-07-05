@@ -1,3 +1,0 @@
-{{- if .Values.serviceMonitor.enabled }}
-{{ include "noah.serviceMonitor" . }}
-{{- end }}

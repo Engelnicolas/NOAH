@@ -1,24 +1,102 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: grafana
+  name: {{ include "noah.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "noah.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: grafana
+      {{- include "noah.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app: grafana
+        {{- include "noah.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
+      securityContext:
+        {{- include "noah.podSecurityContext" . | nindent 8 }}
       containers:
-        - name: grafana
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          ports:
-            - containerPort: 3000
-          env:
-            - name: GF_SECURITY_ADMIN_USER
-              value: "{{ .Values.adminUser }}"
-            - name: GF_SECURITY_ADMIN_PASSWORD
-              value: "{{ .Values.adminPassword }}"
+      - name: grafana
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          {{- include "noah.securityContext" . | nindent 10 }}
+        ports:
+        {{- range .Values.service.ports }}
+        - name: {{ .name }}
+          containerPort: {{ .port }}
+          protocol: {{ .protocol }}
+        {{- end }}
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          value: {{ .Values.auth.admin.username | quote }}
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "noah.fullname" . }}
+              key: admin-password
+        - name: GF_SERVER_DOMAIN
+          value: {{ .Values.config.server.domain | quote }}
+        {{- if .Values.config.server.rootUrl }}
+        - name: GF_SERVER_ROOT_URL
+          value: {{ .Values.config.server.rootUrl | quote }}
+        {{- end }}
+        - name: GF_DATABASE_TYPE
+          value: {{ .Values.config.database.type | quote }}
+        {{- if .Values.datasources.prometheus.enabled }}
+        - name: GF_INSTALL_PLUGINS
+          value: "grafana-piechart-panel"
+        {{- end }}
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-config
+          mountPath: /etc/grafana/grafana.ini
+          subPath: grafana.ini
+        {{- if .Values.datasources.prometheus.enabled }}
+        - name: grafana-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+        {{- end }}
+        {{- if .Values.dashboards.enabled }}
+        - name: grafana-dashboards
+          mountPath: /etc/grafana/provisioning/dashboards
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      volumes:
+      - name: grafana-storage
+        {{- if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "noah.fullname" . }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+      - name: grafana-config
+        configMap:
+          name: {{ include "noah.fullname" . }}-config
+      {{- if .Values.datasources.prometheus.enabled }}
+      - name: grafana-datasources
+        configMap:
+          name: {{ include "noah.fullname" . }}-datasources
+      {{- end }}
+      {{- if .Values.dashboards.enabled }}
+      - name: grafana-dashboards
+        configMap:
+          name: {{ include "noah.fullname" . }}-dashboards
+      {{- end }}

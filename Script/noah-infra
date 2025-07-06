@@ -9,7 +9,7 @@
 set -euo pipefail
 
 # Script metadata
-SCRIPT_VERSION="3.0.0"
+SCRIPT_VERSION="3.1.0"  # Updated: Added automatic prerequisite installation
 SCRIPT_NAME="noah-infra"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -19,6 +19,7 @@ NAMESPACE_PREFIX="noah"
 HELM_TIMEOUT="600s"
 VERBOSE=false
 DRY_RUN=false
+AUTO_INSTALL=true  # New: Automatically install missing prerequisites
 ACTION="status"  # setup, deploy, status, teardown
 USE_SIMPLIFIED_CHARTS=true  # New: Use simplified chart structure
 VALUES_DIR="../Helm/values"  # New: Environment-specific values directory
@@ -69,6 +70,7 @@ OPTIONS:
     -t, --timeout TIMEOUT    Helm timeout (default: 600s)
     -v, --verbose           Enable verbose output
     --dry-run              Show what would be done without executing
+    --no-auto-install      Disable automatic installation of missing tools
     -h, --help             Show this help message
 
 EXAMPLES:
@@ -76,8 +78,120 @@ EXAMPLES:
     ./noah-infra setup --environment dev   # Set up development environment
     ./noah-infra deploy --verbose          # Deploy with verbose output
     ./noah-infra teardown --dry-run        # Show what would be removed
+    ./noah-infra setup --no-auto-install   # Check prerequisites without auto-install
 
 EOF
+}
+
+# Install missing tools automatically
+install_tool() {
+    local tool="$1"
+    
+    log "Installing $tool..."
+    
+    if [ "$DRY_RUN" = true ]; then
+        log "DRY RUN: Would install $tool"
+        return 0
+    fi
+    
+    # Ensure curl is available for downloads
+    if ! command -v curl >/dev/null 2>&1 && [ "$tool" != "ansible" ]; then
+        log_error "curl is required to install $tool but is not available"
+        log "Please install curl first: sudo apt-get install curl (Ubuntu/Debian) or sudo yum install curl (RHEL/CentOS)"
+        return 1
+    fi
+    
+    case "$tool" in
+        "kubectl")
+            log "Installing kubectl..."
+            # Install kubectl using official method
+            local kubectl_version
+            kubectl_version=$(curl -L -s https://dl.k8s.io/release/stable.txt 2>/dev/null)
+            if [ -z "$kubectl_version" ]; then
+                log_error "Failed to get kubectl version"
+                return 1
+            fi
+            
+            if curl -LO "https://dl.k8s.io/release/${kubectl_version}/bin/linux/amd64/kubectl" 2>/dev/null; then
+                chmod +x kubectl
+                if [ -w /usr/local/bin ]; then
+                    mv kubectl /usr/local/bin/
+                else
+                    sudo mv kubectl /usr/local/bin/ || {
+                        log_error "Failed to move kubectl to /usr/local/bin/"
+                        return 1
+                    }
+                fi
+                log "✅ kubectl installed successfully"
+            else
+                log_error "Failed to download kubectl"
+                return 1
+            fi
+            ;;
+        "helm")
+            log "Installing Helm..."
+            # Install Helm using official script
+            if curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; then
+                log "✅ Helm installed successfully"
+            else
+                log_error "Failed to install Helm"
+                return 1
+            fi
+            ;;
+        "ansible")
+            log "Installing Ansible..."
+            if command -v pip3 >/dev/null 2>&1; then
+                if pip3 install --user ansible; then
+                    log "✅ Ansible installed successfully via pip3"
+                    log "Note: You may need to add ~/.local/bin to your PATH"
+                else
+                    log_error "Failed to install Ansible via pip3"
+                    return 1
+                fi
+            elif command -v pip >/dev/null 2>&1; then
+                if pip install --user ansible; then
+                    log "✅ Ansible installed successfully via pip"
+                    log "Note: You may need to add ~/.local/bin to your PATH"
+                else
+                    log_error "Failed to install Ansible via pip"
+                    return 1
+                fi
+            elif command -v apt-get >/dev/null 2>&1; then
+                # Ubuntu/Debian
+                if sudo apt-get update && sudo apt-get install -y ansible; then
+                    log "✅ Ansible installed successfully via apt-get"
+                else
+                    log_error "Failed to install Ansible via apt-get"
+                    return 1
+                fi
+            elif command -v yum >/dev/null 2>&1; then
+                # RHEL/CentOS
+                if sudo yum install -y ansible; then
+                    log "✅ Ansible installed successfully via yum"
+                else
+                    log_error "Failed to install Ansible via yum"
+                    return 1
+                fi
+            elif command -v dnf >/dev/null 2>&1; then
+                # Fedora
+                if sudo dnf install -y ansible; then
+                    log "✅ Ansible installed successfully via dnf"
+                else
+                    log_error "Failed to install Ansible via dnf"
+                    return 1
+                fi
+            else
+                log_error "No suitable package manager found to install Ansible"
+                log "Available options: pip3, pip, apt-get, yum, dnf"
+                log "Please install one of these package managers first"
+                return 1
+            fi
+            ;;
+        *)
+            log_error "Unknown tool: $tool"
+            return 1
+            ;;
+    esac
 }
 
 # Check prerequisites
@@ -85,16 +199,50 @@ check_prerequisites() {
     log "Checking prerequisites..."
     
     local missing_tools=()
+    local install_failed=()
     
     # Check required tools
     command -v kubectl >/dev/null 2>&1 || missing_tools+=("kubectl")
     command -v helm >/dev/null 2>&1 || missing_tools+=("helm")
     command -v ansible >/dev/null 2>&1 || missing_tools+=("ansible")
     
+    # Install missing tools automatically
     if [ ${#missing_tools[@]} -gt 0 ]; then
-        log_error "Missing required tools: ${missing_tools[*]}"
-        log "Please install missing tools and try again"
-        return 1
+        log_warn "Missing required tools: ${missing_tools[*]}"
+        
+        if [ "$AUTO_INSTALL" = false ]; then
+            log_error "Automatic installation is disabled"
+            log "Please install missing tools manually and try again"
+            return 1
+        fi
+        
+        log "Attempting to install missing tools automatically..."
+        
+        for tool in "${missing_tools[@]}"; do
+            if ! install_tool "$tool"; then
+                install_failed+=("$tool")
+            fi
+        done
+        
+        if [ ${#install_failed[@]} -gt 0 ]; then
+            log_error "Failed to install tools: ${install_failed[*]}"
+            log "Please install these tools manually and try again"
+            return 1
+        fi
+        
+        log "✅ All missing tools have been installed"
+        
+        # Re-check that tools are now available
+        local still_missing=()
+        command -v kubectl >/dev/null 2>&1 || still_missing+=("kubectl")
+        command -v helm >/dev/null 2>&1 || still_missing+=("helm")
+        command -v ansible >/dev/null 2>&1 || still_missing+=("ansible")
+        
+        if [ ${#still_missing[@]} -gt 0 ]; then
+            log_error "Tools still not available after installation: ${still_missing[*]}"
+            log "You may need to restart your shell or update your PATH"
+            return 1
+        fi
     fi
     
     # Check Kubernetes connectivity
@@ -357,6 +505,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --dry-run)
             DRY_RUN=true
+            shift
+            ;;
+        --no-auto-install)
+            AUTO_INSTALL=false
             shift
             ;;
         -h|--help)

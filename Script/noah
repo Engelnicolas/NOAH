@@ -25,7 +25,7 @@ USAGE:
     ./noah COMMAND [OPTIONS]
 
 COMMANDS:
-    validate        Validate project (YAML, Ansible, Helm, scripts)
+    validate       Validate project (YAML, Ansible, Helm, scripts)
     fix            Fix common issues automatically
     infra          Infrastructure management (setup, deploy, status, teardown)
     monitoring     Monitoring stack management

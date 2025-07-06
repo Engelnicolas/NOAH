@@ -29,6 +29,16 @@ This project automates the full-stack deployment of an open source secure inform
 - 📈 **Prometheus & Grafana** for monitoring and observability
 - 🚀 **GitLab CI/CD & GitHub Actions** for continuous integration and deployment
 
+---
+
+## 📚 Documentation & Support
+
+### Available Documentation
+
+- **📖 [USER_GUIDE.md](docs/USER_GUIDE.md)**: Complete step-by-step deployment guide
+
+---
+
 ### 🎯 Why Choose N.O.A.H?
 
 - **Complete Automation**: Zero-touch deployment from infrastructure to applications
@@ -141,14 +151,6 @@ All platform services are pre-configured with Keycloak integration:
 - **Benefits**: Patient data protection, secure communication, compliance
 - **Security**: End-to-end encryption, audit trails, access monitoring
 - **Integration**: EHR systems, medical imaging, secure messaging
-
----
-
-## 📚 Documentation & Support
-
-### Available Documentation
-
-- **📖 [USER_GUIDE.md](docs/USER_GUIDE.md)**: Complete step-by-step deployment guide
 
 ---
 

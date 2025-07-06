@@ -1,35 +1,43 @@
+---
 name: CI
 
-on:
+"on":
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
+
       - name: Install tools
         run: |
           pip install ansible ansible-lint yamllint
-          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          
+          HELM_URL="https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3"
+          curl -fsSL "$HELM_URL" | bash
+
       - name: Lint YAML
-        run: find . -name "*.yml" -o -name "*.yaml" | grep -v .git | xargs yamllint -d relaxed
-        
+        run: |
+          find . -name "*.yml" -o -name "*.yaml" | \
+            grep -v .git | xargs yamllint -d relaxed
+
       - name: Lint Ansible
         run: |
           cd Ansible
           ansible-lint main.yml || true
           ansible-playbook --syntax-check main.yml -i inventory
-          
+
       - name: Lint Helm Charts
         run: |
           for chart in Helm/*/; do
@@ -37,28 +45,29 @@ jobs:
               helm lint "$chart" || true
             fi
           done
-          
+
   test:
     runs-on: ubuntu-latest
     needs: lint
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Run validation scripts
         run: |
-          chmod +x Script/*.sh
-          bash Script/validate_fixes.sh || true
-          
+          chmod +x Script/noah-validate
+          ./Script/noah-validate || true
+
   security:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Run security scan
-        uses: github/super-linter@v5
+        uses: super-linter/super-linter@v6
         env:
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VALIDATE_ALL_CODEBASE: false
           VALIDATE_YAML: true
           VALIDATE_BASH: true
+          VALIDATE_ANSIBLE: true

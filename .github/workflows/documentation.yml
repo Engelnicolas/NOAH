@@ -1,8 +1,9 @@
+---
 name: Documentation
 
-on:
+"on":
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'docs/**'
       - 'README.md'
@@ -23,23 +24,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
+
       - name: Install dependencies
         run: pip install mkdocs mkdocs-material mkdocs-mermaid2-plugin
-        
+
       - name: Build docs
         run: mkdocs build --strict
-        
+
       - name: Upload pages artifact
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site/
-          
+
       - name: Deploy to Pages
         if: github.ref == 'refs/heads/main'
         uses: actions/deploy-pages@v4

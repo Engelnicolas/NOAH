@@ -16,8 +16,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/grafana-configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/grafana-secret.yaml") . | sha256sum }}
+        checksum/config: {{ toYaml .Values.grafana.config | sha256sum }}
+        checksum/secret: {{ toYaml .Values.grafana.auth | sha256sum }}
         {{- with .Values.grafana.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

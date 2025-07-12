@@ -158,9 +158,9 @@
 
 14. Team and Channel Management:
     - Access the System Console at: /admin_console
-    - Default team creation: {{ if .Values.mattermost.team.restrictCreationToDomains }}Restricted{{ else }}Open{{ end }}
-    - Public channel creation: {{ if .Values.mattermost.team.restrictPublicChannelCreation }}Restricted{{ else }}Open{{ end }}
-    - Private channel creation: {{ if .Values.mattermost.team.restrictPrivateChannelCreation }}Restricted{{ else }}Open{{ end }}
+    - Default team creation: {{ if .Values.mattermost.teamSettings.restrictCreationToDomains }}Restricted{{ else }}Open{{ end }}
+    - Public channel creation: {{ if .Values.mattermost.teamSettings.restrictPublicChannelCreation }}Restricted{{ else }}Open{{ end }}
+    - Private channel creation: {{ if .Values.mattermost.teamSettings.restrictPrivateChannelCreation }}Restricted{{ else }}Open{{ end }}
 
 15. Troubleshooting:
     - Check pod logs: kubectl logs -n {{ .Release.Namespace }} deployment/{{ include "mattermost.fullname" . }}
@@ -177,10 +177,10 @@
     helm upgrade {{ .Release.Name }} noah/mattermost -f values.yaml
 
 17. Important Notes:
-    {{- if not .Values.mattermost.smtp.enabled }}
+    {{- if not .Values.mattermost.emailSettings.sendEmailNotifications }}
     ⚠️  Email notifications are disabled. Users won't receive email alerts.
     {{- end }}
-    {{- if and (not .Values.mattermost.oauth.enabled) (not .Values.mattermost.ldap.enabled) }}
+    {{- if and (not .Values.oidc.enabled) (not .Values.ldap.enabled) }}
     ⚠️  No external authentication configured. Users must create local accounts.
     {{- end }}
     {{- if and (eq .Values.mattermost.fileSettings.driverName "local") (gt (.Values.replicaCount | default 1 | int) 1) }}

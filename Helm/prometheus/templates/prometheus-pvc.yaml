@@ -1,5 +1,6 @@
 ---
 {{- if and .Values.prometheus.enabled .Values.prometheus.persistence.enabled }}
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

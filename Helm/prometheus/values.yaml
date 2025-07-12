@@ -1,10 +1,12 @@
+---
 # =============================================================================
 # Prometheus Monitoring Stack Helm Chart Values Configuration
 # =============================================================================
 #
 # This file contains configuration values for deploying a complete Prometheus
-# monitoring stack including Prometheus server, Grafana dashboards, AlertManager,
-# and various exporters for comprehensive infrastructure and application monitoring.
+# monitoring stack including Prometheus server, Grafana dashboards,
+# AlertManager, and various exporters for comprehensive infrastructure and
+# application monitoring.
 #
 # Prometheus Stack Features:
 # - Time-series metrics collection and storage
@@ -253,7 +255,8 @@ prometheus:
         - static_configs:
             - targets:
               {{- if .Values.alertmanager.enabled }}
-              - {{ include "prometheus.alertmanager.fullname" . }}:{{ .Values.alertmanager.service.port }}
+              - {{ include "prometheus.alertmanager.fullname" . }}:{{
+                  .Values.alertmanager.service.port }}
               {{- end }}
 
     scrape_configs:
@@ -271,7 +274,9 @@ prometheus:
           ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
         bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
         relabel_configs:
-          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+          - source_labels: [__meta_kubernetes_namespace,
+                            __meta_kubernetes_service_name,
+                            __meta_kubernetes_endpoint_port_name]
             action: keep
             regex: default;kubernetes;https
 
@@ -309,14 +314,16 @@ prometheus:
         kubernetes_sd_configs:
           - role: pod
         relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+          - source_labels: [
+              __meta_kubernetes_pod_annotation_prometheus_io_scrape]
             action: keep
             regex: true
           - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
             action: replace
             target_label: __metrics_path__
             regex: (.+)
-          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+          - source_labels: [__address__,
+                            __meta_kubernetes_pod_annotation_prometheus_io_port]
             action: replace
             regex: ([^:]+)(?::\d+)?;(\d+)
             replacement: $1:$2
@@ -335,19 +342,26 @@ prometheus:
         kubernetes_sd_configs:
           - role: endpoints
         relabel_configs:
-          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+          - source_labels: [
+              __meta_kubernetes_service_annotation_prometheus_io_scrape]
             action: keep
             regex: true
-          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+          - source_labels: [
+              __meta_kubernetes_service_annotation_prometheus_io_scheme]
             action: replace
             target_label: __scheme__
             regex: (https?)
-          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+          - source_labels: [
+              __meta_kubernetes_service_annotation_prometheus_io_path]
             action: replace
             target_label: __metrics_path__
             regex: (.+)
-          - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+          - source_labels: [__address__,
+                            __meta_kubernetes_service_annotation_prometheus_io_port]
             action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
             target_label: __address__
             regex: ([^:]+)(?::\d+)?;(\d+)
             replacement: $1:$2
@@ -429,34 +443,48 @@ prometheus:
               severity: critical
             annotations:
               summary: "Instance {{ $labels.instance }} down"
-              description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 5 minutes."
+              description: >-
+                {{ $labels.instance }} of job {{ $labels.job }} has been down
+                for more than 5 minutes.
 
           - alert: HighCPUUsage
-            expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+            expr: >-
+              100 - (avg by(instance)
+              (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
             for: 5m
             labels:
               severity: warning
             annotations:
               summary: "High CPU usage on {{ $labels.instance }}"
-              description: "CPU usage is above 80% for more than 5 minutes on {{ $labels.instance }}."
+              description: >-
+                CPU usage is above 80% for more than 5 minutes on
+                {{ $labels.instance }}.
 
           - alert: HighMemoryUsage
-            expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+            expr: >-
+              (1 - (node_memory_MemAvailable_bytes /
+              node_memory_MemTotal_bytes)) * 100 > 85
             for: 5m
             labels:
               severity: warning
             annotations:
               summary: "High memory usage on {{ $labels.instance }}"
-              description: "Memory usage is above 85% for more than 5 minutes on {{ $labels.instance }}."
+              description: >-
+                Memory usage is above 85% for more than 5 minutes on
+                {{ $labels.instance }}.
 
           - alert: DiskSpaceLow
-            expr: 100 - (node_filesystem_free_bytes / node_filesystem_size_bytes) * 100 > 90
+            expr: >-
+              100 - (node_filesystem_free_bytes /
+              node_filesystem_size_bytes) * 100 > 90
             for: 5m
             labels:
               severity: critical
             annotations:
               summary: "Disk space low on {{ $labels.instance }}"
-              description: "Disk usage is above 90% on {{ $labels.instance }} filesystem {{ $labels.mountpoint }}."
+              description: >-
+                Disk usage is above 90% on {{ $labels.instance }} filesystem
+                {{ $labels.mountpoint }}.
 
           - alert: KeycloakDown
             expr: up{job="keycloak"} == 0
@@ -465,7 +493,9 @@ prometheus:
               severity: critical
             annotations:
               summary: "Keycloak service is down"
-              description: "Keycloak authentication service has been down for more than 2 minutes."
+              description: >-
+                Keycloak authentication service has been down for more than
+                2 minutes.
 
           - alert: GitLabDown
             expr: up{job="gitlab"} == 0
@@ -474,7 +504,8 @@ prometheus:
               severity: critical
             annotations:
               summary: "GitLab service is down"
-              description: "GitLab service has been down for more than 2 minutes."
+              description: >-
+                GitLab service has been down for more than 2 minutes.
 
   # Auto-scaling
   autoscaling:
@@ -649,7 +680,9 @@ grafana:
       prometheus:
         name: Prometheus
         type: prometheus
-        url: 'http://{{ include "prometheus.fullname" . }}:{{ .Values.prometheus.service.port }}'
+        url: >-
+          http://{{ include "prometheus.fullname" . }}:{{
+          .Values.prometheus.service.port }}
         access: proxy
         isDefault: true
 

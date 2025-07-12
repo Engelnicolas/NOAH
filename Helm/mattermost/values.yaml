@@ -213,6 +213,13 @@ mattermost:
     amazonS3SignV2: false
     amazonS3SSE: false
     amazonS3Trace: false
+    # Nested amazons3 config for template compatibility
+    amazons3:
+      bucket: ""
+      region: ""
+      endpoint: ""
+      accessKeyId: ""
+      secretAccessKey: ""
 
   # Email settings
   emailSettings:
@@ -311,6 +318,16 @@ mattermost:
     signaturePublicKeyFiles: []
 
 # =============================================================================
+# Authentication and Security Configuration
+# =============================================================================
+
+# Application authentication settings
+auth:
+  # Secret key for signing tokens and cookies
+  # Generate a random 256-bit key: openssl rand -hex 32
+  secretKey: ""
+
+# =============================================================================
 # OIDC Authentication with Keycloak Integration
 # =============================================================================
 # Configure OpenID Connect authentication for single sign-on (SSO)
@@ -389,6 +406,7 @@ ldap:
 service:
   type: ClusterIP
   port: 8065
+  metricsPort: 8067
   annotations: {}
 
 # Ingress configuration
@@ -647,12 +665,21 @@ metrics:
     labels: {}
     interval: 30s
     scrapeTimeout: 10s
+  grafanaDashboard:
+    enabled: true
+    folder: "mattermost"
+    labels: {}
 
 # Service Account
 serviceAccount:
   create: true
   annotations: {}
   name: ""
+  automountServiceAccountToken: true
+
+# RBAC Configuration
+rbac:
+  create: true
 
 # Network Policies
 networkPolicy:
@@ -716,3 +743,271 @@ backup:
     region: ""
     accessKey: ""
     secretKey: ""
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# External Database Configuration (when not using PostgreSQL dependency)
+externalDatabase:
+  enabled: false
+  host: ""
+  port: 5432
+  database: "mattermost"
+  username: "mattermost"
+  password: ""
+  existingSecret: ""
+  existingSecretKey: ""
+
+# Security Configuration
+mattermost:
+  # Existing secret for admin credentials (optional)
+  existingSecret: ""
+  
+  # Site URL configuration
+  siteUrl: "https://mattermost.noah.local"
+  
+  security:
+    enableTLS: false
+    tlsCertFile: ""
+    tlsKeyFile: ""
+    readTimeout: 300
+    writeTimeout: 300
+    idleTimeout: 60
+    connectionSecurity: "TLS"
+    allowInsecureOutgoingConnections: false
+    enableMultifactorAuthentication: false
+    sessionLengthWebInDays: 30
+    sessionLengthMobileInDays: 30
+    sessionCacheInMinutes: 10
+    websocketSecurePort: 443
+    useExperimentalGossip: false
+
+  # Service Settings
+  servicesSettings:
+    websocketURL: ""
+    enableIncomingWebhooks: true
+    enableOutgoingWebhooks: true
+    enableCommands: true
+    enableOnlyAdminIntegrations: true
+    enablePostUsernameOverride: false
+    enablePostIconOverride: false
+    enableTesting: false
+    enableOAuthServiceProvider: true
+    enableMultifactorAuthentication: false
+    maxFileSize: 104857600
+
+  # Team Settings
+  teamSettings:
+    siteName: "Mattermost"
+    maxUsersPerTeam: 50
+    enableTeamCreation: true
+    enableUserCreation: true
+    enableOpenServer: false
+    restrictCreationToDomains: ""
+    enableCustomBrand: false
+    customBrandText: ""
+    customDescriptionText: ""
+    restrictDirectMessage: "any"
+    restrictTeamInvite: "all"
+    restrictPublicChannelManagement: "all"
+    restrictPrivateChannelManagement: "all"
+
+  # SQL Settings
+  sqlSettings:
+    driverName: "postgres"
+    maxIdleConns: 20
+    maxOpenConns: 300
+    queryTimeout: 30
+    connMaxLifetimeMilliseconds: 3600000
+    trace: false
+
+  # Log Settings
+  logSettings:
+    enableConsole: true
+    consoleLevel: "INFO"
+    consoleJson: true
+    enableFile: true
+    fileLevel: "INFO"
+    fileJson: true
+    fileLocation: ""
+    enableWebhookDebugging: true
+    enableDiagnostics: true
+
+  # File Settings (template reference)
+  fileSettings:
+    driverName: "local"
+    directory: "/mattermost/data/"
+    enableFileAttachments: true
+    enableMobileUpload: true
+    enableMobileDownload: true
+    maxFileSize: 104857600
+    enablePublicLink: true
+    publicLinkSalt: ""
+    thumbnailWidth: 120
+    thumbnailHeight: 100
+    previewWidth: 1920
+    previewHeight: 1080
+    profileWidth: 128
+    profileHeight: 128
+    # S3 configuration for template compatibility
+    amazons3:
+      bucket: ""
+      region: ""
+      endpoint: ""
+      accessKeyId: ""
+      secretAccessKey: ""
+
+  # Plugin Settings (template reference)
+  pluginSettings:
+    enable: true
+    enableUploads: true
+    allowInsecureDownloadUrl: false
+    enableHealthCheck: true
+    directory: "./plugins"
+    clientDirectory: "./client/plugins"
+    enableMarketplace: true
+    enableRemoteMarketplace: true
+    automaticPrepackagedPlugins: true
+    requirePluginSignature: false
+    marketplaceUrl: "https://api.integrations.mattermost.com"
+    signaturePublicKeyFiles: []
+
+  # Email Settings (template reference)
+  emailSettings:
+    enableSignUpWithEmail: true
+    enableSignInWithEmail: true
+    enableSignInWithUsername: true
+    sendEmailNotifications: true
+    useChannelInEmailNotifications: false
+    requireEmailVerification: false
+    feedbackName: ""
+    feedbackEmail: ""
+    replyToAddress: ""
+    feedbackOrganization: ""
+    enableSMTPAuth: false
+    smtpUsername: ""
+    smtpPassword: ""
+    smtpServer: ""
+    smtpPort: "587"
+    smtpServerTimeout: 10
+    connectionSecurity: ""
+    enablePreviewModeBanner: true
+    skipServerCertificateVerification: false
+    emailNotificationContentsType: "full"
+    emailBatchingBufferSize: 256
+    emailBatchingInterval: 30
+    enableEmailBatching: false
+    sendPushNotifications: false
+    pushNotificationServer: ""
+    pushNotificationContents: "generic"
+    pushNotificationBuffer: 1000
+
+  # Team Settings (template reference)
+  team:
+    siteName: "Mattermost"
+    maxUsersPerTeam: 50
+    enableTeamCreation: true
+    enableUserCreation: true
+    enableOpenServer: false
+    enableUserDeactivation: false
+    restrictCreationToDomains: ""
+    enableCustomUserStatuses: true
+    enableCustomBrand: false
+    customBrandText: ""
+    customDescriptionText: ""
+    restrictDirectMessage: "any"
+    restrictTeamInvite: "all"
+    restrictPublicChannelManagement: "all"
+    restrictPrivateChannelManagement: "all"
+    restrictPublicChannelCreation: "all"
+    restrictPrivateChannelCreation: "all"
+    restrictPublicChannelDeletion: "all"
+    restrictPrivateChannelDeletion: "all"
+    restrictPrivateChannelManageMembers: "all"
+    enableXToLeaveChannelsFromLHS: false
+    userStatusAwayTimeout: 300
+    maxChannelsPerTeam: 2000
+    maxNotificationsPerChannel: 1000
+    enableConfirmNotificationsToChannel: true
+    teammateNameDisplay: "username"
+    experimentalViewArchivedChannels: false
+    experimentalEnableAuthenticationTransfer: true
+    experimentalEnableHardenedMode: false
+    experimentalEnableAutomaticReplies: false
+    experimentalHideTownSquareinLHS: false
+    experimentalTownSquareIsReadOnly: false
+    experimentalPrimaryTeam: ""
+    experimentalDefaultChannels: []
+
+  # SMTP Settings (template reference)
+  smtp:
+    enabled: false
+    server: ""
+    port: 587
+    username: ""
+    password: ""
+    authentication: true
+    enableSecurity: false
+    insecureSkipVerify: false
+
+  # OAuth Settings (template reference)
+  oauth:
+    enabled: false
+    gitlab:
+      enabled: false
+      id: ""
+      secret: ""
+      scope: ""
+      authEndpoint: ""
+      tokenEndpoint: ""
+      userAPIEndpoint: ""
+    google:
+      enabled: false
+      id: ""
+      secret: ""
+      scope: "profile email"
+      authEndpoint: "https://accounts.google.com/o/oauth2/v2/auth"
+      tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token"
+      userAPIEndpoint: "https://www.googleapis.com/oauth2/v2/userinfo"
+    office365:
+      enabled: false
+      id: ""
+      secret: ""
+      scope: "https://graph.microsoft.com/User.Read"
+      authEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+      tokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+      userAPIEndpoint: "https://graph.microsoft.com/v1.0/me"
+
+  # LDAP Settings (template reference)
+  ldap:
+    enabled: false
+    server: ""
+    port: 389
+    connectionSecurity: ""
+    baseDN: ""
+    bindUsername: ""
+    bindPassword: ""
+    userFilter: ""
+    groupFilter: ""
+    guestFilter: ""
+    enableAdminFilter: false
+    adminFilter: ""
+    groupDisplayNameAttribute: ""
+    groupIdAttribute: ""
+    userIdAttribute: ""
+    usernameAttribute: ""
+    nicknameAttribute: ""
+    emailAttribute: ""
+    firstNameAttribute: ""
+    lastNameAttribute: ""
+    positionAttribute: ""
+    syncIntervalMinutes: 60
+    skipCertificateVerification: false
+    queryTimeout: 60
+    maxPageSize: 0
+    loginFieldName: ""
+    loginButtonColor: "#0000"
+    loginButtonBorderColor: "#2389D7"
+    loginButtonTextColor: "#2389D7"

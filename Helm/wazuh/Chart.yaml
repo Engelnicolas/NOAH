@@ -21,6 +21,6 @@ maintainers:
     email: admin@noah.local
 dependencies:
   - name: elasticsearch
-    version: "8.12.0"
+    version: "8.5.1"
     repository: https://helm.elastic.co
     condition: elasticsearch.enabled

@@ -1,14 +1,14 @@
 ---
-{{- if .Values.serviceMonitor.enabled }}
+{{- if .Values.metrics.serviceMonitor.enabled }}
 # Mattermost Service Monitor for Prometheus
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: {{ include "mattermost.fullname" . }}
-  namespace: {{ .Values.serviceMonitor.namespace | default .Release.Namespace }}
+  namespace: {{ .Values.metrics.serviceMonitor.namespace | default .Release.Namespace }}
   labels:
     {{- include "mattermost.labels" . | nindent 4 }}
-    {{- with .Values.serviceMonitor.labels }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
@@ -22,26 +22,26 @@ spec:
   endpoints:
     - port: metrics
       path: /metrics
-      interval: {{ .Values.serviceMonitor.interval }}
-      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
-      {{- if .Values.serviceMonitor.tlsConfig }}
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+      {{- if .Values.metrics.serviceMonitor.tlsConfig }}
       tlsConfig:
-        {{- toYaml .Values.serviceMonitor.tlsConfig | nindent 8 }}
+        {{- toYaml .Values.metrics.serviceMonitor.tlsConfig | nindent 8 }}
       {{- end }}
 {{- end }}
 
 ---
-{{- if and .Values.monitoring.enabled .Values.monitoring.grafana_dashboard.enabled }}
+{{- if and .Values.metrics.enabled .Values.metrics.grafanaDashboard.enabled }}
 # Grafana Dashboard ConfigMap for Mattermost
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "mattermost.fullname" . }}-grafana-dashboard
-  namespace: {{ .Values.serviceMonitor.namespace | default .Release.Namespace }}
+  namespace: {{ .Values.metrics.serviceMonitor.namespace | default .Release.Namespace }}
   labels:
     {{- include "mattermost.labels" . | nindent 4 }}
     grafana_dashboard: "1"
-    grafana_folder: {{ .Values.monitoring.grafana_dashboard.folder | quote }}
+    grafana_folder: {{ .Values.metrics.grafanaDashboard.folder | quote }}
 data:
   mattermost-dashboard.json: |
     {

@@ -198,3 +198,54 @@ Generate database connection string
 {{- printf "postgres://%s:%s@%s:%d/%s?sslmode=disable&connect_timeout=10" .Values.database.user .Values.database.password .Values.database.host (int .Values.database.port) .Values.database.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Return the appropriate apiVersion for PodDisruptionBudget
+*/}}
+{{- define "mattermost.podDisruptionBudget.apiVersion" -}}
+{{- if semverCompare ">=1.21-0" .Capabilities.KubeVersion.GitVersion -}}
+policy/v1
+{{- else -}}
+policy/v1beta1
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return the appropriate apiVersion for NetworkPolicy
+*/}}
+{{- define "mattermost.networkPolicy.apiVersion" -}}
+networking.k8s.io/v1
+{{- end -}}
+
+{{/*
+Redis fullname
+*/}}
+{{- define "mattermost.redis.fullname" -}}
+{{- if .Values.redis.enabled -}}
+{{- printf "%s-redis" (include "mattermost.fullname" .) -}}
+{{- else -}}
+{{- .Values.externalRedis.host -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+PostgreSQL fullname
+*/}}
+{{- define "mattermost.postgresql.fullname" -}}
+{{- if .Values.postgresql.enabled -}}
+{{- printf "%s-postgresql" (include "mattermost.fullname" .) -}}
+{{- else -}}
+{{- .Values.externalPostgresql.host -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Secret name
+*/}}
+{{- define "mattermost.secretName" -}}
+{{- if .Values.existingSecret -}}
+{{- .Values.existingSecret -}}
+{{- else -}}
+{{- include "mattermost.fullname" . -}}
+{{- end -}}
+{{- end -}}

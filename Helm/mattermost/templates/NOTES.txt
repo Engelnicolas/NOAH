@@ -38,62 +38,56 @@
    {{- end }}
 
 4. File Storage:
-   {{- if .Values.mattermost.fileStorage.driver }}
-   Storage Driver: {{ .Values.mattermost.fileStorage.driver }}
-   {{- if eq .Values.mattermost.fileStorage.driver "amazons3" }}
-   S3 Bucket: {{ .Values.mattermost.fileStorage.amazons3.bucket }}
-   S3 Region: {{ .Values.mattermost.fileStorage.amazons3.region }}
+   {{- if .Values.mattermost.fileSettings.driverName }}
+   Storage Driver: {{ .Values.mattermost.fileSettings.driverName }}
+   {{- if eq .Values.mattermost.fileSettings.driverName "amazons3" }}
+   S3 Bucket: {{ .Values.mattermost.fileSettings.amazons3.bucket }}
+   S3 Region: {{ .Values.mattermost.fileSettings.amazons3.region }}
    {{- else }}
-   Local Storage: {{ .Values.mattermost.fileStorage.local.directory }}
+   Local Storage: {{ .Values.mattermost.fileSettings.directory }}
    {{- end }}
    {{- else }}
    📁 Using local file storage
    {{- end }}
 
 5. Authentication Integration:
-   {{- if .Values.mattermost.oauth.enabled }}
-   ✅ OAuth2 authentication is configured
-   {{- if .Values.mattermost.oauth.gitlab.enabled }}
-   GitLab OAuth: {{ .Values.mattermost.oauth.gitlab.id }}
-   {{- end }}
-   {{- if .Values.mattermost.oauth.google.enabled }}
-   Google OAuth: {{ .Values.mattermost.oauth.google.id }}
-   {{- end }}
-   {{- if .Values.mattermost.oauth.office365.enabled }}
-   Office365 OAuth: {{ .Values.mattermost.oauth.office365.id }}
-   {{- end }}
-   {{- if .Values.mattermost.oauth.openid.enabled }}
-   OpenID Connect: {{ .Values.mattermost.oauth.openid.discoveryEndpoint }}
+   {{- if .Values.oidc.enabled }}
+   ✅ OIDC authentication is configured
+   Provider: {{ .Values.oidc.provider }}
+   {{- if .Values.oidc.clientId }}
+   Client ID: {{ .Values.oidc.clientId }}
    {{- end }}
    {{- else }}
-   📝 OAuth authentication not configured. Users will need to create local accounts.
+   📝 OIDC authentication not configured. Users will need to create local accounts.
    {{- end }}
 
-   {{- if .Values.mattermost.ldap.enabled }}
+   {{- if .Values.ldap.enabled }}
    ✅ LDAP authentication is configured
-   LDAP Server: {{ .Values.mattermost.ldap.server }}:{{ .Values.mattermost.ldap.port }}
-   Base DN: {{ .Values.mattermost.ldap.baseDN }}
+   LDAP Server: {{ .Values.ldap.server }}:{{ .Values.ldap.port }}
+   Base DN: {{ .Values.ldap.baseDN }}
    {{- else }}
    📝 LDAP authentication not configured.
    {{- end }}
 
 6. Email Configuration:
-   {{- if .Values.mattermost.smtp.enabled }}
+   {{- if .Values.mattermost.emailSettings.smtpServer }}
    ✅ SMTP is configured for email notifications
-   SMTP Server: {{ .Values.mattermost.smtp.server }}:{{ .Values.mattermost.smtp.port }}
-   From Address: {{ .Values.mattermost.smtp.fromAddress }}
+   SMTP Server: {{ .Values.mattermost.emailSettings.smtpServer }}:{{ .Values.mattermost.emailSettings.smtpPort }}
+   From Address: {{ .Values.mattermost.emailSettings.feedbackEmail }}
    {{- else }}
    📧 SMTP not configured. Email notifications will not work.
    {{- end }}
 
 7. Plugin Configuration:
-   {{- if .Values.mattermost.plugins.enabled }}
+   {{- if .Values.mattermost.pluginSettings.enable }}
    ✅ Plugin system is enabled
-   {{- if .Values.mattermost.plugins.directory }}
-   Plugin Directory: {{ .Values.mattermost.plugins.directory }}
+   {{- if .Values.mattermost.pluginSettings.directory }}
+   Plugin Directory: {{ .Values.mattermost.pluginSettings.directory }}
    {{- end }}
-   {{- range .Values.mattermost.plugins.install }}
+   {{- if .Values.plugins.install }}
+   {{- range .Values.plugins.install }}
    - {{ .name }} ({{ .version }})
+   {{- end }}
    {{- end }}
    {{- else }}
    🔌 Plugin system is disabled
@@ -125,19 +119,15 @@
 10. Search Configuration:
     {{- if .Values.elasticsearch.enabled }}
     ✅ Elasticsearch is enabled for advanced search
-    Elasticsearch Cluster: {{ include "mattermost.elasticsearch.fullname" . }}
-    {{- else if .Values.externalElasticsearch.enabled }}
-    ✅ External Elasticsearch is configured
-    Elasticsearch: {{ .Values.externalElasticsearch.host }}:{{ .Values.externalElasticsearch.port }}
     {{- else }}
     🔍 Elasticsearch not configured. Database search will be used.
     {{- end }}
 
 11. Monitoring and Metrics:
-    {{- if .Values.serviceMonitor.enabled }}
+    {{- if .Values.metrics.serviceMonitor.enabled }}
     ✅ Prometheus ServiceMonitor is enabled for monitoring.
     {{- else }}
-    📊 To enable Prometheus monitoring, set serviceMonitor.enabled=true
+    📊 To enable Prometheus monitoring, set metrics.serviceMonitor.enabled=true
     {{- end }}
     
     Metrics endpoint: http://{{ include "mattermost.fullname" . }}:{{ .Values.service.metricsPort | default 8067 }}/metrics
@@ -190,10 +180,10 @@
     {{- if not .Values.mattermost.smtp.enabled }}
     ⚠️  Email notifications are disabled. Users won't receive email alerts.
     {{- end }}
-    {{- if not .Values.mattermost.oauth.enabled and not .Values.mattermost.ldap.enabled }}
+    {{- if and (not .Values.mattermost.oauth.enabled) (not .Values.mattermost.ldap.enabled) }}
     ⚠️  No external authentication configured. Users must create local accounts.
     {{- end }}
-    {{- if eq .Values.mattermost.fileStorage.driver "local" and .Values.replicaCount | default 1 | int | lt 2 }}
+    {{- if and (eq .Values.mattermost.fileSettings.driverName "local") (gt (.Values.replicaCount | default 1 | int) 1) }}
     ⚠️  Using local file storage with multiple replicas may cause issues. Consider S3 storage.
     {{- end }}
 

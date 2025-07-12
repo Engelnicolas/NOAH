@@ -1,4 +1,3 @@
----
 {{- if and .Values.prometheus.enabled .Values.prometheus.rules.enabled }}
 ---
 apiVersion: v1

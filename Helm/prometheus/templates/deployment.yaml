@@ -1,4 +1,3 @@
----
 {{- if .Values.prometheus.enabled }}
 ---
 apiVersion: apps/v1

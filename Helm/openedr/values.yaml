@@ -349,25 +349,25 @@ persistence:
     - ReadWriteOnce
   size: 100Gi
   annotations: {}
-  
+
   # Data persistence
   data:
     annotations: {}
     size: 50Gi
     path: /opt/openedr/data
-  
-  # Logs persistence  
+
+  # Logs persistence
   logs:
     annotations: {}
     size: 20Gi
     path: /opt/openedr/logs
-  
+
   # Quarantine persistence
   quarantine:
     annotations: {}
     size: 10Gi
     path: /opt/openedr/quarantine
-  
+
   # Agents persistence
   agents:
     annotations: {}
@@ -505,7 +505,7 @@ smtp:
   enabled: false
   host: ""
   port: 587
-  
+
 # Pod annotations and labels
 podAnnotations: {}
 podLabels: {}

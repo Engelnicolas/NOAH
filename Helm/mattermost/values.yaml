@@ -317,6 +317,23 @@ mattermost:
     marketplaceUrl: "https://api.integrations.mattermost.com"
     signaturePublicKeyFiles: []
 
+  # Security Configuration - TLS and Connection Settings
+  security:
+    enableTLS: false
+    tlsCertFile: ""
+    tlsKeyFile: ""
+    readTimeout: 300
+    writeTimeout: 300
+    idleTimeout: 60
+    connectionSecurity: "TLS"
+    allowInsecureOutgoingConnections: false
+    enableMultifactorAuthentication: false
+    sessionLengthWebInDays: 30
+    sessionLengthMobileInDays: 30
+    sessionCacheInMinutes: 10
+    websocketSecurePort: 443
+    useExperimentalGossip: false
+
 # =============================================================================
 # Authentication and Security Configuration
 # =============================================================================
@@ -760,31 +777,7 @@ externalDatabase:
   existingSecret: ""
   existingSecretKey: ""
 
-# Security Configuration
-mattermost:
-  # Existing secret for admin credentials (optional)
-  existingSecret: ""
-  
-  # Site URL configuration
-  siteUrl: "https://mattermost.noah.local"
-  
-  security:
-    enableTLS: false
-    tlsCertFile: ""
-    tlsKeyFile: ""
-    readTimeout: 300
-    writeTimeout: 300
-    idleTimeout: 60
-    connectionSecurity: "TLS"
-    allowInsecureOutgoingConnections: false
-    enableMultifactorAuthentication: false
-    sessionLengthWebInDays: 30
-    sessionLengthMobileInDays: 30
-    sessionCacheInMinutes: 10
-    websocketSecurePort: 443
-    useExperimentalGossip: false
-
-  # Service Settings
+# Pod Disruption Budget
   servicesSettings:
     websocketURL: ""
     enableIncomingWebhooks: true

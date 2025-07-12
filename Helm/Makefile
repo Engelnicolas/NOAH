@@ -2,7 +2,7 @@
 # =========================
 # Provides convenient commands for validating and managing Helm charts
 
-.PHONY: help validate validate-fix validate-verbose deps lint yaml-lint template-test clean
+.PHONY: help validate validate-fix validate-verbose deps lint yaml-lint template-test template-validate quick-template-test clean
 
 # Default target
 help:
@@ -18,6 +18,8 @@ help:
 	@echo "  lint           Run Helm chart linting only"
 	@echo "  yaml-lint      Run YAML syntax validation only"
 	@echo "  template-test  Test template rendering only"
+	@echo "  template-validate Advanced template validation with multiple scenarios"
+	@echo "  quick-template-test Quick template rendering test"
 	@echo "  clean          Clean up dependency files"
 	@echo ""
 	@echo "Prerequisites:"
@@ -132,3 +134,13 @@ ci-validate:
 			helm template "test-$$chart_name" "$$chart" --debug --dry-run >/dev/null || exit 1; \
 		fi; \
 	done
+
+# Advanced template validation with multiple scenarios
+template-validate:
+	@echo "🔬 Running advanced template validation..."
+	@../Script/validate-templates.sh
+
+# Quick template rendering test
+quick-template-test:
+	@echo "🧪 Running quick template test..."
+	@../Script/quick-template-test.sh

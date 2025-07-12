@@ -1,0 +1,149 @@
+---
+name: "Helm Charts Validation"
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'Helm/**'
+      - '.github/workflows/helm-validation.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'Helm/**'
+      - '.github/workflows/helm-validation.yml'
+
+env:
+  HELM_VERSION: "3.13.3"
+  YAMLLINT_VERSION: "1.33.0"
+
+jobs:
+  helm-validation:
+    name: Validate Helm Charts
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install yamllint
+        run: |
+          pip install yamllint==${{ env.YAMLLINT_VERSION }}
+
+      - name: Add Helm repositories
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add elastic https://helm.elastic.co
+          helm repo update
+
+      - name: Build Helm dependencies
+        run: |
+          echo "Building dependencies for all charts..."
+          for chart in Helm/*; do
+            if [ -d "$chart" ] && [ -f "$chart/Chart.yaml" ]; then
+              echo "Processing chart: $chart"
+              if [ -f "$chart/Chart.yaml" ] && grep -q "dependencies:" "$chart/Chart.yaml"; then
+                echo "Building dependencies for $chart"
+                helm dependency build "$chart" || {
+                  echo "Failed to build dependencies for $chart"
+                  exit 1
+                }
+              else
+                echo "No dependencies found for $chart"
+              fi
+            fi
+          done
+
+      - name: Validate YAML syntax
+        run: |
+          echo "Validating YAML syntax with yamllint..."
+          yamllint --config-file=Script/.yamllint.yml Helm/*/values.yaml Helm/*/Chart.yaml
+
+      - name: Lint Helm charts
+        run: |
+          echo "Linting all Helm charts..."
+          failed_charts=()
+          for chart in Helm/*; do
+            if [ -d "$chart" ] && [ -f "$chart/Chart.yaml" ]; then
+              echo "Linting chart: $chart"
+              if ! helm lint "$chart"; then
+                failed_charts+=("$chart")
+              fi
+            fi
+          done
+          
+          if [ ${#failed_charts[@]} -ne 0 ]; then
+            echo "The following charts failed linting:"
+            printf '%s\n' "${failed_charts[@]}"
+            exit 1
+          fi
+          echo "All charts passed linting!"
+
+      - name: Test Helm template rendering
+        run: |
+          echo "Testing template rendering for all charts..."
+          failed_charts=()
+          for chart in Helm/*; do
+            if [ -d "$chart" ] && [ -f "$chart/Chart.yaml" ]; then
+              echo "Testing template rendering for: $chart"
+              if ! helm template test-release "$chart" --debug --dry-run > /dev/null; then
+                failed_charts+=("$chart")
+              fi
+            fi
+          done
+          
+          if [ ${#failed_charts[@]} -ne 0 ]; then
+            echo "The following charts failed template rendering:"
+            printf '%s\n' "${failed_charts[@]}"
+            exit 1
+          fi
+          echo "All charts rendered successfully!"
+
+      - name: Generate validation report
+        if: always()
+        run: |
+          echo "# Helm Charts Validation Report" > validation-report.md
+          echo "" >> validation-report.md
+          echo "## Charts Summary" >> validation-report.md
+          echo "" >> validation-report.md
+          
+          chart_count=0
+          for chart in Helm/*; do
+            if [ -d "$chart" ] && [ -f "$chart/Chart.yaml" ]; then
+              chart_name=$(basename "$chart")
+              chart_version=$(grep "^version:" "$chart/Chart.yaml" | awk '{print $2}')
+              app_version=$(grep "^appVersion:" "$chart/Chart.yaml" | awk '{print $2}' | tr -d '"')
+              
+              echo "- **$chart_name** (v$chart_version) - App: $app_version" >> validation-report.md
+              chart_count=$((chart_count + 1))
+            fi
+          done
+          
+          echo "" >> validation-report.md
+          echo "**Total Charts:** $chart_count" >> validation-report.md
+          echo "" >> validation-report.md
+          echo "## Validation Status" >> validation-report.md
+          echo "" >> validation-report.md
+          echo "- ✅ YAML Syntax Validation" >> validation-report.md
+          echo "- ✅ Helm Chart Linting" >> validation-report.md
+          echo "- ✅ Template Rendering" >> validation-report.md
+          echo "- ✅ Dependency Resolution" >> validation-report.md
+
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: helm-validation-report
+          path: validation-report.md

@@ -1,3 +1,4 @@
+---
 # Global configuration
 global:
   imageRegistry: ""
@@ -202,12 +203,6 @@ startupProbe:
   timeoutSeconds: 5
   failureThreshold: 30
 
-# Service Account
-serviceAccount:
-  create: true
-  annotations: {}
-  name: ""
-
 # Network Policies
 networkPolicy:
   enabled: true
@@ -238,18 +233,6 @@ dns:
   # - name: "keycloak"
   #   type: "A"
   #   value: "10.96.100.1"
-
-# Backup configuration
-backup:
-  enabled: true
-  schedule: "0 2 * * *"
-  retention: "7d"
-  s3:
-    enabled: false
-    bucket: ""
-    region: ""
-    accessKey: ""
-    secretKey: ""
 
 # Monitoring
 metrics:
@@ -282,7 +265,8 @@ sambaConfig: |
       max log size = 1000
 
       # Performance
-      socket options = TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072
+      socket options = >-
+        TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072
       deadtime = 30
       getwd cache = yes
 
@@ -352,30 +336,30 @@ samba:
   dnsForwarder: "8.8.8.8"
   logLevel: 1
   maxLogSize: 1000
-  
+
   # Protocol versions
   minProtocol: "SMB2_10"
   maxProtocol: "SMB3"
   clientMinProtocol: "SMB2_10"
   clientMaxProtocol: "SMB3"
-  
+
   # TLS settings
   tls:
     enabled: false
     keyFile: "/etc/ssl/private/samba.key"
     certFile: "/etc/ssl/certs/samba.crt"
     caFile: "/etc/ssl/certs/ca.crt"
-  
+
   # LDAP settings
   ldap:
     requireStrongAuth: "yes"
-  
+
   # Performance settings
   socketOptions: "TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072"
   readRaw: "yes"
   writeRaw: "yes"
   maxXmit: 65536
-  
+
   # Misc settings
   loadPrinters: "no"
   printing: "bsd"
@@ -391,7 +375,7 @@ autoscaling:
 
 # Backup Configuration
 backup:
-  enabled: false
+  enabled: true
   schedule: "0 2 * * *"
   retention: "7d"
   image:
@@ -399,6 +383,19 @@ backup:
     repository: "alpine"
     tag: "latest"
     pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
   s3:
     enabled: false
     bucket: ""
@@ -409,7 +406,7 @@ backup:
 # Kerberos Configuration
 kerberos:
   dnsLookupRealm: "true"
-  dnsLookupKdc: "true" 
+  dnsLookupKdc: "true"
   ticketLifetime: "24h"
   renewLifetime: "7d"
   forwardable: "true"

@@ -14,25 +14,54 @@ jobs:
 
       - name: Check for outdated dependencies
         run: |
-          echo "Checking Helm chart dependencies..."
+          echo "Checking Helm chart dependencies (standard mode)..."
+          chart_count=0
+
           for chart in Helm/*/Chart.yaml; do
             if [ -f "$chart" ]; then
+              chart_count=$((chart_count + 1))
               echo "Chart: $chart"
-              grep -E "version:|appVersion:" "$chart" || true
+              grep -E "version:|appVersion:" "$chart" || {
+                echo "⚠️ Could not find version information in $chart"
+              }
             fi
           done
 
+          echo "✅ Processed $chart_count charts"
+
       - name: Check Python dependencies
         run: |
-          echo "Checking Python requirements..."
-          find . -name "requirements*.txt" -exec cat {} \; || \
-            echo "No Python requirements found"
+          echo "Checking Python requirements (standard mode)..."
+          req_files=$(find . -name "requirements*.txt" | wc -l)
+
+          if [ $req_files -eq 0 ]; then
+            echo "⚠️ No Python requirements files found"
+          else
+            echo "Found $req_files requirements files:"
+            find . -name "requirements*.txt" -exec echo "  - {}" \; -exec cat {} \;
+          fi
 
       - name: Security audit
         run: |
-          echo "Running basic security checks..."
+          echo "Running basic security checks (standard mode)..."
+
           # Check for common security issues in YAML files
-          grep -r "password.*:" . --include="*.yml" \
-            --include="*.yaml" | head -10 || true
-          grep -r "secret.*:" . --include="*.yml" \
-            --include="*.yaml" | head -10 || true
+          echo "Checking for potential password fields..."
+          password_count=$(grep -r "password.*:" . --include="*.yml" \
+            --include="*.yaml" 2>/dev/null | wc -l)
+          if [ $password_count -gt 0 ]; then
+            echo "⚠️ Found $password_count potential password references:"
+            grep -r "password.*:" . --include="*.yml" \
+              --include="*.yaml" | head -10 || true
+          fi
+
+          echo "Checking for potential secret fields..."
+          secret_count=$(grep -r "secret.*:" . --include="*.yml" \
+            --include="*.yaml" 2>/dev/null | wc -l)
+          if [ $secret_count -gt 0 ]; then
+            echo "⚠️ Found $secret_count potential secret references:"
+            grep -r "secret.*:" . --include="*.yml" \
+              --include="*.yaml" | head -10 || true
+          fi
+
+          echo "✅ Security audit completed"

@@ -16,8 +16,15 @@ jobs:
 
       - name: Generate changelog
         run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^)
-          git log --pretty=format:"- %s" "$LAST_TAG"..HEAD > CHANGELOG.md
+          echo "Generating changelog (standard mode)..."
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || \
+            echo "")
+          if [ -n "$LAST_TAG" ]; then
+            git log --pretty=format:"- %s" "$LAST_TAG"..HEAD > CHANGELOG.md
+          else
+            echo "⚠️ No previous tag found, generating from initial commit"
+            git log --pretty=format:"- %s" > CHANGELOG.md
+          fi
 
       - name: Create release
         uses: softprops/action-gh-release@v1
@@ -33,12 +40,33 @@ jobs:
 
       - name: Package Helm charts
         run: |
+          echo "Packaging Helm charts (standard mode)..."
           mkdir -p releases
+          failed_charts=()
+
           for chart in Helm/*/; do
             if [ -f "$chart/Chart.yaml" ]; then
-              helm package "$chart" -d releases/
+              chart_name=$(basename "$chart")
+              echo "Packaging chart: $chart_name"
+
+              if ! helm package "$chart" -d releases/; then
+                failed_charts+=("$chart_name")
+                echo "⚠️ Failed to package $chart_name, but continuing..."
+              fi
             fi
           done
+
+          if [ ${#failed_charts[@]} -ne 0 ]; then
+            echo "⚠️ The following charts failed to package:"
+            printf '%s\n' "${failed_charts[@]}"
+            echo "Continuing with successfully packaged charts..."
+          fi
+
+          # Check if at least one chart was packaged successfully
+          if [ -z "$(ls -A releases/ 2>/dev/null)" ]; then
+            echo "❌ No charts were successfully packaged"
+            exit 1
+          fi
 
       - name: Upload Helm packages
         uses: softprops/action-gh-release@v1

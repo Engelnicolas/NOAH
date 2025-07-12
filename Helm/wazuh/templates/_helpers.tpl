@@ -231,7 +231,7 @@ ossec.conf: |
 
     <remote>
       <connection>secure</connection>
-      <port>{{ .Values.service.manager.ports | first | .port }}</port>
+      <port>{{ (.Values.service.manager.ports | first).port }}</port>
       <protocol>{{ .Values.agent.config.protocol }}</protocol>
       <allowed-ips>0.0.0.0/0</allowed-ips>
     </remote>

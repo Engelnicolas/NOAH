@@ -29,9 +29,11 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hostname: "oauth2-proxy.noah.local"
-  path: /oauth2
-  pathType: Prefix
+  hosts:
+    - host: "oauth2-proxy.noah.local"
+      paths:
+        - path: /oauth2
+          pathType: Prefix
   tls:
     enabled: true
     secretName: oauth2-proxy-tls
@@ -41,6 +43,7 @@ oauth2:
   # Provider configuration
   provider: "oidc"
   oidcIssuerUrl: "https://keycloak.noah.local/realms/noah"
+  oidcPort: 443
   clientId: "oauth2-proxy"
   clientSecret: ""
   existingSecret: ""
@@ -82,6 +85,16 @@ oauth2:
   passAuthorizationHeader: true
   passAccessToken: true
   passUserHeaders: true
+
+# Configuration
+config:
+  metricsAddress: "0.0.0.0:44180"
+
+# Session Storage
+sessionStorage:
+  type: "redis"
+  redis:
+    connectionUrl: "redis://oauth2-proxy-redis-master:6379"
   setAuthorizationHeader: true
   setXAuthRequestHeaders: true
 
@@ -146,6 +159,14 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
+  scaleDown:
+    stabilizationWindowSeconds: 300
+    percentPolicy: 50
+    periodSeconds: 15
+  scaleUp:
+    stabilizationWindowSeconds: 0
+    percentPolicy: 100
+    periodSeconds: 15
 
 # Pod Disruption Budget
 podDisruptionBudget:
@@ -225,6 +246,8 @@ networkPolicy:
     enabled: true
   egress:
     enabled: true
+  monitoring:
+    namespace: "monitoring"
 
 # Monitoring
 metrics:
@@ -258,3 +281,13 @@ initContainers: []
 
 # Sidecar containers
 sidecarContainers: []
+
+# Persistence Configuration
+persistence:
+  enabled: false
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+  annotations: {}
+  selector: {}

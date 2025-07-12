@@ -128,3 +128,25 @@ Get the storage class
 {{- define "openedr.storageClass" -}}
 {{- .Values.global.storageClass | default .Values.persistence.storageClass }}
 {{- end }}
+
+{{/*
+Get the PostgreSQL fullname
+*/}}
+{{- define "openedr.postgresql.fullname" -}}
+{{- if .Values.postgresql.enabled }}
+{{- printf "%s-postgresql" .Release.Name }}
+{{- else }}
+{{- .Values.openedr.manager.database.host }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get the secret name for database credentials
+*/}}
+{{- define "openedr.secretName" -}}
+{{- if .Values.openedr.manager.existingSecret }}
+{{- .Values.openedr.manager.existingSecret }}
+{{- else }}
+{{- include "openedr.fullname" . }}
+{{- end }}
+{{- end }}

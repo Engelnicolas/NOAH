@@ -10,7 +10,6 @@ metadata:
     app.kubernetes.io/component: manager
   annotations:
     checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-    checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
 spec:
   serviceName: {{ include "wazuh.manager.fullname" . }}-headless
   replicas: {{ .Values.manager.replicaCount }}
@@ -23,7 +22,6 @@ spec:
         {{- include "wazuh.manager.selectorLabels" . | nindent 8 }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         prometheus.io/scrape: "true"
         prometheus.io/port: "9090"
         prometheus.io/path: "/metrics"
@@ -207,7 +205,6 @@ metadata:
     app.kubernetes.io/component: dashboard
   annotations:
     checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-    checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
 spec:
   replicas: {{ .Values.dashboard.replicaCount }}
   selector:
@@ -219,7 +216,6 @@ spec:
         {{- include "wazuh.dashboard.selectorLabels" . | nindent 8 }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         prometheus.io/scrape: "true"
         prometheus.io/port: "5601"
         prometheus.io/path: "/api/status"
@@ -353,7 +349,6 @@ metadata:
     app.kubernetes.io/component: indexer
   annotations:
     checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-    checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
 spec:
   serviceName: {{ include "wazuh.indexer.fullname" . }}-headless
   replicas: {{ .Values.indexer.replicaCount }}
@@ -366,7 +361,6 @@ spec:
         {{- include "wazuh.indexer.selectorLabels" . | nindent 8 }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         prometheus.io/scrape: "true"
         prometheus.io/port: "9200"
         prometheus.io/path: "/_prometheus/metrics"
@@ -501,7 +495,6 @@ metadata:
     app.kubernetes.io/component: agent
   annotations:
     checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-    checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
 spec:
   selector:
     matchLabels:
@@ -512,7 +505,6 @@ spec:
         {{- include "wazuh.agent.selectorLabels" . | nindent 8 }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "wazuh.agent.serviceAccountName" . }}
       securityContext:

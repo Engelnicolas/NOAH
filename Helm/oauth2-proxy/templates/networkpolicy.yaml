@@ -35,7 +35,7 @@ spec:
         - protocol: TCP
           port: {{ .Values.service.port }}
     # Allow ingress from monitoring namespace for Prometheus
-    {{- if .Values.serviceMonitor.enabled }}
+    {{- if .Values.metrics.serviceMonitor.enabled }}
     - from:
         - namespaceSelector:
             matchLabels:
@@ -78,12 +78,12 @@ spec:
       ports:
         - protocol: TCP
           port: 443
-      {{- if .Values.config.oidcIssuerUrl }}
+      {{- if .Values.oauth2.oidcIssuerUrl }}
     # Specific egress for OIDC issuer
     - to: []
       ports:
         - protocol: TCP
-          port: {{ .Values.config.oidcPort | default 443 }}
+          port: {{ .Values.oauth2.oidcPort | default 443 }}
       {{- end }}
     # Allow connection to Redis (if enabled)
     {{- if .Values.redis.enabled }}

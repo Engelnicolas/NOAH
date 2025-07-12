@@ -55,7 +55,7 @@
    - Set up threat intelligence feeds for enhanced detection capabilities
 
 6. Monitoring and Metrics:
-   {{- if .Values.serviceMonitor.enabled }}
+   {{- if .Values.metrics.serviceMonitor.enabled }}
    ✅ Prometheus ServiceMonitor is enabled. OpenEDR metrics will be automatically discovered.
    {{- else }}
    📊 To enable Prometheus monitoring, set serviceMonitor.enabled=true

@@ -168,9 +168,11 @@ ingress:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     nginx.ingress.kubernetes.io/proxy-ssl-verify: "off"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hostname: "openedr.noah.local"
-  path: /
-  pathType: Prefix
+  hosts:
+    - host: "openedr.noah.local"
+      paths:
+        - path: /
+          pathType: Prefix
   tls:
     enabled: true
     secretName: openedr-tls
@@ -183,6 +185,99 @@ resources:
   requests:
     cpu: 1000m
     memory: 4Gi
+
+# Configuration
+config:
+  ssl:
+    enabled: true
+    certificateFile: "/opt/openedr/certs/server.crt"
+    privateKeyFile: "/opt/openedr/certs/server.key"
+  database:
+    type: "postgresql"
+    host: ""
+    port: 5432
+    pool:
+      min: 5
+      max: 20
+      idle: 10
+  redis:
+    host: ""
+    port: 6379
+    password: ""
+    database: 0
+  elasticsearch:
+    enabled: true
+    host: ""
+    port: 9200
+    index: "openedr"
+    ssl:
+      enabled: false
+      certificateFile: ""
+      privateKeyFile: ""
+  ldap:
+    enabled: true
+    host: ""
+    port: 389
+    bindDN: ""
+    bindPassword: ""
+  threat_detection:
+    enabled: true
+    realTime: true
+    behavioral: true
+    mlDetection: true
+    quarantine:
+      enabled: true
+      path: "/opt/openedr/quarantine"
+    machine_learning:
+      enabled: true
+      model_path: "/opt/openedr/models"
+  incident_response:
+    enabled: true
+    auto_response: true
+    quarantine: true
+    escalation:
+      enabled: true
+      webhook_url: ""
+      email_recipients: []
+  compliance:
+    frameworks:
+      - "PCI-DSS"
+      - "SOX"
+      - "ISO27001"
+    reporting:
+      enabled: true
+      schedule: "0 0 * * 0"
+  alerting:
+    email:
+      enabled: true
+      smtp_server: "smtp.noah.local"
+      smtp_port: 587
+    webhook:
+      enabled: true
+      urls: []
+    syslog:
+      enabled: true
+      server: "syslog.noah.local"
+      port: 514
+  agents:
+    auto_update: true
+    update_interval: "24h"
+    max_agents: 10000
+  threat_intelligence:
+    enabled: true
+    feeds:
+      - name: "abuse.ch"
+        url: "https://urlhaus.abuse.ch/downloads/csv/"
+        format: "csv"
+  logging:
+    level: "INFO"
+    format: "json"
+    max_file_size: "100MB"
+    max_files: 10
+
+# Session Storage
+sessionStorage:
+  type: "redis"
 
 # Auto-scaling
 autoscaling:
@@ -254,6 +349,30 @@ persistence:
     - ReadWriteOnce
   size: 100Gi
   annotations: {}
+  
+  # Data persistence
+  data:
+    annotations: {}
+    size: 50Gi
+    path: /opt/openedr/data
+  
+  # Logs persistence  
+  logs:
+    annotations: {}
+    size: 20Gi
+    path: /opt/openedr/logs
+  
+  # Quarantine persistence
+  quarantine:
+    annotations: {}
+    size: 10Gi
+    path: /opt/openedr/quarantine
+  
+  # Agents persistence
+  agents:
+    annotations: {}
+    size: 10Gi
+    path: /opt/openedr/agents
 
   # Additional volumes
   volumes:
@@ -321,9 +440,9 @@ elasticsearch:
   nodeGroup: "master"
   masterService: "openedr-elasticsearch"
   roles:
-    master: "true"
-    ingest: "true"
-    data: "true"
+    - master
+    - ingest
+    - data
   replicas: 1
   minimumMasterNodes: 1
   esMajorVersion: ""
@@ -362,6 +481,15 @@ serviceAccount:
   annotations: {}
   name: ""
 
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# RBAC Configuration
+rbac:
+  create: true
+
 # Network Policies
 networkPolicy:
   enabled: true
@@ -369,7 +497,15 @@ networkPolicy:
     enabled: true
   egress:
     enabled: true
+  monitoring:
+    namespace: "monitoring"
 
+# SMTP Configuration
+smtp:
+  enabled: false
+  host: ""
+  port: 587
+  
 # Pod annotations and labels
 podAnnotations: {}
 podLabels: {}
@@ -437,6 +573,17 @@ backup:
   enabled: true
   schedule: "0 1 * * *"
   retention: "30d"
+  image:
+    repository: "busybox"
+    tag: "latest"
+    pullPolicy: "IfNotPresent"
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    annotations: {}
   s3:
     enabled: false
     bucket: ""

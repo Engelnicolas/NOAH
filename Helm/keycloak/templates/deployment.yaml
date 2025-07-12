@@ -86,11 +86,6 @@ spec:
         # Force pod restart when configuration changes
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
 
-        # Force pod restart when database secrets change
-        {{- if .Values.postgresql.enabled }}
-        checksum/secret-postgresql: {{ include (print $.Template.BasePath "/secret-postgresql.yaml") . | sha256sum }}
-        {{- end }}
-
         # Additional pod annotations from values
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}

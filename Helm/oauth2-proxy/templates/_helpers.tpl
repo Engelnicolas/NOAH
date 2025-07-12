@@ -224,3 +224,10 @@ Generate OAuth2 Proxy command line arguments
 - {{ . }}
 {{- end }}
 {{- end }}
+
+{{/*
+Redis fullname
+*/}}
+{{- define "oauth2-proxy.redis.fullname" -}}
+{{- printf "%s-redis" (include "oauth2-proxy.fullname" .) }}
+{{- end }}

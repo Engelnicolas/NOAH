@@ -35,7 +35,7 @@ spec:
         - protocol: TCP
           port: {{ .Values.service.port }}
     # Allow ingress from monitoring namespace for Prometheus
-    {{- if .Values.serviceMonitor.enabled }}
+    {{- if .Values.metrics.serviceMonitor.enabled }}
     - from:
         - namespaceSelector:
             matchLabels:

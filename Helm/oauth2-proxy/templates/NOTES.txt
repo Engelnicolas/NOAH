@@ -74,7 +74,7 @@
    {{- end }}
 
 7. Monitoring and Metrics:
-   {{- if .Values.serviceMonitor.enabled }}
+   {{- if .Values.metrics.serviceMonitor.enabled }}
    ✅ Prometheus ServiceMonitor is enabled for monitoring.
    {{- else }}
    📊 To enable Prometheus monitoring, set serviceMonitor.enabled=true

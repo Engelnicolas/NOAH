@@ -476,6 +476,14 @@ prometheus:
               summary: "GitLab service is down"
               description: "GitLab service has been down for more than 2 minutes."
 
+  # Auto-scaling
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
 # Grafana configuration
 grafana:
   enabled: true
@@ -589,11 +597,10 @@ grafana:
     auth:
       disable_login_form: false
       disable_signout_menu: false
-
-    auth.ldap:
-      enabled: "{{ .Values.grafana.ldap.enabled }}"
-      config_file: /etc/grafana/ldap.toml
-      allow_sign_up: true
+      ldap:
+        enabled: "{{ .Values.grafana.ldap.enabled }}"
+        config_file: /etc/grafana/ldap.toml
+        allow_sign_up: true
 
     users:
       allow_sign_up: false

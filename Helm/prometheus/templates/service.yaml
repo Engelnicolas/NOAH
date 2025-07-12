@@ -7,6 +7,6 @@ spec:
   selector:
     app: prometheus
   ports:
-    - port: {{ .Values.service.port }}
+    - port: {{ .Values.prometheus.service.port | default 9090 }}
       targetPort: 9090
-  type: {{ .Values.service.type }}
+  type: {{ .Values.prometheus.service.type | default "ClusterIP" }}

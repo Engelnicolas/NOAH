@@ -15,7 +15,7 @@ rules:
   trailing-spaces:
     level: warning
 
-  # Document start is optional for most files  
+  # Document start is optional for most files
   document-start: disable
 
   # Allow empty values
@@ -59,11 +59,11 @@ ignore: |
   Helm/*/templates/*.yml
   **/templates/*.yaml
   **/templates/*.yml
-  
+
   # Ignore generated or external files
   */Chart.lock
   */requirements.lock
-  
+
   # Ignore GitHub Actions workflows (they have different validation rules)
   .github/workflows/*.yml
   .github/workflows/*.yaml

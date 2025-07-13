@@ -680,7 +680,10 @@ deploy_charts() {
     local deployed=0
     local failed=0
     
-    for chart_dir in Helm/*/; do
+    # Change to the parent directory to access Helm charts
+    local helm_base_dir="${SCRIPT_DIR}/../Helm"
+    
+    for chart_dir in "${helm_base_dir}"/*/; do
         if [ -f "${chart_dir}Chart.yaml" ]; then
             local chart_name=$(basename "$chart_dir")
             local release_name="${chart_name}"
@@ -694,7 +697,7 @@ deploy_charts() {
             
             if [ "$USE_SIMPLIFIED_CHARTS" = true ]; then
                 # Use simplified chart structure with default values
-                local values_file="${VALUES_DIR}/values-minimal.yaml"
+                local values_file="${SCRIPT_DIR}/${VALUES_DIR}/values-minimal.yaml"
                 
                 if [ -f "$values_file" ]; then
                     log "Using values file: $values_file"

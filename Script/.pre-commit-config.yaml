@@ -1,6 +1,6 @@
 # Pre-commit configuration for NOAH project
 # See https://pre-commit.com for more information
-# 
+#
 # This configuration provides fast, local validation with minimal duplication
 # CI/CD uses Super-Linter for comprehensive validation
 

@@ -71,7 +71,9 @@
 
 - name: Retrieve OAuth2 Proxy client secret
   uri:
-    url: "http://{{ keycloak_pods.resources[0].status.podIP }}:8080/admin/realms/{{ keycloak.realm }}/clients/{{ oauth2_client_info.json[0].id }}/client-secret"
+    url: >-
+      http://{{ keycloak_pods.resources[0].status.podIP }}:8080/admin/realms/{{ keycloak.realm }}/clients/{{
+      oauth2_client_info.json[0].id }}/client-secret
     method: GET
     headers:
       Authorization: "Bearer {{ admin_token.json.access_token }}"
@@ -425,5 +427,11 @@
       - --password
       - admin
       - --set
-      - >
-        '{"clientId": "nextcloud-client", "redirectUris": ["https://nextcloud.local/oidc"], "publicClient": false, "protocol": "openid-connect", "enabled": true}'
+      - >-
+        {
+          "clientId": "nextcloud-client",
+          "redirectUris": ["https://nextcloud.local/oidc"],
+          "publicClient": false,
+          "protocol": "openid-connect",
+          "enabled": true
+        }

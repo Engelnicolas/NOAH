@@ -27,7 +27,7 @@ echo "========================"
 
 configs=(
     ".pre-commit-config.yaml:Pre-commit hooks configuration"
-    ".markdownlint.yml:Markdown linting rules"
+    "Script/.markdownlint.yml:Markdown linting rules"
     "Script/.yamllint.yml:YAML linting rules"
     "Ansible/.ansible-lint:Ansible linting rules"
     ".github/workflows/ci.yml:GitHub Actions CI with Super-Linter"

@@ -34,7 +34,7 @@ repos:
     rev: v0.37.0
     hooks:
       - id: markdownlint
-        args: [-c, .markdownlint.yml]
+        args: [-c, Script/.markdownlint.yml]
 
   # Shell script linting
   - repo: https://github.com/shellcheck-py/shellcheck-py

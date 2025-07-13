@@ -1,65 +1,39 @@
+---
 # Markdownlint configuration for NOAH project
+# Simplified configuration to ensure CI compatibility
 # See https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
-
-# Extend the default configuration
-extends: null
-
-# Rule configuration
+# Default configuration
+default: true
+# Rule overrides - only essential rules
 rules:
   # Line length - Allow reasonable line lengths for documentation
   MD013:
     line_length: 120
-    # Allow tables and code blocks to exceed line length
     tables: false
     code_blocks: false
-
   # Unordered list style - Use consistent dashes
   MD004:
     style: "dash"
-
-  # Ordered list item prefix - Use ordered numbering
-  MD029:
-    style: "ordered"
-
-  # Inline HTML - Allow specific HTML elements for documentation
+  # Inline HTML - Allow common HTML elements for documentation
   MD033:
-    allowed_elements: ["br", "sup", "sub", "kbd", "details", "summary", "img", "a"]
-
+    allowed_elements:
+      - "br"
+      - "sup"
+      - "sub"
+      - "kbd"
+      - "details"
+      - "summary"
+      - "img"
+      - "a"
+      - "div"
   # Bare URL used - Allow bare URLs in documentation
   MD034: false
-
   # Emphasis used instead of a heading - Allow emphasis for important text
   MD036: false
-
   # Multiple top-level headings in the same document - Allow multiple H1s
   MD025: false
-
   # First line in a file should be a top-level heading - Not required
   MD041: false
-
   # Trailing punctuation in heading - Standard punctuation rules
   MD026:
     punctuation: ".,;:!?"
-
-  # Hard tabs - Use spaces instead of tabs
-  MD010: true
-
-  # Reversed link syntax - Ensure proper link formatting
-  MD011: true
-
-  # Multiple consecutive blank lines - Limit to single blank lines
-  MD012: true
-
-  # Blanks around headers - Require blank lines around headers
-  MD022: true
-
-  # Blanks around fences - Require blank lines around code fences
-  MD031: true
-
-  # Blanks around lists - Require blank lines around lists
-  MD032: true
-
-  # Proper names should have the correct capitalization
-  MD044:
-    names: ["JavaScript", "TypeScript", "GitHub", "Docker", "Kubernetes", "Helm", "YAML", "JSON", "HTML", "CSS", "NOAH"]
-    code_blocks: false

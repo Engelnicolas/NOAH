@@ -31,8 +31,8 @@ jobs:
           VALIDATE_MARKDOWN: true
           VALIDATE_ANSIBLE: true
           # Use custom configs
-          YAML_CONFIG_FILE: Script/.yamllint.yml
-          MARKDOWN_CONFIG_FILE: Script/.markdownlint.yml
+          YAML_CONFIG_FILE: ./Script/.yamllint.yml
+          MARKDOWN_CONFIG_FILE: ./Script/.markdownlint.yml
           # Disable strict mode
           SUPPRESS_POSSUM: true
           DISABLE_ERRORS: false

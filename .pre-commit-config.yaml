@@ -89,7 +89,7 @@ repos:
             -e VALIDATE_PYTHON_PYLINT=true \
             -e VALIDATE_JSON=true \
             -e YAML_CONFIG_FILE=Script/.yamllint.yml \
-            -e MARKDOWN_CONFIG_FILE=.markdownlint.yml \
+            -e MARKDOWN_CONFIG_FILE=Script/.markdownlint.yml \
             -e LOG_LEVEL=WARN \
             -e SUPPRESS_POSSUM=true \
             -v "$PWD":/tmp/lint \

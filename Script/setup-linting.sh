@@ -118,7 +118,7 @@ docker run --rm \
     -e VALIDATE_PYTHON_FLAKE8=true \
     -e VALIDATE_JSON=true \
     -e YAML_CONFIG_FILE=Script/.yamllint.yml \
-    -e MARKDOWN_CONFIG_FILE=.markdownlint.yml \
+    -e MARKDOWN_CONFIG_FILE=Script/.markdownlint.yml \
     -e LOG_LEVEL=INFO \
     -e SUPPRESS_POSSUM=true \
     -v "$PWD":/tmp/lint \

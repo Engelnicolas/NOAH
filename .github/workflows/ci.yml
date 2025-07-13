@@ -33,11 +33,11 @@ jobs:
       - name: Lint YAML
         run: |
           echo "Linting YAML files (standard mode)..."
-          find . -name "*.yml" -o -name "*.yaml" | \
-            grep -v .git | xargs yamllint -d relaxed || {
-              echo "⚠️ YAML linting found issues, but continuing in standard mode"
-              echo "Check the output above for warnings"
-            }
+          # Use custom yamllint config that properly excludes Helm templates
+          yamllint --config-file=Script/.yamllint.yml . || {
+            echo "⚠️ YAML linting found issues, but continuing in standard mode"
+            echo "Check the output above for warnings"
+          }
 
       - name: Lint Ansible
         run: |

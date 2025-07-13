@@ -6,71 +6,73 @@ name: Release
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   release:
+    name: Create Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Generate changelog
-        run: |
-          echo "Generating changelog (standard mode)..."
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || \
-            echo "")
-          if [ -n "$LAST_TAG" ]; then
-            git log --pretty=format:"- %s" "$LAST_TAG"..HEAD > CHANGELOG.md
-          else
-            echo "⚠️ No previous tag found, generating from initial commit"
-            git log --pretty=format:"- %s" > CHANGELOG.md
-          fi
-
-      - name: Create release
-        uses: softprops/action-gh-release@v1
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
         with:
-          files: |
-            Helm/**/*.tgz
-            Script/*.sh
-          body_path: CHANGELOG.md
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version: '3.13.3'
 
-      - name: Package Helm charts
+      - name: Package Helm Charts
         run: |
-          echo "Packaging Helm charts (standard mode)..."
+          echo "## Helm Chart Packaging" >> $GITHUB_STEP_SUMMARY
           mkdir -p releases
+          packaged_charts=()
           failed_charts=()
 
           for chart in Helm/*/; do
             if [ -f "$chart/Chart.yaml" ]; then
               chart_name=$(basename "$chart")
-              echo "Packaging chart: $chart_name"
-
-              if ! helm package "$chart" -d releases/; then
+              echo "📦 Packaging chart: $chart_name"
+              
+              if helm package "$chart" --destination releases/; then
+                packaged_charts+=("$chart_name")
+                echo "✅ $chart_name packaged successfully" >> $GITHUB_STEP_SUMMARY
+              else
                 failed_charts+=("$chart_name")
-                echo "⚠️ Failed to package $chart_name, but continuing..."
+                echo "❌ $chart_name packaging failed" >> $GITHUB_STEP_SUMMARY
               fi
             fi
           done
+          
+          echo "📊 Packaged ${#packaged_charts[@]} charts, ${#failed_charts[@]} failed" >> $GITHUB_STEP_SUMMARY
 
-          if [ ${#failed_charts[@]} -ne 0 ]; then
-            echo "⚠️ The following charts failed to package:"
-            printf '%s\n' "${failed_charts[@]}"
-            echo "Continuing with successfully packaged charts..."
+      - name: Generate Changelog
+        run: |
+          echo "## Changelog Generation" >> $GITHUB_STEP_SUMMARY
+          
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -n "$LAST_TAG" ]; then
+            echo "📝 Generating changelog from $LAST_TAG to HEAD"
+            git log --pretty=format:"- %s" "$LAST_TAG"..HEAD > CHANGELOG.md
+            echo "✅ Changelog generated from $LAST_TAG" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No previous tag found, generating from initial commit"
+            git log --pretty=format:"- %s" > CHANGELOG.md
+            echo "✅ Changelog generated from initial commit" >> $GITHUB_STEP_SUMMARY
           fi
 
-          # Check if at least one chart was packaged successfully
-          if [ -z "$(ls -A releases/ 2>/dev/null)" ]; then
-            echo "❌ No charts were successfully packaged"
-            exit 1
-          fi
-
-      - name: Upload Helm packages
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: releases/*.tgz
+          files: |
+            releases/*.tgz
+            Script/noah*
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

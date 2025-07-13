@@ -3,51 +3,79 @@ name: Dependencies
 
 "on":
   schedule:
-    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM
+    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM UTC
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
-  check-dependencies:
+  dependency-audit:
+    name: Dependency Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Check for outdated dependencies
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check Helm Chart Dependencies
         run: |
-          echo "Checking Helm chart dependencies (standard mode)..."
+          echo "## Helm Chart Dependencies" >> $GITHUB_STEP_SUMMARY
+          echo "| Chart | Version | App Version |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|---------|-------------|" >> $GITHUB_STEP_SUMMARY
+          
           chart_count=0
-
           for chart in Helm/*/Chart.yaml; do
             if [ -f "$chart" ]; then
               chart_count=$((chart_count + 1))
-              echo "Chart: $chart"
-              grep -E "version:|appVersion:" "$chart" || {
-                echo "⚠️ Could not find version information in $chart"
-              }
+              chart_name=$(basename "$(dirname "$chart")")
+              version=$(grep "^version:" "$chart" | cut -d' ' -f2)
+              app_version=$(grep "^appVersion:" "$chart" | cut -d' ' -f2 || echo "N/A")
+              echo "| $chart_name | $version | $app_version |" >> $GITHUB_STEP_SUMMARY
             fi
           done
-
+          
           echo "✅ Processed $chart_count charts"
 
-      - name: Check Python dependencies
+      - name: Check Python Dependencies
         run: |
-          echo "Checking Python requirements (standard mode)..."
+          echo "## Python Dependencies" >> $GITHUB_STEP_SUMMARY
           req_files=$(find . -name "requirements*.txt" | wc -l)
-
+          
           if [ $req_files -eq 0 ]; then
-            echo "⚠️ No Python requirements files found"
+            echo "⚠️ No Python requirements files found" >> $GITHUB_STEP_SUMMARY
           else
-            echo "Found $req_files requirements files:"
-            find . -name "requirements*.txt" -exec echo "  - {}" \; -exec cat {} \;
+            echo "Found $req_files requirements files:" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            find . -name "requirements*.txt" -exec echo "📄 {}" \; -exec cat {} \; >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Security audit
+      - name: Security Audit
         run: |
-          echo "Running basic security checks (standard mode)..."
-
-          # Check for common security issues in YAML files
-          echo "Checking for potential password fields..."
-          password_count=$(grep -r "password.*:" . --include="*.yml" \
+          echo "## Security Audit" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for potential password fields in YAML files
+          password_count=$(grep -r "password.*:" . --include="*.yml" --include="*.yaml" | wc -l)
+          if [ $password_count -gt 0 ]; then
+            echo "⚠️ Found $password_count potential password fields" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No obvious password fields found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check for hardcoded secrets patterns
+          secret_patterns=("api_key" "secret_key" "token" "password" "private_key")
+          for pattern in "${secret_patterns[@]}"; do
+            count=$(grep -ri "$pattern" . --include="*.yml" --include="*.yaml" --include="*.json" | wc -l)
+            if [ $count -gt 0 ]; then
+              echo "⚠️ Found $count potential $pattern references" >> $GITHUB_STEP_SUMMARY
+            fi
+          done \
             --include="*.yaml" 2>/dev/null | wc -l)
           if [ $password_count -gt 0 ]; then
             echo "⚠️ Found $password_count potential password references:"

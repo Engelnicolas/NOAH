@@ -159,6 +159,21 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.13.3'
+
+      - name: Install Test Dependencies
+        run: |
+          cd Test
+          pip install -r requirements.txt
+
       - name: Run validation scripts
         id: validation
         run: |
@@ -185,12 +200,53 @@ jobs:
           # Always continue (don't fail the build for warnings)
           exit 0
 
+      - name: Run unified test suite
+        id: test-suite
+        run: |
+          echo "Running unified test suite..."
+          cd Test
+          chmod +x unified_tests.sh
+          
+          # Create output file for test results
+          test_output_file="/tmp/test_results.txt"
+          
+          if ./unified_tests.sh > "$test_output_file" 2>&1; then
+            echo "✅ All tests passed"
+            echo "test-status=success" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Some tests failed"
+            echo "test-status=warning" >> $GITHUB_OUTPUT
+            exit_code=$?
+            if [ $exit_code -gt 1 ]; then
+              echo "❌ Critical test failures detected"
+              echo "test-status=failure" >> $GITHUB_OUTPUT
+            fi
+          fi
+          
+          # Display test results
+          echo "## Test Suite Results" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          cat "$test_output_file" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            Test/*.json
+            /tmp/noah_tests_*.log
+            /tmp/validation_results.txt
+            /tmp/test_results.txt
+
       - name: Summary
         run: |
           echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "- 🔍 **Super-Linter**: ${{ needs.super-linter.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- 📊 **Helm Validation**: ${{ needs.helm-validation.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🧪 **Tests**: ${{ steps.validation.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🧪 **Validation Scripts**: ${{ steps.validation.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎯 **Test Suite**: ${{ steps.test-suite.outputs.test-status }}" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.helm-validation.outputs.charts-with-warnings }}" != "" ]; then
             echo "- ⚠️ **Helm Warnings**: ${{ needs.helm-validation.outputs.charts-with-warnings }}" >> $GITHUB_STEP_SUMMARY

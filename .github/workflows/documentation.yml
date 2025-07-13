@@ -20,34 +20,58 @@ permissions:
   id-token: write
 
 jobs:
-  docs:
+  build-docs:
+    name: Build Documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: pip install mkdocs mkdocs-material mkdocs-mermaid2-plugin
-
-      - name: Build docs
+      - name: Install Dependencies
         run: |
-          echo "Building documentation (standard mode)..."
-          mkdocs build || {
-            echo "⚠️ Build issues found, continuing in standard mode"
-            echo "Checking for critical errors..."
+          pip install mkdocs mkdocs-material mkdocs-mermaid2-plugin
 
-            # Try to build without strict mode if the first attempt fails
-            if ! mkdocs build --verbose; then
-              echo "❌ Critical documentation build errors found"
+      - name: Build Documentation
+        run: |
+          echo "## Documentation Build" >> $GITHUB_STEP_SUMMARY
+          
+          if mkdocs build --strict; then
+            echo "✅ Documentation built successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Documentation build issues found" >> $GITHUB_STEP_SUMMARY
+            echo "Attempting build without strict mode..." >> $GITHUB_STEP_SUMMARY
+            
+            if mkdocs build --verbose; then
+              echo "✅ Documentation built with warnings" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ Critical documentation build errors" >> $GITHUB_STEP_SUMMARY
               exit 1
             fi
-          }
+          fi
 
-      - name: Upload pages artifact
+      - name: Upload Pages Artifact
         if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
+  deploy-docs:
+    name: Deploy Documentation
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: build-docs
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
         uses: actions/upload-pages-artifact@v3
         with:
           path: site/

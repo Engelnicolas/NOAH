@@ -12,8 +12,8 @@ for file in $(find Helm -name "*.yaml" -path "*/templates/*" | sort); do
     if [[ -f "$file" ]]; then
         echo "Checking: $file"
         
-        # Run yamllint and capture output
-        yamllint_output=$(yamllint "$file" 2>&1)
+        # Run yamllint with proper configuration and capture output
+        yamllint_output=$(yamllint --config-file=Script/.yamllint.yml "$file" 2>&1)
         
         if [[ $? -ne 0 ]]; then
             echo "❌ YAML errors found in $file:"

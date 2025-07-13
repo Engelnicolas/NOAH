@@ -140,10 +140,10 @@ Chart.lock
 charts/*/charts/
 
 # Kubernetes secrets (NEVER commit secrets!)
-*secret*.yaml
-*secret*.yml
-*-secret.yaml
-*-secret.yml
+#*secret*.yaml
+#*secret*.yml
+#*-secret.yaml
+#*-secret.yml
 
 # Rendered Kubernetes manifests
 rendered/

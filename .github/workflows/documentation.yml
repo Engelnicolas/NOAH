@@ -38,20 +38,14 @@ jobs:
 
       - name: Build Documentation
         run: |
-          echo "## Documentation Build" >> $GITHUB_STEP_SUMMARY
-          
-          if mkdocs build --strict; then
-            echo "✅ Documentation built successfully" >> $GITHUB_STEP_SUMMARY
+          SUMMARY=$GITHUB_STEP_SUMMARY
+          echo "## Documentation Build" >> $SUMMARY
+
+          if mkdocs build --verbose; then
+            echo "✅ Documentation built successfully" >> $SUMMARY
           else
-            echo "⚠️ Documentation build issues found" >> $GITHUB_STEP_SUMMARY
-            echo "Attempting build without strict mode..." >> $GITHUB_STEP_SUMMARY
-            
-            if mkdocs build --verbose; then
-              echo "✅ Documentation built with warnings" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "❌ Critical documentation build errors" >> $GITHUB_STEP_SUMMARY
-              exit 1
-            fi
+            echo "❌ Documentation build failed" >> $SUMMARY
+            exit 1
           fi
 
       - name: Upload Pages Artifact
@@ -65,18 +59,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: build-docs
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
     steps:
       - name: Deploy to GitHub Pages
-        id: deploy
-        uses: actions/deploy-pages@v4
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site/
-
-      - name: Deploy to Pages
-        if: github.ref == 'refs/heads/main'
-        uses: actions/deploy-pages@v4
         id: deployment
+        uses: actions/deploy-pages@v4

@@ -50,7 +50,7 @@ jobs:
           
           # Custom configurations
           YAML_CONFIG_FILE: Script/.yamllint.yml
-          MARKDOWN_CONFIG_FILE: .markdownlint.yml
+          MARKDOWN_CONFIG_FILE: Script/.markdownlint.yml
           
           # Output configuration
           LOG_LEVEL: INFO

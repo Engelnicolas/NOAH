@@ -3,7 +3,20 @@
 
 # =============================================================================
 # Operating System Files
-# =============================================================================
+# ==========# Credential files
+credentials*
+*credentials*
+*password*
+*passwd*
+*token*
+*api-key*
+
+# Allow Helm template files (these are templates, not actual secrets)
+!Helm/*/templates/*secret*.yaml
+!Helm/*/templates/*secret*.yml
+
+# But ignore actual secret files
+*secret*===========================================================
 
 # macOS
 .DS_Store
@@ -139,12 +152,6 @@ Chart.lock
 # Helm dependency charts
 charts/*/charts/
 
-# Kubernetes secrets (NEVER commit secrets!)
-#*secret*.yaml
-#*secret*.yml
-#*-secret.yaml
-#*-secret.yml
-
 # Rendered Kubernetes manifests
 rendered/
 output/
@@ -214,7 +221,7 @@ credentials*
 *passwd*
 *token*
 *api-key*
-*secret*
+#*secret*
 
 # Database credentials
 .pgpass

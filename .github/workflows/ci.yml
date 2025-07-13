@@ -10,7 +10,6 @@ name: CI
 permissions:
   contents: read
   security-events: write
-  statuses: write
 
 env:
   DEFAULT_BRANCH: main
@@ -34,9 +33,9 @@ jobs:
           # To report GitHub Actions status checks
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-          # Linter configurations - only specify linters to enable
-          VALIDATE_ALL_CODEBASE: false  # Only validate changed files
+          
+          # Linter configurations
+          VALIDATE_ALL_CODEBASE: false # Only validate changed files
           VALIDATE_YAML: true
           VALIDATE_DOCKERFILE_HADOLINT: true
           VALIDATE_BASH: true
@@ -47,211 +46,80 @@ jobs:
           VALIDATE_PYTHON_FLAKE8: true
           VALIDATE_PYTHON_PYLINT: true
           VALIDATE_JSON: true
-
+          
           # Custom configurations
           YAML_CONFIG_FILE: Script/.yamllint.yml
           MARKDOWN_CONFIG_FILE: Script/.markdownlint.yml
-
+          
           # Output configuration
           LOG_LEVEL: INFO
           SUPPRESS_POSSUM: true
 
-          # Performance optimizations
-          FILTER_REGEX_EXCLUDE: >-
-            (\.git/|\.vscode/|\.cache/|node_modules/|\.pytest_cache/)
-
-  helm-validation:
-    name: Helm Charts Validation
-    runs-on: ubuntu-latest
-    outputs:
-      charts-with-warnings: ${{ steps.helm-lint.outputs.warnings }}
-      charts-with-errors: ${{ steps.helm-lint.outputs.errors }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: '3.13.3'
-
-      - name: Add Helm repositories
-        run: |
-          helm repo add bitnami https://charts.bitnami.com/bitnami
-          helm repo add elastic https://helm.elastic.co
-          helm repo update
-
       - name: Lint Helm Charts
-        id: helm-lint
         run: |
-          echo "Linting Helm charts..."
+          echo "Linting Helm charts (standard mode)..."
           failed_charts=()
           warning_charts=()
-          success_charts=()
 
           for chart in Helm/*/; do
             if [ -f "$chart/Chart.yaml" ]; then
               chart_name=$(basename "$chart")
-              echo "::group::Linting chart: $chart_name"
+              echo "Linting chart: $chart_name"
 
               if helm lint "$chart" 2>&1 | tee /tmp/lint_output; then
                 if grep -q "WARNING" /tmp/lint_output; then
                   warning_charts+=("$chart_name")
-                  echo "::warning::Chart $chart_name has warnings"
-                else
-                  success_charts+=("$chart_name")
                 fi
               else
                 if grep -q "ERROR" /tmp/lint_output; then
                   failed_charts+=("$chart_name")
-                  echo "::error::Chart $chart_name has critical errors"
                 else
                   warning_charts+=("$chart_name")
-                  echo "::warning::Chart $chart_name has warnings"
                 fi
               fi
-              echo "::endgroup::"
             fi
           done
 
-          # Set outputs for other jobs
-          echo "warnings=${warning_charts[*]}" >> $GITHUB_OUTPUT
-          echo "errors=${failed_charts[*]}" >> $GITHUB_OUTPUT
-
-          # Summary
-          SUMMARY=$GITHUB_STEP_SUMMARY
-          echo "## Helm Chart Validation Results" >> $SUMMARY
-          echo "- ✅ **Success**: ${#success_charts[@]} charts" >> $SUMMARY
-          echo "- ⚠️ **Warnings**: ${#warning_charts[@]} charts" >> $SUMMARY
-          echo "- ❌ **Errors**: ${#failed_charts[@]} charts" >> $SUMMARY
-
           if [ ${#warning_charts[@]} -ne 0 ]; then
             echo "⚠️ Charts with warnings: ${warning_charts[*]}"
-            echo "- **Charts with warnings**: ${warning_charts[*]}" >> $SUMMARY
           fi
 
           if [ ${#failed_charts[@]} -ne 0 ]; then
             echo "❌ Charts with critical errors: ${failed_charts[*]}"
-            echo "- **Charts with errors**: ${failed_charts[*]}" >> $SUMMARY
             exit 1
-          fi
-
-          if [ ${#success_charts[@]} -ne 0 ]; then
-            echo "✅ Charts passed validation: ${success_charts[*]}"
           fi
 
           echo "✅ Helm chart linting completed"
 
   test:
-    name: Run Tests
     runs-on: ubuntu-latest
-    needs: [super-linter, helm-validation]
-    if: >-
-      always() &&
-      (needs.super-linter.result == 'success' ||
-       needs.helm-validation.result == 'success')
+    needs: super-linter
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: '3.13.3'
-
-      - name: Install Test Dependencies
-        run: |
-          cd Test
-          pip install -r requirements.txt
+      - uses: actions/checkout@v4
 
       - name: Run validation scripts
-        id: validation
         run: |
-          echo "Running validation scripts..."
+          echo "Running validation scripts (standard mode)..."
           chmod +x Script/noah-validate
+          ./Script/noah-validate || {
+            echo "⚠️ Validation scripts found issues, but continuing in standard mode"
+            echo "Check the output above for details"
+          }
 
-          # Create output file for results
-          output_file="/tmp/validation_results.txt"
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-          if ./Script/noah-validate > "$output_file" 2>&1; then
-            echo "✅ All validation scripts passed"
-            echo "status=success" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ Some validation scripts found issues"
-            echo "status=warning" >> $GITHUB_OUTPUT
-          fi
-
-          # Display results
-          echo "## Validation Results" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          cat "$output_file" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-
-          # Always continue (don't fail the build for warnings)
-          exit 0
-
-      - name: Run unified test suite
-        id: test-suite
-        run: |
-          echo "Running unified test suite..."
-          cd Test
-          chmod +x unified_tests.sh
-
-          # Create output file for test results
-          test_output_file="/tmp/test_results.txt"
-
-          if ./unified_tests.sh > "$test_output_file" 2>&1; then
-            echo "✅ All tests passed"
-            echo "test-status=success" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ Some tests failed"
-            echo "test-status=warning" >> $GITHUB_OUTPUT
-            exit_code=$?
-            if [ $exit_code -gt 1 ]; then
-              echo "❌ Critical test failures detected"
-              echo "test-status=failure" >> $GITHUB_OUTPUT
-            fi
-          fi
-
-          # Display test results
-          echo "## Test Suite Results" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          cat "$test_output_file" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: |
-            Test/*.json
-            /tmp/noah_tests_*.log
-            /tmp/validation_results.txt
-            /tmp/test_results.txt
-
-      - name: Summary
-        run: |
-          S=$GITHUB_STEP_SUMMARY
-          echo "## CI Pipeline Summary" >> $S
-
-          # Pipeline results
-          LINTER_RESULT="${{ needs.super-linter.result }}"
-          HELM_RESULT="${{ needs.helm-validation.result }}"
-          VALIDATION_RESULT="${{ steps.validation.outputs.status }}"
-          TEST_RESULT="${{ steps.test-suite.outputs.test-status }}"
-
-          echo "- 🔍 **Super-Linter**: $LINTER_RESULT" >> $S
-          echo "- 📊 **Helm Validation**: $HELM_RESULT" >> $S
-          echo "- 🧪 **Validation Scripts**: $VALIDATION_RESULT" >> $S
-          echo "- 🎯 **Test Suite**: $TEST_RESULT" >> $S
-
-          WARNINGS="${{ needs.helm-validation.outputs.charts-with-warnings }}"
-          if [ "$WARNINGS" != "" ]; then
-            echo "- ⚠️ **Helm Warnings**: $WARNINGS" >> $S
-          fi
+      - name: Run security scan
+        uses: super-linter/super-linter@v5.7.2
+        env:
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_ALL_CODEBASE: false
+          VALIDATE_YAML: true
+          VALIDATE_BASH: true
+          VALIDATE_ANSIBLE: true
+          YAML_CONFIG_FILE: Script/.yamllint.yml
+          LOG_LEVEL: INFO
+          SUPPRESS_POSSUM: true

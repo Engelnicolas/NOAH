@@ -14,7 +14,6 @@ SCRIPT_NAME="noah-infra"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Configuration
-ENVIRONMENT="dev"
 NAMESPACE_PREFIX="noah"
 HELM_TIMEOUT="600s"
 VERBOSE=false
@@ -23,7 +22,7 @@ AUTO_INSTALL=true  # New: Automatically install missing prerequisites
 SKIP_K8S_CHECK=false  # New: Skip Kubernetes connectivity check
 ACTION="status"  # setup, deploy, status, teardown
 USE_SIMPLIFIED_CHARTS=true  # New: Use simplified chart structure
-VALUES_DIR="../Helm/values"  # New: Environment-specific values directory
+VALUES_DIR="../Helm/values"  # Values directory
 
 # Color codes
 readonly RED='\033[0;31m'
@@ -74,7 +73,6 @@ PREREQUISITES:
     - docker        Container runtime
 
 OPTIONS:
-    -e, --environment ENV    Environment (dev, staging, prod) (default: dev)
     -n, --namespace PREFIX   Namespace prefix (default: noah)
     -t, --timeout TIMEOUT    Helm timeout (default: 600s)
     -v, --verbose           Enable verbose output
@@ -85,7 +83,7 @@ OPTIONS:
 
 EXAMPLES:
     ./noah-infra status                    # Check current status
-    ./noah-infra setup --environment dev   # Set up development environment
+    ./noah-infra setup                     # Set up infrastructure
     ./noah-infra deploy --verbose          # Deploy with verbose output
     ./noah-infra teardown --dry-run        # Show what would be removed
     ./noah-infra setup --no-auto-install   # Check prerequisites without auto-install
@@ -643,7 +641,7 @@ check_prerequisites() {
 
 # Setup infrastructure
 setup_infrastructure() {
-    log "Setting up infrastructure for environment: $ENVIRONMENT"
+    log "Setting up infrastructure"
     
     if [ "$DRY_RUN" = true ]; then
         log "DRY RUN: Would set up infrastructure"
@@ -651,7 +649,7 @@ setup_infrastructure() {
     fi
     
     # Create namespace if it doesn't exist
-    local namespace="${NAMESPACE_PREFIX}-${ENVIRONMENT}"
+    local namespace="${NAMESPACE_PREFIX}"
     if ! kubectl get namespace "$namespace" >/dev/null 2>&1; then
         log "Creating namespace: $namespace"
         kubectl create namespace "$namespace"
@@ -663,7 +661,7 @@ setup_infrastructure() {
     if [ -f "Ansible/main.yml" ]; then
         log "Running Ansible setup playbook..."
         cd Ansible
-        ansible-playbook main.yml -i inventory --limit "$ENVIRONMENT" || {
+        ansible-playbook main.yml -i inventory || {
             log_error "Ansible playbook failed"
             cd ..
             return 1
@@ -676,16 +674,19 @@ setup_infrastructure() {
 
 # Deploy Helm charts
 deploy_charts() {
-    log "Deploying Helm charts to environment: $ENVIRONMENT"
+    log "Deploying Helm charts"
     
-    local namespace="${NAMESPACE_PREFIX}-${ENVIRONMENT}"
+    local namespace="${NAMESPACE_PREFIX}"
     local deployed=0
     local failed=0
     
-    for chart_dir in Helm/*/; do
+    # Change to the parent directory to access Helm charts
+    local helm_base_dir="${SCRIPT_DIR}/../Helm"
+    
+    for chart_dir in "${helm_base_dir}"/*/; do
         if [ -f "${chart_dir}Chart.yaml" ]; then
             local chart_name=$(basename "$chart_dir")
-            local release_name="${chart_name}-${ENVIRONMENT}"
+            local release_name="${chart_name}"
             
             log "Deploying chart: $chart_name"
             
@@ -695,8 +696,8 @@ deploy_charts() {
             fi
             
             if [ "$USE_SIMPLIFIED_CHARTS" = true ]; then
-                # Use simplified chart structure with environment-specific values
-                local values_file="${VALUES_DIR}/${ENVIRONMENT}.yaml"
+                # Use simplified chart structure with default values
+                local values_file="${SCRIPT_DIR}/${VALUES_DIR}/values-minimal.yaml"
                 
                 if [ -f "$values_file" ]; then
                     log "Using values file: $values_file"
@@ -742,9 +743,9 @@ deploy_charts() {
 
 # Check infrastructure status
 check_status() {
-    log "Checking infrastructure status for environment: $ENVIRONMENT"
+    log "Checking infrastructure status"
     
-    local namespace="${NAMESPACE_PREFIX}-${ENVIRONMENT}"
+    local namespace="${NAMESPACE_PREFIX}"
     
     # Check if namespace exists
     if ! kubectl get namespace "$namespace" >/dev/null 2>&1; then
@@ -755,7 +756,6 @@ check_status() {
     echo ""
     echo "📊 Infrastructure Status"
     echo "======================="
-    echo "Environment: $ENVIRONMENT"
     echo "Namespace: $namespace"
     echo ""
     
@@ -802,9 +802,9 @@ check_status() {
 
 # Teardown infrastructure
 teardown_infrastructure() {
-    log "Tearing down infrastructure for environment: $ENVIRONMENT"
+    log "Tearing down infrastructure"
     
-    local namespace="${NAMESPACE_PREFIX}-${ENVIRONMENT}"
+    local namespace="${NAMESPACE_PREFIX}"
     
     if [ "$DRY_RUN" = true ]; then
         log "DRY RUN: Would teardown infrastructure in namespace: $namespace"
@@ -872,10 +872,6 @@ shift
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -e|--environment)
-            ENVIRONMENT="$2"
-            shift 2
-            ;;
         -n|--namespace)
             NAMESPACE_PREFIX="$2"
             shift 2

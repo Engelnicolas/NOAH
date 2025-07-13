@@ -1,13 +1,10 @@
 ---
 name: Release
 
-"on":
+on:
   push:
     tags:
       - 'v*'
-
-permissions:
-  contents: write
 
 jobs:
   release:
@@ -16,63 +13,10 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: '3.13.3'
-
-      - name: Package Helm Charts
-        run: |
-          echo "## Helm Chart Packaging" >> $GITHUB_STEP_SUMMARY
-          mkdir -p releases
-          packaged_charts=()
-          failed_charts=()
-
-          for chart in Helm/*/; do
-            if [ -f "$chart/Chart.yaml" ]; then
-              chart_name=$(basename "$chart")
-              echo "📦 Packaging chart: $chart_name"
-              
-              if helm package "$chart" --destination releases/; then
-                packaged_charts+=("$chart_name")
-                echo "✅ $chart_name packaged successfully" >> $GITHUB_STEP_SUMMARY
-              else
-                failed_charts+=("$chart_name")
-                echo "❌ $chart_name packaging failed" >> $GITHUB_STEP_SUMMARY
-              fi
-            fi
-          done
-          
-          echo "📊 Packaged ${#packaged_charts[@]} charts, ${#failed_charts[@]} failed" >> $GITHUB_STEP_SUMMARY
-
-      - name: Generate Changelog
-        run: |
-          echo "## Changelog Generation" >> $GITHUB_STEP_SUMMARY
-          
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          
-          if [ -n "$LAST_TAG" ]; then
-            echo "📝 Generating changelog from $LAST_TAG to HEAD"
-            git log --pretty=format:"- %s" "$LAST_TAG"..HEAD > CHANGELOG.md
-            echo "✅ Changelog generated from $LAST_TAG" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ No previous tag found, generating from initial commit"
-            git log --pretty=format:"- %s" > CHANGELOG.md
-            echo "✅ Changelog generated from initial commit" >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: ncipollo/release-action@v1
         with:
-          files: |
-            releases/*.tgz
-            Script/noah*
-          body_path: CHANGELOG.md
+          generateReleaseNotes: true
           draft: false
           prerelease: false
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

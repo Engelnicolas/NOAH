@@ -1,0 +1,113 @@
+# Pre-commit configuration for NOAH project
+# See https://pre-commit.com for more information
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '^(.*\.md|.*\.yml|.*\.yaml)$'
+      - id: end-of-file-fixer
+        exclude: '^(.*\.md)$'
+      - id: check-yaml
+        args: ['--unsafe']
+        exclude: '^Helm/.*/templates/.*\.ya?ml$'
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+
+  # YAML linting with custom config
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+        args: [-c, Script/.yamllint.yml]
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.37.0
+    hooks:
+      - id: markdownlint
+        args: [-c, .markdownlint.yml]
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: [-e, SC1091, -e, SC2034]
+
+  # Python linting
+  - repo: https://github.com/psf/black
+    rev: 23.11.0
+    hooks:
+      - id: black
+        language_version: python3
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.1.0
+    hooks:
+      - id: flake8
+        args: [--max-line-length=88, --extend-ignore=E203,W503]
+
+  # Ansible linting
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v6.22.1
+    hooks:
+      - id: ansible-lint
+        files: ^Ansible/.*\.(yml|yaml)$
+        args: [-c, Ansible/.ansible-lint]
+
+  # Docker linting
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: [--ignore, DL3008, --ignore, DL3009]
+
+  # Local Helm linting
+  - repo: local
+    hooks:
+      - id: helm-lint
+        name: Helm Lint
+        entry: bash -c 'for chart in Helm/*/; do if [ -f "$chart/Chart.yaml" ]; then echo "Linting $chart..."; helm lint "$chart" || exit 1; fi; done'
+        language: system
+        files: '^Helm/.*'
+        pass_filenames: false
+
+  # Super-Linter for comprehensive checking
+  - repo: local
+    hooks:
+      - id: super-linter
+        name: Super-Linter
+        entry: bash -c '
+          docker run --rm \
+            -e DEFAULT_BRANCH=main \
+            -e RUN_LOCAL=true \
+            -e VALIDATE_ALL_CODEBASE=false \
+            -e VALIDATE_YAML=true \
+            -e VALIDATE_DOCKERFILE_HADOLINT=true \
+            -e VALIDATE_BASH=true \
+            -e VALIDATE_SHELL_SHFMT=true \
+            -e VALIDATE_MARKDOWN=true \
+            -e VALIDATE_ANSIBLE=true \
+            -e VALIDATE_PYTHON_BLACK=true \
+            -e VALIDATE_PYTHON_FLAKE8=true \
+            -e VALIDATE_JSON=true \
+            -e VALIDATE_KUBERNETES_KUBECONFORM=false \
+            -e VALIDATE_CHECKOV=false \
+            -e VALIDATE_TERRAFORM_TERRASCAN=false \
+            -e VALIDATE_CSS=false \
+            -e VALIDATE_JAVASCRIPT_ES=false \
+            -e VALIDATE_TYPESCRIPT_ES=false \
+            -e YAML_CONFIG_FILE=Script/.yamllint.yml \
+            -e MARKDOWN_CONFIG_FILE=.markdownlint.yml \
+            -e LOG_LEVEL=WARN \
+            -e SUPPRESS_POSSUM=true \
+            -v "$PWD":/tmp/lint \
+            ghcr.io/super-linter/super-linter:v5.7.2
+        '
+        language: system
+        pass_filenames: false
+        stages: [manual]

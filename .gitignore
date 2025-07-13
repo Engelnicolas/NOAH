@@ -411,6 +411,9 @@ _site/
 cache/
 *.cache
 
+# Pre-commit cache
+.pre-commit-cache/
+
 # Index files
 .index
 *.idx

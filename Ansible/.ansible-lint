@@ -1,0 +1,42 @@
+# Ansible-lint configuration for NOAH project
+# See https://ansible-lint.readthedocs.io/en/latest/configuring.html
+
+# Exclude certain paths
+exclude_paths:
+  - .cache/
+  - .github/
+  - test/
+  - Script/
+
+# Enable offline mode to avoid fetching new roles
+offline: false
+
+# Use default rules except for the ones disabled below
+use_default_rules: true
+
+# Skip certain rules that are too strict for our use case
+skip_list:
+  - yaml[line-length]  # We handle line length with yamllint
+  - name[casing]       # Allow flexible naming
+  - role-name          # Allow flexible role naming
+  - galaxy[no-changelog]  # Not using galaxy
+
+# Set the verbosity level
+verbosity: 1
+
+# Configure rule warnings vs errors
+warn_list:
+  - experimental
+  - jinja[spacing]
+  - yaml[comments]
+
+# Rules configuration
+rules:
+  line-length:
+    max: 150
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 1

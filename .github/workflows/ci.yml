@@ -10,6 +10,7 @@ name: CI
 permissions:
   contents: read
   security-events: write
+  statuses: write
 
 env:
   DEFAULT_BRANCH: main
@@ -64,10 +65,16 @@ jobs:
           # Output configuration
           LOG_LEVEL: INFO
           SUPPRESS_POSSUM: true
+          
+          # Performance optimizations
+          FILTER_REGEX_EXCLUDE: '(\.git/|\.vscode/|\.cache/|node_modules/|\.pytest_cache/)'
 
   helm-validation:
     name: Helm Charts Validation
     runs-on: ubuntu-latest
+    outputs:
+      charts-with-warnings: ${{ steps.helm-lint.outputs.warnings }}
+      charts-with-errors: ${{ steps.helm-lint.outputs.errors }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -84,37 +91,61 @@ jobs:
           helm repo update
 
       - name: Lint Helm Charts
+        id: helm-lint
         run: |
           echo "Linting Helm charts..."
           failed_charts=()
           warning_charts=()
+          success_charts=()
 
           for chart in Helm/*/; do
             if [ -f "$chart/Chart.yaml" ]; then
               chart_name=$(basename "$chart")
-              echo "Linting chart: $chart_name"
+              echo "::group::Linting chart: $chart_name"
 
               if helm lint "$chart" 2>&1 | tee /tmp/lint_output; then
                 if grep -q "WARNING" /tmp/lint_output; then
                   warning_charts+=("$chart_name")
+                  echo "::warning::Chart $chart_name has warnings"
+                else
+                  success_charts+=("$chart_name")
                 fi
               else
                 if grep -q "ERROR" /tmp/lint_output; then
                   failed_charts+=("$chart_name")
+                  echo "::error::Chart $chart_name has critical errors"
                 else
                   warning_charts+=("$chart_name")
+                  echo "::warning::Chart $chart_name has warnings"
                 fi
               fi
+              echo "::endgroup::"
             fi
           done
 
+          # Set outputs for other jobs
+          echo "warnings=${warning_charts[*]}" >> $GITHUB_OUTPUT
+          echo "errors=${failed_charts[*]}" >> $GITHUB_OUTPUT
+
+          # Summary
+          echo "## Helm Chart Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **Success**: ${#success_charts[@]} charts" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚠️ **Warnings**: ${#warning_charts[@]} charts" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ **Errors**: ${#failed_charts[@]} charts" >> $GITHUB_STEP_SUMMARY
+
           if [ ${#warning_charts[@]} -ne 0 ]; then
             echo "⚠️ Charts with warnings: ${warning_charts[*]}"
+            echo "- **Charts with warnings**: ${warning_charts[*]}" >> $GITHUB_STEP_SUMMARY
           fi
 
           if [ ${#failed_charts[@]} -ne 0 ]; then
             echo "❌ Charts with critical errors: ${failed_charts[*]}"
+            echo "- **Charts with errors**: ${failed_charts[*]}" >> $GITHUB_STEP_SUMMARY
             exit 1
+          fi
+
+          if [ ${#success_charts[@]} -ne 0 ]; then
+            echo "✅ Charts passed validation: ${success_charts[*]}"
           fi
 
           echo "✅ Helm chart linting completed"
@@ -123,15 +154,44 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     needs: [super-linter, helm-validation]
+    if: always() && (needs.super-linter.result == 'success' || needs.helm-validation.result == 'success')
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Run validation scripts
+        id: validation
         run: |
           echo "Running validation scripts..."
           chmod +x Script/noah-validate
-          ./Script/noah-validate || {
-            echo "⚠️ Validation scripts found issues, but continuing"
-            echo "Check the output above for details"
-          }
+          
+          # Create output file for results
+          output_file="/tmp/validation_results.txt"
+          
+          if ./Script/noah-validate > "$output_file" 2>&1; then
+            echo "✅ All validation scripts passed"
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Some validation scripts found issues"
+            echo "status=warning" >> $GITHUB_OUTPUT
+          fi
+          
+          # Display results
+          echo "## Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          cat "$output_file" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          
+          # Always continue (don't fail the build for warnings)
+          exit 0
+
+      - name: Summary
+        run: |
+          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔍 **Super-Linter**: ${{ needs.super-linter.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 **Helm Validation**: ${{ needs.helm-validation.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🧪 **Tests**: ${{ steps.validation.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.helm-validation.outputs.charts-with-warnings }}" != "" ]; then
+            echo "- ⚠️ **Helm Warnings**: ${{ needs.helm-validation.outputs.charts-with-warnings }}" >> $GITHUB_STEP_SUMMARY
+          fi

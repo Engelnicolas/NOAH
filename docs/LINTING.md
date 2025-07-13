@@ -4,11 +4,12 @@ This document describes the automated code quality and linting setup for the NOA
 
 ## Overview
 
-The NOAH project uses a comprehensive linting and code quality setup that includes:
+The NOAH project uses a comprehensive linting and code quality setup with optimized configurations to avoid duplication:
 
-- **GitHub Super-Linter**: Multi-language linter running in CI/CD
-- **Pre-commit hooks**: Local validation before commits
+- **GitHub Super-Linter**: Comprehensive multi-language linting in CI/CD
+- **Pre-commit hooks**: Fast local validation with minimal overlap
 - **Custom configurations**: Tailored rules for our project structure
+- **Optimized workflow**: Local hooks focus on speed, CI provides comprehensive validation
 
 ## Supported Languages and Tools
 
@@ -16,10 +17,10 @@ The NOAH project uses a comprehensive linting and code quality setup that includ
 - **YAML**: Custom yamllint configuration excluding Helm templates
 - **Markdown**: Markdownlint with project-specific rules
 - **Bash/Shell**: ShellCheck for script validation
-- **Python**: Black formatting + Flake8 linting
-- **Ansible**: Ansible-lint for playbook validation
+- **Python**: Black formatting locally + comprehensive linting in CI
+- **Ansible**: Ansible-lint for playbook validation (excludes YAML formatting)
 - **Helm**: Helm lint for chart validation
-- **Docker**: Hadolint for Dockerfile linting
+- **Docker**: Hadolint for Dockerfile linting (CI only)
 - **JSON**: JSON syntax validation
 
 ### Quality Checks
@@ -28,6 +29,23 @@ The NOAH project uses a comprehensive linting and code quality setup that includ
 - Merge conflict detection
 - Case conflict detection
 - Mixed line ending normalization
+
+## Configuration Strategy
+
+### Local Pre-commit (Fast)
+- **YAML**: yamllint with custom config
+- **Markdown**: markdownlint validation
+- **Shell**: shellcheck for basic validation
+- **Python**: black formatting only
+- **Ansible**: ansible-lint for playbook structure
+- **Helm**: helm lint for chart validation
+
+### CI/CD Super-Linter (Comprehensive)
+- **All languages**: Full validation with additional checks
+- **Python**: black + flake8 + pylint
+- **Docker**: hadolint validation
+- **Shell**: shellcheck + shfmt formatting
+- **Performance**: Only validates changed files
 
 ## Quick Setup
 
@@ -50,20 +68,23 @@ Pre-commit hooks run automatically on each commit. No action needed!
 
 ### Manual Validation
 ```bash
-# Run all hooks on changed files
+# Run all hooks on changed files (fast local validation)
 pre-commit run
 
-# Run all hooks on all files
+# Run all hooks on all files (comprehensive local check)
 pre-commit run --all-files
 
 # Run specific hook
 pre-commit run --hook-id yamllint
 
-# Run Super-Linter locally (requires Docker)
+# Run Super-Linter locally (comprehensive, requires Docker)
 ./run-super-linter.sh
 
-# Run Super-Linter on all files
+# Run Super-Linter on all files (full validation)
 ./run-super-linter.sh --all
+
+# Run only Super-Linter hook (manual stage)
+pre-commit run --hook-stage manual
 ```
 
 ### GitHub Actions
@@ -148,19 +169,24 @@ docker run hello-world
 
 ## Best Practices
 
-1. **Run hooks before pushing**: `pre-commit run --all-files`
-2. **Update regularly**: `pre-commit autoupdate`
-3. **Fix issues incrementally**: Don't disable entire hooks
-4. **Use meaningful commit messages**: Follow conventional commits
-5. **Test locally**: Use `./run-super-linter.sh` before pushing
+1. **Layered validation**: Use fast local hooks for development, rely on CI for comprehensive validation
+2. **Run hooks before pushing**: `pre-commit run --all-files`
+3. **Update regularly**: `pre-commit autoupdate`
+4. **Fix issues incrementally**: Don't disable entire hooks
+5. **Use meaningful commit messages**: Follow conventional commits
+6. **Test comprehensively**: Use `./run-super-linter.sh` for full validation before important commits
+7. **Avoid duplication**: Configuration is optimized to prevent redundant checks
 
 ## Benefits
 
+- **Fast development workflow** with optimized local hooks
+- **Comprehensive CI validation** without duplication
 - **Consistent code quality** across the entire project
 - **Early issue detection** before CI/CD
 - **Automated formatting** for supported languages
 - **Reduced review time** by catching issues early
 - **Team collaboration** with shared standards
+- **Performance optimized** to avoid redundant validation
 
 ## Integration with IDEs
 

@@ -30,13 +30,5 @@ warn_list:
   - jinja[spacing]
   - yaml[comments]
 
-# Rules configuration
-rules:
-  line-length:
-    max: 150
-  braces:
-    min-spaces-inside: 0
-    max-spaces-inside: 1
-  brackets:
-    min-spaces-inside: 0
-    max-spaces-inside: 1
+# Note: YAML formatting rules are handled by yamllint (Script/.yamllint.yml)
+# to avoid duplication and conflicts between linters

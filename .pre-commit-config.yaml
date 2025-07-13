@@ -1,7 +1,11 @@
 # Pre-commit configuration for NOAH project
 # See https://pre-commit.com for more information
+# 
+# This configuration provides fast, local validation with minimal duplication
+# CI/CD uses Super-Linter for comprehensive validation
 
 repos:
+  # Basic file quality checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
@@ -17,6 +21,7 @@ repos:
       - id: check-case-conflict
       - id: mixed-line-ending
 
+  # Fast local validation - avoiding duplicates with CI
   # YAML linting with custom config
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.33.0
@@ -38,18 +43,12 @@ repos:
       - id: shellcheck
         args: [-e, SC1091, -e, SC2034]
 
-  # Python linting
+  # Python formatting only (linting done in CI)
   - repo: https://github.com/psf/black
     rev: 23.11.0
     hooks:
       - id: black
         language_version: python3
-
-  - repo: https://github.com/pycqa/flake8
-    rev: 6.1.0
-    hooks:
-      - id: flake8
-        args: [--max-line-length=88, --extend-ignore=E203,W503]
 
   # Ansible linting
   - repo: https://github.com/ansible/ansible-lint
@@ -58,13 +57,6 @@ repos:
       - id: ansible-lint
         files: ^Ansible/.*\.(yml|yaml)$
         args: [-c, Ansible/.ansible-lint]
-
-  # Docker linting
-  - repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
-    hooks:
-      - id: hadolint-docker
-        args: [--ignore, DL3008, --ignore, DL3009]
 
   # Local Helm linting
   - repo: local
@@ -76,11 +68,11 @@ repos:
         files: '^Helm/.*'
         pass_filenames: false
 
-  # Super-Linter for comprehensive checking
+  # Super-Linter for comprehensive checking (manual only)
   - repo: local
     hooks:
       - id: super-linter
-        name: Super-Linter
+        name: Super-Linter (Manual)
         entry: bash -c '
           docker run --rm \
             -e DEFAULT_BRANCH=main \
@@ -94,6 +86,7 @@ repos:
             -e VALIDATE_ANSIBLE=true \
             -e VALIDATE_PYTHON_BLACK=true \
             -e VALIDATE_PYTHON_FLAKE8=true \
+            -e VALIDATE_PYTHON_PYLINT=true \
             -e VALIDATE_JSON=true \
             -e VALIDATE_KUBERNETES_KUBECONFORM=false \
             -e VALIDATE_CHECKOV=false \

@@ -1,5 +1,5 @@
-{{- if .Values.prometheus.enabled }}
 ---
+{{- if .Values.prometheus.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

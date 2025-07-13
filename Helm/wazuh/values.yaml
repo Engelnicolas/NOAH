@@ -422,11 +422,11 @@ agent:
         command: "df -P"
         frequency: 360
       - log_format: "full_command"
-        command: >-
-          netstat -tulpn |
-          sed 's/\\([[:alnum:]]\\+\\)\\ \\+[[:digit:]]\\+\\ \\+[[:digit:]]\\+\\ \\+\\(.*\\):\\([[:digit:]]*\\)\\ \\+\\(.*\\):\\([[:digit:]]*\\)\\ \\+\\([[:alpha:]]\\+\\).*/\\1 \\2 \\3 \\4 \\5 \\6/' \\
-          |
-          sort -k 6 -g |
+        command: |
+          netstat -tulpn | \
+          sed 's/\([[:alnum:]]\+\) \+[[:digit:]]\+ \+[[:digit:]]\+ \+\(.*\):\([[:digit:]]*\) \+\(.*\):\([[:digit:]]*\) \+\([[:alpha:]]\+\).*' \
+            -e '/\1 \2 \3 \4 \5 \6/' | \
+          sort -k 6 -g | \
           sed 's/LISTEN/Listening/'
         frequency: 360
 

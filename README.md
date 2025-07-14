@@ -18,139 +18,98 @@
 
 **N.O.A.H** (Next Open-source Architecture Hub) is a production-ready infrastructure automation platform that deploys and manages a complete secure information system using industry-standard open-source tools. It provides a unified solution for organizations seeking to deploy enterprise-grade services with full control over their data and infrastructure.
 
-### Key Features
+### Core Components
 
-This project automates the full-stack deployment of an open source secure information system using:
-- 🛠️ **Ansible** for configuration management and service deployment
-- ☸️ **Kubernetes + Helm** for container orchestration and application lifecycle
-- 🔒 **Samba4 AD & Keycloak** for centralized identity and access management
-- 📦 **Nextcloud, Mattermost** for secure collaboration and communication
-- 🛡️ **Wazuh, OpenEDR, OpenVPN, UFW** for comprehensive security monitoring
-- 📈 **Prometheus & Grafana** for monitoring and observability
-- 🚀 **GitLab CI/CD & GitHub Actions** for continuous integration and deployment
-
----
-
-## 📚 Documentation & Support
-
-### Available Documentation
-
-- **📖 [USER_GUIDE.md](docs/USER_GUIDE.md)**: Complete step-by-step deployment guide
+- 🛠️ **Ansible** - Configuration management and service deployment
+- ☸️ **Kubernetes + Helm** - Container orchestration and application lifecycle  
+- 🔒 **Samba4 AD & Keycloak** - Centralized identity and access management
+- 📦 **Nextcloud, Mattermost** - Secure collaboration and communication
+- 🛡️ **Wazuh, OpenEDR, OpenVPN** - Comprehensive security monitoring
+- 📈 **Prometheus & Grafana** - Monitoring and observability
+- 🚀 **GitLab CI/CD** - Continuous integration and deployment
 
 ---
 
-### 🎯 Why Choose N.O.A.H?
+## 🚀 Quick Start
+
+### Prerequisites
+- Kubernetes cluster with kubectl configured
+- Helm 3.x installed
+- 8GB+ RAM available
+
+### Deploy NOAH Platform
+```bash
+# Clone the repository
+git clone https://github.com/Engelnicolas/NOAH.git
+cd NOAH
+
+# Deploy core services (uses root security context for compatibility)
+./Script/noah-infra deploy -m root
+
+# Check deployment status
+kubectl get pods -n noah
+
+# View logs if needed
+./Script/noah-logs --latest
+```
+
+### Access Services
+- **Keycloak**: https://keycloak.your-domain.com
+- **Nextcloud**: https://nextcloud.your-domain.com  
+- **Mattermost**: https://mattermost.your-domain.com
+- **Grafana**: https://grafana.your-domain.com
+
+---
+
+## 📚 Documentation
+
+- **📖 [USER_GUIDE.md](docs/USER_GUIDE.md)**: Complete deployment and configuration guide
+- **🤝 [CONTRIBUTING.md](CONTRIBUTING.md)**: How to contribute to the project
+
+---
+
+## 🎯 Why Choose N.O.A.H?
 
 - **Complete Automation**: Zero-touch deployment from infrastructure to applications
 - **Security-First**: Built-in security controls, monitoring, and compliance features
 - **Vendor Independence**: 100% open-source stack with no vendor lock-in
-- **Scalable Architecture**: Supports everything from single-node to multi-cluster deployments
-- **Production Ready**: Battle-tested configurations with monitoring and backup strategies
+- **Production Ready**: Battle-tested configurations with comprehensive logging
+- **Flexible Security**: Supports both secure and root deployment modes
 
 ---
 
-## 🎯 Project Objectives
+## 🏗️ Architecture
 
-- **🤖 Full Automation**: Complete infrastructure, configuration, and service rollout without manual intervention
-- **🌍 Environment Flexibility**: Seamless deployment across development, staging, and production environments
-- **🔐 Security & Compliance**: Role-based security, single sign-on via LDAP/OIDC, and comprehensive audit trails
-- **🌐 Network Architecture**: Dynamic DNS management, secure networking, and VPN-based access control
-- **🔄 DevOps Integration**: Automated testing, deployment validation, and rollback capabilities
-- **📊 Observability**: Full-stack monitoring, alerting, and performance metrics
-- **🏗️ Infrastructure as Code**: Version-controlled, reproducible infrastructure management
+### Security & Identity Management
+- **Single Sign-On (SSO)**: Unified authentication across all services
+- **Role-Based Access Control**: Granular permissions and user management
+- **Multi-Factor Authentication**: TOTP, WebAuthn support
+- **Comprehensive Monitoring**: Real-time threat detection and alerting
 
----
-
-## 🔧 Components Overview
-
-| Category | Components | Purpose |
-|----------|------------|---------|
-| **Automation** | Ansible, GitLab CI, GitHub Actions | Configuration management, CI/CD pipelines |
-| **Identity & Access** | Samba4 AD, Keycloak (OIDC/SAML) | Centralized authentication, SSO, user management |
-| **Collaboration** | Nextcloud, Mattermost | File sharing, team communication, document collaboration |
-| **Monitoring** | Prometheus, Grafana, Alertmanager | Metrics collection, visualization, alerting |
-| **Security** | OpenVPN, UFW, Wazuh, OpenEDR | VPN access, firewall, SIEM, endpoint detection |
-| **Container Platform** | Kubernetes, Helm, Docker | Container orchestration, package management |
-| **Storage** | Persistent Volumes, NFS, Local Storage | Data persistence, backup, disaster recovery |
+### Deployment Options
+- **Development**: Single-node Kubernetes or Docker Compose
+- **Production**: Multi-cluster with high availability
+- **Security Modes**: Root (compatibility) or secure (restricted) contexts
+- **Monitoring**: Built-in error logging and deployment tracking
 
 ---
 
-## 🔐 Security & Identity Management
+## 🎭 Use Cases
 
-### Single Sign-On (SSO) Architecture
+### 👤 Individual Developers
+Learn DevSecOps, test automation pipelines, experiment with enterprise tools
 
-N.O.A.H implements a comprehensive identity management system using:
+### 🧑‍💼 Small-Medium Business  
+Replace expensive SaaS tools with self-hosted alternatives, 60-80% cost savings
 
-- **🏢 Samba4 Active Directory**: Primary identity provider with LDAP protocol
-- **🔑 Keycloak**: Modern identity broker supporting OIDC, SAML, and social logins
-- **🛡️ Role-Based Access Control (RBAC)**: Granular permissions for all services
-- **🔒 Multi-Factor Authentication (MFA)**: TOTP, WebAuthn, and SMS support
+### 🏢 Enterprise Organizations
+Hybrid cloud infrastructure with compliance requirements and custom integrations
 
-### Integrated Services with SSO
-
-All platform services are pre-configured with Keycloak integration:
-
-| Service | Protocol | Features |
-|---------|----------|----------|
-| **Nextcloud** | OIDC | File sharing, calendar, contacts |
-| **Mattermost** | OIDC | Team messaging, file sharing |
-| **Grafana** | OIDC | Monitoring dashboards, alerting |
-| **Wazuh** | SAML | Security monitoring, threat detection |
-| **GitLab** | OIDC | Source code management, CI/CD |
-
-### Security Hardening Features
-
-- **🔥 Firewall Rules**: Automated UFW configuration with service-specific rules
-- **🛡️ Network Segmentation**: Isolated networks for different service tiers
-- **🔍 Security Monitoring**: Real-time threat detection with Wazuh SIEM
-- **📊 Compliance Reporting**: Automated compliance checks and reporting
-- **🚫 Zero-Trust Architecture**: Default-deny policies with explicit allow rules
-
-
----
-## 🎭 Use Cases by Context
-
-### 👤 Individual Developer / DevOps Engineer
-**Scenario**: Personal learning lab or development workspace
-- **Deployment**: Single-node Kubernetes (Minikube/K3s) or Docker Compose
-- **Benefits**: Learn DevSecOps, test automation pipelines, experiment with tools
-- **Resources**: Laptop/workstation with 8GB+ RAM
-- **Timeline**: 2-4 hours for complete setup
-
-### 🧑‍💼 Small to Medium Business (10-100 employees)
-**Scenario**: Replace expensive SaaS tools with self-hosted alternatives
-- **Deployment**: Small Kubernetes cluster or VM-based deployment
-- **Benefits**: Data sovereignty, cost reduction, customization flexibility
-- **Features**: Centralized SSO, secure file sharing, team communication
-- **ROI**: 60-80% cost savings compared to commercial alternatives
-
-### 🏢 Enterprise Organization (500+ employees)
-**Scenario**: Hybrid cloud infrastructure with compliance requirements
-- **Deployment**: Multi-cluster Kubernetes with high availability
-- **Benefits**: Full compliance control, custom integrations, scalability
-- **Features**: Advanced RBAC, audit logging, disaster recovery
-- **Integration**: Existing AD/LDAP, monitoring systems, backup solutions
-
-### 🏛️ Government / Public Sector
-**Scenario**: Secure, auditable infrastructure for public services
-- **Deployment**: Air-gapped or VPN-only access deployment
-- **Benefits**: Data sovereignty, compliance with regulations, transparency
-- **Security**: Enhanced monitoring, encrypted communications, access controls
-- **Compliance**: GDPR, HIPAA, government security standards
+### 🏛️ Government/Public Sector
+Secure, auditable infrastructure with data sovereignty and regulatory compliance
 
 ### 🎓 Educational Institutions
-**Scenario**: Digital learning platform and administration tools
-- **Deployment**: Campus-wide deployment with student/faculty access
-- **Benefits**: Cost-effective digital transformation, learning opportunities
-- **Features**: Classroom collaboration, secure communication, file management
-- **Educational Value**: Hands-on experience with enterprise technologies
-
-### � Healthcare Organizations
-**Scenario**: HIPAA-compliant collaboration and file sharing
-- **Deployment**: Secure, isolated network with strict access controls
-- **Benefits**: Patient data protection, secure communication, compliance
-- **Security**: End-to-end encryption, audit trails, access monitoring
-- **Integration**: EHR systems, medical imaging, secure messaging
+Digital learning platform with hands-on experience in enterprise technologies
 
 ---
 
@@ -162,8 +121,9 @@ We welcome contributions from the community! Please see our [CONTRIBUTING.md](CO
 - **📝 Documentation**: Improving and expanding documentation
 - **🐛 Bug Reports**: How to report issues effectively
 - **💡 Feature Requests**: Proposing new features and enhancements
-- **🧪 Testing**: Contributing to our simplified test suite
+- **🧪 Testing**: Contributing to our test suite
 
+---
 
 ## 👨‍💻 Author
 

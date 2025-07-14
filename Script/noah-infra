@@ -16,6 +16,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Configuration
 NAMESPACE_PREFIX="noah"
 HELM_TIMEOUT="600s"
+SECURITY_MODE="root"  # root, minimal, secure
+USE_CHART_DEFAULTS=true  # Use chart's default values.yaml
 VERBOSE=false
 DRY_RUN=false
 AUTO_INSTALL=true  # New: Automatically install missing prerequisites
@@ -23,6 +25,13 @@ SKIP_K8S_CHECK=false  # New: Skip Kubernetes connectivity check
 ACTION="status"  # setup, deploy, status, teardown
 USE_SIMPLIFIED_CHARTS=true  # New: Use simplified chart structure
 VALUES_DIR="../Helm/values"  # Values directory
+
+# Logging configuration
+LOG_DIR="${SCRIPT_DIR}/../logs"
+ERROR_LOG_DIR="${LOG_DIR}/errors"
+DEPLOYMENT_LOG_DIR="${LOG_DIR}/deployments"
+TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
+CURRENT_LOG_FILE="${DEPLOYMENT_LOG_DIR}/deployment_${TIMESTAMP}.log"
 
 # Color codes
 readonly RED='\033[0;31m'
@@ -34,20 +43,95 @@ readonly NC='\033[0m'
 # Logging functions
 log() {
     echo -e "${GREEN}[INFO]${NC} $(date '+%H:%M:%S') - $1"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] $1" >> "$CURRENT_LOG_FILE" 2>/dev/null || true
 }
 
 log_warn() {
     echo -e "${YELLOW}[WARN]${NC} $(date '+%H:%M:%S') - $1"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [WARN] $1" >> "$CURRENT_LOG_FILE" 2>/dev/null || true
 }
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $(date '+%H:%M:%S') - $1" >&2
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] $1" >> "$CURRENT_LOG_FILE" 2>/dev/null || true
 }
 
 log_debug() {
     if [[ "$VERBOSE" == "true" ]]; then
         echo -e "${BLUE}[DEBUG]${NC} $(date '+%H:%M:%S') - $1"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') [DEBUG] $1" >> "$CURRENT_LOG_FILE" 2>/dev/null || true
     fi
+}
+
+# Initialize logging directories
+init_logging() {
+    mkdir -p "$LOG_DIR" "$ERROR_LOG_DIR" "$DEPLOYMENT_LOG_DIR" 2>/dev/null || true
+    if [[ ! "$DRY_RUN" == "true" ]]; then
+        echo "=== NOAH Infrastructure Deployment Log ===" > "$CURRENT_LOG_FILE"
+        echo "Started: $(date)" >> "$CURRENT_LOG_FILE"
+        echo "Action: $ACTION" >> "$CURRENT_LOG_FILE"
+        echo "Namespace: $NAMESPACE_PREFIX" >> "$CURRENT_LOG_FILE"
+        echo "Security Mode: $SECURITY_MODE" >> "$CURRENT_LOG_FILE"
+        echo "Use Chart Defaults: $USE_CHART_DEFAULTS" >> "$CURRENT_LOG_FILE"
+        echo "===========================================" >> "$CURRENT_LOG_FILE"
+        echo "" >> "$CURRENT_LOG_FILE"
+    fi
+}
+
+# Log deployment error with details
+log_deployment_error() {
+    local chart_name="$1"
+    local error_output="$2"
+    local timestamp=$(date '+%Y%m%d_%H%M%S')
+    local error_file="${ERROR_LOG_DIR}/${chart_name}_error_${timestamp}.log"
+    
+    # Create detailed error log
+    cat > "$error_file" << EOF
+=== DEPLOYMENT ERROR REPORT ===
+Chart: $chart_name
+Timestamp: $(date)
+Namespace: $NAMESPACE_PREFIX
+Security Mode: $SECURITY_MODE
+Use Chart Defaults: $USE_CHART_DEFAULTS
+Helm Timeout: $HELM_TIMEOUT
+
+=== ERROR OUTPUT ===
+$error_output
+
+=== CHART INFORMATION ===
+EOF
+    
+    # Add chart information if available
+    local chart_dir="${SCRIPT_DIR}/../Helm/${chart_name}"
+    if [[ -f "${chart_dir}/Chart.yaml" ]]; then
+        echo "Chart.yaml:" >> "$error_file"
+        cat "${chart_dir}/Chart.yaml" >> "$error_file" 2>/dev/null || echo "Could not read Chart.yaml" >> "$error_file"
+        echo "" >> "$error_file"
+    fi
+    
+    if [[ -f "${chart_dir}/values.yaml" ]]; then
+        echo "values.yaml:" >> "$error_file"
+        cat "${chart_dir}/values.yaml" >> "$error_file" 2>/dev/null || echo "Could not read values.yaml" >> "$error_file"
+        echo "" >> "$error_file"
+    fi
+    
+    # Add current pod status if namespace exists
+    echo "=== KUBERNETES STATUS ===" >> "$error_file"
+    if kubectl get namespace "$NAMESPACE_PREFIX" >/dev/null 2>&1; then
+        echo "Pods in namespace $NAMESPACE_PREFIX:" >> "$error_file"
+        kubectl get pods -n "$NAMESPACE_PREFIX" >> "$error_file" 2>/dev/null || echo "Could not get pods" >> "$error_file"
+        echo "" >> "$error_file"
+        
+        echo "Events in namespace $NAMESPACE_PREFIX:" >> "$error_file"
+        kubectl get events -n "$NAMESPACE_PREFIX" --sort-by=.metadata.creationTimestamp >> "$error_file" 2>/dev/null || echo "Could not get events" >> "$error_file"
+    else
+        echo "Namespace $NAMESPACE_PREFIX does not exist" >> "$error_file"
+    fi
+    
+    echo "================================" >> "$error_file"
+    
+    log_error "❌ Detailed error log saved: $error_file"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] Deployment failed for $chart_name. Error log: $error_file" >> "$CURRENT_LOG_FILE" 2>/dev/null || true
 }
 
 # Help function
@@ -75,6 +159,8 @@ PREREQUISITES:
 OPTIONS:
     -n, --namespace PREFIX   Namespace prefix (default: noah)
     -t, --timeout TIMEOUT    Helm timeout (default: 600s)
+    --security MODE         Security mode: root, minimal, secure (default: root)
+    --use-chart-defaults    Use only chart's default values.yaml (no external values)
     -v, --verbose           Enable verbose output
     --dry-run              Show what would be done without executing
     --no-auto-install      Disable automatic installation of missing tools
@@ -87,6 +173,14 @@ EXAMPLES:
     ./noah-infra deploy --verbose          # Deploy with verbose output
     ./noah-infra teardown --dry-run        # Show what would be removed
     ./noah-infra setup --no-auto-install   # Check prerequisites without auto-install
+
+LOGGING:
+    All deployment activities are logged to: ../logs/deployments/
+    Error logs with detailed troubleshooting info: ../logs/errors/
+    Each deployment creates a timestamped log file for analysis.
+    
+    View recent errors: ls -la ../logs/errors/
+    Check deployment logs: tail -f ../logs/deployments/deployment_*.log
 
 KUBERNETES SETUP:
     The script will automatically start a minikube cluster if no Kubernetes
@@ -680,6 +774,14 @@ deploy_charts() {
     local deployed=0
     local failed=0
     
+    # Ensure namespace exists before deploying
+    if ! kubectl get namespace "$namespace" >/dev/null 2>&1; then
+        log "Creating namespace: $namespace"
+        kubectl create namespace "$namespace"
+    else
+        log_debug "Namespace already exists: $namespace"
+    fi
+    
     # Change to the parent directory to access Helm charts
     local helm_base_dir="${SCRIPT_DIR}/../Helm"
     
@@ -696,24 +798,59 @@ deploy_charts() {
             fi
             
             if [ "$USE_SIMPLIFIED_CHARTS" = true ]; then
-                # Use simplified chart structure with default values
-                local values_file="${SCRIPT_DIR}/${VALUES_DIR}/values-minimal.yaml"
-                
-                if [ -f "$values_file" ]; then
-                    log "Using values file: $values_file"
-                    helm upgrade --install "$release_name" "$chart_dir" \
+                if [ "$USE_CHART_DEFAULTS" = true ]; then
+                    # Use chart's default values.yaml with root security context applied
+                    log "Using chart's default values.yaml: ${chart_dir}values.yaml"
+                    
+                    # Capture error output for logging
+                    local error_output
+                    error_output=$(helm upgrade --install "$release_name" "$chart_dir" \
                         --namespace "$namespace" \
                         --timeout "$HELM_TIMEOUT" \
                         --wait \
-                        -f "$values_file" >/dev/null 2>&1 && {
+                        --set securityContext.runAsUser=0 \
+                        --set securityContext.runAsGroup=0 \
+                        --set securityContext.fsGroup=0 \
+                        --set securityContext.readOnlyRootFilesystem=false \
+                        --set securityContext.allowPrivilegeEscalation=true 2>&1)
+                    
+                    if [ $? -eq 0 ]; then
                         log "✅ Successfully deployed: $chart_name"
                         ((deployed++))
                         continue
-                    }
+                    else
+                        log_deployment_error "$chart_name" "$error_output"
+                        ((failed++))
+                        continue
+                    fi
                 else
-                    log_error "❌ Values file not found: $values_file"
-                    ((failed++))
-                    continue
+                    # Use external values file based on security mode
+                    local values_file="${SCRIPT_DIR}/${VALUES_DIR}/values-${SECURITY_MODE}.yaml"
+                    if [ -f "$values_file" ]; then
+                        log "Using external values file: $values_file (security mode: $SECURITY_MODE)"
+                        
+                        # Capture error output for logging
+                        local error_output
+                        error_output=$(helm upgrade --install "$release_name" "$chart_dir" \
+                            --namespace "$namespace" \
+                            --timeout "$HELM_TIMEOUT" \
+                            --wait \
+                            -f "$values_file" 2>&1)
+                            
+                        if [ $? -eq 0 ]; then
+                            log "✅ Successfully deployed: $chart_name"
+                            ((deployed++))
+                            continue
+                        else
+                            log_deployment_error "$chart_name" "$error_output"
+                            ((failed++))
+                            continue
+                        fi
+                    else
+                        log_error "❌ Values file not found: $values_file"
+                        ((failed++))
+                        continue
+                    fi
                 fi
             fi
             
@@ -724,14 +861,17 @@ deploy_charts() {
             fi
             
             # Deploy chart
-            if helm upgrade --install "$release_name" "$chart_dir" \
+            local error_output
+            error_output=$(helm upgrade --install "$release_name" "$chart_dir" \
                 --namespace "$namespace" \
                 --timeout "$HELM_TIMEOUT" \
-                --wait >/dev/null 2>&1; then
+                --wait 2>&1)
+                
+            if [ $? -eq 0 ]; then
                 log "✅ Successfully deployed: $chart_name"
                 ((deployed++))
             else
-                log_error "❌ Failed to deploy: $chart_name"
+                log_deployment_error "$chart_name" "$error_output"
                 ((failed++))
             fi
         fi
@@ -838,6 +978,9 @@ teardown_infrastructure() {
 
 # Main execution logic
 main() {
+    # Initialize logging
+    init_logging
+    
     case "$ACTION" in
         "setup")
             check_prerequisites || exit 1
@@ -879,6 +1022,14 @@ while [[ $# -gt 0 ]]; do
         -t|--timeout)
             HELM_TIMEOUT="$2"
             shift 2
+            ;;
+        --security)
+            SECURITY_MODE="$2"
+            shift 2
+            ;;
+        --use-chart-defaults)
+            USE_CHART_DEFAULTS=true
+            shift
             ;;
         -v|--verbose)
             VERBOSE=true

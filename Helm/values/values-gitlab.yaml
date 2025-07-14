@@ -1,0 +1,46 @@
+# GitLab-specific configuration
+# Override security context to allow GitLab to run properly
+
+# GitLab needs to run as root for initial setup
+securityContext:
+  runAsUser: 0  # Root user
+  runAsGroup: 0  # Root group
+  fsGroup: 0     # Root filesystem group
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: true
+
+# Use minimal resources for testing
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: 1000m
+    memory: 4Gi
+
+# Disable persistence for minimal setup
+persistence:
+  enabled: false
+
+# Disable PostgreSQL and Redis for minimal setup
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
+
+# Disable ingress for minimal setup
+ingress:
+  enabled: false
+
+# Disable monitoring for minimal setup
+serviceMonitor:
+  enabled: false
+
+# Disable network policies for minimal setup
+networkPolicy:
+  enabled: false
+
+# Disable autoscaling for minimal setup
+autoscaling:
+  enabled: false

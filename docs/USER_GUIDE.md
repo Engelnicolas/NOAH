@@ -2,9 +2,9 @@
 
 ## 🎯 Overview
 
-This comprehensive guide walks you through deploying the complete N.O.A.H (Next Open-source Architecture Hub) infrastructure platform using the **unified CLI interface** and **simplified tooling**.
+This comprehensive guide walks you through deploying the complete N.O.A.H (Next Open-source Architecture Hub) infrastructure platform using the **unified CLI interface** with **enhanced error logging** and **flexible security modes**.
 
-N.O.A.H provides a production-ready, secure, and scalable open-source infrastructure stack with identity management, collaboration tools, monitoring, and security components.
+N.O.A.H provides a production-ready, secure, and scalable open-source infrastructure stack with identity management, collaboration tools, monitoring, and security components. The latest version includes comprehensive error logging, root user deployment support, and simplified troubleshooting capabilities.
 
 ---
 
@@ -20,17 +20,20 @@ cd noah
 # Validate and fix any issues
 ./Script/noah validate --fix
 
-# Deploy infrastructure (development environment)
-./Script/noah infra deploy --environment dev
+# Deploy infrastructure with root security (recommended for compatibility)
+./Script/noah infra deploy --security root --verbose
+
+# Monitor deployment progress
+./Script/noah-logs tail
 
 # Verify deployment
 ./Script/noah infra status
 
 # Access your services at:
-# - Keycloak: https://auth.your-domain.com
-# - Nextcloud: https://cloud.your-domain.com  
-# - Mattermost: https://chat.your-domain.com
-# - Grafana: https://monitoring.your-domain.com
+# - Keycloak: kubectl port-forward svc/keycloak 8080:8080
+# - Nextcloud: kubectl port-forward svc/nextcloud 8081:80
+# - Mattermost: kubectl port-forward svc/mattermost 8082:8065
+# - Grafana: kubectl port-forward svc/grafana 3000:3000
 ```
 
 ---
@@ -88,113 +91,133 @@ brew install docker kubectl helm python3 git make
 
 ---
 
-## 🏗️ Installation Methods
+## 🏗️ Installation and Deployment
 
-N.O.A.H supports multiple deployment methods depending on your infrastructure and requirements:
+N.O.A.H now supports simplified deployment with enhanced security modes and comprehensive error logging:
 
-### Method 1: Kubernetes Deployment (Recommended)
+### Security Modes
 
-**Best for**: Production environments, scalable deployments
+N.O.A.H supports three security modes:
+
+1. **Root Mode** (`--security root`) - **Recommended**
+   - Applications run as root user (UID 0)
+   - Maximum compatibility with complex applications like GitLab
+   - Required capabilities for full functionality
+   - Default mode for simplified deployment
+
+2. **Minimal Mode** (`--security minimal`)
+   - Non-root user with limited privileges
+   - Reduced resource allocation
+   - Basic functionality only
+
+3. **Secure Mode** (`--security secure`)
+   - Strict security with non-root users
+   - Read-only root filesystem
+   - Network policies enabled
+   - Production-ready security posture
+
+### Deployment Methods
+
+#### Method 1: Kubernetes Deployment (Default)
+
+**Best for**: All environments with automatic error logging
 
 ```bash
 # 1. Ensure Kubernetes cluster is available
 kubectl cluster-info
 
-# 2. Deploy N.O.A.H infrastructure
-./Script/noah infra deploy --environment prod --values-file custom-values.yaml
+# 2. Deploy with root security mode (recommended)
+./Script/noah infra deploy --security root --verbose
 
-# 3. Monitor deployment
-./Script/noah infra status --watch
+# 3. Monitor deployment in real-time
+./Script/noah-logs tail
+
+# 4. Check status
+./Script/noah infra status
+
+# 5. View any errors
+./Script/noah-logs errors
 ```
 
-### Method 2: Docker Compose (Development)
+#### Method 2: Chart-Default Deployment
 
-**Best for**: Local development, testing, single-node deployments
+**Uses each chart's default values.yaml with security overrides**
 
 ```bash
-# 1. Generate Docker Compose files
-./Script/noah infra setup --mode docker-compose
+# Deploy using chart defaults with root security
+./Script/noah infra deploy --use-chart-defaults --security root
 
-# 2. Deploy services
-docker-compose up -d
-
-# 3. Check status
-docker-compose ps
+# Deploy with minimal security
+./Script/noah infra deploy --use-chart-defaults --security minimal
 ```
 
-### Method 3: Ansible + VMs (Traditional)
+#### Method 3: Traditional Ansible Deployment
 
-**Best for**: Existing VM infrastructure, hybrid deployments
+**Best for**: Existing VM infrastructure
 
 ```bash
-# 1. Configure inventory
+# Configure inventory
 cd Ansible
 cp inventory/example inventory/custom
 vim inventory/custom/hosts
 
-# 2. Deploy with Ansible
+# Deploy with Ansible
 ansible-playbook -i inventory/custom main.yml
-
-# 3. Validate deployment
-ansible-playbook -i inventory/custom test_deployment.yml
 ```
 
 ---
 
-## 🔧 Configuration
+## 🔧 Configuration and Values
 
-### Environment Configuration
+## 🔧 Configuration and Values
 
-N.O.A.H supports multiple environments with automatic configuration:
+### Security Context Configuration
 
-```bash
-# Development (minimal resources)
-./Script/noah infra deploy --environment dev
+N.O.A.H now includes flexible security context management:
 
-# Staging (production-like)
-./Script/noah infra deploy --environment staging
+```yaml
+# Root user configuration (values-root.yaml)
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+  fsGroup: 0
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: true
 
-# Production (full features, high availability)
-./Script/noah infra deploy --environment prod
+# Secure configuration (values-secure.yaml)
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
 ```
 
-### Environment-Specific Values
+### Built-in Values Files
 
 ```
 Helm/values/
-├── values-dev.yaml      # Development configuration
-├── values-staging.yaml  # Staging configuration
-├── values-prod.yaml     # Production configuration
-└── values-minimal.yaml  # Minimal installation
+├── values-root.yaml      # Root user deployment (default)
+├── values-minimal.yaml   # Minimal resources, basic security
+├── values-secure.yaml    # High security, production-ready
+├── values-gitlab.yaml    # GitLab-specific optimizations
+└── Chart-specific values.yaml in each chart directory
 ```
 
 ### Custom Configuration
 
-Create custom values files for specific deployments:
+You can override any setting using command-line parameters:
 
-```yaml
-# custom-values.yaml
-global:
-  domain: "your-company.com"
-  environment: "production"
-  
-keycloak:
-  adminUser: "admin"
-  database:
-    type: "postgresql"
-    host: "postgres.internal"
-    
-nextcloud:
-  storage:
-    size: "500Gi"
-    class: "fast-ssd"
-    
-monitoring:
-  prometheus:
-    retention: "90d"
-  grafana:
-    plugins:
-      - grafana-piechart-panel
+```bash
+# Deploy with custom security settings
+./Script/noah infra deploy \
+  --set securityContext.runAsUser=1001 \
+  --set securityContext.runAsGroup=1001
+
+# Deploy with specific chart configuration
+helm upgrade --install gitlab ./Helm/gitlab \
+  --namespace noah \
+  --set gitlab.rootPassword=mysecretpassword
 ```
 
 ---
@@ -231,78 +254,180 @@ chmod +x Script/noah*
 
 ### Step 3: Infrastructure Deployment
 
-#### For Development Environment
+#### Quick Deployment (Recommended)
 
 ```bash
-# Deploy with minimal resources
-./Script/noah infra deploy --environment dev
+# Deploy with root security mode for maximum compatibility
+./Script/noah infra deploy --security root --verbose
 
-# Monitor deployment progress
-watch './Script/noah infra status'
+# Monitor deployment progress in real-time
+./Script/noah-logs tail
 
-# Access services (URLs will be displayed)
-./Script/noah infra status --urls
+# Check final status
+./Script/noah infra status
 ```
 
-#### For Production Environment
+#### Advanced Deployment Options
 
 ```bash
-# Deploy with production configuration
-./Script/noah infra deploy --environment prod --values-file production-values.yaml
+# Deploy with chart defaults
+./Script/noah infra deploy --use-chart-defaults --security root
 
-# Enable monitoring
-./Script/noah monitoring deploy
+# Deploy with external values file
+./Script/noah infra deploy --security minimal
 
-# Setup backup strategy
-./Script/noah backup setup --schedule daily
+# Dry run to see what would be deployed
+./Script/noah infra deploy --dry-run --verbose
 ```
 
-### Step 4: Service Configuration
+### Step 4: Service Access
 
-#### Identity and Access Management
-
-```bash
-# Configure Keycloak SSO
-kubectl port-forward svc/keycloak 8080:8080
-# Access: http://localhost:8080/admin (admin/admin)
-
-# Create users and groups
-# Import OIDC clients for integrated services
-```
-
-#### Collaboration Services
+#### Port Forwarding (Development)
 
 ```bash
-# Configure Nextcloud
-kubectl port-forward svc/nextcloud 8081:80
-# Access: http://localhost:8081 (admin/changeme)
+# Access GitLab
+kubectl port-forward svc/gitlab-gitlab-simple 8080:80 -n noah
+# Access: http://localhost:8080 (root/noah123)
 
-# Configure Mattermost
-kubectl port-forward svc/mattermost 8082:8065
-# Access: http://localhost:8082
-```
+# Access Keycloak
+kubectl port-forward svc/keycloak 8081:8080 -n noah
+# Access: http://localhost:8081/admin (admin/admin)
 
-### Step 5: Monitoring and Security
+# Access Nextcloud
+kubectl port-forward svc/nextcloud 8082:80 -n noah
+# Access: http://localhost:8082 (admin/changeme)
 
-```bash
-# Access Grafana dashboards
-kubectl port-forward svc/grafana 3000:3000
+# Access Grafana
+kubectl port-forward svc/grafana 3000:3000 -n noah
 # Access: http://localhost:3000 (admin/prom-operator)
+```
 
-# Check security status
-./Script/noah validate --scope security
+#### Service Configuration
 
-# View monitoring overview
-./Script/noah monitoring status
+```bash
+# List all services
+kubectl get services -n noah
+
+# Get service details
+kubectl describe service gitlab-gitlab-simple -n noah
+
+# Check service endpoints
+kubectl get endpoints -n noah
+```
+
+---
+
+## 📊 Enhanced Logging and Troubleshooting
+
+### Comprehensive Error Logging
+
+N.O.A.H now includes advanced error logging and analysis:
+
+```bash
+# View deployment logs in real-time
+./Script/noah-logs tail
+
+# Check recent error logs
+./Script/noah-logs errors
+
+# View latest deployment log
+./Script/noah-logs latest
+
+# Show log summary and disk usage
+./Script/noah-logs summary
+
+# Clean old logs (keeps last 10 deployments, 20 errors)
+./Script/noah-logs clean
+```
+
+### Log Structure
+
+**Deployment Logs**: `logs/deployments/deployment_YYYYMMDD_HHMMSS.log`
+- Complete deployment session
+- All commands and results
+- Timestamped entries
+
+**Error Logs**: `logs/errors/CHARTNAME_error_YYYYMMDD_HHMMSS.log`
+- Detailed error reports
+- Helm error output
+- Chart configuration
+- Kubernetes status
+- Troubleshooting information
+
+### Error Log Contents
+
+Each error log includes:
+```
+=== DEPLOYMENT ERROR REPORT ===
+Chart: gitlab
+Timestamp: Mon Jul 14 10:12:57 UTC 2025
+Namespace: noah
+Security Mode: root
+Use Chart Defaults: true
+Helm Timeout: 600s
+
+=== ERROR OUTPUT ===
+[Complete Helm error output]
+
+=== CHART INFORMATION ===
+[Chart.yaml and values.yaml contents]
+
+=== KUBERNETES STATUS ===
+[Current pods, events, and cluster state]
+```
+
+### Common Issues and Solutions
+
+#### Permission Errors
+```bash
+# If you see permission denied errors:
+./Script/noah infra deploy --security root
+
+# For more security, use minimal mode:
+./Script/noah infra deploy --security minimal
+```
+
+#### Storage Issues
+```bash
+# Check persistent volumes
+kubectl get pv,pvc -n noah
+
+# Describe storage issues
+kubectl describe pvc -n noah
+
+# Check available storage classes
+kubectl get storageclass
+```
+
+#### Network Issues
+```bash
+# Test pod connectivity
+kubectl exec -it deployment/gitlab-gitlab-simple -n noah -- ping google.com
+
+# Check DNS resolution
+kubectl exec -it deployment/gitlab-gitlab-simple -n noah -- nslookup keycloak.noah.svc.cluster.local
+
+# View network policies
+kubectl get networkpolicy -n noah
+```
+
+#### Timeout Issues
+```bash
+# Increase timeout for slow deployments
+./Script/noah infra deploy --timeout 1200s --security root
+
+# Check pod startup progress
+kubectl get pods -n noah -w
+
+# View pod logs
+kubectl logs -f deployment/gitlab-gitlab-simple -n noah
 ```
 
 ---
 
 ## 🧪 Testing and Validation
 
-N.O.A.H includes a **simplified, comprehensive testing suite** for validation:
-
-### Quick Validation
+### Comprehensive Testing Suite
 
 ```bash
 # Run complete test suite
@@ -315,33 +440,27 @@ make test-shell     # Dependencies, integration, security
 
 # Check test dependencies
 make check-deps
+
+# Validate specific components
+./Script/noah validate --scope yaml
+./Script/noah validate --scope security
+./Script/noah validate --scope dependencies
 ```
 
-### Detailed Testing Options
+### Deployment Validation
 
 ```bash
-# Python test suite with options
-cd Test
-python3 noah_test.py -v              # Verbose output
-python3 noah_test.py --charts-only   # Helm charts only
-python3 noah_test.py --structure-only # Structure validation
+# Validate deployment success
+./Script/noah infra status
 
-# Shell test suite with options
-./unified_tests.sh                   # All tests
-./unified_tests.sh --deps-only       # Dependencies only
-./unified_tests.sh --helm-only       # Helm chart tests
-./unified_tests.sh --security-only   # Security validation
-```
+# Check all pods are running
+kubectl get pods -n noah
 
-### Continuous Testing
+# Verify services are accessible
+kubectl get services -n noah
 
-```bash
-# Set up pre-commit testing
-git config core.hooksPath .githooks
-
-# Enable automatic validation
-echo "make test" > .git/hooks/pre-push
-chmod +x .git/hooks/pre-push
+# Test connectivity between services
+kubectl exec -it deployment/gitlab-gitlab-simple -n noah -- wget -qO- http://keycloak:8080/health
 ```
 
 ---
@@ -352,47 +471,84 @@ chmod +x .git/hooks/pre-push
 
 ```bash
 # Restart specific service
-kubectl rollout restart deployment/keycloak
+kubectl rollout restart deployment/gitlab-gitlab-simple -n noah
 
 # Scale services
-kubectl scale deployment/nextcloud --replicas=3
+kubectl scale deployment/nextcloud --replicas=3 -n noah
 
 # Update service configuration
-helm upgrade keycloak ./Helm/keycloak --values custom-values.yaml
+helm upgrade gitlab ./Helm/gitlab --namespace noah --set gitlab.rootPassword=newpassword
+
+# Check deployment status
+kubectl rollout status deployment/gitlab-gitlab-simple -n noah
 ```
 
 ### Bulk Operations
 
 ```bash
 # Update all services
-./Script/noah infra upgrade --environment prod
+./Script/noah infra deploy --security root
 
-# Backup all data
-./Script/noah backup create --full
+# Check status of all services
+./Script/noah infra status
 
-# Health check all services
-./Script/noah infra status --detailed
+# View all logs
+./Script/noah-logs deployments
+
+# Restart all services
+kubectl rollout restart deployment -n noah
 ```
 
-### Troubleshooting
+### Resource Management
 
 ```bash
-# Check deployment issues
-kubectl get events --sort-by=.metadata.creationTimestamp
+# Check resource usage
+kubectl top pods -n noah
+kubectl top nodes
 
-# View service logs
-kubectl logs -f deployment/keycloak
+# View resource requests and limits
+kubectl describe pods -n noah | grep -A 5 "Requests\|Limits"
 
-# Debug networking
-kubectl exec -it pod/debug-pod -- nslookup keycloak
-
-# Validate configuration
-./Script/noah validate --verbose
+# Scale based on resource usage
+kubectl scale deployment/gitlab-gitlab-simple --replicas=2 -n noah
 ```
 
 ---
 
 ## 🔐 Security Configuration
+
+### Enhanced Security Context Management
+
+N.O.A.H now supports flexible security contexts with automatic privilege management:
+
+#### Root User Mode (Default)
+```yaml
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+  fsGroup: 0
+  allowPrivilegeEscalation: true
+  capabilities:
+    add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+```
+
+#### Secure User Mode
+```yaml
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+```
 
 ### Identity and Access Management
 
@@ -400,7 +556,7 @@ kubectl exec -it pod/debug-pod -- nslookup keycloak
 
 1. **Access Keycloak Admin Console**:
    ```bash
-   kubectl port-forward svc/keycloak 8080:8080
+   kubectl port-forward svc/keycloak 8080:8080 -n noah
    # Navigate to: http://localhost:8080/admin
    # Default: admin/admin (change immediately)
    ```
@@ -416,27 +572,27 @@ kubectl exec -it pod/debug-pod -- nslookup keycloak
    - Nextcloud (nextcloud-oidc)
    - Mattermost (mattermost-oidc)
    - Grafana (grafana-oidc)
-   - Wazuh (wazuh-oidc)
+   - GitLab (gitlab-oidc)
    ```
 
 #### Samba4 Active Directory
 
 ```bash
 # Check AD status
-kubectl exec -it deployment/samba4 -- samba-tool domain level show
+kubectl exec -it deployment/samba4 -- samba-tool domain level show -n noah
 
 # Create users
-kubectl exec -it deployment/samba4 -- samba-tool user create john.doe
+kubectl exec -it deployment/samba4 -- samba-tool user create john.doe -n noah
 
 # Add to groups
-kubectl exec -it deployment/samba4 -- samba-tool group addmembers "Domain Users" john.doe
+kubectl exec -it deployment/samba4 -- samba-tool group addmembers "Domain Users" john.doe -n noah
 ```
 
 ### Network Security
 
 ```bash
-# Apply network policies
-kubectl apply -f Helm/network-policies/
+# Apply network policies (if enabled)
+kubectl apply -f Helm/network-policies/ -n noah
 
 # Configure firewall rules (if using VMs)
 cd Ansible
@@ -446,36 +602,22 @@ ansible-playbook -i inventory/prod -t ufw main.yml
 ansible-playbook -i inventory/prod -t openvpn main.yml
 ```
 
-### Security Monitoring
-
-```bash
-# Check Wazuh SIEM
-kubectl port-forward svc/wazuh 5601:5601
-# Access: http://localhost:5601 (admin/SecretPassword)
-
-# Monitor OpenEDR
-kubectl logs -f deployment/openedr
-
-# Security audit
-./Script/noah validate --scope security
-```
-
 ---
 
 ## 📊 Monitoring and Observability
 
-### Prometheus and Grafana Setup
+### Enhanced Monitoring with Root Privileges
 
 ```bash
 # Deploy monitoring stack
 ./Script/noah monitoring deploy
 
-# Access Grafana
-kubectl port-forward svc/grafana 3000:3000
+# Access Grafana with port forwarding
+kubectl port-forward svc/grafana 3000:3000 -n noah
 # Default: admin/prom-operator
 
-# View metrics
-kubectl port-forward svc/prometheus 9090:9090
+# View Prometheus metrics
+kubectl port-forward svc/prometheus 9090:9090 -n noah
 ```
 
 ### Pre-configured Dashboards
@@ -486,242 +628,332 @@ kubectl port-forward svc/prometheus 9090:9090
 - **Security Dashboard**: Authentication events, threats
 - **Business Metrics**: User activity, service usage
 
-### Alerting
+### Monitoring with Enhanced Logging
 
 ```bash
-# Configure Alertmanager
-kubectl edit configmap alertmanager-config
+# Monitor deployment progress
+./Script/noah-logs tail
 
-# Test alerts
-kubectl exec -it prometheus-0 -- promtool query instant 'up{job="kubernetes-nodes"}==0'
+# Check monitoring service status
+kubectl get pods -l app.kubernetes.io/name=prometheus -n noah
+
+# View monitoring logs
+kubectl logs -f deployment/prometheus-server -n noah
 ```
 
 ---
 
 ## 💾 Backup and Recovery
 
-### Automated Backup Setup
+### Enhanced Backup with Error Tracking
 
 ```bash
-# Configure backup schedule
-./Script/noah backup setup --schedule daily --retention 30d
+# Setup backup with logging
+./Script/noah backup setup --schedule daily --log-errors
 
-# Manual backup
+# Manual backup with error tracking
 ./Script/noah backup create --full
 
-# List backups
-./Script/noah backup list
+# List backups with status
+./Script/noah backup list --with-logs
+
+# View backup error logs
+./Script/noah-logs errors | grep backup
 ```
 
 ### Recovery Procedures
 
 ```bash
-# Restore from backup
+# Restore from backup with logging
 ./Script/noah backup restore --backup-name backup-2024-01-15
 
-# Partial restore (specific service)
+# Partial restore with error tracking
 ./Script/noah backup restore --service nextcloud --backup-name backup-2024-01-15
 
-# Disaster recovery
+# Disaster recovery with full logging
 ./Script/noah infra teardown
-./Script/noah backup restore --full --backup-name backup-2024-01-15
+./Script/noah backup restore --full --backup-name backup-2024-01-15 --verbose
 ```
 
 ---
 
 ## 🌍 Multi-Environment Management
 
-### Environment Promotion
+### Enhanced Environment Support
 
 ```bash
-# Deploy to staging
-./Script/noah infra deploy --environment staging
+# Deploy to different environments with appropriate security
+./Script/noah infra deploy --security root --namespace noah-dev
+./Script/noah infra deploy --security secure --namespace noah-prod
 
-# Validate staging
-cd Test && make test
+# Environment-specific logging
+./Script/noah-logs summary | grep -E "(noah-dev|noah-prod)"
 
-# Promote to production
-./Script/noah infra deploy --environment prod --values-file prod-values.yaml
+# Promote between environments
+./Script/noah infra deploy --security root --namespace noah-staging
+./Script/noah validate --namespace noah-staging
+./Script/noah infra deploy --security secure --namespace noah-prod
 ```
 
 ### Configuration Management
 
 ```bash
-# Environment-specific configurations
-Helm/values/
-├── values-dev.yaml      # 1 CPU, 2GB RAM per service
-├── values-staging.yaml  # 2 CPU, 4GB RAM per service  
-├── values-prod.yaml     # 4 CPU, 8GB RAM per service
+# Security mode configurations
+./Script/noah infra deploy --security root     # Maximum compatibility
+./Script/noah infra deploy --security minimal  # Basic functionality
+./Script/noah infra deploy --security secure   # Production security
 
-# Custom environment
-cp Helm/values/values-prod.yaml Helm/values/values-custom.yaml
-./Script/noah infra deploy --values-file values-custom.yaml
+# Custom security settings
+./Script/noah infra deploy \
+  --set securityContext.runAsUser=1001 \
+  --set securityContext.runAsGroup=1001 \
+  --namespace noah-custom
 ```
 
 ---
 
-## 🔧 Customization and Extension
+## 🔧 Advanced Customization
 
-### Adding New Services
+### Adding New Services with Proper Security
 
-1. **Create Helm Chart**:
+1. **Create Helm Chart with Security Context**:
    ```bash
    cd Helm
    helm create myservice
+   
+   # Add security context to templates/deployment.yaml
+   securityContext:
+     {{- include "noah.podSecurityContext" . | nindent 8 }}
+   containers:
+   - name: myservice
+     securityContext:
+       {{- include "noah.securityContext" . | nindent 10 }}
    ```
 
-2. **Configure Integration**:
+2. **Configure Integration with Error Logging**:
    ```yaml
-   # Add to values file
+   # Add to values.yaml
    myservice:
      enabled: true
+     securityContext:
+       runAsUser: 0  # or 1000 for non-root
+       runAsGroup: 0
+       allowPrivilegeEscalation: true
      oidc:
        client_id: "myservice-oidc"
        realm: "noah"
    ```
 
-3. **Deploy**:
+3. **Deploy with Monitoring**:
    ```bash
-   ./Script/noah infra upgrade --include myservice
+   ./Script/noah infra deploy --verbose
+   ./Script/noah-logs tail | grep myservice
    ```
 
-### Custom Authentication
+### Custom Security Configurations
 
 ```bash
-# Add LDAP/OIDC integration
-# Configure in Keycloak admin console
-# Update service configurations
-helm upgrade nextcloud ./Helm/nextcloud --set auth.oidc.enabled=true
+# Create custom security profile
+cat > custom-security.yaml << 'EOF'
+securityContext:
+  runAsUser: 2000
+  runAsGroup: 2000
+  fsGroup: 2000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - NET_BIND_SERVICE
+EOF
+
+# Deploy with custom security
+helm upgrade myservice ./Helm/myservice \
+  --namespace noah \
+  -f custom-security.yaml
 ```
 
 ---
 
-## 🆘 Troubleshooting
+## 🆘 Advanced Troubleshooting
 
-### Common Issues
+### Using Enhanced Error Logging
 
-#### Deployment Failures
-
-```bash
-# Check pod status
-kubectl get pods -A
-
-# View events
-kubectl get events --sort-by=.metadata.creationTimestamp
-
-# Debug specific deployment
-kubectl describe deployment/keycloak
-kubectl logs -f deployment/keycloak
-```
-
-#### Network Issues
+#### Comprehensive Error Analysis
 
 ```bash
-# Test connectivity
-kubectl exec -it debug-pod -- ping keycloak
-kubectl exec -it debug-pod -- nslookup keycloak.default.svc.cluster.local
+# View all deployment errors
+./Script/noah-logs errors
 
-# Check services
-kubectl get svc -A
-kubectl describe svc/keycloak
+# Analyze specific chart errors
+cat logs/errors/gitlab_error_*.log
+
+# Search for specific error patterns
+grep -r "permission denied" logs/errors/
+
+# View error trends
+ls -la logs/errors/ | grep $(date +%Y%m%d)
 ```
 
-#### Storage Issues
+#### Real-time Monitoring
 
 ```bash
-# Check persistent volumes
-kubectl get pv,pvc -A
+# Monitor deployment in real-time
+./Script/noah-logs tail
 
-# View storage classes
-kubectl get storageclass
+# Follow specific service logs
+kubectl logs -f deployment/gitlab-gitlab-simple -n noah
 
-# Check disk usage
-kubectl exec -it deployment/nextcloud -- df -h
+# Watch pod status changes
+kubectl get pods -n noah -w
 ```
 
-#### Authentication Issues
+#### Common Issues with Solutions
+
+##### Security Context Issues
+```bash
+# Error: container has runAsNonRoot and image will run as root
+# Solution: Use root security mode
+./Script/noah infra deploy --security root
+
+# Error: operation not permitted
+# Solution: Add required capabilities
+helm upgrade service ./Helm/service \
+  --set securityContext.capabilities.add="{CHOWN,DAC_OVERRIDE}"
+```
+
+##### Storage Permission Issues
+```bash
+# Error: permission denied on volume mount
+# Solution: Set proper fsGroup
+helm upgrade service ./Helm/service \
+  --set securityContext.fsGroup=0
+
+# Check volume permissions
+kubectl exec -it deployment/service -n noah -- ls -la /data
+```
+
+##### Network and DNS Issues
+```bash
+# Test DNS resolution
+kubectl exec -it deployment/gitlab-gitlab-simple -n noah -- nslookup keycloak.noah.svc.cluster.local
+
+# Check service connectivity
+kubectl exec -it deployment/gitlab-gitlab-simple -n noah -- telnet keycloak 8080
+
+# Verify network policies
+kubectl get networkpolicy -n noah
+kubectl describe networkpolicy -n noah
+```
+
+##### Resource and Performance Issues
+```bash
+# Check resource constraints
+kubectl describe pod -n noah | grep -A 5 "Limits:\|Requests:"
+
+# View resource usage
+kubectl top pods -n noah
+kubectl top nodes
+
+# Scale if needed
+kubectl scale deployment/service --replicas=2 -n noah
+```
+
+### Debug Mode and Verbose Logging
 
 ```bash
-# Check Keycloak logs
-kubectl logs -f deployment/keycloak
+# Enable maximum verbosity
+./Script/noah infra deploy --verbose --security root
 
-# Verify OIDC configuration
-kubectl get secret keycloak-oidc -o yaml
+# Debug specific chart deployment
+helm install service ./Helm/service \
+  --namespace noah \
+  --debug \
+  --dry-run
 
-# Test LDAP connectivity
-kubectl exec -it deployment/keycloak -- ldapsearch -H ldap://samba4:389
+# Check Helm release status
+helm status service -n noah
+
+# View Helm history
+helm history service -n noah
 ```
 
-### Debug Mode
+### Log Analysis and Cleanup
 
 ```bash
-# Enable verbose logging
-export NOAH_DEBUG=true
-./Script/noah infra status --verbose
+# Analyze log patterns
+./Script/noah-logs summary
 
-# Comprehensive validation
-./Script/noah validate --verbose --fix
+# Clean old logs to save space
+./Script/noah-logs clean
 
-# Test connectivity
-cd Test
-./unified_tests.sh --integration --verbose
+# Archive important error logs
+mkdir -p archive/$(date +%Y%m)
+cp logs/errors/*.log archive/$(date +%Y%m)/
+
+# Monitor disk usage
+du -sh logs/
 ```
-
-### Getting Help
-
-1. **Check logs**:
-   ```bash
-   kubectl logs -f deployment/SERVICE_NAME
-   ```
-
-2. **Run diagnostics**:
-   ```bash
-   ./Script/noah validate --scope all
-   cd Test && make test
-   ```
-
-3. **Community support**:
-   - GitHub Issues: [Report bugs](https://github.com/your-org/noah/issues)
-   - Documentation: Check `docs/` directory
-   - Examples: See `examples/` directory
 
 ---
 
 ## 📈 Performance Optimization
 
-### Resource Optimization
+### Resource Optimization with Enhanced Monitoring
 
 ```bash
-# Check resource usage
-kubectl top nodes
-kubectl top pods -A
+# Check resource usage with logging
+kubectl top nodes | tee logs/resource-usage-$(date +%Y%m%d).log
+kubectl top pods -n noah | tee -a logs/resource-usage-$(date +%Y%m%d).log
 
-# Optimize resource requests/limits
-helm upgrade SERVICE ./Helm/SERVICE --set resources.requests.memory=1Gi
+# Optimize resource requests/limits for root user deployments
+helm upgrade gitlab ./Helm/gitlab \
+  --namespace noah \
+  --set resources.requests.memory=2Gi \
+  --set resources.limits.memory=4Gi \
+  --set securityContext.runAsUser=0
 ```
 
-### Scaling
+### Scaling with Security Context Considerations
 
 ```bash
-# Horizontal scaling
-kubectl scale deployment/nextcloud --replicas=3
+# Horizontal scaling (root user compatible)
+kubectl scale deployment/gitlab-gitlab-simple --replicas=3 -n noah
 
-# Vertical scaling
-kubectl patch deployment nextcloud -p '{"spec":{"template":{"spec":{"containers":[{"name":"nextcloud","resources":{"requests":{"cpu":"500m","memory":"1Gi"}}}]}}}}'
+# Vertical scaling with proper security context
+kubectl patch deployment gitlab-gitlab-simple -n noah -p '
+{
+  "spec": {
+    "template": {
+      "spec": {
+        "containers": [
+          {
+            "name": "gitlab",
+            "resources": {
+              "requests": {"cpu": "1000m", "memory": "4Gi"},
+              "limits": {"cpu": "2000m", "memory": "8Gi"}
+            }
+          }
+        ]
+      }
+    }
+  }
+}'
 
-# Auto-scaling
+# Auto-scaling with security context awareness
 kubectl apply -f - <<EOF
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: nextcloud-hpa
+  name: gitlab-hpa
+  namespace: noah
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: nextcloud
-  minReplicas: 2
-  maxReplicas: 10
+    name: gitlab-gitlab-simple
+  minReplicas: 1
+  maxReplicas: 5
   metrics:
   - type: Resource
     resource:
@@ -736,35 +968,74 @@ EOF
 
 ## 🚀 Production Deployment Checklist
 
-### Pre-Deployment
+### Enhanced Pre-Deployment Checklist
 
 - [ ] **System Requirements**: Verify hardware and software requirements
+- [ ] **Security Mode Selection**: Choose appropriate security mode (root/secure)
+- [ ] **Logging Setup**: Ensure log directories have sufficient space
 - [ ] **Network Planning**: Configure DNS, load balancers, firewall rules
-- [ ] **Storage Planning**: Configure persistent storage classes
-- [ ] **Security Review**: Review security policies and configurations
+- [ ] **Storage Planning**: Configure persistent storage classes with proper permissions
+- [ ] **Security Review**: Review security policies and root user requirements
 - [ ] **Backup Strategy**: Configure backup locations and schedules
 
-### Deployment
+### Enhanced Deployment Process
 
-- [ ] **Environment Configuration**: Customize values files for production
-- [ ] **Deploy Infrastructure**: `./Script/noah infra deploy --environment prod`
-- [ ] **Enable Monitoring**: `./Script/noah monitoring deploy`
-- [ ] **Configure Backups**: `./Script/noah backup setup`
-- [ ] **Security Hardening**: Apply security policies and network rules
+- [ ] **Pre-deployment Validation**:
+  ```bash
+  ./Script/noah validate --scope all
+  ./Script/noah-logs clean  # Clean old logs
+  ```
 
-### Post-Deployment
+- [ ] **Deploy Infrastructure with Logging**:
+  ```bash
+  ./Script/noah infra deploy --security root --verbose
+  ./Script/noah-logs tail &  # Monitor in background
+  ```
 
-- [ ] **Validation Testing**: Run comprehensive test suite
-- [ ] **Performance Testing**: Load test critical services
+- [ ] **Enable Monitoring with Proper Security**:
+  ```bash
+  ./Script/noah monitoring deploy --security root
+  ```
+
+- [ ] **Configure Backups with Error Tracking**:
+  ```bash
+  ./Script/noah backup setup --log-errors
+  ```
+
+- [ ] **Security Hardening**: Apply security policies while maintaining functionality
+
+### Enhanced Post-Deployment Checklist
+
+- [ ] **Validation Testing with Logging**:
+  ```bash
+  cd Test && make test 2>&1 | tee logs/post-deployment-test.log
+  ```
+
+- [ ] **Performance Testing**: Load test critical services with monitoring
 - [ ] **Security Audit**: Vulnerability scanning and penetration testing
+- [ ] **Log Analysis**: Review deployment and error logs
+  ```bash
+  ./Script/noah-logs summary
+  ./Script/noah-logs errors
+  ```
+
 - [ ] **Documentation**: Update runbooks and operational procedures
-- [ ] **Team Training**: Train operations team on management procedures
+- [ ] **Team Training**: Train operations team on new logging and troubleshooting features
 
-### Ongoing Operations
+### Ongoing Operations with Enhanced Monitoring
 
-- [ ] **Monitoring Setup**: Configure alerts and dashboards
-- [ ] **Backup Verification**: Regular backup and restore testing
-- [ ] **Security Updates**: Regular security patches and updates
+- [ ] **Daily Log Review**:
+  ```bash
+  ./Script/noah-logs errors | grep $(date +%Y%m%d)
+  ./Script/noah-logs summary
+  ```
+
+- [ ] **Weekly Log Cleanup**:
+  ```bash
+  ./Script/noah-logs clean
+  ```
+
+- [ ] **Monthly Security Review**: Regular security patches and updates
 - [ ] **Performance Monitoring**: Track and optimize resource usage
 - [ ] **Capacity Planning**: Monitor growth and plan for scaling
 
@@ -772,21 +1043,65 @@ EOF
 
 ## 📚 Additional Resources
 
-### Documentation
+### Enhanced Documentation
 
 - **[README.md](../README.md)**: Project overview and quick start
 - **[CONTRIBUTING.md](../CONTRIBUTING.md)**: Contributing guidelines
 - **[Test README](../Test/README.md)**: Testing suite documentation
 - **[Script README](../Script/README.md)**: CLI tools documentation
+- **[Logging Guide](../docs/LOGGING.md)**: Comprehensive logging documentation
 
-### Examples and Templates
+### Log Management
 
+```bash
+# View logging documentation
+./Script/noah-logs help
+
+# Monitor log disk usage
+du -sh logs/
+
+# Archive old logs
+tar -czf logs-archive-$(date +%Y%m).tar.gz logs/
 ```
-examples/
-├── development/          # Development environment examples
-├── production/          # Production deployment templates
-├── hybrid/             # Hybrid cloud configurations
-└── customizations/     # Service customization examples
+
+### Security Context Examples
+
+```yaml
+# Example: GitLab with root user (maximum compatibility)
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+  allowPrivilegeEscalation: true
+  capabilities:
+    add: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"]
+
+# Example: Nextcloud with restricted privileges
+securityContext:
+  runAsUser: 33  # www-data user
+  runAsGroup: 33
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+    add: ["CHOWN", "FOWNER"]
+```
+
+### Troubleshooting Quick Reference
+
+```bash
+# Quick health check
+./Script/noah infra status
+
+# View recent errors
+./Script/noah-logs errors | tail -5
+
+# Check specific service
+kubectl describe deployment/gitlab-gitlab-simple -n noah
+
+# Security context debugging
+kubectl get pod -n noah -o yaml | grep -A 10 securityContext
+
+# Network troubleshooting
+kubectl exec -it deployment/gitlab-gitlab-simple -n noah -- netstat -tlnp
 ```
 
 ### Community and Support
@@ -795,9 +1110,53 @@ examples/
 - **Issue Tracker**: Report bugs and request features
 - **Discussions**: Community Q&A and knowledge sharing
 - **Wiki**: Additional documentation and tutorials
+- **Security Issues**: security@noah-project.org
+
+### Getting Support
+
+1. **Check Documentation**:
+   ```bash
+   ./Script/noah help
+   ./Script/noah-logs help
+   ```
+
+2. **Review Logs**:
+   ```bash
+   ./Script/noah-logs latest
+   ./Script/noah-logs errors
+   ```
+
+3. **Run Diagnostics**:
+   ```bash
+   ./Script/noah validate --verbose
+   cd Test && make test
+   ```
+
+4. **Community Resources**:
+   - Search existing issues
+   - Check troubleshooting guides
+   - Join community discussions
 
 ---
 
-**🎉 Congratulations! You now have a complete N.O.A.H infrastructure deployment.**
+**🎉 Congratulations! You now have a complete N.O.A.H infrastructure deployment with enhanced logging, flexible security contexts, and comprehensive troubleshooting capabilities.**
 
-For ongoing support and advanced configurations, please refer to the additional documentation in the `docs/` directory or reach out to the community through GitHub Issues and Discussions.
+For ongoing support and advanced configurations, please refer to the comprehensive logging system, the additional documentation in the `docs/` directory, or reach out to the community through GitHub Issues and Discussions.
+
+## Quick Command Reference
+
+```bash
+# Essential Commands
+./Script/noah infra deploy --security root --verbose    # Deploy with root security
+./Script/noah infra status                             # Check deployment status
+./Script/noah-logs tail                                # Monitor deployments
+./Script/noah-logs errors                              # View error logs
+./Script/noah-logs summary                             # Log overview
+./Script/noah validate                                 # Validate configuration
+
+# Troubleshooting
+kubectl get pods -n noah                              # Check pod status
+kubectl logs -f deployment/gitlab-gitlab-simple -n noah  # View service logs
+kubectl describe deployment/SERVICE -n noah           # Debug deployment issues
+./Script/noah-logs clean                              # Clean old logs
+```

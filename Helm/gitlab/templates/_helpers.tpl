@@ -53,10 +53,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Pod Security Context - Default secure settings
 */}}
 {{- define "noah.podSecurityContext" -}}
+{{- if ne (.Values.securityContext.runAsUser | int) 0 }}
 runAsNonRoot: true
-runAsUser: {{ .Values.securityContext.runAsUser | default 1000 }}
-runAsGroup: {{ .Values.securityContext.runAsGroup | default 1000 }}
-fsGroup: {{ .Values.securityContext.fsGroup | default 1000 }}
+{{- else }}
+runAsNonRoot: false
+{{- end }}
+runAsUser: {{ .Values.securityContext.runAsUser | default 0 }}
+runAsGroup: {{ .Values.securityContext.runAsGroup | default 0 }}
+fsGroup: {{ .Values.securityContext.fsGroup | default 0 }}
 seccompProfile:
   type: RuntimeDefault
 {{- end }}
@@ -65,16 +69,50 @@ seccompProfile:
 Container Security Context - Default secure settings
 */}}
 {{- define "noah.securityContext" -}}
+{{- if ne (.Values.securityContext.runAsUser | int) 0 }}
 runAsNonRoot: true
-runAsUser: {{ .Values.securityContext.runAsUser | default 1000 }}
-runAsGroup: {{ .Values.securityContext.runAsGroup | default 1000 }}
-allowPrivilegeEscalation: false
+{{- else }}
+runAsNonRoot: false
+{{- end }}
+runAsUser: {{ .Values.securityContext.runAsUser | default 0 }}
+runAsGroup: {{ .Values.securityContext.runAsGroup | default 0 }}
+allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation | default true }}
 capabilities:
+  {{- if eq (.Values.securityContext.runAsUser | int) 0 }}
+  add:
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - SETGID
+    - SETUID
+  {{- else }}
   drop:
     - ALL
+  {{- end }}
 {{- if .Values.securityContext.readOnlyRootFilesystem }}
 readOnlyRootFilesystem: true
 {{- end }}
+{{- end }}
+
+{{/*
+ServiceMonitor template
+*/}}
+{{- define "noah.serviceMonitor" -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "noah.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "noah.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "noah.selectorLabels" . | nindent 6 }}
+  endpoints:
+  - port: {{ .Values.serviceMonitor.port | default "http" }}
+    path: {{ .Values.serviceMonitor.path | default "/metrics" }}
+    interval: 30s
 {{- end }}
 
 {{/*

@@ -1,0 +1,77 @@
+# =======================================
+# NOAH Root User Deployment Values
+# =======================================
+# Configuration for deployments that require root access
+
+# Single replica for testing
+replicaCount: 1
+
+# Root user security context for maximum compatibility
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+  fsGroup: 0
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: true
+
+# Moderate resources for root deployments
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+# Enable persistence for proper application functionality
+persistence:
+  enabled: true
+  size: 10Gi
+
+# Enable PostgreSQL for applications that need it
+postgresql:
+  enabled: true
+  auth:
+    username: noah
+    database: noah
+    password: noah123
+  primary:
+    securityContext:
+      enabled: true
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+
+# Enable Redis for applications that need it
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  master:
+    securityContext:
+      enabled: true
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+
+# Disable ingress for internal access
+ingress:
+  enabled: false
+
+# Disable monitoring until Prometheus operator is installed
+serviceMonitor:
+  enabled: false
+
+# Disable network policies for compatibility
+networkPolicy:
+  enabled: false
+
+# Disable autoscaling for testing
+autoscaling:
+  enabled: false
+
+# Global settings
+global:
+  storageClass: ""
+  domain: "noah.local"
+  environment: "development"

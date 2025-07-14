@@ -63,13 +63,15 @@ ingress:
   tls:
     enabled: false
 
-# Security
+# Security context (root user for GitLab compatibility)
 securityContext:
-  runAsUser: 1000
-  runAsGroup: 1000
+  runAsUser: 0
+  runAsGroup: 0
+  fsGroup: 0
   readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: true
 
-# Monitoring
+# Monitoring (disabled by default)
 serviceMonitor:
   enabled: false
   port: http

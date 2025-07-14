@@ -150,3 +150,48 @@ http://{{ .Release.Name }}-keycloak:8080
 {{ .Values.externalKeycloak.protocol }}://{{ .Values.externalKeycloak.host }}{{ if .Values.externalKeycloak.port }}:{{ .Values.externalKeycloak.port }}{{ end }}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Pod Security Context - Default secure settings
+*/}}
+{{- define "noah.podSecurityContext" -}}
+{{- if ne (.Values.securityContext.runAsUser | int) 0 }}
+runAsNonRoot: true
+{{- else }}
+runAsNonRoot: false
+{{- end }}
+runAsUser: {{ .Values.securityContext.runAsUser | default 0 }}
+runAsGroup: {{ .Values.securityContext.runAsGroup | default 0 }}
+fsGroup: {{ .Values.securityContext.fsGroup | default 0 }}
+seccompProfile:
+  type: RuntimeDefault
+{{- end }}
+
+{{/*
+Container Security Context - Default secure settings
+*/}}
+{{- define "noah.securityContext" -}}
+{{- if ne (.Values.securityContext.runAsUser | int) 0 }}
+runAsNonRoot: true
+{{- else }}
+runAsNonRoot: false
+{{- end }}
+runAsUser: {{ .Values.securityContext.runAsUser | default 0 }}
+runAsGroup: {{ .Values.securityContext.runAsGroup | default 0 }}
+allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation | default true }}
+capabilities:
+  {{- if eq (.Values.securityContext.runAsUser | int) 0 }}
+  add:
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - SETGID
+    - SETUID
+  {{- else }}
+  drop:
+    - ALL
+  {{- end }}
+{{- if .Values.securityContext.readOnlyRootFilesystem }}
+readOnlyRootFilesystem: true
+{{- end }}
+{{- end }}

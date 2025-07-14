@@ -1,12 +1,20 @@
 # =======================================
-# NOAH Minimal Installation Values
+# NOAH Secure Deployment Values
 # =======================================
-# Bare minimum resources for testing
+# High security configuration for production
 
 # Single replica
 replicaCount: 1
 
-# Minimal resources
+# Secure non-root user context
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+# Limited resources
 resources:
   requests:
     cpu: 100m
@@ -15,11 +23,11 @@ resources:
     cpu: 500m
     memory: 1Gi
 
-# No persistence (ephemeral)
+# No persistence (ephemeral for security)
 persistence:
   enabled: false
 
-# Embedded SQLite (no external DB)
+# No external database
 postgresql:
   enabled: false
 
@@ -30,20 +38,13 @@ redis:
 ingress:
   enabled: false
 
-# Minimal security (root user for compatibility)
-securityContext:
-  runAsUser: 0
-  runAsGroup: 0
-  fsGroup: 0
-  readOnlyRootFilesystem: false
-  allowPrivilegeEscalation: true
-
-# No monitoring
+# No monitoring to reduce attack surface
 serviceMonitor:
   enabled: false
 
+# Enable network policies
 networkPolicy:
-  enabled: false
+  enabled: true
 
 # No autoscaling
 autoscaling:

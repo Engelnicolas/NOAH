@@ -68,16 +68,6 @@ kubectl get pods -n noah
 
 ---
 
-## 🎯 Why Choose N.O.A.H?
-
-- **Complete Automation**: Zero-touch deployment from infrastructure to applications
-- **Security-First**: Built-in security controls, monitoring, and compliance features
-- **Vendor Independence**: 100% open-source stack with no vendor lock-in
-- **Production Ready**: Battle-tested configurations with comprehensive logging
-- **Flexible Security**: Supports both secure and root deployment modes
-
----
-
 ## 🏗️ Architecture
 
 ### Security & Identity Management
@@ -113,18 +103,6 @@ Digital learning platform with hands-on experience in enterprise technologies
 
 ---
 
-## 🤝 Contributing
-
-We welcome contributions from the community! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) guide for:
-
-- **🔀 Code Contributions**: Pull request guidelines and development workflow
-- **📝 Documentation**: Improving and expanding documentation
-- **🐛 Bug Reports**: How to report issues effectively
-- **💡 Feature Requests**: Proposing new features and enhancements
-- **🧪 Testing**: Contributing to our test suite
-
----
-
 ## 👨‍💻 Author
 
 **Nicolas Engel**  
@@ -146,11 +124,3 @@ Special thanks to the open-source community and the maintainers of all the incre
 - **Elastic** for the ELK stack components
 
 ---
-
-<div align="center">
-
-**⭐ If you find N.O.A.H useful, please give it a star on GitHub! ⭐**
-
-Built with ❤️ by the open-source community
-
-</div>

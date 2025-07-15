@@ -493,7 +493,7 @@
     mode: '0644'
 
 - name: Run post-deployment validation script (optional)
-  ansible.builtin.shell: bash Test/post_deploy_validate.sh
+  ansible.builtin.shell: bash ../Test/post_deploy_validate.sh
   when: run_validation|default(true)
   args:
     chdir: "{{ playbook_dir }}"

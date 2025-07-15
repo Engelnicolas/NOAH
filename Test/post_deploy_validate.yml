@@ -1,0 +1,14 @@
+---
+# NOAH - Post-deployment validation tasks
+# Executes the shell script that runs the unified test suite.
+
+- name: Run post-deployment validation tests
+  ansible.builtin.shell: bash "{{ playbook_dir }}/../Test/post_deploy_validate.sh"
+  args:
+    chdir: "{{ playbook_dir }}/.."
+  register: post_validate
+  ignore_errors: false
+
+- name: Display validation output
+  ansible.builtin.debug:
+    var: post_validate.stdout

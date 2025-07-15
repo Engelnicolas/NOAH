@@ -34,17 +34,17 @@ warnings=0
 # Logging functions
 log_success() {
     echo -e "${GREEN}✅ $1${NC}"
-    ((success++))
+    success=$((success + 1))
 }
 
 log_error() {
     echo -e "${RED}❌ $1${NC}"
-    ((errors++))
+    errors=$((errors + 1))
 }
 
 log_warning() {
     echo -e "${YELLOW}⚠️  $1${NC}"
-    ((warnings++))
+    warnings=$((warnings + 1))
 }
 
 log_info() {

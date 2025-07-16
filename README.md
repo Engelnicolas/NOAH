@@ -44,7 +44,7 @@ git clone https://github.com/Engelnicolas/NOAH.git
 cd NOAH
 
 # Deploy core services (uses root security context for compatibility)
-./Script/noah-infra deploy --security root
+python3 ./Script/noah_infra.py deploy
 
 # Check deployment status
 kubectl get pods -n noah

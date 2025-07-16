@@ -87,9 +87,9 @@ main() {
             fi
             ;;
         "infra")
-            script_path="${SCRIPT_DIR}/noah-infra"
+            script_path="${SCRIPT_DIR}/noah_infra.py"
             if check_script "$script_path"; then
-                exec "$script_path" "$@"
+                exec python3 "$script_path" "$@"
             fi
             ;;
         "monitoring")

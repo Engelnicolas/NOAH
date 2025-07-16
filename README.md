@@ -43,14 +43,20 @@
 git clone https://github.com/Engelnicolas/NOAH.git
 cd NOAH
 
-# Deploy core services (uses root security context for compatibility)
-./Script/noah-infra deploy --security root
+# Initialize infrastructure
+./Script/noah infra setup
+
+# Deploy complete NOAH stack (11 Helm charts)
+./Script/noah infra deploy
 
 # Check deployment status
-kubectl get pods -n noah
+./Script/noah infra status
+
+# Deploy monitoring stack
+./Script/noah monitoring deploy
 
 # View logs if needed
-./Script/noah-logs --latest
+./Script/noah logs latest
 ```
 
 ### Access Services
@@ -124,3 +130,46 @@ Special thanks to the open-source community and the maintainers of all the incre
 - **Elastic** for the ELK stack components
 
 ---
+
+## 🆕 What's New in Version 4.0.0
+
+### 🔧 Modernized CLI Interface
+- **Unified Command Structure**: Single `./noah` entry point for all operations
+- **Enhanced Help System**: Comprehensive documentation with examples
+- **Color-coded Output**: Visual indicators for better user experience
+- **Smart Script Routing**: Automatic validation and execution of specialized scripts
+
+### 🐍 Python Migration
+- **Infrastructure Management**: `noah-infra` with 11 Helm charts deployment
+- **Monitoring Stack**: `noah-monitoring.py` for Prometheus/Grafana management
+- **Code Quality**: `noah-linter.py` unified linting with Super-Linter integration
+- **Auto-fixing**: `noah-fix.py` for intelligent issue resolution
+
+### 📊 Enhanced Monitoring
+- **Structured Logging**: Better error tracking and debugging
+- **Deployment Phases**: Organized 3-phase deployment strategy
+- **Status Validation**: Real-time health checks and validation
+- **Log Management**: Centralized log viewing and analysis
+
+### 🛠️ Developer Experience
+- **Makefile 3.0.0**: Professional project management interface
+- **Comprehensive Documentation**: Detailed script documentation and examples
+- **Error Handling**: Robust error recovery and user guidance
+- **Validation Tools**: Automated YAML, Ansible, and Helm validation
+
+### 📈 Available Commands
+```bash
+# Infrastructure lifecycle
+./noah infra setup|deploy|status|teardown
+
+# Monitoring operations  
+./noah monitoring deploy|status|teardown
+
+# Code quality and validation
+./noah linting setup|lint|report
+./noah fix yaml|shell|all
+./noah validate yaml|ansible|helm|all
+
+# Log management
+./noah logs latest|errors|summary|clean
+```

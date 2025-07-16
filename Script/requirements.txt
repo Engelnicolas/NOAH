@@ -54,7 +54,7 @@ requests>=2.28.0,<3.0
 # Features: API calls to Kubernetes/Helm, health checks
 
 # URL parsing and handling
-urllib3>=1.26.0,<2.0
+urllib3>=1.26.0,<3.0
 # Used by: requests dependency, secure HTTP handling
 # Features: SSL/TLS validation, connection pooling
 
@@ -206,7 +206,7 @@ tqdm>=4.65.0,<5.0
 # =============================================================================
 
 # Code formatting
-black>=23.0.0,<24.0
+black>=23.0.0,<26.0
 # Used by: Code formatting, development
 # Features: Automatic code formatting
 

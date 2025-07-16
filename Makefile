@@ -527,7 +527,7 @@ dev-deploy: deploy ## Dev - Deploy to development environment
 quick-deploy: ## Dev - Quick deploy without full validation
 	@echo "$(BLUE)█ Quick Deploy (Development)$(NC)"
 	@echo ""
-	@cd $(SCRIPT_DIR) && sudo python3 ./noah-infra --dry-run --verbose
+	@cd $(SCRIPT_DIR) && sudo python3 ./noah-deploy.py --dry-run --verbose
 	@echo "$(YELLOW)⚠️ This was a dry run. Remove --dry-run for actual deployment$(NC)"
 
 quick-test: ## Dev - Quick test without full suite

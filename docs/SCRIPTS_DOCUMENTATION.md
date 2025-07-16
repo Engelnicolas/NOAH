@@ -8,7 +8,7 @@ Ce document décrit précisément ce que fait chaque script dans le projet NOAH 
 
 ```
 noah (CLI principal)
-├── noah-infra (déploiement infrastructure)
+├── noah-deploy.py (déploiement infrastructure)
 ├── noah-monitoring.py (stack monitoring)
 ├── noah-linter.py (validation code)
 └── noah-fix.py (correction automatique)
@@ -35,7 +35,7 @@ noah (CLI principal)
 - Validation automatique des scripts
 - Support des options globales (-v, --help, --version)
 
-### 2. `noah-infra` 
+### 2. `noah-deploy.py` 
 **Type:** Python script
 **Rôle:** Gestion complète de l'infrastructure
 **Lignes de code:** 692 lignes

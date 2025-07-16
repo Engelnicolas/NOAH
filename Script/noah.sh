@@ -57,7 +57,7 @@ declare -A SCRIPT_COMMANDS=(
     # Command structure: [command]="script_path:execution_method:description"
     
     ["fix"]="noah-fix.py:python3:Fix common issues automatically with intelligent repairs"
-    ["infra"]="noah-infra:python3:Infrastructure management (setup, deploy, status, teardown)"
+    ["infra"]="noah-deploy.py:python3:Infrastructure management (setup, deploy, status, teardown)"
     ["monitoring"]="noah-monitoring.py:python3:Monitoring stack management (Prometheus, Grafana)"
     ["linting"]="noah-linter.py:python3:Linting validation and setup for code quality"
 )

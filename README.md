@@ -140,7 +140,7 @@ Special thanks to the open-source community and the maintainers of all the incre
 - **Smart Script Routing**: Automatic validation and execution of specialized scripts
 
 ### 🐍 Python Migration
-- **Infrastructure Management**: `noah-infra` with 11 Helm charts deployment
+- **Infrastructure Management**: `noah-deploy.py` with 11 Helm charts deployment
 - **Monitoring Stack**: `noah-monitoring.py` for Prometheus/Grafana management
 - **Code Quality**: `noah-linter.py` unified linting with Super-Linter integration
 - **Auto-fixing**: `noah-fix.py` for intelligent issue resolution

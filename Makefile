@@ -114,7 +114,7 @@ endef
         lint lint-all lint-charts lint-ansible lint-python lint-shell \
         monitoring monitoring-up monitoring-down monitoring-status \
         backup backup-create backup-restore backup-list \
-        clean clean-all clean-charts clean-logs clean-cache \
+        clean clean-all clean-charts clean-cache \
         rollback rollback-infra rollback-monitoring \
         status status-all status-infra status-monitoring \
         docs docs-serve docs-build docs-deploy \
@@ -265,7 +265,7 @@ test-integration: ## Test - Run integration tests
 
 test-e2e: ## Test - Run end-to-end tests
 	$(call print_section,"Running End-to-End Tests")
-	@cd $(SCRIPT_DIR) && ./noah validate all --environment $(ENVIRONMENT)
+	@cd $(SCRIPT_DIR) && ./noah linting lint --environment $(ENVIRONMENT)
 	$(call print_success,"End-to-end tests completed")
 
 dev-test: ENVIRONMENT=dev
@@ -420,7 +420,6 @@ clean: clean-all ## Clean - Clean up all resources
 clean-all: ## Clean - Comprehensive cleanup
 	$(call print_section,"Cleaning Up All Resources")
 	$(MAKE) clean-charts
-	$(MAKE) clean-logs
 	$(MAKE) clean-cache
 	$(call print_success,"Cleanup completed")
 
@@ -428,11 +427,6 @@ clean-charts: ## Clean - Clean Helm charts
 	$(call print_section,"Cleaning Helm Charts")
 	$(MAKE) -C $(HELM_DIR) clean
 	$(call print_success,"Helm charts cleaned")
-
-clean-logs: ## Clean - Clean log files
-	$(call print_section,"Cleaning Log Files")
-	@cd $(SCRIPT_DIR) && ./noah-logs clean
-	$(call print_success,"Log files cleaned")
 
 clean-cache: ## Clean - Clean cache files
 	$(call print_section,"Cleaning Cache Files")

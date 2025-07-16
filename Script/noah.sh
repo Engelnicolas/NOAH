@@ -56,13 +56,10 @@ readonly NC='\033[0m'
 declare -A SCRIPT_COMMANDS=(
     # Command structure: [command]="script_path:execution_method:description"
     
-    ["validate"]="noah-validate:bash:Validate project components (YAML, Ansible, Helm, scripts)"
     ["fix"]="noah-fix.py:python3:Fix common issues automatically with intelligent repairs"
     ["infra"]="noah-infra:python3:Infrastructure management (setup, deploy, status, teardown)"
     ["monitoring"]="noah-monitoring.py:python3:Monitoring stack management (Prometheus, Grafana)"
     ["linting"]="noah-linter.py:python3:Linting validation and setup for code quality"
-    ["logs"]="noah-logs:bash:Log viewer and analyzer for deployment operations"
-    ["backup"]="future:placeholder:Backup and restore operations (to be implemented)"
 )
 
 # =============================================================================
@@ -132,21 +129,9 @@ show_help() {
     echo "                   • status   - Check monitoring stack health"
     echo "                   • teardown - Remove monitoring infrastructure"
     echo ""
-    echo -e "  ${GREEN}logs${NC}           Log management and analysis"
-    echo "                   • latest   - Show latest deployment logs"
-    echo "                   • errors   - Display error logs"
-    echo "                   • summary  - Log summary and statistics"
-    echo "                   • clean    - Clean old log files"
-    echo ""
     
     # Code Quality & Validation
     echo -e "${PURPLE}🔍 Code Quality & Validation:${NC}"
-    echo -e "  ${GREEN}validate${NC}       Project validation and compliance"
-    echo "                   • yaml     - Validate YAML syntax and structure"
-    echo "                   • ansible  - Validate Ansible playbooks"
-    echo "                   • helm     - Validate Helm charts"
-    echo "                   • all      - Comprehensive validation"
-    echo ""
     echo -e "  ${GREEN}fix${NC}            Automated issue resolution"
     echo "                   • yaml     - Fix YAML formatting issues"
     echo "                   • shell    - Fix shell script issues"
@@ -156,14 +141,6 @@ show_help() {
     echo "                   • setup    - Setup linting environment"
     echo "                   • lint     - Run comprehensive linting"
     echo "                   • report   - Generate linting report"
-    echo ""
-    
-    # Future Features
-    echo -e "${PURPLE}🔮 Future Features:${NC}"
-    echo -e "  ${GREEN}backup${NC}         Backup and restore operations"
-    echo "                   • create   - Create system backup"
-    echo "                   • restore  - Restore from backup"
-    echo "                   • list     - List available backups"
     echo ""
     
     echo -e "${YELLOW}SCRIPT EXECUTION DETAILS:${NC}"
@@ -182,10 +159,8 @@ show_help() {
     echo -e "${YELLOW}EXAMPLES:${NC}"
     echo "    ./noah infra deploy              # Deploy infrastructure"
     echo "    ./noah monitoring status         # Check monitoring health"
-    echo "    ./noah validate --scope yaml     # Validate YAML files"
     echo "    ./noah fix --verbose            # Fix issues with details"
     echo "    ./noah linting setup            # Setup linting tools"
-    echo "    ./noah logs latest              # Show recent logs"
     echo ""
     echo -e "${YELLOW}GLOBAL OPTIONS:${NC}"
     echo "    -v, --verbose     Enable verbose output"
@@ -286,17 +261,7 @@ route_command() {
     if [[ "$execution_method" == "placeholder" ]]; then
         print_warning "Command '$command' is not yet implemented"
         print_info "$description"
-        if [[ "$command" == "backup" ]]; then
-            print_info "For now, use Kubernetes native backup tools or Helm commands"
-        fi
         return 0
-    fi
-    
-    # Special handling for validate command (create if missing)
-    if [[ "$command" == "validate" && ! -f "$SCRIPT_DIR/$script_path" ]]; then
-        print_warning "Validation script not found, using fix script for validation"
-        script_path="noah-fix.py"
-        execution_method="python3"
     fi
     
     # Build full script path

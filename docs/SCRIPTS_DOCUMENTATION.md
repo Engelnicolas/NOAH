@@ -11,9 +11,7 @@ noah (CLI principal)
 ├── noah-infra (déploiement infrastructure)
 ├── noah-monitoring.py (stack monitoring)
 ├── noah-linter.py (validation code)
-├── noah-fix.py (correction automatique)
-├── noah-logs (gestion logs)
-└── noah-validate (validation projet) [À implémenter]
+└── noah-fix.py (correction automatique)
 ```
 
 ## Scripts détaillés
@@ -112,26 +110,6 @@ Phase 3 (Monitoring):
 - **Auto-repair:** Réparations intelligentes
 - **Validation:** Vérification post-correction
 
-### 6. `noah-logs`
-**Type:** Bash script
-**Rôle:** Gestion et analyse des logs
-**Statut:** Fonctionnel (path corrigé)
-
-**Fonctionnalités:**
-- **Latest:** Affichage des logs récents
-- **Errors:** Filtrage des erreurs
-- **Summary:** Statistiques et résumé
-- **Clean:** Nettoyage des anciens logs
-
-### 7. `noah-validate` 
-**Type:** À implémenter
-**Rôle:** Validation complète du projet
-**Fonctionnalités prévues:**
-- **YAML:** Validation syntaxe et structure
-- **Ansible:** Validation playbooks
-- **Helm:** Validation charts
-- **All:** Validation complète
-
 ## Flux d'exécution
 
 ```bash
@@ -139,8 +117,6 @@ Phase 3 (Monitoring):
 ./noah infra setup      # Initialise l'environnement
 ./noah infra deploy     # Déploie les 11 charts
 ./noah monitoring deploy # Déploie le monitoring
-./noah validate all     # Valide la configuration
-./noah logs latest      # Vérifie les logs
 ```
 
 ## Améliorations apportées

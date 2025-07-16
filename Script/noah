@@ -93,9 +93,9 @@ main() {
             fi
             ;;
         "monitoring")
-            script_path="${SCRIPT_DIR}/noah-monitoring"
+            script_path="${SCRIPT_DIR}/noah-monitoring.py"
             if check_script "$script_path"; then
-                exec "$script_path" "$@"
+                exec python3 "$script_path" "$@"
             fi
             ;;
         "backup")

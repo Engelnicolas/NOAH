@@ -1,0 +1,46 @@
+# Markdown Linting Configuration for NOAH
+extends: default
+
+rules:
+  # Line length
+  line-length:
+    line_length: 100
+    code_blocks: false
+    tables: false
+    headings: false
+    
+  # Headings
+  heading-style:
+    style: atx
+    
+  # Lists
+  ul-style:
+    style: dash
+    
+  # Inline HTML
+  no-inline-html:
+    allowed_elements:
+      - br
+      - sub
+      - sup
+      - b
+      - i
+      - strong
+      - em
+      - code
+      - pre
+      - details
+      - summary
+      
+  # Trailing spaces
+  no-trailing-spaces: true
+  
+  # Multiple blanks
+  no-multiple-blanks: true
+  
+  # Bare URLs
+  no-bare-urls: false
+  
+  # Duplicate headings
+  no-duplicate-heading:
+    siblings_only: true

@@ -1,0 +1,443 @@
+#!/usr/bin/env python3
+"""
+NOAH Technical Requirements Validator
+Validates system requirements before deployment
+
+Author: NOAH Team
+Version: 1.0.0
+"""
+
+import os
+import sys
+import subprocess
+import psutil
+import shutil
+from pathlib import Path
+from typing import Dict, List, Tuple, Optional
+
+
+class Colors:
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    PURPLE = "\033[95m"
+    CYAN = "\033[96m"
+    END = "\033[0m"
+    BOLD = "\033[1m"
+
+
+class TechnicalRequirementsValidator:
+    def __init__(self, profile: str = "minimal"):
+        self.profile = profile
+        self.requirements = self._load_requirements()
+
+    def _load_requirements(self) -> Dict:
+        """Load requirements based on profile"""
+        requirements = {
+            "minimal": {
+                "cpu_cores": 2,
+                "ram_gb": 6,
+                "storage_gb": 50,
+                "kubernetes_version": "1.24",
+                "helm_version": "3.10",
+                "docker_version": "20.10",
+                "python_version": "3.8",
+            },
+            "root": {
+                "cpu_cores": 8,
+                "ram_gb": 28,
+                "storage_gb": 500,
+                "kubernetes_version": "1.24",
+                "helm_version": "3.10",
+                "docker_version": "20.10",
+                "python_version": "3.8",
+            },
+        }
+        return requirements.get(self.profile, requirements["minimal"])
+
+    def print_banner(self):
+        print(f"{Colors.CYAN}{Colors.BOLD}")
+        print("████████╗███████╗ ██████╗██╗  ██╗    ██████╗ ███████╗ ██████╗ ███████╗")
+        print("╚══██╔══╝██╔════╝██╔════╝██║  ██║    ██╔══██╗██╔════╝██╔═══██╗██╔════╝")
+        print("   ██║   █████╗  ██║     ███████║    ██████╔╝█████╗  ██║   ██║███████╗")
+        print("   ██║   ██╔══╝  ██║     ██╔══██║    ██╔══██╗██╔══╝  ██║▄▄ ██║╚════██║")
+        print("   ██║   ███████╗╚██████╗██║  ██║    ██║  ██║███████╗╚██████╔╝███████║")
+        print("   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝    ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝ ╚══════╝")
+        print(f"{Colors.END}")
+        print(f"{Colors.BOLD}NOAH Technical Requirements Validator{Colors.END}")
+        print(f"{Colors.BLUE}Profile: {self.profile.upper()}{Colors.END}")
+        print("=" * 60)
+
+    def check_system_resources(self) -> Dict:
+        """Check system hardware resources"""
+        print(f"\n{Colors.BOLD}🖥️  System Resources{Colors.END}")
+        results = {}
+
+        # CPU cores
+        cpu_cores = psutil.cpu_count(logical=False)
+        cpu_logical = psutil.cpu_count(logical=True)
+        required_cores = self.requirements["cpu_cores"]
+
+        if cpu_cores >= required_cores:
+            print(
+                f"  {Colors.GREEN}✓{Colors.END} CPU: {cpu_cores} cores (physical), {cpu_logical} threads"
+            )
+            results["cpu"] = {
+                "status": "pass",
+                "actual": cpu_cores,
+                "required": required_cores,
+            }
+        else:
+            print(
+                f"  {Colors.RED}✗{Colors.END} CPU: {cpu_cores} cores < {required_cores} required"
+            )
+            results["cpu"] = {
+                "status": "fail",
+                "actual": cpu_cores,
+                "required": required_cores,
+            }
+
+        # RAM
+        ram_gb = psutil.virtual_memory().total / (1024**3)
+        required_ram = self.requirements["ram_gb"]
+
+        if ram_gb >= required_ram:
+            print(f"  {Colors.GREEN}✓{Colors.END} RAM: {ram_gb:.1f} GB available")
+            results["ram"] = {
+                "status": "pass",
+                "actual": ram_gb,
+                "required": required_ram,
+            }
+        else:
+            print(
+                f"  {Colors.RED}✗{Colors.END} RAM: {ram_gb:.1f} GB < {required_ram} GB required"
+            )
+            results["ram"] = {
+                "status": "fail",
+                "actual": ram_gb,
+                "required": required_ram,
+            }
+
+        # Storage
+        disk_usage = psutil.disk_usage("/")
+        storage_gb = disk_usage.free / (1024**3)
+        required_storage = self.requirements["storage_gb"]
+
+        if storage_gb >= required_storage:
+            print(
+                f"  {Colors.GREEN}✓{Colors.END} Storage: {storage_gb:.1f} GB available"
+            )
+            results["storage"] = {
+                "status": "pass",
+                "actual": storage_gb,
+                "required": required_storage,
+            }
+        else:
+            print(
+                f"  {Colors.RED}✗{Colors.END} Storage: {storage_gb:.1f} GB < {required_storage} GB required"
+            )
+            results["storage"] = {
+                "status": "fail",
+                "actual": storage_gb,
+                "required": required_storage,
+            }
+
+        return results
+
+    def check_software_dependencies(self) -> Dict:
+        """Check required software dependencies"""
+        print(f"\n{Colors.BOLD}📦 Software Dependencies{Colors.END}")
+        results = {}
+
+        dependencies = {
+            "docker": {
+                "command": ["docker", "--version"],
+                "version_pattern": r"Docker version (\d+\.\d+)",
+                "required": self.requirements["docker_version"],
+            },
+            "kubectl": {
+                "command": ["kubectl", "version", "--client", "--short"],
+                "version_pattern": r"Client Version: v(\d+\.\d+)",
+                "required": self.requirements["kubernetes_version"],
+            },
+            "helm": {
+                "command": ["helm", "version", "--short"],
+                "version_pattern": r"v(\d+\.\d+)",
+                "required": self.requirements["helm_version"],
+            },
+            "python": {
+                "command": ["python3", "--version"],
+                "version_pattern": r"Python (\d+\.\d+)",
+                "required": self.requirements["python_version"],
+            },
+            "git": {
+                "command": ["git", "--version"],
+                "version_pattern": r"git version (\d+\.\d+)",
+                "required": "2.30",
+            },
+            "make": {
+                "command": ["make", "--version"],
+                "version_pattern": r"GNU Make (\d+\.\d+)",
+                "required": "4.2",
+            },
+        }
+
+        for tool, config in dependencies.items():
+            try:
+                result = subprocess.run(
+                    config["command"], capture_output=True, text=True, timeout=10
+                )
+
+                if result.returncode == 0:
+                    import re
+
+                    match = re.search(config["version_pattern"], result.stdout)
+                    if match:
+                        version = match.group(1)
+                        if self._compare_versions(version, config["required"]) >= 0:
+                            print(f"  {Colors.GREEN}✓{Colors.END} {tool}: v{version}")
+                            results[tool] = {"status": "pass", "version": version}
+                        else:
+                            print(
+                                f"  {Colors.YELLOW}⚠{Colors.END} {tool}: v{version} < v{config['required']} required"
+                            )
+                            results[tool] = {"status": "warn", "version": version}
+                    else:
+                        print(
+                            f"  {Colors.YELLOW}⚠{Colors.END} {tool}: installed but version unknown"
+                        )
+                        results[tool] = {"status": "warn", "version": "unknown"}
+                else:
+                    print(f"  {Colors.RED}✗{Colors.END} {tool}: command failed")
+                    results[tool] = {"status": "fail", "version": None}
+
+            except subprocess.TimeoutExpired:
+                print(f"  {Colors.RED}✗{Colors.END} {tool}: command timeout")
+                results[tool] = {"status": "fail", "version": None}
+            except FileNotFoundError:
+                print(f"  {Colors.RED}✗{Colors.END} {tool}: not found")
+                results[tool] = {"status": "fail", "version": None}
+
+        return results
+
+    def check_kubernetes_cluster(self) -> Dict:
+        """Check Kubernetes cluster connectivity and resources"""
+        print(f"\n{Colors.BOLD}☸️  Kubernetes Cluster{Colors.END}")
+        results = {}
+
+        try:
+            # Check cluster connectivity
+            result = subprocess.run(
+                ["kubectl", "cluster-info"], capture_output=True, text=True, timeout=15
+            )
+
+            if result.returncode == 0:
+                print(f"  {Colors.GREEN}✓{Colors.END} Cluster connectivity: OK")
+                results["connectivity"] = {"status": "pass"}
+
+                # Check node resources
+                node_result = subprocess.run(
+                    ["kubectl", "top", "nodes"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+
+                if node_result.returncode == 0:
+                    print(f"  {Colors.GREEN}✓{Colors.END} Node metrics: Available")
+                    results["metrics"] = {"status": "pass"}
+                else:
+                    print(
+                        f"  {Colors.YELLOW}⚠{Colors.END} Node metrics: Unavailable (metrics-server required)"
+                    )
+                    results["metrics"] = {"status": "warn"}
+
+                # Check storage classes
+                sc_result = subprocess.run(
+                    ["kubectl", "get", "storageclass"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+
+                if sc_result.returncode == 0 and "default" in sc_result.stdout:
+                    print(
+                        f"  {Colors.GREEN}✓{Colors.END} Storage classes: Default available"
+                    )
+                    results["storage_class"] = {"status": "pass"}
+                else:
+                    print(
+                        f"  {Colors.YELLOW}⚠{Colors.END} Storage classes: No default storage class"
+                    )
+                    results["storage_class"] = {"status": "warn"}
+
+            else:
+                print(f"  {Colors.RED}✗{Colors.END} Cluster connectivity: Failed")
+                results["connectivity"] = {"status": "fail"}
+
+        except subprocess.TimeoutExpired:
+            print(f"  {Colors.RED}✗{Colors.END} Cluster connectivity: Timeout")
+            results["connectivity"] = {"status": "fail"}
+        except FileNotFoundError:
+            print(f"  {Colors.RED}✗{Colors.END} kubectl not found")
+            results["connectivity"] = {"status": "fail"}
+
+        return results
+
+    def check_helm_repositories(self) -> Dict:
+        """Check Helm repositories"""
+        print(f"\n{Colors.BOLD}📋 Helm Repositories{Colors.END}")
+        results = {}
+
+        try:
+            result = subprocess.run(
+                ["helm", "repo", "list"], capture_output=True, text=True, timeout=10
+            )
+
+            if result.returncode == 0:
+                print(f"  {Colors.GREEN}✓{Colors.END} Helm repositories: Configured")
+                results["repositories"] = {"status": "pass"}
+            else:
+                print(
+                    f"  {Colors.YELLOW}⚠{Colors.END} Helm repositories: None configured"
+                )
+                results["repositories"] = {"status": "warn"}
+
+        except subprocess.TimeoutExpired:
+            print(f"  {Colors.RED}✗{Colors.END} Helm repositories: Timeout")
+            results["repositories"] = {"status": "fail"}
+        except FileNotFoundError:
+            print(f"  {Colors.RED}✗{Colors.END} helm not found")
+            results["repositories"] = {"status": "fail"}
+
+        return results
+
+    def _compare_versions(self, version1: str, version2: str) -> int:
+        """Compare semantic versions"""
+
+        def normalize(v):
+            return [int(x) for x in v.split(".")]
+
+        v1 = normalize(version1)
+        v2 = normalize(version2)
+
+        # Pad with zeros to make equal length
+        max_len = max(len(v1), len(v2))
+        v1 += [0] * (max_len - len(v1))
+        v2 += [0] * (max_len - len(v2))
+
+        for i in range(max_len):
+            if v1[i] > v2[i]:
+                return 1
+            elif v1[i] < v2[i]:
+                return -1
+        return 0
+
+    def generate_report(self, results: Dict) -> None:
+        """Generate summary report"""
+        print(f"\n{Colors.BOLD}📊 VALIDATION SUMMARY{Colors.END}")
+        print("=" * 60)
+
+        total_checks = 0
+        passed_checks = 0
+
+        for category, checks in results.items():
+            print(f"\n{Colors.BOLD}{category.title()}:{Colors.END}")
+
+            for check_name, check_result in checks.items():
+                total_checks += 1
+                status = check_result["status"]
+
+                if status == "pass":
+                    print(f"  {Colors.GREEN}✓{Colors.END} {check_name}")
+                    passed_checks += 1
+                elif status == "warn":
+                    print(f"  {Colors.YELLOW}⚠{Colors.END} {check_name}")
+                    passed_checks += 0.5
+                else:
+                    print(f"  {Colors.RED}✗{Colors.END} {check_name}")
+
+        print(f"\n{Colors.BOLD}Results:{Colors.END}")
+        print(f"  Total checks: {total_checks}")
+        print(f"  Passed: {int(passed_checks)}")
+        print(f"  Warnings: {int((passed_checks % 1) * 2)}")
+        print(
+            f"  Failed: {total_checks - int(passed_checks) - int((passed_checks % 1) * 2)}"
+        )
+
+        if passed_checks == total_checks:
+            print(
+                f"\n{Colors.GREEN}🎉 All requirements satisfied for {self.profile} profile!{Colors.END}"
+            )
+        elif passed_checks >= total_checks * 0.8:
+            print(
+                f"\n{Colors.YELLOW}⚠ Most requirements satisfied. Review warnings above.{Colors.END}"
+            )
+        else:
+            print(
+                f"\n{Colors.RED}❌ Critical requirements not met. Address failures above.{Colors.END}"
+            )
+
+    def validate_all(self) -> Dict:
+        """Run all validation checks"""
+        self.print_banner()
+
+        results = {}
+
+        # System resources
+        results["system"] = self.check_system_resources()
+
+        # Software dependencies
+        results["software"] = self.check_software_dependencies()
+
+        # Kubernetes cluster
+        results["kubernetes"] = self.check_kubernetes_cluster()
+
+        # Helm repositories
+        results["helm"] = self.check_helm_repositories()
+
+        # Generate report
+        self.generate_report(results)
+
+        return results
+
+
+def main():
+    """Main function"""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="NOAH Technical Requirements Validator"
+    )
+    parser.add_argument(
+        "--profile",
+        choices=["minimal", "root"],
+        default="minimal",
+        help="Deployment profile to validate against",
+    )
+
+    args = parser.parse_args()
+
+    validator = TechnicalRequirementsValidator(profile=args.profile)
+    results = validator.validate_all()
+
+    # Exit with appropriate code
+    total_checks = sum(len(checks) for checks in results.values())
+    passed_checks = sum(
+        1
+        for checks in results.values()
+        for check in checks.values()
+        if check["status"] == "pass"
+    )
+
+    if passed_checks == total_checks:
+        sys.exit(0)
+    elif passed_checks >= total_checks * 0.8:
+        sys.exit(1)
+    else:
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

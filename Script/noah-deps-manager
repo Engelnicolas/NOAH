@@ -1,0 +1,392 @@
+#!/usr/bin/env python3
+"""
+NOAH Dependencies Manager
+========================
+Manages Python dependencies for the NOAH project
+
+Features:
+- Install dependencies with environment detection
+- Validate installed packages
+- Update dependencies safely
+- Check for security vulnerabilities
+- Generate dependency reports
+
+Author: NOAH Team
+Version: 2.0.0
+"""
+
+import os
+import sys
+import subprocess
+import json
+import tempfile
+import argparse
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+
+class Colors:
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    PURPLE = "\033[95m"
+    CYAN = "\033[96m"
+    END = "\033[0m"
+    BOLD = "\033[1m"
+
+
+class DependencyManager:
+    def __init__(self, verbose: bool = False):
+        self.verbose = verbose
+        self.script_dir = Path(__file__).parent
+        self.requirements_file = self.script_dir / "requirements.txt"
+
+    def print_banner(self):
+        print(f"{Colors.CYAN}{Colors.BOLD}")
+        print("██████╗ ███████╗██████╗ ███████╗    ███╗   ███╗ ██████╗ ██████╗ ")
+        print("██╔══██╗██╔════╝██╔══██╗██╔════╝    ████╗ ████║██╔════╝ ██╔══██╗")
+        print("██║  ██║█████╗  ██████╔╝███████╗    ██╔████╔██║██║  ███╗██████╔╝")
+        print("██║  ██║██╔══╝  ██╔═══╝ ╚════██║    ██║╚██╔╝██║██║   ██║██╔══██╗")
+        print("██████╔╝███████╗██║     ███████║    ██║ ╚═╝ ██║╚██████╔╝██║  ██║")
+        print("╚═════╝ ╚══════╝╚═╝     ╚══════╝    ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝")
+        print(f"{Colors.END}")
+        print(f"{Colors.BOLD}NOAH Dependencies Manager{Colors.END}")
+        print("=" * 50)
+
+    def log(self, message: str, level: str = "INFO"):
+        colors = {
+            "INFO": Colors.BLUE,
+            "SUCCESS": Colors.GREEN,
+            "WARNING": Colors.YELLOW,
+            "ERROR": Colors.RED,
+        }
+        color = colors.get(level, Colors.BLUE)
+        print(f"{color}[{level}]{Colors.END} {message}")
+
+    def run_command(
+        self, command: List[str], capture_output: bool = True
+    ) -> Tuple[bool, str]:
+        """Run a command and return success status and output"""
+        try:
+            if self.verbose:
+                self.log(f"Running: {' '.join(command)}")
+
+            result = subprocess.run(
+                command, capture_output=capture_output, text=True, timeout=300
+            )
+
+            if result.returncode == 0:
+                return True, result.stdout.strip()
+            else:
+                return False, result.stderr.strip()
+
+        except subprocess.TimeoutExpired:
+            return False, "Command timed out"
+        except Exception as e:
+            return False, str(e)
+
+    def check_python_version(self) -> bool:
+        """Check if Python version meets requirements"""
+        self.log("Checking Python version...")
+
+        version_info = sys.version_info
+        required_version = (3, 8)
+
+        if version_info >= required_version:
+            self.log(
+                f"Python {version_info.major}.{version_info.minor}.{version_info.micro} ✓",
+                "SUCCESS",
+            )
+            return True
+        else:
+            self.log(
+                f"Python {version_info.major}.{version_info.minor}.{version_info.micro} < {required_version[0]}.{required_version[1]} required",
+                "ERROR",
+            )
+            return False
+
+    def check_pip_version(self) -> bool:
+        """Check if pip version is adequate"""
+        self.log("Checking pip version...")
+
+        success, output = self.run_command([sys.executable, "-m", "pip", "--version"])
+        if success:
+            self.log(f"pip version: {output}", "SUCCESS")
+            return True
+        else:
+            self.log(f"pip check failed: {output}", "ERROR")
+            return False
+
+    def upgrade_pip(self) -> bool:
+        """Upgrade pip to latest version"""
+        self.log("Upgrading pip...")
+
+        success, output = self.run_command(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "pip"]
+        )
+
+        if success:
+            self.log("pip upgraded successfully", "SUCCESS")
+            return True
+        else:
+            self.log(f"pip upgrade failed: {output}", "ERROR")
+            return False
+
+    def install_dependencies(
+        self, include_dev: bool = False, upgrade: bool = False
+    ) -> bool:
+        """Install project dependencies"""
+        self.log("Installing dependencies...")
+
+        # Install main dependencies
+        cmd = [sys.executable, "-m", "pip", "install"]
+        if upgrade:
+            cmd.append("--upgrade")
+        cmd.extend(["-r", str(self.requirements_file)])
+
+        success, output = self.run_command(cmd)
+        if not success:
+            self.log(f"Failed to install main dependencies: {output}", "ERROR")
+            return False
+
+        self.log("Main dependencies installed successfully", "SUCCESS")
+
+        # Development dependencies are now integrated into main requirements.txt
+        # Use optional dependencies section for development tools
+        if include_dev:
+            self.log(
+                "Development dependencies are included in main requirements.txt", "INFO"
+            )
+
+        return True
+
+    def validate_dependencies(self) -> bool:
+        """Validate that all dependencies are correctly installed"""
+        self.log("Validating installed dependencies...")
+
+        # Check if pip check passes
+        success, output = self.run_command([sys.executable, "-m", "pip", "check"])
+        if not success:
+            self.log(f"Dependency validation failed: {output}", "ERROR")
+            return False
+
+        self.log("All dependencies validated successfully", "SUCCESS")
+        return True
+
+    def list_installed_packages(self) -> Dict[str, str]:
+        """List all installed packages with versions"""
+        success, output = self.run_command(
+            [sys.executable, "-m", "pip", "list", "--format=json"]
+        )
+        if not success:
+            self.log(f"Failed to list packages: {output}", "ERROR")
+            return {}
+
+        try:
+            packages = json.loads(output)
+            return {pkg["name"]: pkg["version"] for pkg in packages}
+        except json.JSONDecodeError:
+            self.log("Failed to parse package list", "ERROR")
+            return {}
+
+    def check_outdated_packages(self) -> List[Dict[str, str]]:
+        """Check for outdated packages"""
+        self.log("Checking for outdated packages...")
+
+        success, output = self.run_command(
+            [sys.executable, "-m", "pip", "list", "--outdated", "--format=json"]
+        )
+        if not success:
+            self.log(f"Failed to check outdated packages: {output}", "ERROR")
+            return []
+
+        try:
+            outdated = json.loads(output)
+            if outdated:
+                self.log(f"Found {len(outdated)} outdated packages", "WARNING")
+                for pkg in outdated:
+                    self.log(
+                        f"  {pkg['name']}: {pkg['version']} → {pkg['latest_version']}",
+                        "WARNING",
+                    )
+            else:
+                self.log("All packages are up to date", "SUCCESS")
+            return outdated
+        except json.JSONDecodeError:
+            self.log("Failed to parse outdated packages list", "ERROR")
+            return []
+
+    def check_security_vulnerabilities(self) -> bool:
+        """Check for security vulnerabilities using safety"""
+        self.log("Checking for security vulnerabilities...")
+
+        # Try to install safety if not available
+        success, _ = self.run_command([sys.executable, "-m", "pip", "show", "safety"])
+        if not success:
+            self.log("Installing safety for security checks...")
+            success, output = self.run_command(
+                [sys.executable, "-m", "pip", "install", "safety"]
+            )
+            if not success:
+                self.log(f"Failed to install safety: {output}", "WARNING")
+                return True  # Don't fail if safety can't be installed
+
+        # Run safety check
+        success, output = self.run_command([sys.executable, "-m", "safety", "check"])
+        if success:
+            self.log("No security vulnerabilities found", "SUCCESS")
+            return True
+        else:
+            self.log(f"Security vulnerabilities detected: {output}", "ERROR")
+            return False
+
+    def generate_dependency_report(self) -> str:
+        """Generate a detailed dependency report"""
+        self.log("Generating dependency report...")
+
+        report = []
+        report.append("NOAH Dependencies Report")
+        report.append("=" * 50)
+        report.append(f"Python Version: {sys.version}")
+        report.append(f"Platform: {sys.platform}")
+        report.append("")
+
+        # List installed packages
+        packages = self.list_installed_packages()
+        if packages:
+            report.append("Installed Packages:")
+            report.append("-" * 20)
+            for name, version in sorted(packages.items()):
+                report.append(f"{name:30} {version}")
+            report.append("")
+
+        # Check outdated packages
+        outdated = self.check_outdated_packages()
+        if outdated:
+            report.append("Outdated Packages:")
+            report.append("-" * 20)
+            for pkg in outdated:
+                report.append(
+                    f"{pkg['name']:30} {pkg['version']} → {pkg['latest_version']}"
+                )
+            report.append("")
+
+        return "\n".join(report)
+
+    def save_report(self, report: str, filename: str = "dependency_report.txt"):
+        """Save dependency report to file"""
+        report_file = self.script_dir / filename
+        try:
+            with open(report_file, "w") as f:
+                f.write(report)
+            self.log(f"Report saved to: {report_file}", "SUCCESS")
+        except Exception as e:
+            self.log(f"Failed to save report: {e}", "ERROR")
+
+    def cleanup_dependencies(self) -> bool:
+        """Clean up unused dependencies"""
+        self.log("Cleaning up unused dependencies...")
+
+        # Try to install pip-autoremove if not available
+        success, _ = self.run_command(
+            [sys.executable, "-m", "pip", "show", "pip-autoremove"]
+        )
+        if not success:
+            self.log("Installing pip-autoremove for cleanup...")
+            success, output = self.run_command(
+                [sys.executable, "-m", "pip", "install", "pip-autoremove"]
+            )
+            if not success:
+                self.log(f"Failed to install pip-autoremove: {output}", "WARNING")
+                return True
+
+        # Run cleanup
+        success, output = self.run_command(
+            [sys.executable, "-m", "pip_autoremove", "--help"]
+        )
+        if success:
+            self.log(
+                "Run 'pip-autoremove' manually to clean unused dependencies", "INFO"
+            )
+
+        return True
+
+
+def main():
+    """Main function"""
+    parser = argparse.ArgumentParser(description="NOAH Dependencies Manager")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Enable verbose output"
+    )
+    parser.add_argument(
+        "--dev", action="store_true", help="Include development dependencies"
+    )
+    parser.add_argument(
+        "--upgrade", action="store_true", help="Upgrade all dependencies"
+    )
+    parser.add_argument(
+        "--check-security",
+        action="store_true",
+        help="Check for security vulnerabilities",
+    )
+    parser.add_argument(
+        "--report", action="store_true", help="Generate dependency report"
+    )
+    parser.add_argument(
+        "--cleanup", action="store_true", help="Clean up unused dependencies"
+    )
+    parser.add_argument(
+        "--install-only", action="store_true", help="Only install dependencies"
+    )
+
+    args = parser.parse_args()
+
+    manager = DependencyManager(verbose=args.verbose)
+    manager.print_banner()
+
+    # Check system requirements
+    if not manager.check_python_version():
+        sys.exit(1)
+
+    if not manager.check_pip_version():
+        sys.exit(1)
+
+    # Upgrade pip
+    if not manager.upgrade_pip():
+        sys.exit(1)
+
+    # Install dependencies
+    if not manager.install_dependencies(include_dev=args.dev, upgrade=args.upgrade):
+        sys.exit(1)
+
+    if args.install_only:
+        manager.log("Dependencies installation completed", "SUCCESS")
+        sys.exit(0)
+
+    # Validate dependencies
+    if not manager.validate_dependencies():
+        sys.exit(1)
+
+    # Security check
+    if args.check_security:
+        if not manager.check_security_vulnerabilities():
+            sys.exit(1)
+
+    # Generate report
+    if args.report:
+        report = manager.generate_dependency_report()
+        manager.save_report(report)
+
+    # Cleanup
+    if args.cleanup:
+        manager.cleanup_dependencies()
+
+    # Check for outdated packages
+    manager.check_outdated_packages()
+
+    manager.log("All dependency operations completed successfully", "SUCCESS")
+
+
+if __name__ == "__main__":
+    main()

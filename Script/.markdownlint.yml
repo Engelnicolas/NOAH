@@ -8,15 +8,15 @@ rules:
     code_blocks: false
     tables: false
     headings: false
-    
+
   # Headings
   heading-style:
     style: atx
-    
+
   # Lists
   ul-style:
     style: dash
-    
+
   # Inline HTML
   no-inline-html:
     allowed_elements:
@@ -31,16 +31,16 @@ rules:
       - pre
       - details
       - summary
-      
+
   # Trailing spaces
   no-trailing-spaces: true
-  
+
   # Multiple blanks
   no-multiple-blanks: true
-  
+
   # Bare URLs
   no-bare-urls: false
-  
+
   # Duplicate headings
   no-duplicate-heading:
     siblings_only: true

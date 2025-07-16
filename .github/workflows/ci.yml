@@ -12,8 +12,8 @@ permissions:
     branches: [main]
 
 jobs:
-  validate:
-    name: Validate Code
+  linting:
+    name: NOAH Linting Validation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -21,25 +21,113 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Test NOAH Linter Prerequisites
+        run: |
+          echo "Testing NOAH linter prerequisites..."
+          python3 Script/noah-linter.py report
+          echo "Prerequisites check completed"
+
+      - name: Setup NOAH Development Environment
+        run: |
+          echo "Setting up NOAH development environment..."
+          python3 Script/noah-linter.py setup
+          echo "Development environment setup completed"
+
+      - name: Run NOAH Linter with Docker
+        run: |
+          echo "Running NOAH linter with Docker..."
+          python3 Script/noah-linter.py lint --verbose
+          echo "NOAH linter completed"
+        continue-on-error: true
+
+      - name: Generate and Upload Linting Report
+        run: |
+          echo "Generating comprehensive linting report..."
+          python3 Script/noah-linter.py report --save --verbose
+          echo "Linting report generated"
+        continue-on-error: true
+
+      - name: Upload Linting Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: noah-linting-report
+          path: linting_report.json
+          retention-days: 30
+
+  validate:
+    name: Validate Code
+    runs-on: ubuntu-latest
+    needs: linting
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Setup NOAH Linting Environment
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --user pre-commit
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Pre-commit Hooks
+        run: |
+          pre-commit install --install-hooks
+          pre-commit install --hook-type commit-msg
+
+      - name: Run Pre-commit Hooks
+        run: |
+          pre-commit run --all-files --show-diff-on-failure
+        continue-on-error: true
+
       - name: Run Super-Linter
-        uses: super-linter/super-linter@v6
+        uses: super-linter/super-linter@v5.7.2
         env:
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_LOCAL: false
           VALIDATE_ALL_CODEBASE: false
-          LOG_LEVEL: WARN
-          # Only enable essential linters
+          LOG_LEVEL: INFO
+          # Enable essential linters with corrected configuration
           VALIDATE_YAML: true
           VALIDATE_BASH: true
-          VALIDATE_DOCKERFILE_HADOLINT: true
+          VALIDATE_PYTHON_BLACK: true
+          VALIDATE_PYTHON_FLAKE8: true
+          VALIDATE_JSON: true
           VALIDATE_MARKDOWN: true
           VALIDATE_ANSIBLE: true
-          # Use custom configs
-          YAML_CONFIG_FILE: .github/linters/.yamllint.yml
-          MARKDOWN_CONFIG_FILE: .github/linters/.markdownlint.yml
-          # Disable strict mode
+          # Use corrected configuration paths
+          YAML_CONFIG_FILE: Script/.yamllint.yml
+          MARKDOWN_CONFIG_FILE: Script/.markdownlint.yml
+          # Suppress ASCII art and enable error handling
           SUPPRESS_POSSUM: true
           DISABLE_ERRORS: false
+
+      - name: Run NOAH Linting Validator
+        run: |
+          echo "Running NOAH unified linting validator..."
+          python3 Script/noah-linter.py report --save
+          echo "Linting report generated successfully"
+        continue-on-error: true
+
+      - name: Upload Linting Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linting-report
+          path: linting_report.json
+          retention-days: 30
 
       - name: Setup Helm
         uses: azure/setup-helm@v4

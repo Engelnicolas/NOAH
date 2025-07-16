@@ -23,12 +23,12 @@
 
 2. OAuth2 Proxy Configuration:
    OAuth2 Proxy is now running and configured to protect your applications.
-   
+
    Provider: {{ .Values.config.provider | default "oidc" }}
    {{- if .Values.config.oidcIssuerUrl }}
    OIDC Issuer: {{ .Values.config.oidcIssuerUrl }}
    {{- end }}
-   
+
    Cookie Domain: {{ .Values.config.cookieDomain | default "Not specified" }}
    Session Storage: {{ .Values.sessionStorage.type | default "cookie" }}
 
@@ -79,7 +79,7 @@
    {{- else }}
    📊 To enable Prometheus monitoring, set serviceMonitor.enabled=true
    {{- end }}
-   
+
    Metrics endpoint: http://{{ include "oauth2-proxy.fullname" . }}:{{ .Values.service.metricsPort | default 44180 }}/metrics
 
 8. High Availability:
@@ -95,7 +95,7 @@
 
 9. Integration with Applications:
    To integrate OAuth2 Proxy with your applications, configure your Ingress with:
-   
+
    annotations:
      nginx.ingress.kubernetes.io/auth-url: "https://{{ if .Values.ingress.enabled }}{{ (index .Values.ingress.hosts 0).host }}{{ else }}oauth2-proxy.example.com{{ end }}/oauth2/auth"
      nginx.ingress.kubernetes.io/auth-signin: "https://{{ if .Values.ingress.enabled }}{{ (index .Values.ingress.hosts 0).host }}{{ else }}oauth2-proxy.example.com{{ end }}/oauth2/start?rd=$escaped_request_uri"

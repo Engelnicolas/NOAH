@@ -35,7 +35,7 @@
 ### Prerequisites
 - Kubernetes cluster with kubectl configured
 - Helm 3.x installed
-- 8GB+ RAM available
+- 8GB+ RAM available (see [Technical Requirements](docs/TECHNICAL_REQUIREMENTS.md) for detailed specifications)
 
 ### Deploy NOAH Platform
 ```bash
@@ -70,6 +70,8 @@ cd NOAH
 ## 📚 Documentation
 
 - **📖 [USER_GUIDE.md](docs/USER_GUIDE.md)**: Complete deployment and configuration guide
+- **🔧 [TECHNICAL_REQUIREMENTS.md](docs/TECHNICAL_REQUIREMENTS.md)**: Detailed system requirements and specifications
+- **📊 [DEPLOYMENT_PROFILES.md](docs/DEPLOYMENT_PROFILES.md)**: Comparison of deployment profiles (minimal vs root)
 - **🤝 [CONTRIBUTING.md](CONTRIBUTING.md)**: How to contribute to the project
 
 ---

@@ -326,29 +326,29 @@ opensearch_dashboards.yml: |
   server.ssl.certificate: {{ .Values.dashboard.config.server.ssl.certificate }}
   server.ssl.key: {{ .Values.dashboard.config.server.ssl.key }}
   {{- end }}
-  
+
   opensearch.hosts: {{ .Values.dashboard.config.opensearch.hosts | toJson }}
   opensearch.username: {{ .Values.dashboard.config.opensearch.username }}
   opensearch.password: "$(OPENSEARCH_PASSWORD)"
-  
+
   {{- if .Values.dashboard.config.opensearch.ssl }}
   opensearch.ssl.verificationMode: {{ .Values.dashboard.config.opensearch.ssl.verificationMode }}
   opensearch.ssl.certificateAuthorities: {{ .Values.dashboard.config.opensearch.ssl.certificateAuthorities | toJson }}
   {{- end }}
-  
+
   wazuh.api.url: {{ .Values.dashboard.config.wazuh.api.url }}
   wazuh.api.port: {{ .Values.dashboard.config.wazuh.api.port }}
   wazuh.api.username: {{ .Values.dashboard.config.wazuh.api.username }}
   wazuh.api.password: "$(WAZUH_API_PASSWORD)"
   wazuh.api.run_as: {{ .Values.dashboard.config.wazuh.api.run_as }}
-  
+
   {{- if .Values.dashboard.config.monitoring.enabled }}
   wazuh.monitoring.enabled: {{ .Values.dashboard.config.monitoring.enabled }}
   wazuh.monitoring.frequency: {{ .Values.dashboard.config.monitoring.frequency | default 900 }}
   wazuh.monitoring.shards: {{ .Values.dashboard.config.monitoring.shards | default 2 }}
   wazuh.monitoring.replicas: {{ .Values.dashboard.config.monitoring.replicas | default 0 }}
   {{- end }}
-  
+
   logging.silent: {{ .Values.dashboard.config.logging.silent }}
   logging.quiet: {{ .Values.dashboard.config.logging.quiet }}
   logging.verbose: {{ .Values.dashboard.config.logging.verbose }}

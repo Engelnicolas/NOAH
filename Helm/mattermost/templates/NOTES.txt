@@ -100,7 +100,7 @@
    {{- else }}
    📈 To enable auto-scaling, set autoscaling.enabled=true
    {{- end }}
-   
+
    {{- if .Values.podDisruptionBudget.enabled }}
    ✅ Pod Disruption Budget is configured for high availability
    {{- end }}
@@ -129,7 +129,7 @@
     {{- else }}
     📊 To enable Prometheus monitoring, set metrics.serviceMonitor.enabled=true
     {{- end }}
-    
+
     Metrics endpoint: http://{{ include "mattermost.fullname" . }}:{{ .Values.service.metricsPort | default 8067 }}/metrics
 
 12. Security Configuration:
@@ -138,7 +138,7 @@
     {{- else }}
     ⚠️  Network Policy is disabled. Consider enabling for production.
     {{- end }}
-    
+
     {{- if .Values.mattermost.security.enableTLS }}
     ✅ TLS is enabled for secure communications
     {{- else }}
@@ -172,7 +172,7 @@
 16. Configuration Management:
     Main configuration is stored in ConfigMap: {{ include "mattermost.fullname" . }}
     Secrets are stored in Secret: {{ include "mattermost.secretName" . }}
-    
+
     To update configuration, modify values.yaml and upgrade the release:
     helm upgrade {{ .Release.Name }} noah/mattermost -f values.yaml
 

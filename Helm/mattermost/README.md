@@ -121,7 +121,7 @@ mattermost:
 mattermost:
   oauth:
     enabled: true
-    
+
     # GitLab OAuth
     gitlab:
       enabled: true
@@ -130,7 +130,7 @@ mattermost:
       authEndpoint: "https://gitlab.example.com/oauth/authorize"
       tokenEndpoint: "https://gitlab.example.com/oauth/token"
       userApiEndpoint: "https://gitlab.example.com/api/v4/user"
-    
+
     # Generic OpenID Connect (Keycloak)
     openid:
       enabled: true
@@ -245,7 +245,7 @@ mattermost:
     idleTimeout: 60
     maxHeaderSize: 1048576
     useStrictTransportSecurity: true
-    
+
   # Password requirements
   passwordSettings:
     minimumLength: 8
@@ -346,7 +346,7 @@ backup:
   enabled: true
   schedule: "0 2 * * *"  # Daily at 2 AM
   retentionDays: 30
-  
+
   s3:
     enabled: true
     bucket: mattermost-backups

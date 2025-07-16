@@ -99,11 +99,11 @@ config:
   emailDomains:
     - "*"
   cookieDomain: .example.com
-  
+
   # Optional: Additional OIDC claims
   oidcExtraAudiences:
     - oauth2-proxy
-  
+
 secrets:
   clientSecret: keycloak-client-secret
 ```
@@ -139,12 +139,12 @@ config:
     - http://nextcloud.default.svc.cluster.local:80
     - http://grafana.monitoring.svc.cluster.local:3000
     - http://gitlab.default.svc.cluster.local:80
-  
+
   # Email domain restrictions
   emailDomains:
     - example.com
     - company.org
-  
+
   # Skip authentication for certain paths
   skipAuthRegex:
     - "^/health$"
@@ -190,10 +190,10 @@ config:
   cookieSameSite: lax
   cookieExpire: 168h0m0s  # 1 week
   cookieRefresh: 1h0m0s   # 1 hour
-  
+
   # SSL settings
   sslInsecureSkipVerify: false
-  
+
   # Headers
   setAuthorizationHeader: true
   setXAuthRequestHeaders: true
@@ -392,7 +392,7 @@ kubectl delete pvc -l app.kubernetes.io/name=oauth2-proxy
    ```bash
    # Test OIDC discovery
    curl https://your-keycloak.com/realms/master/.well-known/openid-configuration
-   
+
    # Check OAuth2 Proxy logs
    kubectl logs -l app.kubernetes.io/name=oauth2-proxy
    ```

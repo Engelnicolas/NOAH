@@ -93,18 +93,18 @@ Generate Samba configuration
     netbios name = {{ .Values.samba.netbiosName | upper }}
     server role = {{ .Values.samba.serverRole }}
     dns forwarder = {{ .Values.samba.dnsForwarder }}
-    
+
     # Logging
     log level = {{ .Values.samba.logLevel | default 1 }}
     log file = /var/log/samba/log.%m
     max log size = {{ .Values.samba.maxLogSize | default 1000 }}
-    
+
     # Security settings
     server min protocol = {{ .Values.samba.minProtocol | default "SMB2_10" }}
     server max protocol = {{ .Values.samba.maxProtocol | default "SMB3" }}
     client min protocol = {{ .Values.samba.clientMinProtocol | default "SMB2_10" }}
     client max protocol = {{ .Values.samba.clientMaxProtocol | default "SMB3" }}
-    
+
     # TLS settings
     {{- if .Values.samba.tls.enabled }}
     tls enabled = yes
@@ -112,22 +112,22 @@ Generate Samba configuration
     tls certfile = {{ .Values.samba.tls.certFile }}
     tls cafile = {{ .Values.samba.tls.caFile }}
     {{- end }}
-    
+
     # LDAP settings for AD
     ldap server require strong auth = {{ .Values.samba.ldap.requireStrongAuth | default "yes" }}
-    
+
     # Performance tuning
     socket options = {{ .Values.samba.socketOptions | default "TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072" }}
     read raw = {{ .Values.samba.readRaw | default "yes" }}
     write raw = {{ .Values.samba.writeRaw | default "yes" }}
     max xmit = {{ .Values.samba.maxXmit | default 65536 }}
-    
+
     # Misc settings
     load printers = {{ .Values.samba.loadPrinters | default "no" }}
     printing = {{ .Values.samba.printing | default "bsd" }}
     printcap name = /dev/null
     disable spoolss = {{ .Values.samba.disableSpoolss | default "yes" }}
-    
+
     {{- with .Values.samba.extraGlobalConfig }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

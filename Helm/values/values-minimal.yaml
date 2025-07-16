@@ -1,12 +1,48 @@
 # =======================================
 # NOAH Minimal Installation Values
 # =======================================
-# Bare minimum resources for testing
+# Lightweight configuration for testing and development
+# Version: 2.0.0
+# Updated: July 16, 2025
 
-# Single replica
+# =============================================================================
+# APPLICATION CONFIGURATION
+# =============================================================================
+
+# Single replica for minimal resource usage
 replicaCount: 1
 
-# Minimal resources
+# Image configuration
+image:
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+
+# Minimal security context for compatibility
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+  fsGroup: 0
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: true
+  capabilities:
+    drop:
+      - ALL
+
+# Pod security context
+podSecurityContext:
+  runAsUser: 0
+  runAsGroup: 0
+  fsGroup: 0
+
+# =============================================================================
+# RESOURCE MANAGEMENT
+# =============================================================================
+
+# Minimal resource allocation
 resources:
   requests:
     cpu: 100m
@@ -15,36 +51,150 @@ resources:
     cpu: 500m
     memory: 1Gi
 
-# No persistence (ephemeral)
+# =============================================================================
+# STORAGE CONFIGURATION
+# =============================================================================
+
+# No persistence for testing (ephemeral storage)
 persistence:
   enabled: false
+  size: 1Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
 
-# Embedded SQLite (no external DB)
+# =============================================================================
+# DATABASE CONFIGURATION
+# =============================================================================
+
+# Embedded database (no external PostgreSQL)
 postgresql:
   enabled: false
+  # SQLite or in-memory database will be used
 
+# =============================================================================
+# CACHE CONFIGURATION
+# =============================================================================
+
+# No external Redis (in-memory cache)
 redis:
   enabled: false
+  # Application will use in-memory caching
 
-# No external access
+# =============================================================================
+# NETWORKING CONFIGURATION
+# =============================================================================
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# No external access (internal only)
 ingress:
   enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts: []
+  tls: []
 
-# Minimal security (root user for compatibility)
-securityContext:
-  runAsUser: 0
-  runAsGroup: 0
-  fsGroup: 0
-  readOnlyRootFilesystem: false
-  allowPrivilegeEscalation: true
-
-# No monitoring
-serviceMonitor:
-  enabled: false
-
+# No network policies for minimal setup
 networkPolicy:
   enabled: false
 
-# No autoscaling
+# =============================================================================
+# MONITORING CONFIGURATION
+# =============================================================================
+
+# No monitoring to reduce resource usage
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+
+# =============================================================================
+# SCALING CONFIGURATION
+# =============================================================================
+
+# No autoscaling for minimal setup
 autoscaling:
   enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+
+# =============================================================================
+# ENVIRONMENT CONFIGURATION
+# =============================================================================
+
+# Minimal environment variables
+env:
+  - name: ENVIRONMENT
+    value: "minimal"
+  - name: DEBUG
+    value: "false"
+  - name: LOG_LEVEL
+    value: "info"
+
+# =============================================================================
+# GLOBAL CONFIGURATION
+# =============================================================================
+
+# Global settings for minimal deployment
+global:
+  storageClass: ""
+  domain: "localhost"
+  environment: "development"
+  timezone: "UTC"
+
+# =============================================================================
+# HEALTH CHECKS
+# =============================================================================
+
+# Basic health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# =============================================================================
+# NODE CONFIGURATION
+# =============================================================================
+
+# No specific node requirements
+nodeSelector: {}
+
+# No tolerations
+tolerations: []
+
+# No affinity rules
+affinity: {}
+
+# =============================================================================
+# ADDITIONAL CONFIGURATION
+# =============================================================================
+
+# Labels for minimal deployment
+labels:
+  app: noah-minimal
+  tier: development
+  profile: minimal
+
+# Annotations
+annotations:
+  description: "Minimal NOAH deployment for testing"
+  version: "2.0.0"
+  profile: "minimal"
+  maintainer: "NOAH Team"

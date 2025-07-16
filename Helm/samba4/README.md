@@ -86,15 +86,15 @@ samba:
   netbiosName: DC01
   adminPassword: "VerySecurePassword123!"
   serverRole: active directory domain controller
-  
+
   # DNS Configuration
   dnsBackend: SAMBA_INTERNAL
   dnsForwarder: "8.8.8.8"
-  
+
   # Security Settings
   minProtocol: SMB2_10
   maxProtocol: SMB3
-  
+
   # TLS Configuration
   tls:
     enabled: true
@@ -125,7 +125,7 @@ samba:
       groups:
         - Domain Users
         - Accounting
-  
+
   groups:
     - name: Accounting
       description: Accounting Department
@@ -147,7 +147,7 @@ samba:
         - "@Domain Users"
       createMask: "0664"
       directoryMask: "0775"
-    
+
     - name: public
       path: /srv/samba/public
       comment: Public Files
@@ -224,7 +224,7 @@ backup:
   enabled: true
   schedule: "0 2 * * *"  # Daily at 2 AM
   retentionDays: 30
-  
+
   # S3 Backup Storage
   s3:
     enabled: true
@@ -233,7 +233,7 @@ backup:
     endpoint: s3.amazonaws.com
     accessKey: your-access-key
     secretKey: your-secret-key
-  
+
   # Local backup storage
   persistence:
     enabled: true

@@ -60,7 +60,7 @@
    {{- else }}
    📊 To enable Prometheus monitoring, set serviceMonitor.enabled=true
    {{- end }}
-   
+
    Metrics endpoint: http://{{ include "openedr.fullname" . }}:{{ .Values.service.metricsPort | default 9090 }}/metrics
 
 7. Backup and Recovery:

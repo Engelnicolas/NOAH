@@ -18,6 +18,113 @@ import time
 from pathlib import Path
 from datetime import datetime
 
+
+class DependencyManager:
+    """Manages automatic installation of missing Python modules."""
+
+    def __init__(self, requirements_file: str = "requirements.txt"):
+        self.requirements_file = Path(__file__).parent / requirements_file
+        self.missing_modules = []
+
+    def check_and_install_requirements(self) -> bool:
+        """Check and install missing Python requirements automatically."""
+        print(f"\n🔍 Vérification des dépendances Python...")
+        
+        if not self.requirements_file.exists():
+            print(f"⚠️  Fichier {self.requirements_file} non trouvé")
+            return True
+        
+        try:
+            # Read requirements file
+            with open(self.requirements_file, 'r', encoding='utf-8') as f:
+                requirements = []
+                for line in f:
+                    line = line.strip()
+                    # Skip empty lines and comments
+                    if line and not line.startswith('#'):
+                        # Extract package name (before any version specifiers)
+                        package_name = line.split('>=')[0].split('==')[0].split('<')[0].split('>')[0].strip()
+                        if package_name:
+                            requirements.append((package_name, line))
+            
+            # Check each requirement
+            for package_name, requirement_line in requirements:
+                if not self._is_module_installed(package_name):
+                    self.missing_modules.append(requirement_line)
+            
+            # Install missing modules
+            if self.missing_modules:
+                print(f"📦 {len(self.missing_modules)} modules manquants détectés")
+                return self._install_missing_modules()
+            else:
+                print("✅ Toutes les dépendances sont installées")
+                return True
+                
+        except Exception as e:
+            print(f"❌ Erreur lors de la vérification des dépendances: {e}")
+            return False
+
+    def _is_module_installed(self, module_name: str) -> bool:
+        """Check if a Python module is installed."""
+        try:
+            # Handle special cases
+            import_name = self._get_import_name(module_name)
+            __import__(import_name)
+            return True
+        except ImportError:
+            return False
+
+    def _get_import_name(self, package_name: str) -> str:
+        """Convert package name to import name for special cases."""
+        mapping = {
+            'pyyaml': 'yaml',
+            'pillow': 'PIL',
+            'beautifulsoup4': 'bs4',
+            'python-dateutil': 'dateutil',
+            'msgpack-python': 'msgpack',
+        }
+        return mapping.get(package_name.lower(), package_name)
+
+    def _install_missing_modules(self) -> bool:
+        """Install missing Python modules with retry mechanism."""
+        max_retries = 3
+        
+        for requirement in self.missing_modules:
+            package_name = requirement.split('>=')[0].split('==')[0].split('<')[0].split('>')[0].strip()
+            
+            for attempt in range(max_retries):
+                try:
+                    print(f"📥 Installation de {package_name} (tentative {attempt + 1}/{max_retries})...")
+                    
+                    # Run pip install
+                    result = subprocess.run([
+                        sys.executable, "-m", "pip", "install", requirement
+                    ], capture_output=True, text=True, timeout=300)
+                    
+                    if result.returncode == 0:
+                        print(f"✅ {package_name} installé avec succès")
+                        break
+                    else:
+                        print(f"⚠️  Échec installation {package_name}: {result.stderr}")
+                        if attempt == max_retries - 1:
+                            print(f"❌ Impossible d'installer {package_name} après {max_retries} tentatives")
+                            return False
+                        else:
+                            time.sleep(2)
+                            
+                except subprocess.TimeoutExpired:
+                    print(f"⏰ Timeout lors de l'installation de {package_name}")
+                    if attempt == max_retries - 1:
+                        return False
+                except Exception as e:
+                    print(f"❌ Erreur lors de l'installation de {package_name}: {e}")
+                    if attempt == max_retries - 1:
+                        return False
+        
+        print("✅ Toutes les dépendances ont été installées avec succès")
+        return True
+
+
 # ASCII Art Logo
 ASCII_LOGO = """
 ███    ██  ██████   █████  ██   ██
@@ -680,6 +787,13 @@ Chart Deployment Phases:
     )
 
     args = parser.parse_args()
+
+    # Check and install Python dependencies first
+    print(f"{Color.CYAN}NOAH - Deployment Script v1.0.1{Color.RESET}")
+    dependency_manager = DependencyManager()
+    if not dependency_manager.check_and_install_requirements():
+        print(f"{Color.RED}❌ Échec de l'installation des dépendances Python{Color.RESET}")
+        sys.exit(1)
 
     # Handle list-charts option
     if args.list_charts:

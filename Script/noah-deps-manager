@@ -133,6 +133,129 @@ class DependencyManager:
             self.log(f"pip upgrade failed: {output}", "ERROR")
             return False
 
+    def auto_install_missing_dependencies(self) -> bool:
+        """Automatically check and install missing dependencies with retry mechanism."""
+        self.log("🔍 Checking for missing dependencies...")
+        
+        if not self.requirements_file.exists():
+            self.log(f"Requirements file not found: {self.requirements_file}", "ERROR")
+            return False
+        
+        try:
+            # Parse requirements file
+            missing_modules = []
+            installed_modules = []
+            
+            with open(self.requirements_file, 'r', encoding='utf-8') as f:
+                requirements = []
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        # Extract package name
+                        package_name = self._extract_package_name(line)
+                        if package_name:
+                            requirements.append((package_name, line))
+            
+            # Check each requirement
+            self.log(f"📋 Checking {len(requirements)} dependencies...")
+            for package_name, requirement_line in requirements:
+                if not self._is_module_installed(package_name):
+                    missing_modules.append((package_name, requirement_line))
+                else:
+                    installed_modules.append(package_name)
+                    if self.verbose:
+                        self.log(f"✓ {package_name} already installed", "SUCCESS")
+            
+            # Report status
+            self.log(f"📊 Status: {len(installed_modules)} installed, {len(missing_modules)} missing")
+            
+            # Install missing modules
+            if missing_modules:
+                self.log(f"📦 Installing {len(missing_modules)} missing dependencies...")
+                return self._install_missing_modules_with_retry(missing_modules)
+            else:
+                self.log("✅ All dependencies are already installed", "SUCCESS")
+                return True
+                
+        except Exception as e:
+            self.log(f"Error during dependency check: {e}", "ERROR")
+            return False
+
+    def _extract_package_name(self, requirement_line: str) -> str:
+        """Extract package name from requirement line."""
+        for separator in ['>=', '==', '<=', '>', '<', '!=', '~=', '[', ';']:
+            if separator in requirement_line:
+                requirement_line = requirement_line.split(separator)[0]
+        return requirement_line.strip()
+
+    def _is_module_installed(self, module_name: str) -> bool:
+        """Check if a Python module is installed."""
+        try:
+            import_name = self._get_import_name(module_name)
+            __import__(import_name)
+            return True
+        except ImportError:
+            return False
+
+    def _get_import_name(self, package_name: str) -> str:
+        """Convert package name to import name for special cases."""
+        mapping = {
+            'pyyaml': 'yaml',
+            'pillow': 'PIL',
+            'beautifulsoup4': 'bs4',
+            'python-dateutil': 'dateutil',
+            'msgpack-python': 'msgpack',
+            'pyyaml-include': 'yamlinclude',
+            'prometheus-client': 'prometheus_client',
+            'memory-profiler': 'memory_profiler',
+            'pytest-cov': 'pytest_cov',
+            'pytest-mock': 'pytest_mock',
+        }
+        return mapping.get(package_name.lower(), package_name.replace('-', '_'))
+
+    def _install_missing_modules_with_retry(self, missing_modules: list) -> bool:
+        """Install missing modules with retry mechanism."""
+        max_retries = 3
+        success_count = 0
+        failed_modules = []
+        
+        for i, (package_name, requirement_line) in enumerate(missing_modules, 1):
+            self.log(f"[{i}/{len(missing_modules)}] Installing {package_name}...")
+            
+            for attempt in range(max_retries):
+                try:
+                    cmd = [sys.executable, "-m", "pip", "install", requirement_line]
+                    success, output = self.run_command(cmd)
+                    
+                    if success:
+                        self.log(f"✅ {package_name} installed successfully", "SUCCESS")
+                        success_count += 1
+                        break
+                    else:
+                        if attempt == max_retries - 1:
+                            self.log(f"❌ Failed to install {package_name} after {max_retries} attempts", "ERROR")
+                            failed_modules.append(package_name)
+                        else:
+                            self.log(f"⚠️ Attempt {attempt + 1} failed for {package_name}, retrying...", "WARNING")
+                            import time
+                            time.sleep(2)
+                            
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        self.log(f"❌ Error installing {package_name}: {e}", "ERROR")
+                        failed_modules.append(package_name)
+        
+        # Final report
+        total = len(missing_modules)
+        self.log(f"📋 Installation summary: {success_count}/{total} successful")
+        
+        if failed_modules:
+            self.log(f"❌ Failed modules: {', '.join(failed_modules)}", "ERROR")
+            return False
+        else:
+            self.log("✅ All missing dependencies installed successfully", "SUCCESS")
+            return True
+
     def install_dependencies(
         self, include_dev: bool = False, upgrade: bool = False
     ) -> bool:
@@ -339,6 +462,9 @@ def main():
     parser.add_argument(
         "--install-only", action="store_true", help="Only install dependencies"
     )
+    parser.add_argument(
+        "--auto-install", action="store_true", help="Auto-check and install missing dependencies only"
+    )
 
     args = parser.parse_args()
 
@@ -351,6 +477,13 @@ def main():
 
     if not manager.check_pip_version():
         sys.exit(1)
+
+    # Auto-install mode: only check and install missing dependencies
+    if args.auto_install:
+        if not manager.auto_install_missing_dependencies():
+            sys.exit(1)
+        manager.log("Auto-installation completed successfully", "SUCCESS")
+        sys.exit(0)
 
     # Upgrade pip
     if not manager.upgrade_pip():

@@ -1,0 +1,818 @@
+---
+# =============================================================================
+# Prometheus Monitoring Stack helm Chart Values Configuration
+# =============================================================================
+#
+# This file contains configuration values for deploying a complete Prometheus
+# monitoring stack including Prometheus server, Grafana dashboards,
+# AlertManager, and various exporters for comprehensive infrastructure and
+# application monitoring.
+#
+# Prometheus Stack Features:
+# - Time-series metrics collection and storage
+# - PromQL query language for advanced metric analysis
+# - Alert rules and notification management
+# - Service discovery for automatic target detection
+# - High availability with clustering support
+# - Long-term storage and data retention
+# - Integration with Kubernetes and cloud platforms
+# - Custom metrics and application monitoring
+# - Comprehensive dashboards and visualization
+# - Multi-tenant support and federation
+#
+# Chart Components:
+# - Prometheus Server: Core metrics collection and storage
+# - Grafana: Visualization dashboards and alerting UI
+# - AlertManager: Alert routing and notification management
+# - Node Exporter: System and hardware metrics collection
+# - Blackbox Exporter: Endpoint availability monitoring
+# - Various ServiceMonitors: Application-specific metrics
+#
+# Integration Features:
+# - LDAP authentication for Grafana access
+# - OAuth2/OIDC integration with Keycloak
+# - ServiceMonitor auto-discovery for N.O.A.H services
+# - Custom dashboards for GitLab, Nextcloud, Mattermost, etc.
+# - Alert rules for infrastructure and application health
+# - Integration with external notification systems
+#
+# Dependencies:
+# - Persistent storage for metrics retention
+# - Samba4: LDAP authentication for Grafana
+# - Keycloak: OIDC authentication (optional)
+# - ingress-nginx: External access and load balancing
+# - cert-manager: TLS certificate management
+#
+# Documentation: https://prometheus.io/docs/
+# =============================================================================
+
+# =============================================================================
+# Global Configuration
+# =============================================================================
+# Settings that apply across all monitoring stack components
+
+global:
+  # Container image registry override (leave empty for default registries)
+  imageRegistry: ""
+
+  # Global image pull secrets for private registries
+  imagePullSecrets: []
+
+  # Default storage class for persistent volumes
+  # Critical for metrics storage performance and reliability
+  storageClass: ""
+
+  # Global scrape interval for all Prometheus targets
+  # Lower values provide higher resolution but use more storage
+  scrapeInterval: 30s
+
+  # Global rule evaluation interval for alerts
+  # Should typically match or be a multiple of scrapeInterval
+  evaluationInterval: 30s
+
+  # External labels applied to all metrics
+  # Useful for federation and multi-cluster setups
+  externalLabels: {}
+
+# =============================================================================
+# Prometheus Server Configuration
+# =============================================================================
+# Core metrics collection, storage, and query engine
+
+prometheus:
+  # Enable Prometheus server deployment
+  enabled: true
+
+  # Number of Prometheus replicas for high availability
+  # Multiple replicas require external storage or federation
+  replicaCount: 2
+
+  # Container image configuration
+  image:
+    # Prometheus official registry (Quay.io)
+    registry: quay.io
+
+    # Official Prometheus server image
+    repository: prometheus/prometheus
+
+    # Prometheus version - use stable releases for production
+    # Format: vX.Y.Z (e.g., v2.48.1)
+    tag: "v2.48.1"
+
+    # Image pull policy
+    pullPolicy: IfNotPresent
+
+    # Image-specific pull secrets
+    pullSecrets: []
+
+  # =============================================================================
+  # Service Configuration
+  # =============================================================================
+  # Kubernetes service for Prometheus server access
+
+  service:
+    # Service type for Prometheus access
+    # ClusterIP: Internal access only (recommended with Ingress)
+    type: ClusterIP
+
+    # Prometheus HTTP port
+    port: 9090
+
+    # Service annotations for cloud provider integrations
+    annotations: {}
+
+    # Session affinity for load balancing
+    # None: No session affinity (suitable for stateless queries)
+    sessionAffinity: None
+
+  # =============================================================================
+  # Ingress Configuration
+  # =============================================================================
+  # External access configuration for Prometheus web UI
+
+  ingress:
+    # Enable ingress for external access to Prometheus
+    enabled: true
+
+    # Ingress class (nginx, traefik, etc.)
+    className: nginx
+
+    # Ingress annotations for specific configurations
+    annotations:
+      # Force HTTPS redirect for security
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+
+      # Automatic TLS certificate provisioning
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+    # Hostname for Prometheus access
+    hostname: "prometheus.noah.local"
+
+    # URL path for Prometheus (usually root)
+    path: /
+    pathType: Prefix
+
+    # TLS configuration
+    tls:
+      enabled: true
+      secretName: prometheus-tls
+
+  # =============================================================================
+  # Persistent Storage Configuration
+  # =============================================================================
+  # Long-term metrics storage configuration
+
+  persistence:
+    # Enable persistent storage for metrics data
+    # CRITICAL: Required for production to retain historical data
+    enabled: true
+
+    # Storage class for metrics data
+    # Use high-performance storage for large-scale deployments
+    storageClass: ""
+
+    # Volume access modes
+    # ReadWriteOnce: Single node access (suitable for most deployments)
+    accessModes:
+      - ReadWriteOnce
+
+    # Storage size for metrics retention
+    # Size depends on retention period and metric volume
+    # Recommendation: 50Gi for small deployments, 200Gi+ for production
+    size: 50Gi
+
+    # Additional annotations for PVC (storage-specific metadata)
+    annotations: {}
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+    requests:
+      cpu: 500m
+      memory: 2Gi
+
+  # Retention and storage
+  retention: "30d"
+  retentionSize: "40GB"
+  walCompression: true
+
+  # Security Context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    fsGroup: 65534
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 65534
+
+  # Probes
+  livenessProbe:
+    enabled: true
+    httpGet:
+      path: /-/healthy
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 3
+
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: /-/ready
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 5
+    timeoutSeconds: 4
+    failureThreshold: 3
+
+  # Configuration
+  config: |
+    global:
+      scrape_interval: {{ .Values.global.scrapeInterval }}
+      evaluation_interval: {{ .Values.global.evaluationInterval }}
+      external_labels:
+        cluster: 'noah'
+        replica: '$(POD_NAME)'
+        {{- range $key, $value := .Values.global.externalLabels }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              {{- if .Values.alertmanager.enabled }}
+              - {{ include "prometheus.alertmanager.fullname" . }}:{{
+                  .Values.alertmanager.service.port }}
+              {{- end }}
+
+    scrape_configs:
+      # Prometheus itself
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      # Kubernetes API server
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+          - role: endpoints
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace,
+                            __meta_kubernetes_service_name,
+                            __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+
+      # Kubernetes nodes
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics
+
+      # Kubernetes node exporter
+      - job_name: 'kubernetes-node-exporter'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_endpoints_name]
+            action: keep
+            regex: node-exporter
+          - source_labels: [__meta_kubernetes_endpoint_address_target_name]
+            target_label: node
+
+      # Kubernetes pods
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [
+              __meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__,
+                            __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+      # Kubernetes services
+      - job_name: 'kubernetes-service-endpoints'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [
+              __meta_kubernetes_service_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [
+              __meta_kubernetes_service_annotation_prometheus_io_scheme]
+            action: replace
+            target_label: __scheme__
+            regex: (https?)
+          - source_labels: [
+              __meta_kubernetes_service_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__,
+                            __meta_kubernetes_service_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+            target_label: __address__
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+          - action: labelmap
+            regex: __meta_kubernetes_service_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_service_name]
+            action: replace
+            target_label: kubernetes_name
+
+      # N.O.A.H specific services
+      - job_name: 'keycloak'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: '.*keycloak.*'
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: http
+
+      - job_name: 'gitlab'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: '.*gitlab.*'
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: http
+
+      - job_name: 'nextcloud'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: '.*nextcloud.*'
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: http
+
+      - job_name: 'mattermost'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: '.*mattermost.*'
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: http
+
+      - job_name: 'wazuh'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: '.*wazuh.*'
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: http
+
+  # Alerting rules
+  rules:
+    enabled: true
+    groups:
+      - name: noah.rules
+        rules:
+          - alert: InstanceDown
+            expr: up == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Instance {{ $labels.instance }} down"
+              description: >-
+                {{ $labels.instance }} of job {{ $labels.job }} has been down
+                for more than 5 minutes.
+
+          - alert: HighCPUUsage
+            expr: >-
+              100 - (avg by(instance)
+              (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High CPU usage on {{ $labels.instance }}"
+              description: >-
+                CPU usage is above 80% for more than 5 minutes on
+                {{ $labels.instance }}.
+
+          - alert: HighMemoryUsage
+            expr: >-
+              (1 - (node_memory_MemAvailable_bytes /
+              node_memory_MemTotal_bytes)) * 100 > 85
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory usage on {{ $labels.instance }}"
+              description: >-
+                Memory usage is above 85% for more than 5 minutes on
+                {{ $labels.instance }}.
+
+          - alert: DiskSpaceLow
+            expr: >-
+              100 - (node_filesystem_free_bytes /
+              node_filesystem_size_bytes) * 100 > 90
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Disk space low on {{ $labels.instance }}"
+              description: >-
+                Disk usage is above 90% on {{ $labels.instance }} filesystem
+                {{ $labels.mountpoint }}.
+
+          - alert: KeycloakDown
+            expr: up{job="keycloak"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Keycloak service is down"
+              description: >-
+                Keycloak authentication service has been down for more than
+                2 minutes.
+
+          - alert: GitLabDown
+            expr: up{job="gitlab"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "GitLab service is down"
+              description: >-
+                GitLab service has been down for more than 2 minutes.
+
+  # Auto-scaling
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# Grafana configuration
+grafana:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    registry: grafana
+    repository: grafana
+    tag: "10.2.3"
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 3000
+    annotations: {}
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hostname: "grafana.noah.local"
+    path: /
+    pathType: Prefix
+    tls:
+      enabled: true
+      secretName: grafana-tls
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    annotations: {}
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+  # Authentication
+  auth:
+    adminUser: admin
+    adminPassword: ""
+    existingSecret: ""
+    existingSecretPasswordKey: admin-password
+
+  # LDAP authentication
+  ldap:
+    enabled: true
+    config: |
+      [[servers]]
+      host = "samba4.noah.svc.cluster.local"
+      port = 389
+      use_ssl = false
+      start_tls = false
+      ssl_skip_verify = false
+      bind_dn = "cn=grafana-service,cn=Users,dc=noah,dc=local"
+      bind_password = "{{ .Values.grafana.ldap.bindPassword }}"
+      search_filter = "(sAMAccountName=%s)"
+      search_base_dns = ["cn=Users,dc=noah,dc=local"]
+
+      [servers.attributes]
+      name = "givenName"
+      surname = "sn"
+      username = "sAMAccountName"
+      member_of = "memberOf"
+      email = "mail"
+
+      [[servers.group_mappings]]
+      group_dn = "cn=Grafana-Admins,cn=Groups,dc=noah,dc=local"
+      org_role = "Admin"
+
+      [[servers.group_mappings]]
+      group_dn = "cn=Grafana-Editors,cn=Groups,dc=noah,dc=local"
+      org_role = "Editor"
+
+      [[servers.group_mappings]]
+      group_dn = "cn=Grafana-Viewers,cn=Groups,dc=noah,dc=local"
+      org_role = "Viewer"
+    bindPassword: ""
+    existingSecret: ""
+    existingSecretKey: ldap-password
+
+  # Grafana configuration
+  config:
+    server:
+      domain: "grafana.noah.local"
+      root_url: "https://grafana.noah.local"
+      serve_from_sub_path: false
+
+    database:
+      type: sqlite3
+      path: /var/lib/grafana/grafana.db
+
+    security:
+      admin_user: "{{ .Values.grafana.auth.adminUser }}"
+      admin_password: "{{ .Values.grafana.auth.adminPassword }}"
+      secret_key: "{{ randAlphaNum 32 }}"
+
+    auth:
+      disable_login_form: false
+      disable_signout_menu: false
+      ldap:
+        enabled: "{{ .Values.grafana.ldap.enabled }}"
+        config_file: /etc/grafana/ldap.toml
+        allow_sign_up: true
+
+    users:
+      allow_sign_up: false
+      auto_assign_org: true
+      auto_assign_org_role: Viewer
+
+    log:
+      mode: console
+      level: info
+
+    metrics:
+      enabled: true
+
+    alerting:
+      enabled: true
+
+  # Default dashboards
+  dashboards:
+    enabled: true
+    default:
+      kubernetes:
+        gnetId: 315
+        revision: 3
+        datasource: Prometheus
+      node-exporter:
+        gnetId: 1860
+        revision: 27
+        datasource: Prometheus
+      keycloak:
+        gnetId: 10441
+        revision: 1
+        datasource: Prometheus
+      gitlab:
+        gnetId: 7826
+        revision: 1
+        datasource: Prometheus
+      wazuh:
+        gnetId: 12777
+        revision: 1
+        datasource: Prometheus
+
+  # Data sources
+  datasources:
+    enabled: true
+    default:
+      prometheus:
+        name: Prometheus
+        type: prometheus
+        url: >-
+          http://{{ include "prometheus.fullname" . }}:{{
+          .Values.prometheus.service.port }}
+        access: proxy
+        isDefault: true
+
+# AlertManager configuration
+alertmanager:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    registry: quay.io
+    repository: prometheus/alertmanager
+    tag: "v0.26.0"
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 9093
+    annotations: {}
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hostname: "alertmanager.noah.local"
+    path: /
+    pathType: Prefix
+    tls:
+      enabled: true
+      secretName: alertmanager-tls
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 5Gi
+    annotations: {}
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  # Configuration
+  config: |
+    global:
+      smtp_smarthost: 'localhost:587'
+      smtp_from: 'alertmanager@noah.local'
+
+    route:
+      group_by: ['alertname']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'web.hook'
+
+    receivers:
+    - name: 'web.hook'
+      webhook_configs:
+      - url: 'http://mattermost.noah.svc.cluster.local:8065/hooks/alerts'
+        send_resolved: true
+
+    inhibit_rules:
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'dev', 'instance']
+
+# Node Exporter configuration
+nodeExporter:
+  enabled: true
+
+  image:
+    registry: quay.io
+    repository: prometheus/node-exporter
+    tag: "v1.7.0"
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 9100
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9100"
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 200m
+      memory: 180Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+  egress:
+    enabled: true
+
+# Node selection
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Pod annotations and labels
+podAnnotations: {}
+podLabels: {}
+
+# Common labels
+commonLabels: {}
+commonAnnotations: {}

@@ -1,0 +1,19 @@
+---
+apiVersion: v2
+name: gitlab-simple
+description: Simplified GitLab CE helm chart for NOAH infrastructure
+version: 1.0.0
+appVersion: "16.7.0"
+type: application
+keywords:
+  - gitlab
+  - git
+  - devops
+  - ci-cd
+  - noah
+home: https://about.gitlab.com/
+sources:
+  - https://gitlab.com/gitlab-org/gitlab
+maintainers:
+  - name: NOAH Team
+    email: team@noah.local

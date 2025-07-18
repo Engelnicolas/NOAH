@@ -316,19 +316,19 @@ networkPolicy:
 ### Migration Commands
 ```bash
 # Validate current deployment
-./Script/noah validate --scope all
+./script/noah validate --scope all
 
 # Check requirements for root profile
-./Script/noah requirements --profile root
+./script/noah requirements --profile root
 
 # Backup current configuration
 kubectl get configmaps -o yaml > config-backup.yaml
 
 # Deploy root profile
-./Script/noah infra deploy --profile root
+./script/noah infra deploy --profile root
 
 # Validate new deployment
-./Script/noah infra status
+./script/noah infra status
 ```
 
 ---
@@ -338,7 +338,7 @@ kubectl get configmaps -o yaml > config-backup.yaml
 ### Minimal Profile Checklist
 - [ ] Docker installed and running
 - [ ] Kubernetes cluster available (single-node OK)
-- [ ] Helm 3.x installed
+- [ ] helm 3.x installed
 - [ ] 6GB RAM available
 - [ ] 50GB storage available
 - [ ] Internet connectivity
@@ -346,7 +346,7 @@ kubectl get configmaps -o yaml > config-backup.yaml
 ### Root Profile Checklist
 - [ ] Docker installed and running
 - [ ] Kubernetes cluster available (multi-node recommended)
-- [ ] Helm 3.x installed
+- [ ] helm 3.x installed
 - [ ] 28GB RAM available
 - [ ] 500GB storage available
 - [ ] Storage classes configured
@@ -369,10 +369,10 @@ Use the technical requirements validator to ensure your environment meets the ne
 
 ```bash
 # Validate for minimal profile
-./Script/noah requirements --profile minimal
+./script/noah requirements --profile minimal
 
 # Validate for root profile
-./Script/noah requirements --profile root
+./script/noah requirements --profile root
 ```
 
 For detailed technical specifications, see [TECHNICAL_REQUIREMENTS.md](TECHNICAL_REQUIREMENTS.md).

@@ -1,0 +1,416 @@
+# =============================================================================
+# Keycloak Identity and Access Management helm Chart Values
+# =============================================================================
+#
+# This file contains configuration values for deploying Keycloak, an open-source
+# Identity and Access Management solution that provides:
+# - Single Sign-On (SSO) capabilities
+# - Identity brokering and social login
+# - User federation with LDAP/Active Directory
+# - OAuth2/OpenID Connect provider
+# - SAML 2.0 identity provider and service provider
+# - Fine-grained authorization services
+# - Multi-factor authentication
+# - User management and self-service capabilities
+#
+# Chart Features:
+# - High availability deployment with clustering
+# - PostgreSQL database integration
+# - HTTPS/TLS termination and security
+# - LDAP/Active Directory federation
+# - Ingress configuration with load balancing
+# - Persistent storage for themes and configurations
+# - Monitoring and health checks
+# - Auto-scaling capabilities
+#
+# Documentation: https://www.keycloak.org/documentation
+# =============================================================================
+
+# Global configuration shared across all components
+global:
+  # Container image registry override (leave empty for default registries)
+  imageRegistry: ""
+
+  # Global image pull secrets for accessing private registries
+  imagePullSecrets: []
+
+  # Default storage class for persistent volumes
+  storageClass: ""
+
+# =============================================================================
+# Keycloak Application Configuration
+# =============================================================================
+
+# Number of Keycloak replicas for high availability
+# Minimum 2 recommended for production to ensure zero-downtime deployments
+# Note: Requires database clustering for session replication
+replicaCount: 2
+
+# Container image configuration
+image:
+  # Keycloak official registry (Quay.io)
+  registry: quay.io
+
+  # Official Keycloak container image
+  repository: keycloak/keycloak
+
+  # Keycloak version - pin to specific versions for production stability
+  # Latest stable versions provide security updates and bug fixes
+  tag: "23.0.1"
+
+  # Image pull policy
+  # IfNotPresent: Pull only if image doesn't exist locally (recommended)
+  pullPolicy: IfNotPresent
+
+  # Image-specific pull secrets
+  pullSecrets: []
+
+# =============================================================================
+# Authentication Configuration
+# =============================================================================
+# Configure the initial Keycloak admin user for management access
+
+auth:
+  # Admin username for Keycloak management console
+  adminUser: admin
+
+  # Admin password (leave empty to use existingSecret)
+  # For production, always use existingSecret for security
+  adminPassword: ""
+
+  # Use existing Kubernetes secret for admin credentials
+  existingSecret: ""
+  passwordSecretKey: admin-password
+
+# =============================================================================
+# Database Configuration
+# =============================================================================
+# Keycloak requires a database for persistence and clustering support
+
+database:
+  # Database vendor - PostgreSQL recommended for production
+  # Supported: postgres, mysql, mariadb, mssql, oracle
+  vendor: postgres
+
+  # Database connection details
+  hostname: ""
+  port: 5432
+  database: keycloak
+  username: keycloak
+
+  # Database password (leave empty to use existingSecret)
+  password: ""
+
+  # Use existing secret for database credentials (recommended for production)
+  existingSecret: ""
+  existingSecretPasswordKey: password
+  existingSecretUsernameKey: username
+
+# =============================================================================
+# Service Configuration
+# =============================================================================
+# Configure Kubernetes service for Keycloak access
+
+service:
+  # Service type - ClusterIP for internal access with Ingress
+  # Options: ClusterIP, NodePort, LoadBalancer
+  type: ClusterIP
+
+  # HTTP port for Keycloak service
+  port: 8080
+
+  # HTTPS port (if TLS termination at service level)
+  httpsPort: 8443
+
+  # Service annotations for cloud provider integrations
+  annotations: {}
+
+  # Session affinity for load balancing
+  # None: No session affinity (recommended with proper session replication)
+  sessionAffinity: None
+
+# =============================================================================
+# Ingress Configuration
+# =============================================================================
+# Configure external access to Keycloak through ingress controller
+
+ingress:
+  # Enable ingress for external access
+  enabled: true
+
+  # Ingress class (nginx, traefik, etc.)
+  className: nginx
+
+  # Ingress annotations for specific configurations
+  annotations:
+    # Increase buffer sizes for Keycloak's large authentication responses
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hostname: keycloak.noah.local
+  path: /
+  pathType: Prefix
+  tls:
+    enabled: true
+    secretName: keycloak-tls
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+# Auto-scaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Node selection
+nodeSelector: {}
+tolerations: []
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+          topologyKey: kubernetes.io/hostname
+
+# Security Context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Probes
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /health/live
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /health/ready
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+startupProbe:
+  enabled: true
+  httpGet:
+    path: /health/ready
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+# Extra environment variables
+extraEnvVars: []
+extraEnvVarsSecret: ""
+extraEnvVarsConfigMap: ""
+
+# JVM configuration
+jvmHeap: "-Xms1024m -Xmx1536m"
+jvmOpts: "-XX:+UseG1GC -XX:+UseStringDeduplication"
+
+# Keycloak configuration
+configuration: |
+  # Database
+  db={{ .Values.database.vendor }}
+  db-url-host={{ include "keycloak.databaseHost" . }}
+  db-url-port={{ .Values.database.port }}
+  db-url-database={{ .Values.database.database }}
+  db-username={{ .Values.database.username }}
+
+  # HTTP/HTTPS
+  http-enabled=true
+  http-port=8080
+  hostname-strict=false
+  hostname-strict-https=false
+
+  # Production settings
+  {{- if .Values.production.enabled }}
+  hostname={{ .Values.ingress.hostname }}
+  proxy=edge
+  {{- end }}
+
+  # Metrics
+  metrics-enabled=true
+  health-enabled=true
+
+# Production mode
+production:
+  enabled: true
+
+# Cache configuration
+cache:
+  stack: kubernetes
+
+# LDAP/AD Integration
+ldap:
+  enabled: true
+  vendor: ad # ad for Active Directory, other for generic LDAP
+  connectionUrl: "ldap://samba4.noah.svc.cluster.local:389"
+  usersDN: "cn=Users,dc=noah,dc=local"
+  bindDN: "cn=keycloak-service,cn=Users,dc=noah,dc=local"
+  bindCredential: ""
+  existingSecret: ""
+  existingSecretKey: ldap-password
+
+  # User mapping
+  userObjectClasses: "person,organizationalPerson,user"
+  usernameLDAPAttribute: "sAMAccountName"
+  rdnLDAPAttribute: "cn"
+  uuidLDAPAttribute: "objectGUID"
+  userLDAPFilter: ""
+
+  # Group mapping
+  groupsDN: "cn=Groups,dc=noah,dc=local"
+  groupObjectClasses: "group"
+  groupNameLDAPAttribute: "cn"
+  groupMembershipLDAPAttribute: "member"
+  membershipLDAPAttribute: "memberOf"
+
+  # Advanced settings
+  editMode: "WRITABLE"
+  syncRegistrations: true
+
+  # Import settings
+  importUsers: true
+  searchScope: "SUBTREE"
+  useTruststoreSpi: "ldapsOnly"
+  connectionPooling: true
+  pagination: true
+
+  # Kerberos
+  kerberos:
+    enabled: false
+    kerberosRealm: "NOAH.LOCAL"
+    serverPrincipal: "HTTP/keycloak.noah.local@NOAH.LOCAL"
+    keyTab: ""
+
+# Custom themes
+themes:
+  enabled: false
+  existingConfigMap: ""
+
+# Custom providers
+providers:
+  enabled: false
+  existingConfigMap: ""
+
+# Realm configuration
+realm:
+  enabled: true
+  name: "noah"
+  displayName: "NOAH"
+
+  # OIDC clients will be configured via ansible
+  clients: []
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  path: /metrics
+  port: 8080
+  serviceMonitor:
+    enabled: true
+    namespace: ""
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+
+# PostgreSQL dependency
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "postgres"
+    username: "keycloak"
+    password: "keycloak"
+    database: "keycloak"
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+
+# Persistence for Keycloak data
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 5Gi
+  annotations: {}
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+  egress:
+    enabled: true
+
+# Extra volumes and mounts
+extraVolumes: []
+extraVolumeMounts: []
+
+# Init containers
+initContainers: []
+
+# Sidecar containers
+sidecarContainers: []
+
+# Pod annotations and labels
+podAnnotations: {}
+podLabels: {}
+
+# Common labels
+commonLabels: {}
+commonAnnotations: {}

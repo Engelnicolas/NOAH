@@ -1,0 +1,67 @@
+#!/bin/bash
+# Wrapper script pour le nouveau NOAH CLI Python
+# S'assure que le script est exécuté depuis le répertoire racine du projet NOAH
+
+# Couleurs pour l'affichage
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Fonction pour afficher les erreurs
+error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+# Fonction pour afficher les infos
+info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+# Fonction pour afficher les succès
+success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+# Déterminer le répertoire du script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Vérifier qu'on est dans le répertoire racine du projet NOAH
+if [[ ! -f "$SCRIPT_DIR/script/noah.py" ]]; then
+    error "Ce script doit être exécuté depuis le répertoire racine du projet NOAH"
+    error "Structure attendue: NOAH/noah (ce script) et NOAH/script/noah.py"
+    error "Répertoire actuel: $SCRIPT_DIR"
+    exit 1
+fi
+
+# Se déplacer vers le répertoire racine
+cd "$SCRIPT_DIR" || {
+    error "Impossible de se déplacer vers le répertoire racine: $SCRIPT_DIR"
+    exit 1
+}
+
+# Vérifier si l'environnement virtuel existe
+if [[ -f "venv/bin/python" ]]; then
+    # Utiliser l'environnement virtuel Python
+    PYTHON_CMD="venv/bin/python"
+    success "Utilisation de l'environnement virtuel Python"
+elif [[ -f "venv/bin/activate" ]]; then
+    # Activer l'environnement virtuel puis utiliser python3
+    source venv/bin/activate
+    PYTHON_CMD="python3"
+    success "Environnement virtuel activé"
+else
+    # Fallback vers python3 système
+    PYTHON_CMD="python3"
+    info "Utilisation de Python système (recommandé: configurer un environnement virtuel)"
+fi
+
+# Vérifier que le script noah.py existe
+if [[ ! -f "script/noah.py" ]]; then
+    error "Script noah.py non trouvé dans script/"
+    exit 1
+fi
+
+# Exécuter le CLI Python NOAH
+exec "$PYTHON_CMD" script/noah.py "$@"

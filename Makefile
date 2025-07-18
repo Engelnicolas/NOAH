@@ -42,7 +42,7 @@ ENVIRONMENT ?= dev
 # Kubernetes namespace prefix
 NAMESPACE_PREFIX ?= noah
 
-# Helm operation timeout
+# helm operation timeout
 HELM_TIMEOUT ?= 10m
 
 # Verbose output flag
@@ -53,9 +53,9 @@ PYTHON_VERSION ?= 3.12
 
 # Current directory paths
 ROOT_DIR := $(shell pwd)
-SCRIPT_DIR := $(ROOT_DIR)/Script
-HELM_DIR := $(ROOT_DIR)/Helm
-ANSIBLE_DIR := $(ROOT_DIR)/Ansible
+SCRIPT_DIR := $(ROOT_DIR)/script
+HELM_DIR := $(ROOT_DIR)/helm
+ANSIBLE_DIR := $(ROOT_DIR)/ansible
 TEST_DIR := $(ROOT_DIR)/Test
 DOCS_DIR := $(ROOT_DIR)/docs
 
@@ -170,7 +170,7 @@ show-config: ## Show current configuration settings
 	$(call print_section,"Current Configuration")
 	@echo "  Environment: $(CYAN)$(ENVIRONMENT)$(NC)"
 	@echo "  Namespace Prefix: $(CYAN)$(NAMESPACE_PREFIX)$(NC)"
-	@echo "  Helm Timeout: $(CYAN)$(HELM_TIMEOUT)$(NC)"
+	@echo "  helm Timeout: $(CYAN)$(HELM_TIMEOUT)$(NC)"
 	@echo "  Verbose: $(CYAN)$(VERBOSE)$(NC)"
 	@echo "  Python Version: $(CYAN)$(PYTHON_VERSION)$(NC)"
 	@echo "  Current Context: $(CYAN)$$(kubectl config current-context 2>/dev/null || echo 'not set')$(NC)"
@@ -185,8 +185,8 @@ check-deps: ## Check if required dependencies are installed
 	$(call print_section,"Checking Dependencies")
 	@command -v python3 >/dev/null 2>&1 || { echo "$(RED)❌ Python 3 not found$(NC)"; exit 1; }
 	@command -v kubectl >/dev/null 2>&1 || { echo "$(RED)❌ kubectl not found$(NC)"; exit 1; }
-	@command -v helm >/dev/null 2>&1 || { echo "$(RED)❌ Helm not found$(NC)"; exit 1; }
-	@command -v ansible-playbook >/dev/null 2>&1 || { echo "$(RED)❌ Ansible not found$(NC)"; exit 1; }
+	@command -v helm >/dev/null 2>&1 || { echo "$(RED)❌ helm not found$(NC)"; exit 1; }
+	@command -v ansible-playbook >/dev/null 2>&1 || { echo "$(RED)❌ ansible not found$(NC)"; exit 1; }
 	@command -v docker >/dev/null 2>&1 || echo "$(YELLOW)⚠️ Docker not found (optional)$(NC)"
 	@command -v git >/dev/null 2>&1 || { echo "$(RED)❌ Git not found$(NC)"; exit 1; }
 	@echo "$(GREEN)✅ All required dependencies found$(NC)"
@@ -284,15 +284,15 @@ validate-all: ## Validate - Run comprehensive validation
 	$(MAKE) validate-python
 	$(call print_success,"All validations completed")
 
-validate-charts: ## Validate - Validate Helm charts
-	$(call print_section,"Validating Helm Charts")
+validate-charts: ## Validate - Validate helm charts
+	$(call print_section,"Validating helm Charts")
 	$(MAKE) -C $(HELM_DIR) validate
-	$(call print_success,"Helm charts validated")
+	$(call print_success,"helm charts validated")
 
-validate-ansible: ## Validate - Validate Ansible playbooks
-	$(call print_section,"Validating Ansible Playbooks")
+validate-ansible: ## Validate - Validate ansible playbooks
+	$(call print_section,"Validating ansible Playbooks")
 	@cd $(ANSIBLE_DIR) && ansible-playbook --syntax-check main.yml
-	$(call print_success,"Ansible playbooks validated")
+	$(call print_success,"ansible playbooks validated")
 
 validate-python: ## Validate - Validate Python scripts
 	$(call print_section,"Validating Python Scripts")
@@ -313,15 +313,15 @@ lint-all: ## Lint - Run comprehensive linting
 	$(MAKE) lint-shell
 	$(call print_success,"All linting completed")
 
-lint-charts: ## Lint - Lint Helm charts
-	$(call print_section,"Linting Helm Charts")
+lint-charts: ## Lint - Lint helm charts
+	$(call print_section,"Linting helm Charts")
 	$(MAKE) -C $(HELM_DIR) lint
-	$(call print_success,"Helm charts linted")
+	$(call print_success,"helm charts linted")
 
-lint-ansible: ## Lint - Lint Ansible playbooks
-	$(call print_section,"Linting Ansible Playbooks")
+lint-ansible: ## Lint - Lint ansible playbooks
+	$(call print_section,"Linting ansible Playbooks")
 	@cd $(ANSIBLE_DIR) && ansible-lint main.yml || true
-	$(call print_success,"Ansible playbooks linted")
+	$(call print_success,"ansible playbooks linted")
 
 lint-python: ## Lint - Lint Python scripts
 	$(call print_section,"Linting Python Scripts")
@@ -401,13 +401,13 @@ rollback: rollback-infra ## Rollback - Rollback infrastructure
 
 rollback-infra: ## Rollback - Rollback infrastructure deployment
 	$(call print_section,"Rolling Back Infrastructure")
-	$(call print_warning,"Use Helm rollback for specific releases")
+	$(call print_warning,"Use helm rollback for specific releases")
 	@echo "Examples:"
 	@echo "  helm rollback <release-name> <revision> -n $(NAMESPACE_PREFIX)-$(ENVIRONMENT)"
 
 rollback-monitoring: ## Rollback - Rollback monitoring deployment
 	$(call print_section,"Rolling Back Monitoring")
-	$(call print_warning,"Use Helm rollback for monitoring releases")
+	$(call print_warning,"Use helm rollback for monitoring releases")
 	@echo "Examples:"
 	@echo "  helm rollback prometheus-$(ENVIRONMENT) <revision> -n $(NAMESPACE_PREFIX)-monitoring"
 
@@ -423,10 +423,10 @@ clean-all: ## Clean - Comprehensive cleanup
 	$(MAKE) clean-cache
 	$(call print_success,"Cleanup completed")
 
-clean-charts: ## Clean - Clean Helm charts
-	$(call print_section,"Cleaning Helm Charts")
+clean-charts: ## Clean - Clean helm charts
+	$(call print_section,"Cleaning helm Charts")
 	$(MAKE) -C $(HELM_DIR) clean
-	$(call print_success,"Helm charts cleaned")
+	$(call print_success,"helm charts cleaned")
 
 clean-cache: ## Clean - Clean cache files
 	$(call print_section,"Cleaning Cache Files")
@@ -505,7 +505,7 @@ security-scan: ## Security - Run security scans
 	$(call print_info,"Consider using tools like:")
 	@echo "  - kubesec for Kubernetes security"
 	@echo "  - bandit for Python security"
-	@echo "  - ansible-review for Ansible security"
+	@echo "  - ansible-review for ansible security"
 
 security-audit: ## Security - Run security audit
 	$(call print_section,"Running Security Audit")
@@ -566,7 +566,7 @@ debug: ## Debug - Show debugging information
 	@echo "$(YELLOW)Kubernetes Context:$(NC)"
 	@kubectl config current-context 2>/dev/null || echo "  No current context"
 	@echo ""
-	@echo "$(YELLOW)Helm Repositories:$(NC)"
+	@echo "$(YELLOW)helm Repositories:$(NC)"
 	@helm repo list 2>/dev/null || echo "  No repositories configured"
 	@echo ""
 	@echo "$(YELLOW)Directory Structure:$(NC)"
@@ -577,8 +577,8 @@ troubleshoot: ## Debug - Troubleshooting guide
 	$(call print_section,"Troubleshooting Guide")
 	@echo "$(YELLOW)Common Issues:$(NC)"
 	@echo "  1. kubectl not found: Install kubectl CLI"
-	@echo "  2. helm not found: Install Helm package manager"
-	@echo "  3. ansible not found: Install Ansible automation platform"
+	@echo "  2. helm not found: Install helm package manager"
+	@echo "  3. ansible not found: Install ansible automation platform"
 	@echo "  4. Permission denied: Check file permissions with 'ls -la'"
 	@echo "  5. Context not set: Set kubectl context with 'kubectl config use-context <context>'"
 	@echo ""

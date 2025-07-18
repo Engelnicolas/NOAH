@@ -1,0 +1,19 @@
+---
+apiVersion: v2
+name: grafana-simple
+description: Simplified Grafana dashboard helm chart for NOAH infrastructure
+version: 1.0.0
+appVersion: "10.2.0"
+type: application
+keywords:
+  - grafana
+  - monitoring
+  - dashboards
+  - visualization
+  - noah
+home: https://grafana.com/
+sources:
+  - https://github.com/grafana/grafana
+maintainers:
+  - name: NOAH Team
+    email: team@noah.local

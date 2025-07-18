@@ -439,7 +439,7 @@ resources:
 - Update security contexts if needed
 
 **Monthly:**
-- Update Helm charts and container images
+- Update helm charts and container images
 - Review and optimize resource allocations
 - Audit security configurations
 - Performance benchmarking
@@ -485,4 +485,4 @@ N.O.A.H's technical requirements are designed to be flexible and scalable, suppo
 - **Security:** Profile-based security contexts with capability management
 - **Monitoring:** Built-in metrics and logging for observability
 
-For specific deployment scenarios, consult the individual Helm values files and adjust resource allocations based on your infrastructure capacity and performance requirements.
+For specific deployment scenarios, consult the individual helm values files and adjust resource allocations based on your infrastructure capacity and performance requirements.

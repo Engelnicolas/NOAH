@@ -283,7 +283,7 @@ cache:
 # LDAP/AD Integration
 ldap:
   enabled: true
-  vendor: ad  # ad for Active Directory, other for generic LDAP
+  vendor: ad # ad for Active Directory, other for generic LDAP
   connectionUrl: "ldap://samba4.noah.svc.cluster.local:389"
   usersDN: "cn=Users,dc=noah,dc=local"
   bindDN: "cn=keycloak-service,cn=Users,dc=noah,dc=local"

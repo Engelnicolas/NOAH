@@ -6,7 +6,7 @@ metadata:
   labels:
     app: samba4
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: { { .Values.replicaCount } }
   selector:
     matchLabels:
       app: samba4
@@ -18,7 +18,7 @@ spec:
       containers:
         - name: samba4
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          imagePullPolicy: { { .Values.image.pullPolicy } }
           ports:
             - containerPort: 389
               name: ldap

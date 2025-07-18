@@ -121,7 +121,7 @@ mattermost:
     enableLinkPreviews: true
     restrictLinkPreviews: ""
     enablePermalinkPreviews: true
-    maxFileSize: 104857600  # 100MB
+    maxFileSize: 104857600 # 100MB
     enablePublicLink: true
     publicLinkSalt: ""
     enableUploads: true
@@ -668,7 +668,7 @@ elasticsearch:
       cpu: "2000m"
       memory: "4Gi"
   volumeClaimTemplate:
-    accessModes: [ "ReadWriteOnce" ]
+    accessModes: ["ReadWriteOnce"]
     resources:
       requests:
         storage: 30Gi
@@ -777,7 +777,7 @@ externalDatabase:
   existingSecret: ""
   existingSecretKey: ""
 
-# Pod Disruption Budget
+  # Pod Disruption Budget
   servicesSettings:
     websocketURL: ""
     enableIncomingWebhooks: true

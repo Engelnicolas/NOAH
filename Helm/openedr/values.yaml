@@ -460,7 +460,7 @@ elasticsearch:
       cpu: "2000m"
       memory: "4Gi"
   volumeClaimTemplate:
-    accessModes: [ "ReadWriteOnce" ]
+    accessModes: ["ReadWriteOnce"]
     resources:
       requests:
         storage: 100Gi
@@ -647,4 +647,4 @@ compliance:
     - "HIPAA"
     - "ISO27001"
     - "NIST"
-  reportSchedule: "0 0 * * 0"  # Weekly on Sunday
+  reportSchedule: "0 0 * * 0" # Weekly on Sunday

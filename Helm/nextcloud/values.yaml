@@ -315,7 +315,7 @@ affinity: {}
 # Security Context
 podSecurityContext:
   runAsNonRoot: false
-  runAsUser: 33  # www-data user
+  runAsUser: 33 # www-data user
   runAsGroup: 33
   fsGroup: 33
 

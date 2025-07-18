@@ -4,9 +4,9 @@ kind: Service
 metadata:
   name: oauth2-proxy
 spec:
-  type: {{ .Values.service.type }}
+  type: { { .Values.service.type } }
   selector:
     app: oauth2-proxy
   ports:
-    - port: {{ .Values.service.port }}
+    - port: { { .Values.service.port } }
       targetPort: 4180

@@ -82,9 +82,9 @@ manager:
       cpu: "2000m"
 
   # Kubernetes scheduling configuration
-  nodeSelector: {}   # Node selection constraints
-  tolerations: []    # Tolerate specific node taints
-  affinity: {}      # Pod affinity and anti-affinity rules
+  nodeSelector: {} # Node selection constraints
+  tolerations: [] # Tolerate specific node taints
+  affinity: {} # Pod affinity and anti-affinity rules
 
   # =============================================================================
   # Wazuh Manager Core Configuration
@@ -163,8 +163,8 @@ manager:
 
       # Vulnerability feed providers to use
       providers:
-        - "canonical"    # Ubuntu/Canonical vulnerability feeds
-        - "debian"       # Debian security advisories
+        - "canonical" # Ubuntu/Canonical vulnerability feeds
+        - "debian" # Debian security advisories
         - "redhat"
         - "arch"
 
@@ -221,7 +221,7 @@ manager:
         - "elasticsearch.noah.svc.cluster.local:9200"
       protocol: "https"
       username: "wazuh"
-      password: ""  # Set via secret
+      password: "" # Set via secret
       index_name: "wazuh-alerts"
       index_template: "wazuh"
       ssl_agent_ca: "/etc/ssl/root-ca.pem"
@@ -263,7 +263,7 @@ dashboard:
     opensearch:
       hosts: ["https://elasticsearch.noah.svc.cluster.local:9200"]
       username: "kibanaserver"
-      password: ""  # Set via secret
+      password: "" # Set via secret
       ssl:
         verificationMode: "certificate"
         certificateAuthorities: ["/usr/share/wazuh-dashboard/certs/root-ca.pem"]
@@ -273,7 +273,7 @@ dashboard:
         url: "https://wazuh-manager.noah.svc.cluster.local"
         port: 55000
         username: "wazuh-wui"
-        password: ""  # Set via secret
+        password: "" # Set via secret
         run_as: false
 
     # Security configuration
@@ -538,19 +538,19 @@ secrets:
   # Wazuh API credentials
   api:
     username: "wazuh"
-    password: ""  # Generated if empty
+    password: "" # Generated if empty
 
   # Wazuh WUI credentials
   wui:
     username: "wazuh-wui"
-    password: ""  # Generated if empty
+    password: "" # Generated if empty
 
   # Elasticsearch/Indexer credentials
   elastic:
     username: "elastic"
-    password: ""  # Generated if empty
+    password: "" # Generated if empty
     kibana_username: "kibanaserver"
-    kibana_password: ""  # Generated if empty
+    kibana_password: "" # Generated if empty
 
   # LDAP bind credentials
   ldap:
@@ -729,10 +729,20 @@ affinity:
 initContainers:
   - name: wait-for-elasticsearch
     image: busybox:1.35
-    command: ['sh', '-c', 'until nslookup elasticsearch.noah.svc.cluster.local; do echo waiting for elasticsearch; sleep 2; done;']
+    command:
+      [
+        "sh",
+        "-c",
+        "until nslookup elasticsearch.noah.svc.cluster.local; do echo waiting for elasticsearch; sleep 2; done;",
+      ]
   - name: wait-for-ldap
     image: busybox:1.35
-    command: ['sh', '-c', 'until nslookup ldap.noah.svc.cluster.local; do echo waiting for ldap; sleep 2; done;']
+    command:
+      [
+        "sh",
+        "-c",
+        "until nslookup ldap.noah.svc.cluster.local; do echo waiting for ldap; sleep 2; done;",
+      ]
 
 # Extra Environment Variables
 extraEnvVars: []
@@ -778,15 +788,15 @@ monitoring:
   alerts:
     - name: "WazuhManagerDown"
       severity: "critical"
-      condition: "up{job=\"wazuh-manager\"} == 0"
+      condition: 'up{job="wazuh-manager"} == 0'
       duration: "5m"
     - name: "WazuhHighMemoryUsage"
       severity: "warning"
-      condition: "container_memory_usage_bytes{pod=~\"wazuh-manager-.*\"} / container_spec_memory_limit_bytes > 0.8"
+      condition: 'container_memory_usage_bytes{pod=~"wazuh-manager-.*"} / container_spec_memory_limit_bytes > 0.8'
       duration: "10m"
     - name: "WazuhHighCPUUsage"
       severity: "warning"
-      condition: "rate(container_cpu_usage_seconds_total{pod=~\"wazuh-manager-.*\"}[5m]) > 0.8"
+      condition: 'rate(container_cpu_usage_seconds_total{pod=~"wazuh-manager-.*"}[5m]) > 0.8'
       duration: "10m"
 
 # Health Checks

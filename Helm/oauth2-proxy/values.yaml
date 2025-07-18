@@ -55,7 +55,7 @@ oauth2:
   cookieSecretExistingSecretKey: "cookie-secret"
   cookieName: "_oauth2_proxy"
   cookieDomain: ".noah.local"
-  cookieExpire: "168h"  # 7 days
+  cookieExpire: "168h" # 7 days
   cookieRefresh: "1h"
   cookieSecure: true
   cookieHttpOnly: true
@@ -73,7 +73,7 @@ oauth2:
 
   # Upstream configuration
   upstreams:
-    - "static://202"  # Default upstream for health checks
+    - "static://202" # Default upstream for health checks
 
   # Skip authentication for specific paths
   skipAuthRegex:

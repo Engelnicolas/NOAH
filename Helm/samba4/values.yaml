@@ -6,7 +6,7 @@ global:
   storageClass: ""
 
 # Samba4 AD configuration
-replicaCount: 1  # Single instance for AD consistency
+replicaCount: 1 # Single instance for AD consistency
 
 image:
   registry: ""
@@ -212,11 +212,11 @@ networkPolicy:
       - default
       - kube-system
     allowedPorts:
-      - 389  # LDAP
-      - 636  # LDAPS
-      - 88   # Kerberos
-      - 464  # Kadmin
-      - 53   # DNS
+      - 389 # LDAP
+      - 636 # LDAPS
+      - 88 # Kerberos
+      - 464 # Kadmin
+      - 53 # DNS
   egress:
     enabled: true
 
@@ -236,7 +236,7 @@ dns:
 
 # Monitoring
 metrics:
-  enabled: false  # Samba doesn't have native Prometheus metrics
+  enabled: false # Samba doesn't have native Prometheus metrics
   serviceMonitor:
     enabled: false
 

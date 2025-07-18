@@ -9,9 +9,10 @@ Version: 1.0.0
 
 import os
 import sys
-import yaml
 from pathlib import Path
 from typing import Dict, List, Tuple
+
+import yaml
 
 
 class Colors:

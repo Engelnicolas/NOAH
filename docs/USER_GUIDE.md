@@ -137,7 +137,7 @@ postgresql:
   persistence:
     size: 10Gi      # Database data
 
-# Cache storage  
+# Cache storage
 redis:
   persistence:
     size: 5Gi       # Cache data

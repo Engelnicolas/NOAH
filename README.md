@@ -21,7 +21,7 @@
 ### Core Components
 
 - 🛠️ **Ansible** - Configuration management and service deployment
-- ☸️ **Kubernetes + Helm** - Container orchestration and application lifecycle  
+- ☸️ **Kubernetes + Helm** - Container orchestration and application lifecycle
 - 🔒 **Samba4 AD & Keycloak** - Centralized identity and access management
 - 📦 **Nextcloud, Mattermost** - Secure collaboration and communication
 - 🛡️ **Wazuh, OpenEDR, OpenVPN** - Comprehensive security monitoring
@@ -61,7 +61,7 @@ cd NOAH
 
 ### Access Services
 - **Keycloak**: https://keycloak.your-domain.com
-- **Nextcloud**: https://nextcloud.your-domain.com  
+- **Nextcloud**: https://nextcloud.your-domain.com
 - **Mattermost**: https://mattermost.your-domain.com
 - **Grafana**: https://grafana.your-domain.com
 
@@ -97,7 +97,7 @@ cd NOAH
 ### 👤 Individual Developers
 Learn DevSecOps, test automation pipelines, experiment with enterprise tools
 
-### 🧑‍💼 Small-Medium Business  
+### 🧑‍💼 Small-Medium Business
 Replace expensive SaaS tools with self-hosted alternatives, 60-80% cost savings
 
 ### 🏢 Enterprise Organizations
@@ -113,9 +113,9 @@ Digital learning platform with hands-on experience in enterprise technologies
 
 ## 👨‍💻 Author
 
-**Nicolas Engel**  
-📧 Email: [contact@nicolasengel.fr](mailto:contact@nicolasengel.fr)  
-🌐 Website: [nicolasengel.fr](https://nicolasengel.fr)  
+**Nicolas Engel**
+📧 Email: [contact@nicolasengel.fr](mailto:contact@nicolasengel.fr)
+🌐 Website: [nicolasengel.fr](https://nicolasengel.fr)
 
 *Passionate about cybersecurity, open-source infrastructure, DevSecOps, and building secure, scalable solutions for organizations of all sizes.*
 
@@ -164,7 +164,7 @@ Special thanks to the open-source community and the maintainers of all the incre
 # Infrastructure lifecycle
 ./noah infra setup|deploy|status|teardown
 
-# Monitoring operations  
+# Monitoring operations
 ./noah monitoring deploy|status|teardown
 
 # Code quality and validation

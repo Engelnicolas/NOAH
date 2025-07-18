@@ -21,8 +21,7 @@ def test_noah_scripts_directory_exists():
 
 def test_requirements_file_exists():
     """Vérifie que le fichier requirements.txt existe."""
-    requirements_file = Path(__file__).parent.parent / \
-        "Script" / "requirements.txt"
+    requirements_file = Path(__file__).parent.parent / "Script" / "requirements.txt"
     assert requirements_file.exists(), "Le fichier requirements.txt doit exister"
 
 

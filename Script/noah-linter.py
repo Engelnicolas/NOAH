@@ -166,9 +166,9 @@ class NoahLinter:
                 self.print_warning(
                     "pre-commit not found in PATH. Adding ~/.local/bin to PATH"
                 )
-                os.environ[
-                    "PATH"
-                ] = f"{os.path.expanduser('~/.local/bin')}:{os.environ.get('PATH', '')}"
+                os.environ["PATH"] = (
+                    f"{os.path.expanduser('~/.local/bin')}:{os.environ.get('PATH', '')}"
+                )
 
             # Install pre-commit hooks
             self.print_status("Installing pre-commit hooks...")

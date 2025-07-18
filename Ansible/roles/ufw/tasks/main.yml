@@ -24,109 +24,109 @@
             hostNetwork: true
             hostPID: true
             containers:
-            - name: ufw-config
-              image: ubuntu:22.04
-              command:
-                - /bin/bash
-                - -c
-                - |
-                  set -e
+              - name: ufw-config
+                image: ubuntu:22.04
+                command:
+                  - /bin/bash
+                  - -c
+                  - |
+                    set -e
 
-                  # Install UFW if not present
-                  apt-get update && apt-get install -y ufw
+                    # Install UFW if not present
+                    apt-get update && apt-get install -y ufw
 
-                  # Reset UFW to default state
-                  ufw --force reset
+                    # Reset UFW to default state
+                    ufw --force reset
 
-                  # Set default policies
-                  ufw default deny incoming
-                  ufw default allow outgoing
+                    # Set default policies
+                    ufw default deny incoming
+                    ufw default allow outgoing
 
-                  # Allow SSH (essential for management)
-                  ufw allow 22/tcp
+                    # Allow SSH (essential for management)
+                    ufw allow 22/tcp
 
-                  # Allow HTTP/HTTPS for web services
-                  ufw allow 80/tcp
-                  ufw allow 443/tcp
+                    # Allow HTTP/HTTPS for web services
+                    ufw allow 80/tcp
+                    ufw allow 443/tcp
 
-                  # Allow Kubernetes API server
-                  ufw allow 6443/tcp
+                    # Allow Kubernetes API server
+                    ufw allow 6443/tcp
 
-                  # Allow kubelet API
-                  ufw allow 10250/tcp
+                    # Allow kubelet API
+                    ufw allow 10250/tcp
 
-                  # Allow NodePort services range
-                  ufw allow 30000:32767/tcp
+                    # Allow NodePort services range
+                    ufw allow 30000:32767/tcp
 
-                  # Allow DNS
-                  ufw allow 53/tcp
-                  ufw allow 53/udp
+                    # Allow DNS
+                    ufw allow 53/tcp
+                    ufw allow 53/udp
 
-                  # Allow NTP
-                  ufw allow 123/udp
+                    # Allow NTP
+                    ufw allow 123/udp
 
-                  # Allow LDAP/Samba4
-                  ufw allow 389/tcp
-                  ufw allow 636/tcp
-                  ufw allow 88/tcp
-                  ufw allow 464/tcp
-                  ufw allow 53/tcp
+                    # Allow LDAP/Samba4
+                    ufw allow 389/tcp
+                    ufw allow 636/tcp
+                    ufw allow 88/tcp
+                    ufw allow 464/tcp
+                    ufw allow 53/tcp
 
-                  # Allow OpenVPN
-                  ufw allow 1194/udp
+                    # Allow OpenVPN
+                    ufw allow 1194/udp
 
-                  # Allow monitoring ports
-                  ufw allow 9090/tcp  # Prometheus
-                  ufw allow 3000/tcp  # Grafana
-                  ufw allow 9100/tcp  # Node Exporter
+                    # Allow monitoring ports
+                    ufw allow 9090/tcp  # Prometheus
+                    ufw allow 3000/tcp  # Grafana
+                    ufw allow 9100/tcp  # Node Exporter
 
-                  # Allow Wazuh agent communication
-                  ufw allow 1514/tcp
-                  ufw allow 1515/tcp
-                  ufw allow 514/udp
+                    # Allow Wazuh agent communication
+                    ufw allow 1514/tcp
+                    ufw allow 1515/tcp
+                    ufw allow 514/udp
 
-                  # Allow internal cluster communication
-                  ufw allow from 10.244.0.0/16  # Pod network
-                  ufw allow from 10.96.0.0/12   # Service network
-                  ufw allow from 172.17.0.0/16  # Docker bridge
+                    # Allow internal cluster communication
+                    ufw allow from 10.244.0.0/16  # Pod network
+                    ufw allow from 10.96.0.0/12   # Service network
+                    ufw allow from 172.17.0.0/16  # Docker bridge
 
-                  # Log denied connections
-                  ufw logging on
+                    # Log denied connections
+                    ufw logging on
 
-                  # Enable UFW
-                  ufw --force enable
+                    # Enable UFW
+                    ufw --force enable
 
-                  # Display status
-                  ufw status verbose
+                    # Display status
+                    ufw status verbose
 
-                  # Keep container running
-                  tail -f /dev/null
-              securityContext:
-                privileged: true
-              volumeMounts:
-              - name: proc
-                mountPath: /host/proc
-                readOnly: true
-              - name: sys
-                mountPath: /host/sys
-                readOnly: true
-              resources:
-                limits:
-                  cpu: 100m
-                  memory: 128Mi
-                requests:
-                  cpu: 50m
-                  memory: 64Mi
+                    # Keep container running
+                    tail -f /dev/null
+                securityContext:
+                  privileged: true
+                volumeMounts:
+                  - name: proc
+                    mountPath: /host/proc
+                    readOnly: true
+                  - name: sys
+                    mountPath: /host/sys
+                    readOnly: true
+                resources:
+                  limits:
+                    cpu: 100m
+                    memory: 128Mi
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
             volumes:
-            - name: proc
-              hostPath:
-                path: /proc
-            - name: sys
-              hostPath:
-                path: /sys
+              - name: proc
+                hostPath:
+                  path: /proc
+              - name: sys
+                hostPath:
+                  path: /sys
             tolerations:
-            - operator: Exists
-              effect: NoSchedule
+              - operator: Exists
+                effect: NoSchedule
   register: ufw_daemonset
 
 - name: Wait for UFW configurator pods to be ready
@@ -199,20 +199,20 @@
             hostNetwork: true
             restartPolicy: OnFailure
             containers:
-            - name: ufw-status
-              image: ubuntu:22.04
-              command:
-                - /bin/bash
-                - -c
-                - |
-                  apt-get update && apt-get install -y ufw iptables
-                  ufw status verbose
-                  echo "UFW configuration completed successfully"
-              securityContext:
-                privileged: true
+              - name: ufw-status
+                image: ubuntu:22.04
+                command:
+                  - /bin/bash
+                  - -c
+                  - |
+                    apt-get update && apt-get install -y ufw iptables
+                    ufw status verbose
+                    echo "UFW configuration completed successfully"
+                securityContext:
+                  privileged: true
             tolerations:
-            - operator: Exists
-              effect: NoSchedule
+              - operator: Exists
+                effect: NoSchedule
   register: ufw_status_job
 
 - name: Wait for UFW status check to complete
@@ -250,29 +250,29 @@
       spec:
         podSelector: {}
         policyTypes:
-        - Ingress
-        - Egress
+          - Ingress
+          - Egress
         ingress:
-        - from:
-          - namespaceSelector:
-              matchLabels:
-                name: "{{ namespace }}"
-          - namespaceSelector:
-              matchLabels:
-                name: kube-system
-          - namespaceSelector:
-              matchLabels:
-                name: ingress-nginx
-        - from: []
-          ports:
-          - protocol: TCP
-            port: 80
-          - protocol: TCP
-            port: 443
-          - protocol: TCP
-            port: 8080
+          - from:
+              - namespaceSelector:
+                  matchLabels:
+                    name: "{{ namespace }}"
+              - namespaceSelector:
+                  matchLabels:
+                    name: kube-system
+              - namespaceSelector:
+                  matchLabels:
+                    name: ingress-nginx
+          - from: []
+            ports:
+              - protocol: TCP
+                port: 80
+              - protocol: TCP
+                port: 443
+              - protocol: TCP
+                port: 8080
         egress:
-        - {}  # Allow all egress traffic
+          - {} # Allow all egress traffic
 
 - name: Display UFW deployment status
   debug:

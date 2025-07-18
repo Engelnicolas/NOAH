@@ -21,7 +21,7 @@
         password: "{{ nextcloud_admin_password | default('changeme123') }}"
 
       database:
-        type: sqlite  # For production, use PostgreSQL
+        type: sqlite # For production, use PostgreSQL
 
       persistence:
         enabled: true
@@ -74,7 +74,7 @@
         siteName: "NOAH Mattermost"
 
       database:
-        type: sqlite  # For production, use PostgreSQL
+        type: sqlite # For production, use PostgreSQL
 
       ldap:
         enabled: true
@@ -218,7 +218,7 @@
         AuthEndpoint: "{{ keycloak.issuer_url }}/protocol/openid-connect/auth"
         TokenEndpoint: "{{ keycloak.issuer_url }}/protocol/openid-connect/token"
         UserApiEndpoint: "{{ keycloak.issuer_url }}/protocol/openid-connect/userinfo"
-    status_code: [200, 401]  # 401 if no admin token
+    status_code: [200, 401] # 401 if no admin token
   register: mattermost_oidc_config
   failed_when: false
 

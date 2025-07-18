@@ -157,69 +157,69 @@
             hostNetwork: true
             hostPID: true
             containers:
-            - name: openedr-agent
-              image: openedr/openedr-agent:latest
-              env:
-              - name: OPENEDR_SERVER_URL
-                value: "http://openedr-server.{{ namespace }}.svc.cluster.local:8080"
-              - name: OPENEDR_AGENT_ID
-                valueFrom:
-                  fieldRef:
-                    fieldPath: spec.nodeName
-              - name: OPENEDR_COLLECTION_INTERVAL
-                value: "60"
-              - name: OPENEDR_LOG_LEVEL
-                value: "INFO"
-              securityContext:
-                privileged: true
-              volumeMounts:
-              - name: proc
-                mountPath: /host/proc
-                readOnly: true
-              - name: sys
-                mountPath: /host/sys
-                readOnly: true
-              - name: root
-                mountPath: /host/root
-                readOnly: true
-              - name: var-log
-                mountPath: /host/var/log
-                readOnly: true
-              - name: etc
-                mountPath: /host/etc
-                readOnly: true
-              - name: dev
-                mountPath: /host/dev
-                readOnly: true
-              resources:
-                limits:
-                  cpu: 200m
-                  memory: 256Mi
-                requests:
-                  cpu: 100m
-                  memory: 128Mi
+              - name: openedr-agent
+                image: openedr/openedr-agent:latest
+                env:
+                  - name: OPENEDR_SERVER_URL
+                    value: "http://openedr-server.{{ namespace }}.svc.cluster.local:8080"
+                  - name: OPENEDR_AGENT_ID
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: spec.nodeName
+                  - name: OPENEDR_COLLECTION_INTERVAL
+                    value: "60"
+                  - name: OPENEDR_LOG_LEVEL
+                    value: "INFO"
+                securityContext:
+                  privileged: true
+                volumeMounts:
+                  - name: proc
+                    mountPath: /host/proc
+                    readOnly: true
+                  - name: sys
+                    mountPath: /host/sys
+                    readOnly: true
+                  - name: root
+                    mountPath: /host/root
+                    readOnly: true
+                  - name: var-log
+                    mountPath: /host/var/log
+                    readOnly: true
+                  - name: etc
+                    mountPath: /host/etc
+                    readOnly: true
+                  - name: dev
+                    mountPath: /host/dev
+                    readOnly: true
+                resources:
+                  limits:
+                    cpu: 200m
+                    memory: 256Mi
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
             volumes:
-            - name: proc
-              hostPath:
-                path: /proc
-            - name: sys
-              hostPath:
-                path: /sys
-            - name: root
-              hostPath:
-                path: /
-            - name: var-log
-              hostPath:
-                path: /var/log
-            - name: etc
-              hostPath:
-                path: /etc
-            - name: dev
-              hostPath:
-                path: /dev
+              - name: proc
+                hostPath:
+                  path: /proc
+              - name: sys
+                hostPath:
+                  path: /sys
+              - name: root
+                hostPath:
+                  path: /
+              - name: var-log
+                hostPath:
+                  path: /var/log
+              - name: etc
+                hostPath:
+                  path: /etc
+              - name: dev
+                hostPath:
+                  path: /dev
             tolerations:
-            - operator: Exists
-              effect: NoSchedule
+              - operator: Exists
+                effect: NoSchedule
   register: openedr_agent_deployment
 
 - name: Wait for OpenEDR Agent pods to be ready

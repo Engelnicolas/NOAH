@@ -58,7 +58,7 @@
         "access.token.lifespan": "3600"
         "sso.session.idle.timeout": "1800"
         "sso.session.max.lifespan": "36000"
-    status_code: [201, 409]  # 409 if already exists
+    status_code: [201, 409] # 409 if already exists
   register: oauth2_proxy_client
 
 - name: Get OAuth2 Proxy client secret
@@ -100,7 +100,10 @@
       directAccessGrantsEnabled: true
       serviceAccountsEnabled: false
       redirectUris: ["{{ item.redirect_uri }}/*"]
-      webOrigins: ["{{ item.redirect_uri.split('/')[0] }}://{{ item.redirect_uri.split('/')[2] }}"]
+      webOrigins:
+        [
+          "{{ item.redirect_uri.split('/')[0] }}://{{ item.redirect_uri.split('/')[2] }}",
+        ]
       defaultClientScopes: ["openid", "profile", "email", "roles"]
       optionalClientScopes: ["address", "phone"]
       attributes:
@@ -225,7 +228,10 @@
         "ignore.missing.groups": ["false"]
         "membership.ldap.attribute": ["member"]
         "membership.attribute.type": ["DN"]
-        "groups.ldap.filter": ["(|(cn=NextcloudUsers)(cn=MattermostUsers)(cn=GitlabUsers)(cn=AdminUsers)(cn=VPNUsers))"]
+        "groups.ldap.filter":
+          [
+            "(|(cn=NextcloudUsers)(cn=MattermostUsers)(cn=GitlabUsers)(cn=AdminUsers)(cn=VPNUsers))",
+          ]
         "mode": ["READ_ONLY"]
         "user.roles.retrieve.strategy": ["LOAD_GROUPS_BY_MEMBER_ATTRIBUTE"]
         "mapped.group.attributes": [""]

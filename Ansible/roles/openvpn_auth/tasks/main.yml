@@ -175,87 +175,87 @@
               app: openvpn-ldap
           spec:
             containers:
-            - name: openvpn
-              image: kylemanna/openvpn:2.4
-              ports:
-              - containerPort: 1194
-                protocol: UDP
-              securityContext:
-                capabilities:
-                  add:
-                  - NET_ADMIN
-              volumeMounts:
-              - name: openvpn-data
-                mountPath: /etc/openvpn
-              - name: ldap-auth-config
-                mountPath: /etc/openvpn/auth
-              - name: ldap-tools
-                mountPath: /usr/local/bin/ldap-auth.sh
-                subPath: openvpn-ldap-script.sh
-              env:
-              - name: OVPN_DATA
-                value: "/etc/openvpn"
-              command:
-                - /bin/bash
-                - -c
-                - |
-                  set -e
+              - name: openvpn
+                image: kylemanna/openvpn:2.4
+                ports:
+                  - containerPort: 1194
+                    protocol: UDP
+                securityContext:
+                  capabilities:
+                    add:
+                      - NET_ADMIN
+                volumeMounts:
+                  - name: openvpn-data
+                    mountPath: /etc/openvpn
+                  - name: ldap-auth-config
+                    mountPath: /etc/openvpn/auth
+                  - name: ldap-tools
+                    mountPath: /usr/local/bin/ldap-auth.sh
+                    subPath: openvpn-ldap-script.sh
+                env:
+                  - name: OVPN_DATA
+                    value: "/etc/openvpn"
+                command:
+                  - /bin/bash
+                  - -c
+                  - |
+                    set -e
 
-                  # Install LDAP client tools
-                  apt-get update && apt-get install -y ldap-utils
+                    # Install LDAP client tools
+                    apt-get update && apt-get install -y ldap-utils
 
-                  # Make auth script executable
-                  chmod +x /usr/local/bin/ldap-auth.sh
+                    # Make auth script executable
+                    chmod +x /usr/local/bin/ldap-auth.sh
 
-                  # Configure OpenVPN server with LDAP auth
-                  cat >> /etc/openvpn/server.conf << 'EOF'
+                    # Configure OpenVPN server with LDAP auth
+                    cat >> /etc/openvpn/server.conf << 'EOF'
 
-                  # LDAP Authentication
-                  plugin /usr/lib/openvpn/openvpn-auth-ldap.so /etc/openvpn/auth/auth-ldap.conf
+                    # LDAP Authentication
+                    plugin /usr/lib/openvpn/openvpn-auth-ldap.so /etc/openvpn/auth/auth-ldap.conf
 
-                  # Use script-based authentication as fallback
-                  auth-user-pass-verify /usr/local/bin/ldap-auth.sh via-env
-                  script-security 2
+                    # Use script-based authentication as fallback
+                    auth-user-pass-verify /usr/local/bin/ldap-auth.sh via-env
+                    script-security 2
 
-                  # Require username/password authentication
-                  client-cert-not-required
-                  username-as-common-name
+                    # Require username/password authentication
+                    client-cert-not-required
+                    username-as-common-name
 
-                  # User-specific configuration
-                  client-config-dir /etc/openvpn/ccd
+                    # User-specific configuration
+                    client-config-dir /etc/openvpn/ccd
 
-                  # Logging
-                  verb 4
-                  log-append /var/log/openvpn.log
+                    # Logging
+                    verb 4
+                    log-append /var/log/openvpn.log
 
-                  EOF
+                    EOF
 
-                  # Create client config directory
-                  mkdir -p /etc/openvpn/ccd
+                    # Create client config directory
+                    mkdir -p /etc/openvpn/ccd
 
-                  # Create log file
-                  touch /var/log/openvpn-auth.log
+                    # Create log file
+                    touch /var/log/openvpn-auth.log
 
-                  # Start OpenVPN
-                  exec openvpn --config /etc/openvpn/server.conf
-              resources:
-                limits:
-                  cpu: 200m
-                  memory: 256Mi
-                requests:
-                  cpu: 100m
-                  memory: 128Mi
+                    # Start OpenVPN
+                    exec openvpn --config /etc/openvpn/server.conf
+                resources:
+                  limits:
+                    cpu: 200m
+                    memory: 256Mi
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
             volumes:
-            - name: openvpn-data
-              persistentVolumeClaim:
-                claimName: openvpn-data
-            - name: ldap-auth-config
-              configMap:
-                name: openvpn-ldap-auth
-            - name: ldap-tools
-              configMap:
-                name: openvpn-ldap-auth
-                defaultMode: 0755
+              - name: openvpn-data
+                persistentVolumeClaim:
+                  claimName: openvpn-data
+              - name: ldap-auth-config
+                configMap:
+                  name: openvpn-ldap-auth
+              - name: ldap-tools
+                configMap:
+                  name: openvpn-ldap-auth
+                  defaultMode: 0755
   register: openvpn_ldap_deployment
 
 - name: Create OpenVPN service with LDAP auth
@@ -271,10 +271,10 @@
       spec:
         type: LoadBalancer
         ports:
-        - port: 1194
-          protocol: UDP
-          targetPort: 1194
-          name: openvpn
+          - port: 1194
+            protocol: UDP
+            targetPort: 1194
+            name: openvpn
         selector:
           app: openvpn-ldap
   register: openvpn_ldap_service

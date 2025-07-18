@@ -64,15 +64,15 @@
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - oauth2-proxy
-              topologyKey: kubernetes.io/hostname
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - oauth2-proxy
+                topologyKey: kubernetes.io/hostname
   register: oauth2_proxy_deployment
 
 - name: Wait for OAuth2 Proxy pods to be ready
@@ -150,20 +150,20 @@
           nginx.ingress.kubernetes.io/auth-response-headers: "x-auth-request-user,x-auth-request-email,x-auth-request-access-token"
       spec:
         tls:
-        - hosts:
-          - "{{ item.hostname }}"
-          secretName: "{{ item.name }}-tls"
+          - hosts:
+              - "{{ item.hostname }}"
+            secretName: "{{ item.name }}-tls"
         rules:
-        - host: "{{ item.hostname }}"
-          http:
-            paths:
-            - path: /
-              pathType: Prefix
-              backend:
-                service:
-                  name: "{{ item.service }}"
-                  port:
-                    number: "{{ item.port }}"
+          - host: "{{ item.hostname }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: "{{ item.service }}"
+                      port:
+                        number: "{{ item.port }}"
   loop:
     - name: nextcloud
       hostname: nextcloud.local

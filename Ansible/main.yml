@@ -134,12 +134,12 @@
         - name: Deploy firewall rules (UFW)
           include_role:
             name: ufw
-          tags: ['phase1', 'security', 'ufw']
+          tags: ["phase1", "security", "ufw"]
 
         - name: Deploy OpenVPN server
           include_role:
             name: openvpn
-          tags: ['phase1', 'security', 'openvpn']
+          tags: ["phase1", "security", "openvpn"]
 
         - name: Phase 1 success
           set_fact:
@@ -164,7 +164,7 @@
         - name: Deploy LDAP/Samba4 directory service
           include_role:
             name: ldap_samba4
-          tags: ['phase2', 'identity', 'ldap']
+          tags: ["phase2", "identity", "ldap"]
 
         - name: Wait for LDAP/Samba4 to be ready
           kubernetes.core.k8s_info:
@@ -182,7 +182,7 @@
         - name: Deploy Keycloak identity provider
           include_role:
             name: keycloak
-          tags: ['phase2', 'identity', 'keycloak']
+          tags: ["phase2", "identity", "keycloak"]
 
         - name: Wait for Keycloak to be ready
           kubernetes.core.k8s_info:
@@ -200,7 +200,7 @@
         - name: Configure OAuth2 Proxy
           include_role:
             name: oauth2_proxy
-          tags: ['phase2', 'identity', 'oauth2']
+          tags: ["phase2", "identity", "oauth2"]
 
         - name: Phase 2 success
           set_fact:
@@ -225,13 +225,13 @@
         - name: Deploy collaboration platforms (Nextcloud, Mattermost)
           include_role:
             name: collab_platforms
-          tags: ['phase3', 'collaboration', 'platforms']
+          tags: ["phase3", "collaboration", "platforms"]
           register: collab_deployment
 
         - name: Deploy GitLab for code collaboration
           include_role:
             name: gitlab
-          tags: ['phase3', 'collaboration', 'gitlab']
+          tags: ["phase3", "collaboration", "gitlab"]
           register: gitlab_deployment
 
         - name: Wait for parallel deployments to complete
@@ -267,19 +267,19 @@
         - name: Deploy Wazuh security monitoring
           include_role:
             name: wazuh
-          tags: ['phase4', 'security', 'wazuh']
+          tags: ["phase4", "security", "wazuh"]
           register: wazuh_deployment
 
         - name: Deploy OpenEDR endpoint detection
           include_role:
             name: openedr
-          tags: ['phase4', 'security', 'openedr']
+          tags: ["phase4", "security", "openedr"]
           register: openedr_deployment
 
         - name: Deploy monitoring stack (Prometheus, Grafana)
           include_role:
             name: monitoring
-          tags: ['phase4', 'monitoring', 'prometheus']
+          tags: ["phase4", "monitoring", "prometheus"]
           register: monitoring_deployment
 
         - name: Wait for parallel security/monitoring deployments
@@ -316,12 +316,12 @@
         - name: Configure OIDC federation between services
           include_role:
             name: federation
-          tags: ['phase5', 'federation', 'sso']
+          tags: ["phase5", "federation", "sso"]
 
         - name: Configure OpenVPN authentication with LDAP
           include_role:
             name: openvpn_auth
-          tags: ['phase5', 'vpn', 'auth']
+          tags: ["phase5", "vpn", "auth"]
 
         - name: Phase 5 success
           set_fact:
@@ -358,7 +358,7 @@
           uri:
             url: "https://{{ item }}/health"
             method: GET
-            status_code: [200, 302, 401]  # Some services redirect to login
+            status_code: [200, 302, 401] # Some services redirect to login
             timeout: 10
           loop: "{{ http_services }}"
           register: endpoint_checks
@@ -427,7 +427,7 @@
     - name: Run post-deployment validation
       include_tasks: ../Test/post_deploy_validate.yml
       when: run_validation | bool
-      tags: ['validation', 'testing']
+      tags: ["validation", "testing"]
 
     - name: Send deployment notification
       uri:

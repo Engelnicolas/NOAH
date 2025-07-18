@@ -153,7 +153,7 @@
     wait_condition:
       type: Ready
       status: "True"
-    wait_timeout: 900  # GitLab takes longer to start
+    wait_timeout: 900 # GitLab takes longer to start
   register: gitlab_pods
 
 - name: Wait for GitLab Runner pods to be ready
@@ -183,7 +183,7 @@
       signup_enabled: false
       require_two_factor_authentication: false
       ldap_enabled: true
-    status_code: [200, 401]  # 401 if no admin token
+    status_code: [200, 401] # 401 if no admin token
   register: gitlab_ldap_config
   failed_when: false
 

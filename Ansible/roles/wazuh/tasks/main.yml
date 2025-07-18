@@ -191,67 +191,67 @@
             hostNetwork: true
             hostPID: true
             containers:
-            - name: wazuh-agent
-              image: wazuh/wazuh-agent:4.7.0
-              env:
-              - name: WAZUH_MANAGER
-                value: "wazuh-manager.{{ namespace }}.svc.cluster.local"
-              - name: WAZUH_REGISTRATION_SERVER
-                value: "wazuh-manager.{{ namespace }}.svc.cluster.local"
-              - name: WAZUH_REGISTRATION_PORT
-                value: "1515"
-              - name: WAZUH_REGISTRATION_PASSWORD
-                value: "{{ wazuh_authd_password | default('changeme123') }}"
-              - name: WAZUH_AGENT_GROUP
-                value: "kubernetes"
-              - name: WAZUH_AGENT_NAME
-                valueFrom:
-                  fieldRef:
-                    fieldPath: spec.nodeName
-              securityContext:
-                privileged: true
-              volumeMounts:
-              - name: proc
-                mountPath: /host/proc
-                readOnly: true
-              - name: sys
-                mountPath: /host/sys
-                readOnly: true
-              - name: root
-                mountPath: /host/root
-                readOnly: true
-              - name: etc
-                mountPath: /host/etc
-                readOnly: true
-              - name: var-log
-                mountPath: /host/var/log
-                readOnly: true
-              resources:
-                limits:
-                  cpu: 200m
-                  memory: 256Mi
-                requests:
-                  cpu: 100m
-                  memory: 128Mi
+              - name: wazuh-agent
+                image: wazuh/wazuh-agent:4.7.0
+                env:
+                  - name: WAZUH_MANAGER
+                    value: "wazuh-manager.{{ namespace }}.svc.cluster.local"
+                  - name: WAZUH_REGISTRATION_SERVER
+                    value: "wazuh-manager.{{ namespace }}.svc.cluster.local"
+                  - name: WAZUH_REGISTRATION_PORT
+                    value: "1515"
+                  - name: WAZUH_REGISTRATION_PASSWORD
+                    value: "{{ wazuh_authd_password | default('changeme123') }}"
+                  - name: WAZUH_AGENT_GROUP
+                    value: "kubernetes"
+                  - name: WAZUH_AGENT_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: spec.nodeName
+                securityContext:
+                  privileged: true
+                volumeMounts:
+                  - name: proc
+                    mountPath: /host/proc
+                    readOnly: true
+                  - name: sys
+                    mountPath: /host/sys
+                    readOnly: true
+                  - name: root
+                    mountPath: /host/root
+                    readOnly: true
+                  - name: etc
+                    mountPath: /host/etc
+                    readOnly: true
+                  - name: var-log
+                    mountPath: /host/var/log
+                    readOnly: true
+                resources:
+                  limits:
+                    cpu: 200m
+                    memory: 256Mi
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
             volumes:
-            - name: proc
-              hostPath:
-                path: /proc
-            - name: sys
-              hostPath:
-                path: /sys
-            - name: root
-              hostPath:
-                path: /
-            - name: etc
-              hostPath:
-                path: /etc
-            - name: var-log
-              hostPath:
-                path: /var/log
+              - name: proc
+                hostPath:
+                  path: /proc
+              - name: sys
+                hostPath:
+                  path: /sys
+              - name: root
+                hostPath:
+                  path: /
+              - name: etc
+                hostPath:
+                  path: /etc
+              - name: var-log
+                hostPath:
+                  path: /var/log
             tolerations:
-            - operator: Exists
-              effect: NoSchedule
+              - operator: Exists
+                effect: NoSchedule
   register: wazuh_agent_deployment
 
 - name: Create Wazuh custom rules ConfigMap
@@ -390,7 +390,7 @@
     url: "https://{{ wazuh_manager_pods.resources[0].status.podIP }}:55000"
     method: GET
     validate_certs: false
-    status_code: [200, 401]  # 401 is expected without auth
+    status_code: [200, 401] # 401 is expected without auth
   register: wazuh_manager_health
   until: wazuh_manager_health.status in [200, 401]
   retries: 15
@@ -400,7 +400,7 @@
   uri:
     url: "http://{{ wazuh_dashboard_pods.resources[0].status.podIP }}:5601/app/wz-home"
     method: GET
-    status_code: [200, 302]  # 302 redirect is acceptable
+    status_code: [200, 302] # 302 redirect is acceptable
   register: wazuh_dashboard_health
   until: wazuh_dashboard_health.status in [200, 302]
   retries: 15

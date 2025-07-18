@@ -60,6 +60,9 @@ declare -A SCRIPT_COMMANDS=(
     ["infra"]="noah-deploy.py:python3:Infrastructure management (setup, deploy, status, teardown)"
     ["monitoring"]="noah-monitoring.py:python3:Monitoring stack management (Prometheus, Grafana)"
     ["linting"]="noah-linter.py:python3:Linting validation and setup for code quality"
+    ["deps"]="noah-deps-manager:python3:Dependencies management and security checks"
+    ["setup"]="noah-setup:python3:Quick setup and environment initialization"
+    ["requirements"]="noah-tech-requirements:python3:Technical requirements validation"
 )
 
 # =============================================================================
@@ -99,6 +102,98 @@ EOF
 }
 
 # =============================================================================
+# ROOT PRIVILEGES MANAGEMENT
+# =============================================================================
+
+# Check if running as root and request elevation if needed
+check_root_privileges() {
+    local command="$1"
+
+    # Commands that require root privileges
+    declare -a root_commands=("infra" "monitoring" "deps" "setup")
+
+    # Check if current command requires root
+    local requires_root=false
+    for cmd in "${root_commands[@]}"; do
+        if [[ "$command" == "$cmd" ]]; then
+            requires_root=true
+            break
+        fi
+    done
+
+    # If command doesn't require root, continue normally
+    if [[ "$requires_root" == "false" ]]; then
+        return 0
+    fi
+
+    # Check if already running as root
+    if [[ $EUID -eq 0 ]]; then
+        print_success "Running with root privileges ✓"
+        return 0
+    fi
+
+    # Request root privileges
+    print_warning "La commande '$command' nécessite des privilèges root"
+    print_info "Les opérations suivantes nécessitent des privilèges administrateur :"
+    print_info "  • Installation de packages système"
+    print_info "  • Configuration de services réseau"
+    print_info "  • Gestion des conteneurs Docker/Kubernetes"
+    print_info "  • Modification des configurations système"
+    echo ""
+
+    # Prompt user for confirmation
+    echo -e "${YELLOW}Voulez-vous continuer avec sudo ? [y/N]${NC}"
+    read -r response
+
+    case "$response" in
+        [yY]|[yY][eE][sS]|[oO]|[oO][uU][iI])
+            print_info "Relancement avec sudo..."
+            # Re-execute the entire script with sudo
+            exec sudo bash "$0" "$command" "$@"
+            ;;
+        *)
+            print_error "Opération annulée par l'utilisateur"
+            print_info "Pour exécuter sans interaction, utilisez :"
+            print_info "  sudo ./noah $command"
+            exit 1
+            ;;
+    esac
+}
+
+# Alternative function for non-interactive environments
+ensure_root_privileges() {
+    local command="$1"
+
+    # Commands that require root privileges
+    declare -a root_commands=("infra" "monitoring" "deps" "setup")
+
+    # Check if current command requires root
+    local requires_root=false
+    for cmd in "${root_commands[@]}"; do
+        if [[ "$command" == "$cmd" ]]; then
+            requires_root=true
+            break
+        fi
+    done
+
+    # If command doesn't require root, continue normally
+    if [[ "$requires_root" == "false" ]]; then
+        return 0
+    fi
+
+    # Check if running as root
+    if [[ $EUID -ne 0 ]]; then
+        print_error "Cette commande doit être exécutée en tant que root"
+        print_error "Utilisez: sudo ./noah $command"
+        print_info ""
+        print_info "Commandes nécessitant root: ${root_commands[*]}"
+        exit 1
+    fi
+
+    print_success "Privilèges root confirmés ✓"
+}
+
+# =============================================================================
 # HELP SYSTEM
 # =============================================================================
 
@@ -116,31 +211,67 @@ show_help() {
     # Infrastructure Management
     echo -e "${PURPLE}📦 Infrastructure Management:${NC}"
     echo -e "  ${GREEN}infra${NC}          Infrastructure lifecycle management"
-    echo "                   • setup    - Initialize infrastructure prerequisites"
-    echo "                   • deploy   - Deploy complete NOAH stack with Helm charts"
-    echo "                   • status   - Check infrastructure deployment status"
-    echo "                   • teardown - Clean removal of all infrastructure"
+    echo "                   Options:"
+    echo "                   • --namespace NAME    - Kubernetes namespace (default: noah)"
+    echo "                   • --timeout TIME      - Helm deployment timeout (default: 600s)"
+    echo "                   • --dry-run           - Show what would be deployed"
+    echo "                   • --priority-only     - Deploy only priority infrastructure"
+    echo "                   • --list-charts       - List all available charts"
+    echo "                   • --verbose, -v       - Enable verbose output"
     echo ""
 
     # Monitoring & Observability
     echo -e "${PURPLE}📊 Monitoring & Observability:${NC}"
     echo -e "  ${GREEN}monitoring${NC}     Monitoring stack operations"
-    echo "                   • deploy   - Deploy Prometheus + Grafana stack"
-    echo "                   • status   - Check monitoring stack health"
-    echo "                   • teardown - Remove monitoring infrastructure"
+    echo "                   Actions: deploy, status, teardown"
+    echo "                   Options:"
+    echo "                   • -e ENV              - Environment (dev, staging, prod)"
+    echo "                   • -n NAMESPACE        - Kubernetes namespace (default: noah-monitoring)"
+    echo "                   • --dry-run           - Show what would be done"
+    echo "                   • --save-report       - Save status report to file"
+    echo "                   • -v, --verbose       - Enable verbose output"
     echo ""
 
     # Code Quality & Validation
     echo -e "${PURPLE}🔍 Code Quality & Validation:${NC}"
     echo -e "  ${GREEN}fix${NC}            Automated issue resolution"
-    echo "                   • yaml     - Fix YAML formatting issues"
-    echo "                   • shell    - Fix shell script issues"
-    echo "                   • all      - Fix all detectable issues"
+    echo "                   Options:"
+    echo "                   • -t TYPES            - File types: yaml, shell, mkdocs"
+    echo "                   • -v, --verbose       - Enable verbose output"
+    echo "                   • -n, --dry-run       - Show what would be fixed"
+    echo "                   • file                - Specific file to fix"
     echo ""
     echo -e "  ${GREEN}linting${NC}        Code linting and style checking"
-    echo "                   • setup    - Setup linting environment"
-    echo "                   • lint     - Run comprehensive linting"
-    echo "                   • report   - Generate linting report"
+    echo "                   Actions: setup, lint, precommit, report, help"
+    echo "                   Options:"
+    echo "                   • --all               - Run on all files"
+    echo "                   • --hook-id ID        - Specific pre-commit hook"
+    echo "                   • --save              - Save report to file"
+    echo "                   • -v, --verbose       - Enable verbose output"
+    echo ""
+
+    # Dependencies & Setup
+    echo -e "${PURPLE}🔧 Dependencies & Setup:${NC}"
+    echo -e "  ${GREEN}deps${NC}           Dependencies management and security"
+    echo "                   Options:"
+    echo "                   • --auto-install     - Auto-check and install missing dependencies"
+    echo "                   • --upgrade           - Upgrade all dependencies"
+    echo "                   • --check-security    - Check for security vulnerabilities"
+    echo "                   • --report            - Generate dependency report"
+    echo "                   • --cleanup           - Clean up unused dependencies"
+    echo "                   • -v, --verbose       - Enable verbose output"
+    echo ""
+    echo -e "  ${GREEN}setup${NC}          Quick setup and environment initialization"
+    echo "                   Options:"
+    echo "                   • --profile PROFILE   - Deployment profile (minimal, root)"
+    echo "                   • --dev               - Include development dependencies"
+    echo "                   • --deps-only         - Only install dependencies"
+    echo "                   • --check-only        - Only run validation checks"
+    echo "                   • -v, --verbose       - Enable verbose output"
+    echo ""
+    echo -e "  ${GREEN}requirements${NC}   Technical requirements validation"
+    echo "                   Options:"
+    echo "                   • --profile PROFILE   - Deployment profile (minimal, root)"
     echo ""
 
     echo -e "${YELLOW}SCRIPT EXECUTION DETAILS:${NC}"
@@ -157,15 +288,53 @@ show_help() {
     done
 
     echo -e "${YELLOW}EXAMPLES:${NC}"
-    echo "    ./noah infra deploy              # Deploy infrastructure"
-    echo "    ./noah monitoring status         # Check monitoring health"
-    echo "    ./noah fix --verbose            # Fix issues with details"
-    echo "    ./noah linting setup            # Setup linting tools"
+    echo ""
+    echo -e "${BLUE}Infrastructure Management:${NC}"
+    echo "    ./noah infra --list-charts           # List all available Helm charts"
+    echo "    ./noah infra --dry-run               # See what would be deployed"
+    echo "    ./noah infra --priority-only         # Deploy only priority infrastructure"
+    echo "    ./noah infra --namespace mynoah      # Deploy to custom namespace"
+    echo "    ./noah infra --timeout 900s          # Use custom timeout"
+    echo ""
+    echo -e "${BLUE}Monitoring Operations:${NC}"
+    echo "    ./noah monitoring deploy             # Deploy monitoring stack"
+    echo "    ./noah monitoring status             # Check monitoring health"
+    echo "    ./noah monitoring teardown           # Remove monitoring infrastructure"
+    echo "    ./noah monitoring status --save-report  # Save status to file"
+    echo "    ./noah monitoring deploy -e prod     # Deploy for production"
+    echo ""
+    echo -e "${BLUE}Code Quality & Fixes:${NC}"
+    echo "    ./noah fix --verbose                 # Fix issues with detailed output"
+    echo "    ./noah fix -t yaml                   # Fix only YAML files"
+    echo "    ./noah fix --dry-run                 # Preview fixes without applying"
+    echo "    ./noah fix myfile.yml                # Fix specific file"
+    echo ""
+    echo -e "${BLUE}Linting Operations:${NC}"
+    echo "    ./noah linting setup                 # Setup linting environment"
+    echo "    ./noah linting lint                  # Run linting on changed files"
+    echo "    ./noah linting lint --all            # Run linting on all files"
+    echo "    ./noah linting report --save         # Generate and save linting report"
+    echo "    ./noah linting precommit             # Run pre-commit hooks"
+    echo ""
+    echo -e "${BLUE}Dependencies & Setup:${NC}"
+    echo "    ./noah deps --auto-install           # Auto-install missing dependencies"
+    echo "    ./noah deps --upgrade                # Upgrade all dependencies"
+    echo "    ./noah deps --check-security         # Check for security vulnerabilities"
+    echo "    ./noah deps --report                 # Generate dependency report"
+    echo "    ./noah setup --profile root          # Setup for root deployment"
+    echo "    ./noah setup --dev                   # Include development dependencies"
+    echo "    ./noah requirements --profile minimal  # Validate minimal requirements"
     echo ""
     echo -e "${YELLOW}GLOBAL OPTIONS:${NC}"
     echo "    -v, --verbose     Enable verbose output"
     echo "    -h, --help       Show this help message"
     echo "    --version        Show version information"
+    echo "    --force-root     Force non-interactive root privilege check"
+    echo ""
+    echo -e "${YELLOW}ROOT PRIVILEGES:${NC}"
+    echo "    Some commands (infra, monitoring, deps, setup) require root privileges."
+    echo "    The script will automatically prompt for sudo when needed."
+    echo "    Use --force-root for non-interactive environments."
     echo ""
     echo -e "${YELLOW}For command-specific help, run:${NC}"
     echo "    ./noah COMMAND --help"
@@ -254,6 +423,11 @@ route_command() {
         return 1
     fi
 
+    # Check root privileges if needed for this command (skip for --help)
+    if [[ "$1" != "--help" && "$1" != "-h" ]]; then
+        check_root_privileges "$command" "$@"
+    fi
+
     # Parse command information
     IFS=':' read -r script_path execution_method description <<< "${SCRIPT_COMMANDS[$command]}"
 
@@ -287,6 +461,9 @@ main() {
         exit 0
     fi
 
+    # Global flags
+    local force_root_check=false
+
     # Parse global options
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -299,6 +476,11 @@ main() {
                 echo "Script: $SCRIPT_NAME"
                 echo "Description: $SCRIPT_DESCRIPTION"
                 exit 0
+                ;;
+            --force-root)
+                force_root_check=true
+                shift
+                continue
                 ;;
             -*)
                 print_error "Unknown global option: $1"
@@ -316,6 +498,11 @@ main() {
     # Get command
     local command="$1"
     shift
+
+    # Use non-interactive root check if --force-root is specified
+    if [[ "$force_root_check" == "true" ]]; then
+        ensure_root_privileges "$command"
+    fi
 
     # Route to appropriate script
     if ! route_command "$command" "$@"; then

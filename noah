@@ -54,6 +54,108 @@ cd "$SCRIPT_DIR" || {
 }
 
 # =============================================================================
+# ÉTAPE 0: VÉRIFICATION DES PRÉREQUIS SYSTÈME
+# =============================================================================
+step "Vérification des prérequis système..."
+
+check_system_prerequisites() {
+    # Détecter le système d'exploitation
+    if [[ -f /etc/os-release ]]; then
+        source /etc/os-release
+        OS_ID="$ID"
+        OS_VERSION="$VERSION_ID"
+        info "Système détecté: $PRETTY_NAME"
+    else
+        warning "Impossible de détecter le système d'exploitation"
+        return 0
+    fi
+    
+    # Vérifications spécifiques à Ubuntu/Debian
+    if [[ "$OS_ID" == "ubuntu" ]] || [[ "$OS_ID" == "debian" ]]; then
+        step "Vérification des packages Python pour Ubuntu/Debian..."
+        
+        # Vérifier si python3-venv est installé
+        if ! dpkg -l python3-venv >/dev/null 2>&1; then
+            warning "Le package python3-venv n'est pas installé"
+            info "Installation automatique de python3-venv..."
+            
+            # Vérifier les privilèges sudo de manière interactive
+            if sudo -v 2>/dev/null; then
+                info "Privilèges sudo confirmés"
+                
+                # Installer python3-venv et la version spécifique si nécessaire
+                python_version=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
+                if sudo apt update && sudo apt install -y python3-full python3-venv python${python_version}-venv; then
+                    success "python3-venv installé avec succès"
+                else
+                    error "Échec de l'installation de python3-venv"
+                    error "Veuillez installer manuellement: sudo apt install python3-full python3-venv python${python_version}-venv"
+                    exit 1
+                fi
+            else
+                error "Privilèges sudo requis pour installer python3-venv"
+                python_version=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
+                echo -e "${YELLOW}Veuillez exécuter les commandes suivantes manuellement:${NC}"
+                echo "  sudo apt update"
+                echo "  sudo apt install -y python3-full python3-venv python${python_version}-venv"
+                echo "Puis relancez ce script."
+                exit 1
+            fi
+        else
+            success "python3-venv est déjà installé"
+            
+            # Vérifier si la version spécifique de python3-venv est installée
+            python_version=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
+            if ! dpkg -l python${python_version}-venv >/dev/null 2>&1; then
+                warning "Le package python${python_version}-venv n'est pas installé"
+                info "Installation de python${python_version}-venv..."
+                
+                if sudo apt install -y python${python_version}-venv; then
+                    success "python${python_version}-venv installé avec succès"
+                else
+                    warning "Échec de l'installation de python${python_version}-venv"
+                    warning "Tentative de création de l'environnement virtuel quand même..."
+                fi
+            else
+                success "python${python_version}-venv est déjà installé"
+            fi
+        fi
+        
+        # Vérifier si python3-pip est installé
+        if ! dpkg -l python3-pip >/dev/null 2>&1; then
+            warning "Le package python3-pip n'est pas installé"
+            info "Installation automatique de python3-pip..."
+            
+            if sudo apt install -y python3-pip; then
+                success "python3-pip installé avec succès"
+            else
+                warning "Échec de l'installation de python3-pip"
+                warning "Certaines fonctionnalités pourraient ne pas fonctionner"
+                info "Vous pouvez l'installer manuellement: sudo apt install python3-pip"
+            fi
+        else
+            success "python3-pip est déjà installé"
+        fi
+    fi
+    
+    # Vérifications générales pour tous les systèmes
+    if ! command -v python3 &> /dev/null; then
+        error "Python3 n'est pas installé ou non disponible dans le PATH"
+        if [[ "$OS_ID" == "ubuntu" ]] || [[ "$OS_ID" == "debian" ]]; then
+            error "Veuillez installer Python3: sudo apt install python3"
+        else
+            error "Veuillez installer Python3 selon votre distribution"
+        fi
+        exit 1
+    else
+        python_version=$(python3 --version | cut -d' ' -f2)
+        success "Python3 disponible: version $python_version"
+    fi
+}
+
+check_system_prerequisites
+
+# =============================================================================
 # ÉTAPE 1: VÉRIFICATION ET CONFIGURATION DE L'ENVIRONNEMENT VIRTUEL
 # =============================================================================
 step "Vérification de l'environnement virtuel Python..."
@@ -74,7 +176,8 @@ check_and_setup_venv() {
         # Créer l'environnement virtuel
         if ! python3 -m venv venv; then
             error "Échec de la création de l'environnement virtuel"
-            error "Vérifiez que python3-venv est installé: sudo apt install python3-full python3-venv"
+            error "Le module python3-venv devrait être installé mais la création a échoué"
+            error "Vérifiez les permissions et l'espace disque disponible"
             exit 1
         fi
         

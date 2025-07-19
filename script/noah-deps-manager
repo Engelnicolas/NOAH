@@ -41,6 +41,8 @@ class DependencyManager:
         self.verbose = verbose
         self.script_dir = Path(__file__).parent
         self.requirements_file = self.script_dir / "requirements.txt"
+        self.retry_attempts = 0  # Track retry attempts to prevent infinite loops
+        self.max_retry_attempts = 3  # Maximum number of retry attempts
 
     def print_banner(self):
         print(f"{Colors.CYAN}{Colors.BOLD}")
@@ -53,6 +55,10 @@ class DependencyManager:
         print(f"{Colors.END}")
         print(f"{Colors.BOLD}NOAH Dependencies Manager{Colors.END}")
         print("=" * 50)
+
+    def reset_retry_counter(self):
+        """Reset the retry attempt counter for fresh installations."""
+        self.retry_attempts = 0
 
     def log(self, message: str, level: str = "INFO"):
         colors = {
@@ -135,7 +141,11 @@ class DependencyManager:
 
     def auto_install_missing_dependencies(self) -> bool:
         """Automatically check and install missing dependencies with retry mechanism."""
-        self.log("🔍 Checking for missing dependencies...")
+        # Reset retry attempts for fresh auto-install calls
+        if self.retry_attempts == 0:
+            self.log("🔍 Checking for missing dependencies...")
+        else:
+            self.log(f"🔍 Retry check for missing dependencies (attempt {self.retry_attempts}/{self.max_retry_attempts})...")
 
         if not self.requirements_file.exists():
             self.log(f"Requirements file not found: {self.requirements_file}", "ERROR")
@@ -176,7 +186,31 @@ class DependencyManager:
                 self.log(
                     f"📦 Installing {len(missing_modules)} missing dependencies..."
                 )
-                return self._install_missing_modules_with_retry(missing_modules)
+                install_success = self._install_missing_modules_with_retry(missing_modules)
+                
+                # Final comprehensive check after installation
+                if install_success:
+                    self.log("🔍 Performing final verification of all dependencies...")
+                    final_check_success = self._perform_final_dependency_check(requirements)
+                    
+                    if not final_check_success:
+                        if self.retry_attempts < self.max_retry_attempts:
+                            self.log(f"⚠️ Final verification detected issues. Attempting full retry ({self.retry_attempts + 1}/{self.max_retry_attempts})...", "WARNING")
+                            self.retry_attempts += 1
+                            return self._retry_auto_install()
+                        else:
+                            self.log(f"❌ Maximum retry attempts ({self.max_retry_attempts}) reached. Stopping to prevent infinite loops.", "ERROR")
+                            return False
+                    
+                    return True
+                else:
+                    if self.retry_attempts < self.max_retry_attempts:
+                        self.log(f"❌ Installation failed. Attempting full retry ({self.retry_attempts + 1}/{self.max_retry_attempts})...", "ERROR")
+                        self.retry_attempts += 1
+                        return self._retry_auto_install()
+                    else:
+                        self.log(f"❌ Maximum retry attempts ({self.max_retry_attempts}) reached. Stopping to prevent infinite loops.", "ERROR")
+                        return False
             else:
                 self.log("✅ All dependencies are already installed", "SUCCESS")
                 return True
@@ -214,6 +248,8 @@ class DependencyManager:
             "memory-profiler": "memory_profiler",
             "pytest-cov": "pytest_cov",
             "pytest-mock": "pytest_mock",
+            "ansible-core": "ansible",  # ansible-core imports as 'ansible'
+            "python-dotenv": "dotenv",  # python-dotenv imports as 'dotenv'
         }
         return mapping.get(package_name.lower(), package_name.replace("-", "_"))
 
@@ -262,9 +298,212 @@ class DependencyManager:
 
         if failed_modules:
             self.log(f"❌ Failed modules: {', '.join(failed_modules)}", "ERROR")
-            return False
+            
+            # Attempt automatic retry with --auto-install if there are errors
+            self.log("🔄 Attempting automatic retry with enhanced installation method...", "WARNING")
+            retry_success = self._retry_failed_installations(failed_modules)
+            
+            if retry_success:
+                self.log("✅ Retry installation completed successfully", "SUCCESS")
+                return True
+            else:
+                self.log("❌ Retry installation failed. Manual intervention may be required.", "ERROR")
+                return False
         else:
             self.log("✅ All missing dependencies installed successfully", "SUCCESS")
+            return True
+
+    def _retry_failed_installations(self, failed_modules: list) -> bool:
+        """Retry failed installations using alternative methods."""
+        self.log(f"🔄 Retrying installation for {len(failed_modules)} failed modules...")
+        
+        success_count = 0
+        final_failed = []
+        
+        for module in failed_modules:
+            self.log(f"🔄 Retrying {module} with enhanced method...")
+            
+            # Try different installation strategies
+            strategies = [
+                # Strategy 1: Install with no-cache and force-reinstall
+                [sys.executable, "-m", "pip", "install", "--no-cache-dir", "--force-reinstall", module],
+                # Strategy 2: Install with user flag (if not in virtual env)
+                [sys.executable, "-m", "pip", "install", "--user", module] if not hasattr(sys, 'real_prefix') and not sys.base_prefix != sys.prefix else None,
+                # Strategy 3: Install with no-deps first, then install deps
+                [sys.executable, "-m", "pip", "install", "--no-deps", module],
+                # Strategy 4: Try with different index
+                [sys.executable, "-m", "pip", "install", "-i", "https://pypi.org/simple/", module]
+            ]
+            
+            # Filter out None strategies
+            strategies = [s for s in strategies if s is not None]
+            
+            module_installed = False
+            for i, strategy in enumerate(strategies, 1):
+                try:
+                    self.log(f"  Strategy {i}/{len(strategies)}: {' '.join(strategy[3:])}")
+                    success, output = self.run_command(strategy)
+                    
+                    if success:
+                        # Verify the module is actually importable
+                        if self._is_module_installed(module):
+                            self.log(f"✅ {module} successfully installed with strategy {i}", "SUCCESS")
+                            success_count += 1
+                            module_installed = True
+                            break
+                        else:
+                            self.log(f"⚠️ {module} installed but not importable, trying next strategy...", "WARNING")
+                    else:
+                        self.log(f"⚠️ Strategy {i} failed for {module}: {output[:100]}...", "WARNING")
+                        
+                except Exception as e:
+                    self.log(f"⚠️ Strategy {i} error for {module}: {str(e)[:100]}...", "WARNING")
+            
+            if not module_installed:
+                final_failed.append(module)
+                self.log(f"❌ All strategies failed for {module}", "ERROR")
+        
+        # Final retry report
+        self.log(f"🔄 Retry summary: {success_count}/{len(failed_modules)} recovered")
+        
+        if final_failed:
+            self.log(f"❌ Still failed after retry: {', '.join(final_failed)}", "ERROR")
+            self.log("💡 Manual troubleshooting suggestions:", "INFO")
+            for module in final_failed:
+                self.log(f"  - Try: python -m pip install --upgrade --force-reinstall {module}", "INFO")
+                self.log(f"  - Check if {module} has system dependencies that need to be installed", "INFO")
+            return False
+        else:
+            self.log("✅ All previously failed modules have been successfully installed", "SUCCESS")
+            return True
+
+    def _perform_final_dependency_check(self, requirements: list) -> bool:
+        """Perform a final comprehensive check of all dependencies."""
+        self.log("🔍 Final dependency verification...")
+        
+        missing_after_install = []
+        total_checked = 0
+        
+        for package_name, requirement_line in requirements:
+            total_checked += 1
+            if not self._is_module_installed(package_name):
+                missing_after_install.append(package_name)
+                self.log(f"❌ {package_name} still missing after installation", "ERROR")
+            elif self.verbose:
+                self.log(f"✅ {package_name} verified", "SUCCESS")
+        
+        if missing_after_install:
+            self.log(f"❌ Final check failed: {len(missing_after_install)}/{total_checked} dependencies still missing", "ERROR")
+            self.log(f"Missing modules: {', '.join(missing_after_install)}", "ERROR")
+            return False
+        else:
+            self.log(f"✅ Final check passed: All {total_checked} dependencies verified", "SUCCESS")
+            return True
+    
+    def _retry_auto_install(self) -> bool:
+        """Retry the entire auto-install process once more with safeguards."""
+        self.log(f"🔄 Attempting complete retry of dependency installation (attempt {self.retry_attempts}/{self.max_retry_attempts})...", "WARNING")
+        
+        # Prevent infinite recursion by using a direct installation approach instead of subprocess
+        if self.retry_attempts >= self.max_retry_attempts:
+            self.log(f"❌ Maximum retry attempts ({self.max_retry_attempts}) reached. Aborting retry.", "ERROR")
+            return False
+        
+        try:
+            # Direct retry approach - re-parse requirements and install missing ones
+            self.log("🔄 Re-checking and installing dependencies directly...")
+            
+            if not self.requirements_file.exists():
+                self.log(f"Requirements file not found: {self.requirements_file}", "ERROR")
+                return False
+
+            # Parse requirements file again
+            missing_modules = []
+            with open(self.requirements_file, "r", encoding="utf-8") as f:
+                requirements = []
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        package_name = self._extract_package_name(line)
+                        if package_name:
+                            requirements.append((package_name, line))
+
+            # Check which modules are still missing
+            for package_name, requirement_line in requirements:
+                if not self._is_module_installed(package_name):
+                    missing_modules.append((package_name, requirement_line))
+
+            self.log(f"🔄 Retry found {len(missing_modules)} still missing dependencies")
+            
+            if missing_modules:
+                # Use enhanced installation strategies directly
+                return self._install_missing_modules_with_enhanced_strategies(missing_modules)
+            else:
+                self.log("✅ All dependencies are now installed after retry", "SUCCESS")
+                return True
+                
+        except Exception as e:
+            self.log(f"❌ Exception during retry auto-install: {e}", "ERROR")
+            return False
+
+    def _install_missing_modules_with_enhanced_strategies(self, missing_modules: list) -> bool:
+        """Install missing modules using enhanced strategies for retry scenarios."""
+        self.log(f"🔄 Installing {len(missing_modules)} missing modules with enhanced strategies...")
+        
+        success_count = 0
+        failed_modules = []
+        
+        for i, (package_name, requirement_line) in enumerate(missing_modules, 1):
+            self.log(f"[{i}/{len(missing_modules)}] Enhanced install: {package_name}...")
+            
+            # Enhanced strategies for retry scenario
+            strategies = [
+                # Strategy 1: Force reinstall with no cache
+                [sys.executable, "-m", "pip", "install", "--no-cache-dir", "--force-reinstall", requirement_line],
+                # Strategy 2: Install with no dependencies first
+                [sys.executable, "-m", "pip", "install", "--no-deps", "--force-reinstall", package_name],
+                # Strategy 3: Try with different index
+                [sys.executable, "-m", "pip", "install", "-i", "https://pypi.org/simple/", "--no-cache-dir", requirement_line],
+                # Strategy 4: Basic install as fallback
+                [sys.executable, "-m", "pip", "install", requirement_line]
+            ]
+            
+            module_installed = False
+            for strategy_num, strategy in enumerate(strategies, 1):
+                try:
+                    self.log(f"  Enhanced strategy {strategy_num}/{len(strategies)}: {' '.join(strategy[3:])}")
+                    success, output = self.run_command(strategy)
+                    
+                    if success:
+                        # Verify the module is actually importable
+                        if self._is_module_installed(package_name):
+                            self.log(f"✅ {package_name} successfully installed with enhanced strategy {strategy_num}", "SUCCESS")
+                            success_count += 1
+                            module_installed = True
+                            break
+                        else:
+                            self.log(f"⚠️ {package_name} installed but not importable, trying next strategy...", "WARNING")
+                    else:
+                        self.log(f"⚠️ Enhanced strategy {strategy_num} failed: {output[:100]}...", "WARNING")
+                        
+                except Exception as e:
+                    self.log(f"⚠️ Enhanced strategy {strategy_num} error: {str(e)[:100]}...", "WARNING")
+            
+            if not module_installed:
+                failed_modules.append(package_name)
+                self.log(f"❌ All enhanced strategies failed for {package_name}", "ERROR")
+        
+        # Enhanced installation summary
+        self.log(f"🔄 Enhanced installation summary: {success_count}/{len(missing_modules)} successful")
+        
+        if failed_modules:
+            self.log(f"❌ Still failed after enhanced installation: {', '.join(failed_modules)}", "ERROR")
+            self.log("💡 Manual intervention required for remaining modules:", "INFO")
+            for module in failed_modules:
+                self.log(f"  - Try manually: python -m pip install --upgrade --force-reinstall {module}", "INFO")
+            return False
+        else:
+            self.log("✅ All modules successfully installed with enhanced strategies", "SUCCESS")
             return True
 
     def install_dependencies(
@@ -446,6 +685,250 @@ class DependencyManager:
 
         return True
 
+    def update_requirements_versions(self, auto_update: bool = False) -> bool:
+        """Update package versions in requirements.txt to latest available versions."""
+        self.log("🔄 Checking for package version updates...")
+        
+        if not self.requirements_file.exists():
+            self.log(f"Requirements file not found: {self.requirements_file}", "ERROR")
+            return False
+        
+        try:
+            # Read current requirements file
+            with open(self.requirements_file, "r", encoding="utf-8") as f:
+                original_lines = f.readlines()
+            
+            # Parse requirements and get outdated packages
+            outdated_packages = self.check_outdated_packages()
+            if not outdated_packages:
+                self.log("✅ All packages are already up to date", "SUCCESS")
+                return True
+            
+            # Create mapping of package name to latest version
+            outdated_map = {pkg["name"].lower(): pkg["latest_version"] for pkg in outdated_packages}
+            
+            self.log(f"📦 Found {len(outdated_packages)} packages with available updates")
+            
+            # Process each line in requirements.txt
+            updated_lines = []
+            updates_made = []
+            
+            for line_num, line in enumerate(original_lines, 1):
+                original_line = line
+                stripped_line = line.strip()
+                
+                # Skip comments and empty lines
+                if not stripped_line or stripped_line.startswith("#"):
+                    updated_lines.append(original_line)
+                    continue
+                
+                # Extract package name and current version spec
+                package_name = self._extract_package_name(stripped_line)
+                if not package_name:
+                    updated_lines.append(original_line)
+                    continue
+                
+                # Check if this package has an update available
+                package_key = package_name.lower()
+                if package_key in outdated_map:
+                    latest_version = outdated_map[package_key]
+                    
+                    # Update the version in the line
+                    updated_line = self._update_version_in_line(stripped_line, package_name, latest_version)
+                    
+                    if updated_line != stripped_line:
+                        # Preserve original line formatting (indentation, line ending)
+                        indent = len(line) - len(line.lstrip())
+                        line_ending = line[len(line.rstrip()):]
+                        updated_lines.append(" " * indent + updated_line + line_ending)
+                        
+                        updates_made.append({
+                            "package": package_name,
+                            "line": line_num,
+                            "old": stripped_line,
+                            "new": updated_line
+                        })
+                        
+                        self.log(f"📝 Line {line_num}: {package_name} version updated", "INFO")
+                    else:
+                        updated_lines.append(original_line)
+                else:
+                    updated_lines.append(original_line)
+            
+            # Show summary of proposed changes
+            if updates_made:
+                self.log(f"📋 Proposed version updates:", "INFO")
+                for update in updates_made:
+                    self.log(f"  Line {update['line']}: {update['old']} → {update['new']}", "INFO")
+                
+                # Ask for confirmation unless auto_update is True
+                if auto_update:
+                    self.log("🔄 Auto-update mode: applying changes automatically", "INFO")
+                    proceed = True
+                else:
+                    self.log("❓ Apply these updates to requirements.txt? (y/N): ", "WARNING")
+                    try:
+                        response = input().strip().lower()
+                        proceed = response in ['y', 'yes']
+                    except (EOFError, KeyboardInterrupt):
+                        proceed = False
+                
+                if proceed:
+                    # Create backup
+                    backup_file = self.requirements_file.with_suffix('.txt.backup')
+                    with open(backup_file, "w", encoding="utf-8") as f:
+                        f.writelines(original_lines)
+                    self.log(f"💾 Backup created: {backup_file}", "INFO")
+                    
+                    # Write updated requirements
+                    with open(self.requirements_file, "w", encoding="utf-8") as f:
+                        f.writelines(updated_lines)
+                    
+                    self.log(f"✅ Updated {len(updates_made)} package versions in requirements.txt", "SUCCESS")
+                    
+                    # Optionally install updated packages
+                    if auto_update:
+                        self.log("🔄 Installing updated packages...", "INFO")
+                        # Try to install with dependency resolution checking
+                        install_success = self._safe_install_updated_dependencies()
+                        if install_success:
+                            self.log("✅ Updated packages installed successfully", "SUCCESS")
+                        else:
+                            self.log("❌ Failed to install updated packages due to conflicts", "ERROR")
+                            self.log("🔄 Reverting to backup requirements.txt...", "WARNING")
+                            # Restore backup on failure
+                            self._restore_requirements_backup()
+                            return False
+                    
+                    return True
+                else:
+                    self.log("❌ Version updates cancelled by user", "WARNING")
+                    return False
+            else:
+                self.log("✅ No version updates needed in requirements.txt", "SUCCESS")
+                return True
+                
+        except Exception as e:
+            self.log(f"❌ Error updating requirements versions: {e}", "ERROR")
+            return False
+    
+    def _update_version_in_line(self, line: str, package_name: str, new_version: str) -> str:
+        """Update the version specification in a requirements line."""
+        # Common version operators
+        operators = [">=", "==", "<=", ">", "<", "!=", "~="]
+        
+        # Find the version operator and current version
+        for op in operators:
+            if op in line:
+                parts = line.split(op, 1)
+                if len(parts) == 2:
+                    package_part = parts[0].strip()
+                    version_part = parts[1].strip()
+                    
+                    # Handle additional specifiers like [extras] or ;python_version
+                    version_clean = version_part.split('[')[0].split(';')[0].split(',')[0].strip()
+                    
+                    # Preserve extras and environment markers
+                    extras = ""
+                    env_markers = ""
+                    
+                    if '[' in parts[1]:
+                        extras_start = parts[1].find('[')
+                        extras_end = parts[1].find(']', extras_start)
+                        if extras_end != -1:
+                            extras = parts[1][extras_start:extras_end+1]
+                    
+                    if ';' in parts[1]:
+                        env_markers = ';' + parts[1].split(';', 1)[1]
+                    
+                    # Construct updated line based on operator type
+                    if op == "==":
+                        # Exact version: update to new version
+                        return f"{package_part}{op}{new_version}{extras}{env_markers}"
+                    elif op == ">=":
+                        # Minimum version: update to new minimum
+                        return f"{package_part}{op}{new_version}{extras}{env_markers}"
+                    elif op == "~=":
+                        # Compatible version: update to new compatible version
+                        return f"{package_part}{op}{new_version}{extras}{env_markers}"
+                    else:
+                        # For other operators (<=, >, <, !=), be more conservative
+                        # Only update if it makes sense
+                        if op == "<=" and self._version_compare(new_version, version_clean) > 0:
+                            return f"{package_part}{op}{new_version}{extras}{env_markers}"
+                        elif op == ">" and self._version_compare(new_version, version_clean) > 0:
+                            return f"{package_part}{op}{new_version}{extras}{env_markers}"
+                        else:
+                            # Keep original line for complex constraints
+                            return line
+                break
+        
+        # If no version operator found, add one with the new version
+        if package_name.lower() in line.lower():
+            # Simple package name without version - add latest version
+            return f"{package_name}>={new_version}"
+        
+        return line
+    
+    def _version_compare(self, version1: str, version2: str) -> int:
+        """Compare two version strings. Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal."""
+        try:
+            from packaging import version
+            v1 = version.parse(version1)
+            v2 = version.parse(version2)
+            
+            if v1 > v2:
+                return 1
+            elif v1 < v2:
+                return -1
+            else:
+                return 0
+        except ImportError:
+            # Fallback to simple string comparison if packaging is not available
+            if version1 > version2:
+                return 1
+            elif version1 < version2:
+                return -1
+            else:
+                return 0
+        except Exception:
+            # If version parsing fails, assume they're equal
+            return 0
+    
+    def _safe_install_updated_dependencies(self) -> bool:
+        """Safely install updated dependencies with conflict detection."""
+        # First, try a dry-run to check for conflicts
+        self.log("🔍 Checking for dependency conflicts...", "INFO")
+        
+        # Use pip's dependency resolver to check for conflicts
+        cmd_check = [sys.executable, "-m", "pip", "install", "--dry-run", "-r", str(self.requirements_file)]
+        success, output = self.run_command(cmd_check)
+        
+        if not success and "ResolutionImpossible" in output:
+            self.log("❌ Dependency conflicts detected in updated requirements", "ERROR")
+            self.log(f"Conflict details: {output[:200]}...", "ERROR")
+            return False
+        
+        # If dry-run passed, proceed with actual installation
+        return self.install_dependencies(upgrade=True)
+    
+    def _restore_requirements_backup(self) -> bool:
+        """Restore requirements.txt from backup file."""
+        backup_file = self.requirements_file.with_suffix('.txt.backup')
+        
+        if backup_file.exists():
+            try:
+                import shutil
+                shutil.copy2(backup_file, self.requirements_file)
+                self.log(f"✅ Requirements.txt restored from backup", "SUCCESS")
+                return True
+            except Exception as e:
+                self.log(f"❌ Failed to restore backup: {e}", "ERROR")
+                return False
+        else:
+            self.log("❌ No backup file found to restore", "ERROR")
+            return False
+
 
 def main():
     """Main function"""
@@ -478,6 +961,26 @@ def main():
         action="store_true",
         help="Auto-check and install missing dependencies only",
     )
+    parser.add_argument(
+        "--update-versions",
+        action="store_true",
+        help="Check for and update package versions in requirements.txt",
+    )
+    parser.add_argument(
+        "--auto-update",
+        action="store_true",
+        help="Automatically update package versions without confirmation",
+    )
+    parser.add_argument(
+        "--show-updates",
+        action="store_true",
+        help="Show available package updates without modifying requirements.txt",
+    )
+    parser.add_argument(
+        "--no-auto-update",
+        action="store_true",
+        help="Disable automatic version updates (skip auto-update on normal runs)",
+    )
 
     args = parser.parse_args()
 
@@ -493,10 +996,41 @@ def main():
 
     # Auto-install mode: only check and install missing dependencies
     if args.auto_install:
+        # Reset retry counter for fresh auto-install
+        manager.reset_retry_counter()
         if not manager.auto_install_missing_dependencies():
             sys.exit(1)
         manager.log("Auto-installation completed successfully", "SUCCESS")
         sys.exit(0)
+    
+    # Update versions mode: check and update package versions in requirements.txt
+    if args.update_versions or args.auto_update:
+        if not manager.update_requirements_versions(auto_update=args.auto_update):
+            sys.exit(1)
+        manager.log("Version update process completed", "SUCCESS")
+        sys.exit(0)
+    
+    # Show updates mode: just display available updates without modifying files
+    if args.show_updates:
+        outdated = manager.check_outdated_packages()
+        if outdated:
+            manager.log(f"📦 {len(outdated)} packages have updates available:", "INFO")
+            for pkg in outdated:
+                manager.log(f"  • {pkg['name']}: {pkg['version']} → {pkg['latest_version']}", "INFO")
+            manager.log("💡 Use --update-versions to update requirements.txt", "INFO")
+        else:
+            manager.log("✅ All packages are up to date", "SUCCESS")
+        sys.exit(0)
+
+    # Automatic update check: run --auto-update by default unless specific modes are used or disabled
+    if not args.no_auto_update:
+        manager.log("🔄 Running automatic version update check...", "INFO")
+        if not manager.update_requirements_versions(auto_update=True):
+            manager.log("⚠️ Automatic update failed, continuing with normal operations...", "WARNING")
+        else:
+            manager.log("✅ Automatic version update completed", "SUCCESS")
+    else:
+        manager.log("⏭️ Automatic version updates disabled by --no-auto-update", "INFO")
 
     # Upgrade pip
     if not manager.upgrade_pip():

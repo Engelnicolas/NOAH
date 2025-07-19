@@ -4,12 +4,12 @@
 # Comprehensive requirements file for all NOAH Python scripts and tools
 #
 # AUTHOR: NOAH Team
-# VERSION: 2.0.0
-# UPDATED: July 16, 2025
+# VERSION: 1.0.0
+# UPDATED: July 19, 2025
 #
 # USAGE:
-pip install -r requirements.txt
-python -m pip install -r requirements.txt --upgrade
+#   pip install -r requirements.txt
+#   python -m pip install -r requirements.txt --upgrade
 #
 # COMPATIBILITY:
 #   Python >= 3.8
@@ -21,7 +21,7 @@ python -m pip install -r requirements.txt --upgrade
 # =============================================================================
 
 # System monitoring and hardware information
-psutil>=5.9.0,<6.0.0
+psutil>=7.0.0
 # Used by: noah-tech-requirements (CPU, RAM, disk monitoring)
 # Features: System resource validation, hardware specs checking
 
@@ -31,12 +31,12 @@ psutil>=5.9.0,<6.0.0
 
 # YAML parsing and generation
 PyYAML>=6.0,<7.0
-# Used by: helm-values-validator.py, noah-fix.py, noah_test.py
-# Features: helm values validation, YAML fixing, configuration parsing
+# Used by: helm-values-validator.py, noah.py dependency check
+# Features: helm values validation, YAML configuration parsing
 
 # JSON schema validation
 jsonschema>=4.17.0,<5.0
-# Used by: noah-linter.py, noah_test.py
+# Used by: noah-linter.py, configuration validation
 # Features: Configuration validation, schema enforcement
 
 # Advanced configuration management
@@ -50,7 +50,7 @@ configparser>=5.3.0,<6.0
 
 # HTTP requests and API calls
 requests>=2.28.0,<3.0
-# Used by: noah-monitoring.py, noah-deploy.py
+# Used by: noah.py dependency check, potential future monitoring scripts
 # Features: API calls to Kubernetes/Helm, health checks
 
 # URL parsing and handling
@@ -64,17 +64,17 @@ urllib3>=1.26.0,<3.0
 
 # Advanced CLI framework
 click>=8.1.0,<9.0
-# Used by: Future CLI enhancements
+# Used by: Future CLI enhancements, optional dependency
 # Features: Command parsing, options handling, help generation
 
 # Cross-platform colored terminal output
 colorama>=0.4.6,<1.0
-# Used by: All scripts with colored output
+# Used by: All scripts with colored output, optional enhancement
 # Features: Windows/Unix color compatibility
 
 # Rich text and beautiful formatting
-rich>=13.0.0,<14.0
-# Used by: Enhanced CLI output, progress bars
+rich>=13.0.0,<15.0
+# Used by: Enhanced CLI output, progress bars, optional
 # Features: Tables, progress bars, syntax highlighting
 
 # =============================================================================
@@ -83,7 +83,7 @@ rich>=13.0.0,<14.0
 
 # Extended date/time parsing
 python-dateutil>=2.8.0,<3.0
-# Used by: noah-deploy.py, noah-monitoring.py, noah_test.py
+# Used by: noah-deploy.py, noah-monitoring.py timestamp handling
 # Features: Timestamp parsing, timezone handling
 
 # =============================================================================
@@ -91,8 +91,8 @@ python-dateutil>=2.8.0,<3.0
 # =============================================================================
 
 # Structured logging
-structlog>=22.3.0,<24.0
-# Used by: noah-deploy.py, noah-monitoring.py
+structlog>=25.4.0
+# Used by: noah-deploy.py, noah-monitoring.py logging enhancement
 # Features: Structured logs, JSON output, contextual logging
 
 # =============================================================================
@@ -100,12 +100,12 @@ structlog>=22.3.0,<24.0
 # =============================================================================
 
 # Testing framework
-pytest>=7.4.0,<8.0
+pytest>=8.4.1
 # Used by: Test suite, unit tests
 # Features: Test discovery, fixtures, assertions
 
 # Test coverage reporting
-pytest-cov>=4.1.0,<5.0
+pytest-cov>=6.2.1
 # Used by: Coverage analysis
 # Features: Code coverage reports, HTML output
 
@@ -119,13 +119,13 @@ pytest-mock>=3.11.0,<4.0
 # =============================================================================
 
 # Kubernetes Python client (optional)
-kubernetes>=27.2.0,<28.0
-# Used by: noah-deploy.py, noah-monitoring.py
+kubernetes>=33.1.0
+# Used by: noah-deploy.py, noah-monitoring.py (future enhancements)
 # Features: Kubernetes API access, resource management
 # NOTE: Install separately if needed: pip install kubernetes
 
 # YAML processing for Kubernetes manifests
-pyyaml-include>=1.3.0,<2.0
+pyyaml-include>=2.2
 # Used by: Complex YAML processing with includes
 # Features: YAML file inclusion, templating
 
@@ -138,10 +138,11 @@ bandit>=1.7.5,<2.0
 # Used by: noah-linter.py, security validation
 # Features: Security vulnerability scanning
 
-# Password strength validation
+# Password strength validation (optional)
 zxcvbn>=4.4.28,<5.0
-# Used by: Password validation in configuration
+# Used by: Password validation in configuration (if needed)
 # Features: Password strength checking
+# NOTE: Commented out as not currently used
 
 # =============================================================================
 # MONITORING & METRICS
@@ -157,8 +158,8 @@ prometheus-client>=0.17.0,<1.0
 # =============================================================================
 
 # Docker SDK for Python (optional)
-docker>=6.1.0,<7.0
-# Used by: noah-deploy.py, container management
+docker>=6.1.0,<8.0
+# Used by: noah-deploy.py, container management (future)
 # Features: Docker container management, image handling
 # NOTE: Install separately if needed: pip install docker
 
@@ -177,7 +178,7 @@ ansible-core>=2.14.0,<3.0
 # =============================================================================
 
 # Python helm client (alternative implementation)
-pyhelm3>=3.9.0,<4.0
+pyhelm3>=0.4.0,<1.0
 # Used by: helm-values-validator.py, helm operations
 # Features: helm chart validation, release management
 # NOTE: pyhelm3 is not actively maintained, using subprocess calls instead
@@ -206,12 +207,12 @@ tqdm>=4.65.0,<5.0
 # =============================================================================
 
 # Code formatting
-black>=23.0.0,<26.0
+black>=25.1.0
 # Used by: Code formatting, development
 # Features: Automatic code formatting
 
 # Import sorting
-isort>=5.12.0,<6.0
+isort>=6.0.1
 # Used by: Import organization, development
 # Features: Import sorting, style consistency
 
@@ -220,35 +221,58 @@ mypy>=1.4.0,<2.0
 # Used by: Static type checking, development
 # Features: Type checking, development tools
 
-# Testing framework
-pytest>=7.0.0,<8.0
+# Testing framework (duplicate entry - remove this one)
+pytest>=8.4.1
 # Used by: Testing, development
 # Features: Test framework, fixtures
 
-# Test coverage
-pytest-cov>=4.0.0,<5.0
+# Test coverage (duplicate entry - remove this one)
+pytest-cov>=6.2.1
 # Used by: Test coverage, development
 # Features: Coverage reporting, analysis
 
 # Code linting
-flake8>=6.0.0,<7.0
+flake8>=6.0.0,<8.0
 # Used by: Code linting, development
 # Features: Style checking, error detection
 
-# Security scanning
-bandit>=1.7.0,<2.0
+# Security scanning (duplicate entry - see above)
+# bandit>=1.7.0,<2.0
 # Used by: Security analysis, development
 # Features: Security vulnerability scanning
 
-# Performance profiling
+# Performance profiling (optional)
 memory-profiler>=0.61.0,<1.0
-# Used by: Performance analysis, development
+# Used by: Performance analysis, development (if needed)
 # Features: Memory usage profiling
+# NOTE: Commented out as not currently used
 
-# Enhanced development experience
-rich>=13.0.0,<14.0
+# Enhanced development experience (duplicate - see above)
+# rich>=13.0.0,<14.0
 # Used by: Terminal output, development
 # Features: Rich text, tables, progress bars
+
+# =============================================================================
+# ADDITIONAL USEFUL PACKAGES (OPTIONAL)
+# =============================================================================
+
+# Package vulnerability scanning
+safety>=2.3.0,<4.0
+# Used by: Security checking of dependencies
+# Features: Check for known security vulnerabilities
+# Install: pip install safety
+
+# Environment management
+python-dotenv>=1.0.0,<2.0
+# Used by: Environment variable management
+# Features: Load environment variables from .env files
+# Install: pip install python-dotenv
+
+# Configuration file parsing
+toml>=0.10.0,<1.0
+# Used by: TOML configuration file parsing
+# Features: Parse TOML configuration files
+# Install: pip install toml
 
 # =============================================================================
 # TROUBLESHOOTING

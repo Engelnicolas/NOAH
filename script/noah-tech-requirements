@@ -234,10 +234,24 @@ class TechnicalRequirementsValidator:
                     print(f"  {Colors.GREEN}✓{Colors.END} Node metrics: Available")
                     results["metrics"] = {"status": "pass"}
                 else:
-                    print(
-                        f"  {Colors.YELLOW}⚠{Colors.END} Node metrics: Unavailable (metrics-server required)"
+                    # Try once more after a short delay (metrics-server might be starting)
+                    import time
+                    time.sleep(3)
+                    retry_result = subprocess.run(
+                        ["kubectl", "top", "nodes"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
                     )
-                    results["metrics"] = {"status": "warn"}
+                    
+                    if retry_result.returncode == 0:
+                        print(f"  {Colors.GREEN}✓{Colors.END} Node metrics: Available")
+                        results["metrics"] = {"status": "pass"}
+                    else:
+                        print(
+                            f"  {Colors.YELLOW}⚠{Colors.END} Node metrics: Unavailable (metrics-server required)"
+                        )
+                        results["metrics"] = {"status": "warn"}
 
                 # Check storage classes
                 sc_result = subprocess.run(
@@ -573,6 +587,13 @@ class TechnicalRequirementsValidator:
             
             if context_result.returncode == 0:
                 print(f"  {Colors.GREEN}✓{Colors.END} kubectl configured for KIND cluster")
+                
+                # Install metrics-server for monitoring
+                if self.install_metrics_server():
+                    print(f"  {Colors.GREEN}✓{Colors.END} Cluster monitoring configured")
+                else:
+                    print(f"  {Colors.YELLOW}⚠{Colors.END} Cluster created but monitoring setup incomplete")
+                
                 return True
             else:
                 print(f"  {Colors.YELLOW}⚠{Colors.END} KIND cluster created but kubectl config may need manual setup")
@@ -580,6 +601,62 @@ class TechnicalRequirementsValidator:
         else:
             print(f"  {Colors.RED}✗{Colors.END} Failed to create KIND cluster: {create_result.stderr}")
             return False
+
+    def install_metrics_server(self) -> bool:
+        """Install metrics-server for Kubernetes cluster monitoring"""
+        print(f"  {Colors.BLUE}📊 Installing metrics-server...{Colors.END}")
+        
+        try:
+            # Check if metrics-server is already installed
+            check_result = subprocess.run(
+                ["kubectl", "get", "deployment", "metrics-server", "-n", "kube-system"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if check_result.returncode == 0:
+                print(f"  {Colors.GREEN}✓{Colors.END} metrics-server is already installed")
+                return True
+                
+        except subprocess.TimeoutExpired:
+            print(f"  {Colors.YELLOW}⚠{Colors.END} Timeout checking metrics-server status")
+        
+        # Install metrics-server using kubectl apply
+        install_result = subprocess.run(
+            ["kubectl", "apply", "-f", "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if install_result.returncode != 0:
+            print(f"  {Colors.RED}✗{Colors.END} Failed to install metrics-server: {install_result.stderr}")
+            return False
+        
+        # Patch metrics-server for KIND/development environments (disable TLS verification)
+        patch_result = subprocess.run([
+            "kubectl", "patch", "deployment", "metrics-server", "-n", "kube-system",
+            "--type", "json",
+            "-p", '[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
+        ], capture_output=True, text=True, timeout=30)
+        
+        if patch_result.returncode != 0:
+            print(f"  {Colors.YELLOW}⚠{Colors.END} Failed to patch metrics-server, but installation may still work")
+        
+        # Wait for metrics-server to be ready
+        print(f"  {Colors.BLUE}⏳ Waiting for metrics-server to be ready...{Colors.END}")
+        wait_result = subprocess.run([
+            "kubectl", "wait", "--for=condition=available", "--timeout=60s",
+            "deployment/metrics-server", "-n", "kube-system"
+        ], capture_output=True, text=True, timeout=70)
+        
+        if wait_result.returncode == 0:
+            print(f"  {Colors.GREEN}✓{Colors.END} metrics-server installed and ready")
+            return True
+        else:
+            print(f"  {Colors.YELLOW}⚠{Colors.END} metrics-server installed but may need time to become ready")
+            return True
 
     def check_helm_repositories(self) -> Dict:
         """Check Helm repositories, configure essential ones if missing"""

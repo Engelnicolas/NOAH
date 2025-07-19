@@ -301,9 +301,58 @@ class TechnicalRequirementsValidator:
         if "Stopped" in status_result.stdout or status_result.returncode != 0:
             print(f"  {Colors.BLUE}🚀 Starting Minikube cluster...{Colors.END}")
             
-            # Start minikube with Docker driver
+            # Check if we're running as root and use appropriate driver
+            import os
+            if os.geteuid() == 0:
+                print(f"  {Colors.YELLOW}⚠{Colors.END} Running as root, installing required packages...")
+                
+                # Install required packages for none driver including crictl
+                install_packages = [
+                    "apt", "update",
+                    "&&", "apt", "install", "-y", 
+                    "conntrack", "socat", "ebtables", "ethtool", "curl"
+                ]
+                
+                pkg_result = subprocess.run(
+                    " ".join(install_packages),
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+                
+                if pkg_result.returncode == 0:
+                    print(f"  {Colors.GREEN}✓{Colors.END} Required packages installed")
+                else:
+                    print(f"  {Colors.YELLOW}⚠{Colors.END} Package installation may have failed, continuing...")
+                
+                # Install crictl and attempt cri-dockerd for newer Kubernetes
+                crictl_ok = self.install_crictl()
+                cri_dockerd_ok = self.install_cri_dockerd()
+                
+                if crictl_ok and cri_dockerd_ok:
+                    print(f"  {Colors.GREEN}✓{Colors.END} All required components installed")
+                    start_command = [
+                        "minikube", "start", 
+                        "--driver=none"
+                    ]
+                else:
+                    print(f"  {Colors.YELLOW}⚠{Colors.END} Some components failed, using default Kubernetes version...")
+                    start_command = [
+                        "minikube", "start", 
+                        "--driver=none",
+                        "--container-runtime=docker"
+                    ]
+            else:
+                start_command = [
+                    "minikube", "start", 
+                    "--driver=docker",
+                    "--memory=4096", 
+                    "--cpus=2"
+                ]
+            
             start_result = subprocess.run(
-                ["minikube", "start", "--driver=docker", "--memory=4096", "--cpus=2"],
+                start_command,
                 capture_output=True,
                 text=True,
                 timeout=300  # 5 minutes timeout
@@ -329,7 +378,27 @@ class TechnicalRequirementsValidator:
                 print(f"  {Colors.GREEN}✓{Colors.END} Essential addons enabled (ingress, metrics-server)")
                 return True
             else:
-                print(f"  {Colors.RED}✗{Colors.END} Failed to start Minikube: {start_result.stderr}")
+                print(f"  {Colors.RED}✗{Colors.END} Failed to start Minikube")
+                
+                # Show specific error guidance
+                error_msg = start_result.stderr.lower()
+                if "crictl" in error_msg:
+                    print(f"  {Colors.BLUE}💡{Colors.END} crictl is required for this Kubernetes version")
+                    print(f"     Alternative: Use older Kubernetes version or run as non-root user")
+                elif "docker" in error_msg:
+                    print(f"  {Colors.BLUE}💡{Colors.END} Docker driver issue - ensure Docker is running")
+                    print(f"     Try: sudo systemctl start docker")
+                elif "permission" in error_msg or "access" in error_msg:
+                    print(f"  {Colors.BLUE}💡{Colors.END} Permission issue detected")
+                    print(f"     Try running as non-root user or check Docker group membership")
+                
+                print(f"  {Colors.YELLOW}⚠{Colors.END} Error details: {start_result.stderr.strip()}")
+                
+                # Try KIND as fallback
+                print(f"  {Colors.BLUE}💡{Colors.END} Trying KIND (Kubernetes in Docker) as alternative...")
+                if self.setup_kind_cluster():
+                    return True
+                
                 return False
         else:
             print(f"  {Colors.GREEN}✓{Colors.END} Minikube cluster is already running")
@@ -365,6 +434,152 @@ class TechnicalRequirementsValidator:
         
         print(f"  {Colors.GREEN}✓{Colors.END} Minikube installed successfully")
         return True
+
+    def install_crictl(self) -> bool:
+        """Install crictl (CRI CLI) required for Kubernetes 1.28.0+ in root environments"""
+        try:
+            # Check if crictl is already installed
+            result = subprocess.run(
+                ["crictl", "--version"], capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                print(f"  {Colors.GREEN}✓{Colors.END} crictl is already installed")
+                return True
+        except FileNotFoundError:
+            pass
+        
+        print(f"  {Colors.BLUE}📦 Installing crictl...{Colors.END}")
+        
+        # Download and install crictl (using latest stable version)
+        commands = [
+            ["curl", "-L", "https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.30.0/crictl-v1.30.0-linux-amd64.tar.gz", "-o", "crictl.tar.gz"],
+            ["tar", "zxvf", "crictl.tar.gz"],
+            ["mv", "crictl", "/usr/local/bin/"],
+            ["rm", "crictl.tar.gz"]
+        ]
+        
+        for cmd in commands:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode != 0:
+                print(f"  {Colors.RED}✗{Colors.END} Failed to install crictl: {result.stderr}")
+                return False
+        
+        print(f"  {Colors.GREEN}✓{Colors.END} crictl installed successfully")
+        return True
+
+    def install_cri_dockerd(self) -> bool:
+        """Install cri-dockerd (CRI shim for Docker) required for Kubernetes 1.24+ with none driver"""
+        try:
+            # Check if cri-dockerd is already installed
+            result = subprocess.run(
+                ["cri-dockerd", "--version"], capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                print(f"  {Colors.GREEN}✓{Colors.END} cri-dockerd is already installed")
+                return True
+        except FileNotFoundError:
+            pass
+        
+        print(f"  {Colors.BLUE}📦 Installing cri-dockerd...{Colors.END}")
+        
+        # Install dependencies first
+        deps_cmd = ["apt", "update", "&&", "apt", "install", "-y", "curl", "wget", "systemd"]
+        deps_result = subprocess.run(
+            " ".join(deps_cmd),
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if deps_result.returncode != 0:
+            print(f"  {Colors.YELLOW}⚠{Colors.END} Failed to install dependencies, continuing...")
+        
+        # Download and install cri-dockerd
+        commands = [
+            ["wget", "https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.4/cri-dockerd_0.3.4.3-0.ubuntu-jammy_amd64.deb", "-O", "cri-dockerd.deb"],
+            ["dpkg", "-i", "cri-dockerd.deb"],
+            ["systemctl", "enable", "cri-docker.service"],
+            ["systemctl", "enable", "cri-docker.socket"],
+            ["systemctl", "start", "cri-docker.service"],
+            ["systemctl", "start", "cri-docker.socket"],
+            ["rm", "cri-dockerd.deb"]
+        ]
+        
+        for cmd in commands:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode != 0 and "systemctl" not in cmd[0]:
+                print(f"  {Colors.RED}✗{Colors.END} Failed to install cri-dockerd: {result.stderr}")
+                return False
+        
+        print(f"  {Colors.GREEN}✓{Colors.END} cri-dockerd installed successfully")
+        return True
+
+    def setup_kind_cluster(self) -> bool:
+        """Set up a KIND (Kubernetes in Docker) cluster as alternative to Minikube"""
+        print(f"  {Colors.BLUE}🔧 Setting up KIND cluster as alternative...{Colors.END}")
+        
+        # Check if kind is installed
+        try:
+            result = subprocess.run(["kind", "--version"], capture_output=True, text=True, timeout=5)
+            if result.returncode != 0:
+                raise FileNotFoundError
+        except FileNotFoundError:
+            print(f"  {Colors.BLUE}📦 Installing KIND...{Colors.END}")
+            
+            # Install KIND
+            install_commands = [
+                ["curl", "-Lo", "./kind", "https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64"],
+                ["chmod", "+x", "./kind"],
+                ["mv", "./kind", "/usr/local/bin/kind"]
+            ]
+            
+            for cmd in install_commands:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                if result.returncode != 0:
+                    print(f"  {Colors.RED}✗{Colors.END} Failed to install KIND: {result.stderr}")
+                    return False
+            
+            print(f"  {Colors.GREEN}✓{Colors.END} KIND installed successfully")
+        
+        # Check if cluster already exists
+        cluster_result = subprocess.run(
+            ["kind", "get", "clusters"], capture_output=True, text=True, timeout=10
+        )
+        
+        if "kind" in cluster_result.stdout:
+            print(f"  {Colors.GREEN}✓{Colors.END} KIND cluster already exists")
+            return True
+        
+        # Create KIND cluster
+        print(f"  {Colors.BLUE}🚀 Creating KIND cluster...{Colors.END}")
+        create_result = subprocess.run(
+            ["kind", "create", "cluster", "--name", "kind"],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        if create_result.returncode == 0:
+            print(f"  {Colors.GREEN}✓{Colors.END} KIND cluster created successfully")
+            
+            # Set kubectl context to kind
+            context_result = subprocess.run(
+                ["kubectl", "cluster-info", "--context", "kind-kind"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if context_result.returncode == 0:
+                print(f"  {Colors.GREEN}✓{Colors.END} kubectl configured for KIND cluster")
+                return True
+            else:
+                print(f"  {Colors.YELLOW}⚠{Colors.END} KIND cluster created but kubectl config may need manual setup")
+                return True
+        else:
+            print(f"  {Colors.RED}✗{Colors.END} Failed to create KIND cluster: {create_result.stderr}")
+            return False
 
     def check_helm_repositories(self) -> Dict:
         """Check Helm repositories, configure essential ones if missing"""
@@ -488,19 +703,29 @@ class TechnicalRequirementsValidator:
         print(f"{Colors.BOLD}Step 1: Checking system tools{Colors.END}")
         print(f"💡 Use 'python3 script/noah-deps-manager --check-system-tools' if tools are missing")
         
-        tools_check = ["docker", "kubectl", "helm"]
+        tools_check = {
+            "docker": ["docker", "--version"],
+            "kubectl": ["kubectl", "version", "--client"],
+            "helm": ["helm", "version", "--short"]
+        }
         tools_available = True
         
-        for tool in tools_check:
+        for tool_name, command in tools_check.items():
             try:
-                result = subprocess.run([tool, "--version"], capture_output=True, text=True, timeout=5)
+                result = subprocess.run(command, capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
-                    print(f"  {Colors.GREEN}✓{Colors.END} {tool} is available")
+                    print(f"  {Colors.GREEN}✓{Colors.END} {tool_name} is available")
                 else:
-                    print(f"  {Colors.RED}✗{Colors.END} {tool} is not working properly")
+                    print(f"  {Colors.RED}✗{Colors.END} {tool_name} is not working properly")
+                    print(f"    Return code: {result.returncode}")
+                    if result.stderr.strip():
+                        print(f"    Error: {result.stderr.strip()}")
                     tools_available = False
             except FileNotFoundError:
-                print(f"  {Colors.RED}✗{Colors.END} {tool} is not installed")
+                print(f"  {Colors.RED}✗{Colors.END} {tool_name} is not installed")
+                tools_available = False
+            except subprocess.TimeoutExpired:
+                print(f"  {Colors.RED}✗{Colors.END} {tool_name} command timeout")
                 tools_available = False
         
         if not tools_available:
@@ -512,11 +737,22 @@ class TechnicalRequirementsValidator:
         
         # Step 2: Set up Minikube cluster
         print(f"{Colors.BOLD}Step 2: Setting up Kubernetes cluster{Colors.END}")
-        if self.setup_minikube_cluster():
-            print(f"  {Colors.GREEN}✓{Colors.END} Kubernetes cluster is ready")
-        else:
-            print(f"  {Colors.RED}✗{Colors.END} Failed to set up Kubernetes cluster")
-            return
+        cluster_setup_success = False
+        
+        try:
+            if self.setup_minikube_cluster():
+                print(f"  {Colors.GREEN}✓{Colors.END} Kubernetes cluster is ready")
+                cluster_setup_success = True
+            else:
+                print(f"  {Colors.YELLOW}⚠{Colors.END} Kubernetes cluster setup failed")
+                print(f"  {Colors.BLUE}💡{Colors.END} Manual setup options:")
+                print(f"     • Non-root setup: su - username && minikube start --driver=docker")
+                print(f"     • Alternative: Use cloud Kubernetes (EKS, GKE, AKS)")
+                print(f"     • For testing: Use kind (Kubernetes in Docker)")
+                print(f"     • Continue anyway: Helm repositories will still be configured")
+        except Exception as e:
+            print(f"  {Colors.YELLOW}⚠{Colors.END} Kubernetes cluster setup failed: {e}")
+            print(f"  {Colors.BLUE}💡{Colors.END} Continuing with Helm setup...")
         
         print()
         
@@ -532,36 +768,56 @@ class TechnicalRequirementsValidator:
         # Step 4: Verify the setup
         print(f"{Colors.BOLD}Step 4: Verifying setup{Colors.END}")
         
-        # Test kubectl
-        try:
-            result = subprocess.run(["kubectl", "get", "nodes"], capture_output=True, text=True, timeout=10)
-            if result.returncode == 0:
-                print(f"  {Colors.GREEN}✓{Colors.END} kubectl can access the cluster")
-                node_count = len([line for line in result.stdout.split('\n') if 'Ready' in line])
-                print(f"    📊 {node_count} node(s) ready")
-            else:
-                print(f"  {Colors.RED}✗{Colors.END} kubectl cannot access the cluster")
-        except subprocess.TimeoutExpired:
-            print(f"  {Colors.RED}✗{Colors.END} kubectl access timeout")
+        # Test kubectl only if cluster setup was successful
+        if cluster_setup_success:
+            try:
+                result = subprocess.run(["kubectl", "get", "nodes"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    print(f"  {Colors.GREEN}✓{Colors.END} kubectl can access the cluster")
+                    node_count = len([line for line in result.stdout.split('\n') if 'Ready' in line])
+                    print(f"    📊 {node_count} node(s) ready")
+                else:
+                    print(f"  {Colors.RED}✗{Colors.END} kubectl cannot access the cluster")
+            except subprocess.TimeoutExpired:
+                print(f"  {Colors.RED}✗{Colors.END} kubectl access timeout")
+        else:
+            print(f"  {Colors.YELLOW}⚠{Colors.END} Skipping kubectl test (cluster not available)")
         
         # Test helm
         try:
             result = subprocess.run(["helm", "repo", "list"], capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
                 repo_count = len(result.stdout.strip().split('\n')) - 1  # Exclude header
-                print(f"  {Colors.GREEN}✓{Colors.END} Helm has {repo_count} repositories configured")
+                if repo_count > 0:
+                    print(f"  {Colors.GREEN}✓{Colors.END} Helm has {repo_count} repositories configured")
+                else:
+                    print(f"  {Colors.YELLOW}⚠{Colors.END} Helm has no repositories configured")
             else:
                 print(f"  {Colors.YELLOW}⚠{Colors.END} Helm repositories need configuration")
         except subprocess.TimeoutExpired:
             print(f"  {Colors.RED}✗{Colors.END} Helm check timeout")
         
         print()
-        print(f"{Colors.GREEN}{Colors.BOLD}🎉 Kubernetes environment setup complete!{Colors.END}")
+        
+        if cluster_setup_success:
+            print(f"{Colors.GREEN}{Colors.BOLD}🎉 Kubernetes environment setup complete!{Colors.END}")
+        else:
+            print(f"{Colors.YELLOW}{Colors.BOLD}⚠️ Partial setup complete (Helm configured, Kubernetes cluster needs manual setup){Colors.END}")
+            
         print()
         print(f"{Colors.BOLD}Next steps:{Colors.END}")
-        print(f"  • Run full validation: python3 script/noah-tech-requirements")
-        print(f"  • Deploy NOAH: ./noah deploy --profile minimal")
-        print(f"  • Access cluster: minikube dashboard")
+        
+        if cluster_setup_success:
+            print(f"  • Run full validation: python3 script/noah-tech-requirements")
+            print(f"  • Deploy NOAH: ./noah deploy --profile minimal")
+            print(f"  • Access cluster: minikube dashboard")
+        else:
+            print(f"  • Set up Kubernetes cluster manually (as non-root user):")
+            print(f"    - Switch to non-root user: su - username")
+            print(f"    - Run: minikube start --driver=docker")
+            print(f"  • Or use a cloud Kubernetes service")
+            print(f"  • Then run: python3 script/noah-tech-requirements")
+            
         print()
         print(f"{Colors.BLUE}💡 Useful commands:{Colors.END}")
         print(f"  • minikube status          # Check cluster status")

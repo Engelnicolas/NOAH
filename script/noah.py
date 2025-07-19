@@ -21,6 +21,159 @@ import importlib.util
 import inspect
 
 
+def check_and_install_dependencies():
+    """Check for required dependencies and install them if missing."""
+    # First check if pip is available
+    try:
+        subprocess.run([sys.executable, '-m', 'pip', '--version'], 
+                      capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print(f"{Colors.RED}[ERROR] pip n'est pas disponible{Colors.NC}")
+        print(f"{Colors.BLUE}[INFO] Installation de pip: python3 -m ensurepip --upgrade{Colors.NC}")
+        try:
+            subprocess.run([sys.executable, '-m', 'ensurepip', '--upgrade'], check=True)
+            print(f"{Colors.GREEN}[SUCCESS] pip installé avec succès{Colors.NC}")
+        except subprocess.CalledProcessError:
+            print(f"{Colors.RED}[ERROR] Impossible d'installer pip automatiquement{Colors.NC}")
+            print(f"{Colors.BLUE}[INFO] Veuillez installer pip manuellement{Colors.NC}")
+            return False
+    
+    # Core Python modules that should be available
+    core_modules = ['venv', 'ensurepip']
+    missing_core = []
+    
+    for module in core_modules:
+        try:
+            importlib.import_module(module)
+        except ImportError:
+            missing_core.append(module)
+    
+    if missing_core:
+        print(f"{Colors.YELLOW}[WARNING] Modules Python manquants: {', '.join(missing_core)}{Colors.NC}")
+        print(f"{Colors.BLUE}[INFO] Veuillez installer python3-full: sudo apt install python3-full python3-venv{Colors.NC}")
+    
+    # Check for required packages from requirements.txt
+    critical_packages = [
+        ('psutil', 'psutil>=5.9.0'),
+        ('yaml', 'PyYAML>=6.0'),
+        ('requests', 'requests>=2.28.0'),
+    ]
+    
+    missing_packages = []
+    for module_name, package_spec in critical_packages:
+        try:
+            importlib.import_module(module_name)
+        except ImportError:
+            missing_packages.append(package_spec)
+    
+    if missing_packages:
+        print(f"{Colors.YELLOW}[WARNING] Packages Python manquants: {', '.join([p.split('>=')[0] for p in missing_packages])}{Colors.NC}")
+        
+        # Check if we're in an externally managed environment
+        if not (hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)):
+            venv_path = Path(__file__).parent.parent / "venv"
+            if venv_path.exists():
+                print(f"{Colors.BLUE}[INFO] Environnement virtuel détecté: {venv_path}{Colors.NC}")
+                print(f"{Colors.BLUE}[INFO] Activez l'environnement virtuel: source {venv_path}/bin/activate{Colors.NC}")
+                print(f"{Colors.BLUE}[INFO] Puis relancez: ./noah <commande>{Colors.NC}")
+                return False
+            else:
+                print(f"{Colors.BLUE}[INFO] Environnement géré exterieurement détecté{Colors.NC}")
+                print(f"{Colors.BLUE}[INFO] Utilisez le script wrapper: ./noah <commande>{Colors.NC}")
+                print(f"{Colors.BLUE}[INFO] Il créera automatiquement l'environnement virtuel{Colors.NC}")
+                return False
+        
+        print(f"{Colors.BLUE}[INFO] Installation automatique en cours...{Colors.NC}")
+        
+        # Try to install missing packages
+        all_installed = True
+        for package in missing_packages:
+            try:
+                package_name = package.split('>=')[0]
+                print(f"{Colors.BLUE}[INFO] Installation de {package_name}...{Colors.NC}")
+                result = subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', package_name], 
+                    capture_output=True, 
+                    text=True
+                )
+                if result.returncode == 0:
+                    print(f"{Colors.GREEN}[SUCCESS] {package_name} installé avec succès{Colors.NC}")
+                else:
+                    # Try with --user flag if regular install fails
+                    if "externally-managed-environment" in result.stderr:
+                        print(f"{Colors.YELLOW}[WARNING] Environnement géré exterieurement{Colors.NC}")
+                        print(f"{Colors.BLUE}[INFO] Utilisez l'environnement virtuel pour installer les dépendances{Colors.NC}")
+                        all_installed = False
+                        continue
+                    
+                    print(f"{Colors.YELLOW}[WARNING] Échec d'installation standard, tentative avec --user{Colors.NC}")
+                    result_user = subprocess.run(
+                        [sys.executable, '-m', 'pip', 'install', '--user', package_name], 
+                        capture_output=True, 
+                        text=True
+                    )
+                    if result_user.returncode == 0:
+                        print(f"{Colors.GREEN}[SUCCESS] {package_name} installé avec --user{Colors.NC}")
+                    else:
+                        print(f"{Colors.RED}[ERROR] Échec de l'installation de {package_name}{Colors.NC}")
+                        print(f"{Colors.BLUE}[INFO] Essayez manuellement: pip install {package_name}{Colors.NC}")
+                        all_installed = False
+            except Exception as e:
+                print(f"{Colors.RED}[ERROR] Erreur lors de l'installation de {package}: {e}{Colors.NC}")
+                all_installed = False
+        
+        return len(missing_core) == 0 and all_installed
+    
+    return len(missing_core) == 0 and len(missing_packages) == 0
+
+
+def install_requirements_if_missing():
+    """Install packages from requirements.txt if they're missing."""
+    script_dir = Path(__file__).parent
+    requirements_file = script_dir / "requirements.txt"
+    
+    if not requirements_file.exists():
+        print(f"{Colors.YELLOW}[WARNING] Fichier requirements.txt non trouvé{Colors.NC}")
+        return False
+    
+    # Check if deps-manager exists and use it
+    deps_manager = script_dir / "noah-deps-manager"
+    if deps_manager.exists() and os.access(deps_manager, os.X_OK):
+        try:
+            print(f"{Colors.BLUE}[INFO] Vérification des dépendances avec noah-deps-manager...{Colors.NC}")
+            result = subprocess.run(
+                [sys.executable, str(deps_manager), '--auto-install'],
+                capture_output=True,
+                text=True,
+                cwd=script_dir.parent
+            )
+            if result.returncode == 0:
+                print(f"{Colors.GREEN}[SUCCESS] Toutes les dépendances sont installées{Colors.NC}")
+                return True
+            else:
+                print(f"{Colors.YELLOW}[WARNING] noah-deps-manager a signalé des problèmes{Colors.NC}")
+        except Exception as e:
+            print(f"{Colors.YELLOW}[WARNING] Erreur avec noah-deps-manager: {e}{Colors.NC}")
+    
+    # Fallback: install directly from requirements.txt
+    try:
+        print(f"{Colors.BLUE}[INFO] Installation des dépendances depuis requirements.txt...{Colors.NC}")
+        result = subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', '-r', str(requirements_file)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            print(f"{Colors.GREEN}[SUCCESS] Dépendances installées avec succès{Colors.NC}")
+            return True
+        else:
+            print(f"{Colors.RED}[ERROR] Échec de l'installation des dépendances: {result.stderr}{Colors.NC}")
+            return False
+    except Exception as e:
+        print(f"{Colors.RED}[ERROR] Erreur lors de l'installation: {e}{Colors.NC}")
+        return False
+
+
 class Colors:
     """Terminal color constants."""
     RED = '\033[0;31m'
@@ -42,8 +195,53 @@ class NoahCLI:
         self.name = "noah"
         self.description = "Next Open-source Architecture Hub CLI"
         
+        # Check and install dependencies early
+        # Only show dependency check messages if there are issues
+        has_issues = not self._quick_dependency_check()
+        if has_issues:
+            print(f"{Colors.CYAN}[NOAH] Vérification des dépendances...{Colors.NC}")
+        
+        self._check_virtual_environment()
+        deps_ok = check_and_install_dependencies()
+        
+        if not deps_ok:
+            print(f"{Colors.YELLOW}[WARNING] Certaines dépendances manquent, tentative d'installation...{Colors.NC}")
+            install_requirements_if_missing()
+        elif has_issues:
+            print(f"{Colors.GREEN}[SUCCESS] Toutes les dépendances sont disponibles{Colors.NC}")
+        
         # Discover all Python scripts in the script directory
         self.script_commands = self._discover_scripts()
+
+    def _quick_dependency_check(self) -> bool:
+        """Quick check if critical dependencies are available without verbose output."""
+        try:
+            import psutil
+            import yaml
+            import requests
+            return True
+        except ImportError:
+            return False
+
+    def _check_virtual_environment(self) -> None:
+        """Check if running in a virtual environment and suggest creating one if not."""
+        # Check if we're in a virtual environment
+        in_venv = hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
+        
+        if not in_venv:
+            print(f"{Colors.YELLOW}[WARNING] Vous n'êtes pas dans un environnement virtuel Python{Colors.NC}")
+            
+            # Check if venv directory exists in parent directory
+            venv_path = self.script_dir.parent / "venv"
+            if venv_path.exists():
+                print(f"{Colors.BLUE}[INFO] Environnement virtuel détecté: {venv_path}{Colors.NC}")
+                print(f"{Colors.BLUE}[INFO] Pour l'activer: source {venv_path}/bin/activate{Colors.NC}")
+            else:
+                print(f"{Colors.BLUE}[INFO] Il est recommandé d'utiliser un environnement virtuel{Colors.NC}")
+                print(f"{Colors.BLUE}[INFO] Le script ./noah créera automatiquement l'environnement{Colors.NC}")
+        else:
+            venv_path = os.environ.get('VIRTUAL_ENV', 'unknown')
+            print(f"{Colors.GREEN}[SUCCESS] Environnement virtuel actif: {venv_path}{Colors.NC}")
 
     def _discover_scripts(self) -> Dict[str, Dict]:
         """Discover all Python scripts in the script directory."""

@@ -152,21 +152,6 @@ class TechnicalRequirementsValidator:
         results = {}
 
         dependencies = {
-            "docker": {
-                "command": ["docker", "--version"],
-                "version_pattern": r"Docker version (\d+\.\d+)",
-                "required": self.requirements["docker_version"],
-            },
-            "kubectl": {
-                "command": ["kubectl", "version", "--client", "--short"],
-                "version_pattern": r"Client Version: v(\d+\.\d+)",
-                "required": self.requirements["kubernetes_version"],
-            },
-            "helm": {
-                "command": ["helm", "version", "--short"],
-                "version_pattern": r"v(\d+\.\d+)",
-                "required": self.requirements["helm_version"],
-            },
             "python": {
                 "command": ["python3", "--version"],
                 "version_pattern": r"Python (\d+\.\d+)",
@@ -223,7 +208,7 @@ class TechnicalRequirementsValidator:
         return results
 
     def check_kubernetes_cluster(self) -> Dict:
-        """Check Kubernetes cluster connectivity and resources"""
+        """Check Kubernetes cluster connectivity and resources, set up if missing"""
         print(f"\n{Colors.BOLD}☸️  Kubernetes Cluster{Colors.END}")
         results = {}
 
@@ -275,7 +260,21 @@ class TechnicalRequirementsValidator:
 
             else:
                 print(f"  {Colors.RED}✗{Colors.END} Cluster connectivity: Failed")
-                results["connectivity"] = {"status": "fail"}
+                print(f"  {Colors.BLUE}ℹ{Colors.END} Attempting to set up Kubernetes cluster with Minikube...")
+                
+                if self.setup_minikube_cluster():
+                    # Retry connectivity check after setup
+                    retry_result = subprocess.run(
+                        ["kubectl", "cluster-info"], capture_output=True, text=True, timeout=15
+                    )
+                    if retry_result.returncode == 0:
+                        print(f"  {Colors.GREEN}✓{Colors.END} Cluster connectivity: OK (after setup)")
+                        results["connectivity"] = {"status": "pass"}
+                    else:
+                        print(f"  {Colors.RED}✗{Colors.END} Cluster setup failed")
+                        results["connectivity"] = {"status": "fail"}
+                else:
+                    results["connectivity"] = {"status": "fail"}
 
         except subprocess.TimeoutExpired:
             print(f"  {Colors.RED}✗{Colors.END} Cluster connectivity: Timeout")
@@ -286,8 +285,89 @@ class TechnicalRequirementsValidator:
 
         return results
 
+    def setup_minikube_cluster(self) -> bool:
+        """Set up a Minikube Kubernetes cluster for development"""
+        print(f"  {Colors.BLUE}🔧 Setting up Minikube cluster...{Colors.END}")
+        
+        # Check if minikube is installed
+        if not self.check_and_install_minikube():
+            return False
+        
+        # Check if minikube cluster already exists but stopped
+        status_result = subprocess.run(
+            ["minikube", "status"], capture_output=True, text=True
+        )
+        
+        if "Stopped" in status_result.stdout or status_result.returncode != 0:
+            print(f"  {Colors.BLUE}🚀 Starting Minikube cluster...{Colors.END}")
+            
+            # Start minikube with Docker driver
+            start_result = subprocess.run(
+                ["minikube", "start", "--driver=docker", "--memory=4096", "--cpus=2"],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minutes timeout
+            )
+            
+            if start_result.returncode == 0:
+                print(f"  {Colors.GREEN}✓{Colors.END} Minikube cluster started successfully")
+                
+                # Enable ingress addon for future use
+                subprocess.run(
+                    ["minikube", "addons", "enable", "ingress"],
+                    capture_output=True,
+                    text=True
+                )
+                
+                # Enable metrics-server for monitoring
+                subprocess.run(
+                    ["minikube", "addons", "enable", "metrics-server"],
+                    capture_output=True,
+                    text=True
+                )
+                
+                print(f"  {Colors.GREEN}✓{Colors.END} Essential addons enabled (ingress, metrics-server)")
+                return True
+            else:
+                print(f"  {Colors.RED}✗{Colors.END} Failed to start Minikube: {start_result.stderr}")
+                return False
+        else:
+            print(f"  {Colors.GREEN}✓{Colors.END} Minikube cluster is already running")
+            return True
+
+    def check_and_install_minikube(self) -> bool:
+        """Check if minikube is installed, install if missing"""
+        try:
+            result = subprocess.run(
+                ["minikube", "version"], capture_output=True, text=True, timeout=10
+            )
+            
+            if result.returncode == 0:
+                print(f"  {Colors.GREEN}✓{Colors.END} Minikube is already installed")
+                return True
+        except FileNotFoundError:
+            pass
+        
+        print(f"  {Colors.BLUE}📦 Installing Minikube...{Colors.END}")
+        
+        # Download and install minikube
+        commands = [
+            ["curl", "-LO", "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64"],
+            ["sudo", "install", "minikube-linux-amd64", "/usr/local/bin/minikube"],
+            ["rm", "minikube-linux-amd64"]
+        ]
+        
+        for cmd in commands:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode != 0:
+                print(f"  {Colors.RED}✗{Colors.END} Failed to install Minikube: {result.stderr}")
+                return False
+        
+        print(f"  {Colors.GREEN}✓{Colors.END} Minikube installed successfully")
+        return True
+
     def check_helm_repositories(self) -> Dict:
-        """Check Helm repositories"""
+        """Check Helm repositories, configure essential ones if missing"""
         print(f"\n{Colors.BOLD}📋 Helm Repositories{Colors.END}")
         results = {}
 
@@ -296,14 +376,42 @@ class TechnicalRequirementsValidator:
                 ["helm", "repo", "list"], capture_output=True, text=True, timeout=10
             )
 
-            if result.returncode == 0:
+            if result.returncode == 0 and result.stdout.strip():
                 print(f"  {Colors.GREEN}✓{Colors.END} Helm repositories: Configured")
                 results["repositories"] = {"status": "pass"}
+                
+                # Check for essential repositories
+                repos_output = result.stdout
+                essential_repos = {
+                    "bitnami": "https://charts.bitnami.com/bitnami",
+                    "stable": "https://charts.helm.sh/stable"
+                }
+                
+                missing_repos = []
+                for repo_name, repo_url in essential_repos.items():
+                    if repo_name not in repos_output:
+                        missing_repos.append((repo_name, repo_url))
+                
+                if missing_repos:
+                    print(f"  {Colors.YELLOW}⚠{Colors.END} Adding missing essential repositories...")
+                    for repo_name, repo_url in missing_repos:
+                        self.add_helm_repository(repo_name, repo_url)
+                    
+                    # Update repository information
+                    update_result = subprocess.run(
+                        ["helm", "repo", "update"], capture_output=True, text=True, timeout=30
+                    )
+                    if update_result.returncode == 0:
+                        print(f"  {Colors.GREEN}✓{Colors.END} Repository information updated")
+                
             else:
-                print(
-                    f"  {Colors.YELLOW}⚠{Colors.END} Helm repositories: None configured"
-                )
-                results["repositories"] = {"status": "warn"}
+                print(f"  {Colors.YELLOW}⚠{Colors.END} Helm repositories: None configured")
+                print(f"  {Colors.BLUE}🔧 Configuring essential Helm repositories...{Colors.END}")
+                
+                if self.setup_essential_helm_repositories():
+                    results["repositories"] = {"status": "pass"}
+                else:
+                    results["repositories"] = {"status": "warn"}
 
         except subprocess.TimeoutExpired:
             print(f"  {Colors.RED}✗{Colors.END} Helm repositories: Timeout")
@@ -313,6 +421,154 @@ class TechnicalRequirementsValidator:
             results["repositories"] = {"status": "fail"}
 
         return results
+
+    def setup_essential_helm_repositories(self) -> bool:
+        """Set up essential Helm repositories for NOAH deployment"""
+        essential_repos = {
+            "bitnami": "https://charts.bitnami.com/bitnami",
+            "stable": "https://charts.helm.sh/stable",
+            "prometheus-community": "https://prometheus-community.github.io/helm-charts",
+            "grafana": "https://grafana.github.io/helm-charts",
+            "ingress-nginx": "https://kubernetes.github.io/ingress-nginx"
+        }
+        
+        success_count = 0
+        for repo_name, repo_url in essential_repos.items():
+            if self.add_helm_repository(repo_name, repo_url):
+                success_count += 1
+        
+        if success_count > 0:
+            # Update repository information
+            print(f"  {Colors.BLUE}📡 Updating repository information...{Colors.END}")
+            update_result = subprocess.run(
+                ["helm", "repo", "update"], capture_output=True, text=True, timeout=60
+            )
+            
+            if update_result.returncode == 0:
+                print(f"  {Colors.GREEN}✓{Colors.END} {success_count} essential repositories configured")
+                return True
+            else:
+                print(f"  {Colors.YELLOW}⚠{Colors.END} Repository update failed, but repositories added")
+                return True
+        
+        return False
+
+    def add_helm_repository(self, name: str, url: str) -> bool:
+        """Add a single Helm repository"""
+        try:
+            result = subprocess.run(
+                ["helm", "repo", "add", name, url],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                print(f"    {Colors.GREEN}✓{Colors.END} Added repository: {name}")
+                return True
+            else:
+                print(f"    {Colors.YELLOW}⚠{Colors.END} Failed to add {name}: {result.stderr.strip()}")
+                return False
+                
+        except subprocess.TimeoutExpired:
+            print(f"    {Colors.RED}✗{Colors.END} Timeout adding repository: {name}")
+            return False
+
+    def setup_kubernetes_environment(self) -> None:
+        """Set up complete Kubernetes environment with Minikube and Helm repositories"""
+        print(f"{Colors.CYAN}{Colors.BOLD}")
+        print("🚀 NOAH Kubernetes Environment Setup")
+        print("=" * 50)
+        print(f"{Colors.END}")
+        
+        print(f"{Colors.BOLD}Setting up Kubernetes development environment...{Colors.END}")
+        print()
+        
+        # Step 1: Ensure system tools are available
+        print(f"{Colors.BOLD}Step 1: Checking system tools{Colors.END}")
+        print(f"💡 Use 'python3 script/noah-deps-manager --check-system-tools' if tools are missing")
+        
+        tools_check = ["docker", "kubectl", "helm"]
+        tools_available = True
+        
+        for tool in tools_check:
+            try:
+                result = subprocess.run([tool, "--version"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    print(f"  {Colors.GREEN}✓{Colors.END} {tool} is available")
+                else:
+                    print(f"  {Colors.RED}✗{Colors.END} {tool} is not working properly")
+                    tools_available = False
+            except FileNotFoundError:
+                print(f"  {Colors.RED}✗{Colors.END} {tool} is not installed")
+                tools_available = False
+        
+        if not tools_available:
+            print(f"\n{Colors.RED}❌ Required tools are missing. Please run:{Colors.END}")
+            print(f"   python3 script/noah-deps-manager --check-system-tools")
+            return
+        
+        print()
+        
+        # Step 2: Set up Minikube cluster
+        print(f"{Colors.BOLD}Step 2: Setting up Kubernetes cluster{Colors.END}")
+        if self.setup_minikube_cluster():
+            print(f"  {Colors.GREEN}✓{Colors.END} Kubernetes cluster is ready")
+        else:
+            print(f"  {Colors.RED}✗{Colors.END} Failed to set up Kubernetes cluster")
+            return
+        
+        print()
+        
+        # Step 3: Configure Helm repositories
+        print(f"{Colors.BOLD}Step 3: Configuring Helm repositories{Colors.END}")
+        if self.setup_essential_helm_repositories():
+            print(f"  {Colors.GREEN}✓{Colors.END} Helm repositories are configured")
+        else:
+            print(f"  {Colors.YELLOW}⚠{Colors.END} Some Helm repositories may not be configured")
+        
+        print()
+        
+        # Step 4: Verify the setup
+        print(f"{Colors.BOLD}Step 4: Verifying setup{Colors.END}")
+        
+        # Test kubectl
+        try:
+            result = subprocess.run(["kubectl", "get", "nodes"], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                print(f"  {Colors.GREEN}✓{Colors.END} kubectl can access the cluster")
+                node_count = len([line for line in result.stdout.split('\n') if 'Ready' in line])
+                print(f"    📊 {node_count} node(s) ready")
+            else:
+                print(f"  {Colors.RED}✗{Colors.END} kubectl cannot access the cluster")
+        except subprocess.TimeoutExpired:
+            print(f"  {Colors.RED}✗{Colors.END} kubectl access timeout")
+        
+        # Test helm
+        try:
+            result = subprocess.run(["helm", "repo", "list"], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                repo_count = len(result.stdout.strip().split('\n')) - 1  # Exclude header
+                print(f"  {Colors.GREEN}✓{Colors.END} Helm has {repo_count} repositories configured")
+            else:
+                print(f"  {Colors.YELLOW}⚠{Colors.END} Helm repositories need configuration")
+        except subprocess.TimeoutExpired:
+            print(f"  {Colors.RED}✗{Colors.END} Helm check timeout")
+        
+        print()
+        print(f"{Colors.GREEN}{Colors.BOLD}🎉 Kubernetes environment setup complete!{Colors.END}")
+        print()
+        print(f"{Colors.BOLD}Next steps:{Colors.END}")
+        print(f"  • Run full validation: python3 script/noah-tech-requirements")
+        print(f"  • Deploy NOAH: ./noah deploy --profile minimal")
+        print(f"  • Access cluster: minikube dashboard")
+        print()
+        print(f"{Colors.BLUE}💡 Useful commands:{Colors.END}")
+        print(f"  • minikube status          # Check cluster status")
+        print(f"  • minikube stop           # Stop the cluster")
+        print(f"  • minikube delete         # Delete the cluster")
+        print(f"  • kubectl get pods -A     # List all pods")
+        print(f"  • helm list -A            # List all Helm releases")
 
     def _compare_versions(self, version1: str, version2: str) -> int:
         """Compare semantic versions"""
@@ -380,6 +636,99 @@ class TechnicalRequirementsValidator:
                 f"\n{Colors.RED}❌ Critical requirements not met. Address failures above.{Colors.END}"
             )
 
+    def quick_verify(self) -> None:
+        """Quick verification of basic requirements without full system check"""
+        print(f"{Colors.CYAN}{Colors.BOLD}")
+        print("🔍 NOAH Quick Requirements Verification")
+        print("=" * 40)
+        print(f"{Colors.END}")
+
+        # Check basic software availability
+        tools = {
+            "python3": "Python 3",
+            "git": "Git Version Control",
+            "make": "GNU Make"
+        }
+
+        all_present = True
+        
+        for tool, description in tools.items():
+            try:
+                result = subprocess.run(
+                    [tool, "--version"], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=5
+                )
+                
+                if result.returncode == 0:
+                    # Extract version info
+                    version_info = result.stdout.split('\n')[0]
+                    print(f"  {Colors.GREEN}✅ {description}:{Colors.END} {version_info}")
+                else:
+                    print(f"  {Colors.RED}❌ {description}:{Colors.END} Command failed")
+                    all_present = False
+                    
+            except subprocess.TimeoutExpired:
+                print(f"  {Colors.RED}❌ {description}:{Colors.END} Command timeout")
+                all_present = False
+            except FileNotFoundError:
+                print(f"  {Colors.RED}❌ {description}:{Colors.END} Not installed")
+                all_present = False
+
+        # Summary
+        print(f"\n{Colors.BOLD}Quick Verification Summary:{Colors.END}")
+        if all_present:
+            print(f"  {Colors.GREEN}🎉 All essential tools are available!{Colors.END}")
+            print(f"  💡 Run with --full for comprehensive system validation")
+        else:
+            print(f"  {Colors.RED}⚠ Some tools are missing or not accessible{Colors.END}")
+            print(f"  💡 Use noah-deps-manager --check-system-tools for Docker/kubectl/Helm installation")
+
+    def show_troubleshooting_help(self) -> None:
+        """Show troubleshooting guidance for common issues"""
+        print(f"{Colors.CYAN}{Colors.BOLD}")
+        print("🔧 NOAH Troubleshooting Guide")
+        print("=" * 50)
+        print(f"{Colors.END}")
+
+        print(f"{Colors.BOLD}Common Issues and Solutions:{Colors.END}")
+        print()
+
+        print(f"{Colors.RED}❌ System tools (Docker/kubectl/Helm) missing{Colors.END}")
+        print("   Solution: Use the dependency manager to install them")
+        print("   python3 script/noah-deps-manager --check-system-tools")
+        print()
+
+        print(f"{Colors.RED}❌ kubectl: connection refused{Colors.END}")
+        print("   Solution: Ensure Kubernetes cluster is running")
+        print("   minikube status")
+        print("   minikube start  # if stopped")
+        print()
+
+        print(f"{Colors.RED}❌ helm: repository not found{Colors.END}")
+        print("   Solution: Add and update repositories")
+        print("   helm repo add stable https://charts.helm.sh/stable")
+        print("   helm repo update")
+        print()
+
+        print(f"{Colors.RED}❌ System resources insufficient{Colors.END}")
+        print("   Solution: Check available resources")
+        print("   free -h  # Check RAM")
+        print("   df -h    # Check disk space")
+        print("   nproc    # Check CPU cores")
+        print()
+
+        print(f"{Colors.YELLOW}⚠ For persistent issues:{Colors.END}")
+        print("   1. Check system logs: journalctl -xe")
+        print("   2. Verify network connectivity")
+        print("   3. Check firewall settings")
+        print("   4. Restart services: sudo systemctl restart docker")
+        print()
+
+        print(f"{Colors.BLUE}💡 Get detailed validation report:{Colors.END}")
+        print("   python3 script/noah-tech-requirements --profile minimal --verbose")
+
     def validate_all(self) -> Dict:
         """Run all validation checks"""
         self.print_banner()
@@ -409,18 +758,62 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="NOAH Technical Requirements Validator"
+        description="NOAH Technical Requirements Validator",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s                        # Full validation with minimal profile
+  %(prog)s --profile root         # Full validation with root profile
+  %(prog)s --quick                # Quick verification of basic tools
+  %(prog)s --troubleshoot         # Show troubleshooting guide
+  %(prog)s --setup-k8s            # Set up Kubernetes cluster and Helm repositories
+        """
     )
     parser.add_argument(
         "--profile",
         choices=["minimal", "root"],
         default="minimal",
-        help="Deployment profile to validate against",
+        help="Deployment profile to validate against (default: minimal)",
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Quick verification of basic requirements without full system check",
+    )
+    parser.add_argument(
+        "--troubleshoot",
+        action="store_true",
+        help="Show troubleshooting guidance for common issues",
+    )
+    parser.add_argument(
+        "--setup-k8s",
+        action="store_true",
+        help="Automatically set up Kubernetes cluster (Minikube) and Helm repositories if missing",
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Run full comprehensive validation (default behavior)",
     )
 
     args = parser.parse_args()
 
     validator = TechnicalRequirementsValidator(profile=args.profile)
+
+    # Handle different modes
+    if args.troubleshoot:
+        validator.show_troubleshooting_help()
+        return
+
+    if args.setup_k8s:
+        validator.setup_kubernetes_environment()
+        return
+
+    if args.quick:
+        validator.quick_verify()
+        return
+
+    # Default: Full validation
     results = validator.validate_all()
 
     # Exit with appropriate code

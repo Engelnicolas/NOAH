@@ -929,6 +929,227 @@ class DependencyManager:
             self.log("❌ No backup file found to restore", "ERROR")
             return False
 
+    def check_and_install_system_tools(self) -> bool:
+        """Check and install Docker, kubectl, and Helm if missing"""
+        self.log("🔧 Checking system tools (Docker, kubectl, Helm)...", "INFO")
+        
+        tools_status = {
+            "docker": self.check_and_install_docker(),
+            "kubectl": self.check_and_install_kubectl(),
+            "helm": self.check_and_install_helm()
+        }
+        
+        all_success = all(tools_status.values())
+        
+        if all_success:
+            self.log("✅ All system tools are available", "SUCCESS")
+        else:
+            failed_tools = [tool for tool, status in tools_status.items() if not status]
+            self.log(f"❌ Failed to install: {', '.join(failed_tools)}", "ERROR")
+        
+        return all_success
+
+    def check_and_install_docker(self) -> bool:
+        """Check if Docker is installed, install if missing"""
+        self.log("🐳 Checking Docker installation...", "INFO")
+        
+        # Check if docker is already installed
+        success, output = self.run_command(["docker", "--version"])
+        if success:
+            import re
+            match = re.search(r"Docker version (\d+\.\d+)", output)
+            if match:
+                version = match.group(1)
+                self.log(f"✅ Docker v{version} is already installed", "SUCCESS")
+                return True
+        
+        # Docker not found, attempt installation
+        self.log("🔧 Docker not found, attempting installation...", "INFO")
+        
+        # Detect OS and install accordingly
+        import platform
+        os_name = platform.system().lower()
+        
+        if os_name == "linux":
+            # Check if it's Ubuntu/Debian
+            try:
+                with open("/etc/os-release", "r") as f:
+                    os_info = f.read().lower()
+                    if "ubuntu" in os_info or "debian" in os_info:
+                        return self._install_docker_ubuntu()
+                    elif "centos" in os_info or "rhel" in os_info or "fedora" in os_info:
+                        return self._install_docker_rhel()
+            except FileNotFoundError:
+                pass
+        
+        self.log("❌ Automatic Docker installation not supported for this OS", "ERROR")
+        self.log("💡 Please install Docker manually: https://docs.docker.com/get-docker/", "INFO")
+        return False
+
+    def _install_docker_ubuntu(self) -> bool:
+        """Install Docker on Ubuntu/Debian systems"""
+        commands = [
+            ["sudo", "apt", "update"],
+            ["sudo", "apt", "install", "-y", "docker.io"],
+            ["sudo", "systemctl", "start", "docker"],
+            ["sudo", "systemctl", "enable", "docker"],
+            ["sudo", "usermod", "-aG", "docker", os.environ.get("USER", "ubuntu")]
+        ]
+        
+        for cmd in commands:
+            self.log(f"Running: {' '.join(cmd)}", "INFO")
+            success, output = self.run_command(cmd)
+            if not success:
+                self.log(f"❌ Command failed: {output}", "ERROR")
+                return False
+        
+        self.log("✅ Docker installed successfully", "SUCCESS")
+        self.log("💡 Please log out and back in for group changes to take effect", "WARNING")
+        return True
+
+    def _install_docker_rhel(self) -> bool:
+        """Install Docker on RHEL/CentOS/Fedora systems"""
+        commands = [
+            ["sudo", "dnf", "install", "-y", "docker"],
+            ["sudo", "systemctl", "start", "docker"],
+            ["sudo", "systemctl", "enable", "docker"],
+            ["sudo", "usermod", "-aG", "docker", os.environ.get("USER", "user")]
+        ]
+        
+        for cmd in commands:
+            self.log(f"Running: {' '.join(cmd)}", "INFO")
+            success, output = self.run_command(cmd)
+            if not success:
+                self.log(f"❌ Command failed: {output}", "ERROR")
+                return False
+        
+        self.log("✅ Docker installed successfully", "SUCCESS")
+        self.log("💡 Please log out and back in for group changes to take effect", "WARNING")
+        return True
+
+    def check_and_install_kubectl(self) -> bool:
+        """Check if kubectl is installed, install if missing"""
+        self.log("☸️ Checking kubectl installation...", "INFO")
+        
+        # Check if kubectl is already installed
+        success, output = self.run_command(["kubectl", "version", "--client", "--short"])
+        if success:
+            import re
+            match = re.search(r"Client Version: v(\d+\.\d+)", output)
+            if match:
+                version = match.group(1)
+                self.log(f"✅ kubectl v{version} is already installed", "SUCCESS")
+                return True
+        
+        # kubectl not found, attempt installation
+        self.log("🔧 kubectl not found, attempting installation...", "INFO")
+        
+        # Download and install kubectl
+        commands = [
+            ["curl", "-LO", "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"],
+            ["chmod", "+x", "kubectl"],
+            ["sudo", "mv", "kubectl", "/usr/local/bin/"]
+        ]
+        
+        # Use shell for the first command to handle command substitution
+        self.log("Downloading latest kubectl...", "INFO")
+        download_cmd = 'curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
+        success, output = self.run_command(download_cmd, shell=True)
+        if not success:
+            self.log(f"❌ Failed to download kubectl: {output}", "ERROR")
+            return False
+        
+        # Make executable and move to system path
+        for cmd in commands[1:]:
+            self.log(f"Running: {' '.join(cmd)}", "INFO")
+            success, output = self.run_command(cmd)
+            if not success:
+                self.log(f"❌ Command failed: {output}", "ERROR")
+                return False
+        
+        self.log("✅ kubectl installed successfully", "SUCCESS")
+        return True
+
+    def check_and_install_helm(self) -> bool:
+        """Check if Helm is installed, install if missing"""
+        self.log("⚓ Checking Helm installation...", "INFO")
+        
+        # Check if helm is already installed
+        success, output = self.run_command(["helm", "version", "--short"])
+        if success:
+            import re
+            match = re.search(r"v(\d+\.\d+)", output)
+            if match:
+                version = match.group(1)
+                self.log(f"✅ Helm v{version} is already installed", "SUCCESS")
+                return True
+        
+        # Helm not found, attempt installation
+        self.log("🔧 Helm not found, attempting installation...", "INFO")
+        
+        # Download and run Helm installation script
+        install_cmd = 'curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash'
+        self.log("Downloading and installing Helm...", "INFO")
+        success, output = self.run_command(install_cmd, shell=True)
+        
+        if success:
+            self.log("✅ Helm installed successfully", "SUCCESS")
+            return True
+        else:
+            self.log(f"❌ Helm installation failed: {output}", "ERROR")
+            return False
+
+    def run_command(self, command, shell: bool = False, timeout: int = 120) -> Tuple[bool, str]:
+        """Run a system command and return success status and output"""
+        try:
+            if isinstance(command, str) and shell:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
+            elif isinstance(command, list):
+                result = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
+            else:
+                return False, "Invalid command format"
+            
+            output = result.stdout + result.stderr
+            return result.returncode == 0, output.strip()
+            
+        except subprocess.TimeoutExpired:
+            return False, f"Command timed out after {timeout} seconds"
+        except FileNotFoundError:
+            return False, "Command not found"
+        except Exception as e:
+            return False, str(e)
+
+    def _compare_versions(self, version1: str, version2: str) -> int:
+        """Compare semantic versions"""
+        def normalize(v):
+            return [int(x) for x in v.split(".")]
+
+        v1 = normalize(version1)
+        v2 = normalize(version2)
+
+        # Pad with zeros to make equal length
+        max_len = max(len(v1), len(v2))
+        v1 += [0] * (max_len - len(v1))
+        v2 += [0] * (max_len - len(v2))
+
+        for i in range(max_len):
+            if v1[i] > v2[i]:
+                return 1
+            elif v1[i] < v2[i]:
+                return -1
+        return 0
+
 
 def main():
     """Main function"""
@@ -981,11 +1202,23 @@ def main():
         action="store_true",
         help="Disable automatic version updates (skip auto-update on normal runs)",
     )
+    parser.add_argument(
+        "--check-system-tools",
+        action="store_true",
+        help="Check and install system tools (Docker, kubectl, Helm)",
+    )
 
     args = parser.parse_args()
 
     manager = DependencyManager(verbose=args.verbose)
     manager.print_banner()
+
+    # Check system tools mode: install Docker, kubectl, Helm if missing
+    if args.check_system_tools:
+        if not manager.check_and_install_system_tools():
+            sys.exit(1)
+        manager.log("System tools check completed successfully", "SUCCESS")
+        sys.exit(0)
 
     # Check system requirements
     if not manager.check_python_version():
@@ -1031,6 +1264,11 @@ def main():
             manager.log("✅ Automatic version update completed", "SUCCESS")
     else:
         manager.log("⏭️ Automatic version updates disabled by --no-auto-update", "INFO")
+
+    # Check system tools (Docker, kubectl, Helm) and install if missing
+    manager.log("🔧 Checking system tools...", "INFO")
+    if not manager.check_and_install_system_tools():
+        manager.log("⚠️ Some system tools are missing, but continuing with Python dependencies...", "WARNING")
 
     # Upgrade pip
     if not manager.upgrade_pip():

@@ -1,12 +1,14 @@
 #!/bin/bash
 # Wrapper script pour le nouveau NOAH CLI Python
 # S'assure que le script est exécuté depuis le répertoire racine du projet NOAH
+# Vérifie l'environnement virtuel, les exigences techniques et les dépendances
 
 # Couleurs pour l'affichage
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Fonction pour afficher les erreurs
@@ -22,6 +24,16 @@ info() {
 # Fonction pour afficher les succès
 success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+# Fonction pour afficher les avertissements
+warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+# Fonction pour afficher les étapes
+step() {
+    echo -e "${CYAN}[STEP]${NC} $1"
 }
 
 # Déterminer le répertoire du script
@@ -41,27 +53,173 @@ cd "$SCRIPT_DIR" || {
     exit 1
 }
 
-# Vérifier si l'environnement virtuel existe
-if [[ -f "venv/bin/python" ]]; then
-    # Utiliser l'environnement virtuel Python
-    PYTHON_CMD="venv/bin/python"
-    success "Utilisation de l'environnement virtuel Python"
-elif [[ -f "venv/bin/activate" ]]; then
-    # Activer l'environnement virtuel puis utiliser python3
+# =============================================================================
+# ÉTAPE 1: VÉRIFICATION ET CONFIGURATION DE L'ENVIRONNEMENT VIRTUEL
+# =============================================================================
+step "Vérification de l'environnement virtuel Python..."
+
+check_and_setup_venv() {
+    # Vérifier si l'environnement virtuel existe
+    if [[ ! -d "venv" ]]; then
+        warning "Environnement virtuel non trouvé"
+        info "Création de l'environnement virtuel..."
+        
+        # Vérifier si python3 est disponible
+        if ! command -v python3 &> /dev/null; then
+            error "Python3 n'est pas installé ou non disponible"
+            error "Veuillez installer Python3 avant de continuer"
+            exit 1
+        fi
+        
+        # Créer l'environnement virtuel
+        if ! python3 -m venv venv; then
+            error "Échec de la création de l'environnement virtuel"
+            error "Vérifiez que python3-venv est installé: sudo apt install python3-full python3-venv"
+            exit 1
+        fi
+        
+        success "Environnement virtuel créé avec succès"
+    fi
+    
+    # Vérifier que l'environnement virtuel est fonctionnel
+    if [[ ! -f "venv/bin/python" ]] || [[ ! -f "venv/bin/activate" ]]; then
+        error "Environnement virtuel corrompu ou incomplet"
+        error "Supprimez le dossier 'venv' et relancez le script"
+        exit 1
+    fi
+    
+    # Activer l'environnement virtuel
     source venv/bin/activate
-    PYTHON_CMD="python3"
-    success "Environnement virtuel activé"
-else
-    # Fallback vers python3 système
-    PYTHON_CMD="python3"
-    info "Utilisation de Python système (recommandé: configurer un environnement virtuel)"
-fi
+    
+    # Vérifier que l'activation a fonctionné
+    if [[ "$VIRTUAL_ENV" != "$SCRIPT_DIR/venv" ]]; then
+        error "Échec de l'activation de l'environnement virtuel"
+        exit 1
+    fi
+    
+    success "Environnement virtuel activé: $VIRTUAL_ENV"
+    PYTHON_CMD="python"
+}
+
+check_and_setup_venv
+
+# =============================================================================
+# ÉTAPE 2: VÉRIFICATION DES EXIGENCES TECHNIQUES
+# =============================================================================
+step "Vérification des exigences techniques système..."
+
+check_technical_requirements() {
+    if [[ ! -f "script/noah-tech-requirements" ]]; then
+        warning "Script noah-tech-requirements non trouvé"
+        warning "Passage de la vérification des exigences techniques"
+        return 0
+    fi
+    
+    # Rendre le script exécutable si nécessaire
+    chmod +x script/noah-tech-requirements
+    
+    # Exécuter la vérification des exigences techniques
+    info "Exécution de la validation des exigences techniques..."
+    
+    if "$PYTHON_CMD" script/noah-tech-requirements --profile minimal > /dev/null 2>&1; then
+        success "Toutes les exigences techniques sont satisfaites"
+        return 0
+    else
+        tech_exit_code=$?
+        case $tech_exit_code in
+            1)
+                warning "Certaines exigences techniques ne sont pas satisfaites (80%+ OK)"
+                warning "Le système peut fonctionner mais avec des performances réduites"
+                info "Exécutez 'python script/noah-tech-requirements' pour plus de détails"
+                return 0  # Continuer malgré les avertissements
+                ;;
+            2)
+                error "Exigences techniques critiques non satisfaites"
+                error "Le système risque de ne pas fonctionner correctement"
+                info "Exécutez 'python script/noah-tech-requirements' pour voir les détails"
+                echo -e "${YELLOW}Voulez-vous continuer malgré tout ? (y/N)${NC}"
+                read -r response
+                if [[ "$response" =~ ^[Yy]$ ]]; then
+                    warning "Continuation forcée malgré les exigences non satisfaites"
+                    return 0
+                else
+                    exit 1
+                fi
+                ;;
+            *)
+                error "Erreur lors de la vérification des exigences techniques"
+                exit 1
+                ;;
+        esac
+    fi
+}
+
+check_technical_requirements
+
+# =============================================================================
+# ÉTAPE 3: VÉRIFICATION ET INSTALLATION DES DÉPENDANCES
+# =============================================================================
+step "Vérification des dépendances Python..."
+
+check_and_install_dependencies() {
+    if [[ ! -f "script/noah-deps-manager" ]]; then
+        warning "Script noah-deps-manager non trouvé"
+        warning "Tentative d'installation manuelle des dépendances..."
+        
+        if [[ -f "script/requirements.txt" ]]; then
+            info "Installation des dépendances via pip..."
+            if "$PYTHON_CMD" -m pip install -r script/requirements.txt; then
+                success "Dépendances installées avec succès"
+                return 0
+            else
+                error "Échec de l'installation des dépendances"
+                exit 1
+            fi
+        else
+            warning "Fichier requirements.txt non trouvé"
+            warning "Continuation sans vérification des dépendances"
+            return 0
+        fi
+    fi
+    
+    # Rendre le script exécutable si nécessaire
+    chmod +x script/noah-deps-manager
+    
+    # Vérifier d'abord si les dépendances sont déjà installées
+    info "Vérification des dépendances existantes..."
+    
+    # Utiliser l'option --auto-install pour vérifier et installer uniquement ce qui manque
+    if "$PYTHON_CMD" script/noah-deps-manager --auto-install; then
+        success "Toutes les dépendances sont installées et à jour"
+        return 0
+    else
+        deps_exit_code=$?
+        error "Échec de l'installation ou de la vérification des dépendances"
+        error "Code de sortie: $deps_exit_code"
+        info "Essayez manuellement: python script/noah-deps-manager --auto-install"
+        exit 1
+    fi
+}
+
+check_and_install_dependencies
+
+# =============================================================================
+# ÉTAPE 4: EXÉCUTION DU CLI NOAH
+# =============================================================================
+step "Lancement du CLI NOAH..."
 
 # Vérifier que le script noah.py existe
 if [[ ! -f "script/noah.py" ]]; then
     error "Script noah.py non trouvé dans script/"
     exit 1
 fi
+
+# Afficher un résumé avant l'exécution
+info "Environnement prêt:"
+info "  • Environnement virtuel: $VIRTUAL_ENV"
+info "  • Python: $("$PYTHON_CMD" --version)"
+info "  • Répertoire de travail: $(pwd)"
+echo
 
 # Exécuter le CLI Python NOAH
 exec "$PYTHON_CMD" script/noah.py "$@"

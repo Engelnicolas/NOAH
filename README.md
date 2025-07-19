@@ -404,10 +404,9 @@ Ce projet est sous licence **GPL v3**. Voir [LICENSE](LICENSE) pour plus de dét
 
 **⭐ Si NOAH vous aide, n'hésitez pas à mettre une étoile !**
 
-[🐛 Signaler un bug](https://github.com/Engelnicolas/NOAH/issues) • [� Demander une fonctionnalité](https://github.com/Engelnicolas/NOAH/discussions) • [📖 Wiki](https://github.com/Engelnicolas/NOAH/wiki)
+[🐛 Signaler un bug](https://github.com/Engelnicolas/NOAH/issues) • [💡 Demander une fonctionnalité](https://github.com/Engelnicolas/NOAH/discussions) • [📖 Wiki](https://github.com/Engelnicolas/NOAH/wiki)
 
 </div>
-| `noah-setup` | Configuration initiale de l'environnement | 👤 User |
 | `noah-tech-requirements` | Vérification des prérequis techniques | 🔒 Root |
 
 ### 💡 Exemples d'utilisation

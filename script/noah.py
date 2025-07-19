@@ -38,7 +38,7 @@ class NoahCLI:
     def __init__(self):
         """Initialize the NOAH CLI."""
         self.script_dir = Path(__file__).parent.resolve()
-        self.version = "5.0.0"
+        self.version = "0.9"
         self.name = "noah"
         self.description = "Next Open-source Architecture Hub CLI"
         
@@ -391,7 +391,7 @@ Next Open-source Architecture Hub
             "Monitoring": ["monitoring"],
             "Code Quality": ["fix", "linter", "linting"],
             "Dependencies": ["deps", "deps-manager"],
-            "Setup": ["setup", "tech-requirements", "requirements"]
+            "Setup": ["tech-requirements", "requirements"]
         }
         
         for category, commands in categories.items():
@@ -431,7 +431,6 @@ Next Open-source Architecture Hub
         print()
         print(f"{Colors.BLUE}Infrastructure:{Colors.NC}")
         print("    ./noah deploy --help                    # Aide pour le déploiement")
-        print("    ./noah setup --dev                      # Configuration développement")
         print()
         print(f"{Colors.BLUE}Monitoring:{Colors.NC}")
         print("    ./noah monitoring status                # État du monitoring")

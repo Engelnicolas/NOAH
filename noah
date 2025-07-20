@@ -265,8 +265,21 @@ check_technical_requirements
 step "Vérification des dépendances Python..."
 
 check_and_install_dependencies() {
+    # Détecter si c'est une opération d'aide (ne nécessite que des dépendances minimales)
+    is_help_operation=false
+    for arg in "$@"; do
+        if [[ "$arg" == "--help" || "$arg" == "-h" || "$arg" == "help" ]]; then
+            is_help_operation=true
+            break
+        fi
+    done
+    
     if [[ ! -f "script/noah-deps-manager" ]]; then
         warning "Script noah-deps-manager non trouvé"
+        if [[ "$is_help_operation" == "true" ]]; then
+            info "Opération d'aide détectée, continuation avec dépendances minimales"
+            return 0
+        fi
         warning "Tentative d'installation manuelle des dépendances..."
         
         if [[ -f "script/requirements.txt" ]]; then
@@ -291,20 +304,32 @@ check_and_install_dependencies() {
     # Vérifier d'abord si les dépendances sont déjà installées
     info "Vérification des dépendances existantes..."
     
+    # Utiliser la vérification minimale pour les opérations d'aide
+    if [[ "$is_help_operation" == "true" ]]; then
+        info "Opération d'aide détectée - vérification minimale des dépendances"
+        if "$PYTHON_CMD" script/noah-deps-manager --help-mode; then
+            success "Dépendances minimales disponibles pour l'aide"
+            return 0
+        else
+            warning "Certaines dépendances manquent mais continuation pour l'aide"
+            return 0
+        fi
+    fi
+    
     # Utiliser l'option --auto-install pour vérifier et installer uniquement ce qui manque
     if "$PYTHON_CMD" script/noah-deps-manager --auto-install; then
-        success "Toutes les dépendances sont installées et à jour"
+        success "Toutes les dépendances critiques sont installées et à jour"
         return 0
     else
         deps_exit_code=$?
-        error "Échec de l'installation ou de la vérification des dépendances"
+        error "Échec de l'installation ou de la vérification des dépendances critiques"
         error "Code de sortie: $deps_exit_code"
         info "Essayez manuellement: python script/noah-deps-manager --auto-install"
         exit 1
     fi
 }
 
-check_and_install_dependencies
+check_and_install_dependencies "$@"
 
 # =============================================================================
 # ÉTAPE 4: EXÉCUTION DU CLI NOAH

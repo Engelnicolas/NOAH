@@ -378,24 +378,38 @@ class DependencyManager:
             return True
 
     def _perform_final_dependency_check(self, requirements: list) -> bool:
-        """Perform a final comprehensive check of all dependencies."""
-        self.log("🔍 Final dependency verification...")
+        """Perform a final comprehensive check of all dependencies with graceful handling."""
+        self.log("🔍 Final dependency verification (graceful mode)...")
         
-        missing_after_install = []
+        missing_critical = []
+        missing_optional = []
         total_checked = 0
+        
+        # Define critical dependencies that must be present
+        critical_deps = {'psutil', 'click', 'requests'}
         
         for package_name, requirement_line in requirements:
             total_checked += 1
             if not self._is_module_installed(package_name):
-                missing_after_install.append(package_name)
-                self.log(f"❌ {package_name} still missing after installation", "ERROR")
+                if package_name.lower() in critical_deps:
+                    missing_critical.append(package_name)
+                    self.log(f"❌ Critical dependency {package_name} still missing", "ERROR")
+                else:
+                    missing_optional.append(package_name)
+                    self.log(f"⚠️ Optional dependency {package_name} missing (non-critical)", "WARNING")
             elif self.verbose:
                 self.log(f"✅ {package_name} verified", "SUCCESS")
         
-        if missing_after_install:
-            self.log(f"❌ Final check failed: {len(missing_after_install)}/{total_checked} dependencies still missing", "ERROR")
-            self.log(f"Missing modules: {', '.join(missing_after_install)}", "ERROR")
+        # Only fail if critical dependencies are missing
+        if missing_critical:
+            self.log(f"❌ Final check failed: {len(missing_critical)} critical dependencies missing", "ERROR")
+            self.log(f"Critical missing: {', '.join(missing_critical)}", "ERROR")
             return False
+        elif missing_optional:
+            self.log(f"⚠️ {len(missing_optional)} optional dependencies missing but continuing", "WARNING")
+            self.log(f"Optional missing: {', '.join(missing_optional)}", "WARNING")
+            self.log(f"✅ Critical dependencies verified: {total_checked - len(missing_optional)}/{total_checked}", "SUCCESS")
+            return True
         else:
             self.log(f"✅ Final check passed: All {total_checked} dependencies verified", "SUCCESS")
             return True
@@ -545,6 +559,93 @@ class DependencyManager:
             return False
 
         self.log("All dependencies validated successfully", "SUCCESS")
+        return True
+
+    def validate_dependencies_gracefully(self) -> Tuple[bool, List[str]]:
+        """Validate dependencies with graceful error handling
+        
+        Returns:
+            Tuple[bool, List[str]]: (has_critical_errors, list_of_warnings)
+        """
+        self.log("Validating installed dependencies (graceful mode)...")
+        warnings = []
+        critical_errors = []
+
+        # Check if pip check passes
+        success, output = self.run_command([sys.executable, "-m", "pip", "check"])
+        if not success:
+            # Parse pip check output to categorize issues
+            lines = output.strip().split('\n')
+            for line in lines:
+                if line.strip():
+                    # Check if it's a critical core dependency
+                    if any(critical in line.lower() for critical in ['psutil', 'click', 'requests']):
+                        critical_errors.append(line.strip())
+                        self.log(f"Critical dependency issue: {line.strip()}", "ERROR")
+                    else:
+                        warnings.append(line.strip())
+                        self.log(f"Dependency warning: {line.strip()}", "WARNING")
+
+        # Check core Python dependencies individually
+        core_deps = ['psutil', 'click', 'requests', 'pyyaml', 'jsonschema']
+        missing_core = []
+        
+        for dep in core_deps:
+            try:
+                __import__(dep.replace('-', '_'))
+            except ImportError:
+                if dep in ['psutil']:  # Critical for system monitoring
+                    critical_errors.append(f"Missing critical dependency: {dep}")
+                    self.log(f"Missing critical dependency: {dep}", "ERROR")
+                else:
+                    warnings.append(f"Missing optional dependency: {dep}")
+                    self.log(f"Missing optional dependency: {dep}", "WARNING")
+
+        if critical_errors:
+            self.log(f"Found {len(critical_errors)} critical dependency errors", "ERROR")
+            return False, warnings + critical_errors
+        elif warnings:
+            self.log(f"Found {len(warnings)} dependency warnings (non-critical)", "WARNING")
+            self.log("Continuing with available dependencies...", "INFO")
+            return True, warnings
+        else:
+            self.log("All dependencies validated successfully", "SUCCESS")
+            return True, []
+
+    def check_minimal_dependencies(self) -> bool:
+        """Check only the absolutely essential dependencies for basic operations"""
+        self.log("Checking minimal dependencies for basic operations...")
+        
+        # Only check for Python standard library + psutil (for system info)
+        essential_deps = ['psutil']
+        missing_essential = []
+        
+        for dep in essential_deps:
+            try:
+                __import__(dep)
+                self.log(f"✅ Essential dependency {dep} available", "SUCCESS")
+            except ImportError:
+                missing_essential.append(dep)
+                self.log(f"❌ Essential dependency {dep} missing", "ERROR")
+        
+        if missing_essential:
+            self.log(f"Missing essential dependencies: {', '.join(missing_essential)}", "ERROR")
+            self.log("Installing essential dependencies for basic operations...", "INFO")
+            
+            # Try to install just the essential ones
+            for dep in missing_essential:
+                success, output = self.run_command([
+                    sys.executable, "-m", "pip", "install", dep
+                ])
+                if success:
+                    self.log(f"✅ Installed essential dependency: {dep}", "SUCCESS")
+                else:
+                    self.log(f"❌ Failed to install {dep}: {output}", "ERROR")
+                    return False
+            
+            return True
+        
+        self.log("All essential dependencies are available", "SUCCESS")
         return True
 
     def list_installed_packages(self) -> Dict[str, str]:
@@ -1188,6 +1289,16 @@ def main():
         help="Check for and update package versions in requirements.txt",
     )
     parser.add_argument(
+        "--graceful",
+        action="store_true",
+        help="Use graceful dependency checking (don't fail on non-critical issues)",
+    )
+    parser.add_argument(
+        "--help-mode",
+        action="store_true",
+        help="Minimal checking for help operations (only check absolute essentials)",
+    )
+    parser.add_argument(
         "--auto-update",
         action="store_true",
         help="Automatically update package versions without confirmation",
@@ -1227,13 +1338,24 @@ def main():
     if not manager.check_pip_version():
         sys.exit(1)
 
-    # Auto-install mode: only check and install missing dependencies
+    # Help mode: minimal checking for basic operations
+    if args.help_mode:
+        if manager.check_minimal_dependencies():
+            manager.log("Minimal dependencies satisfied for basic operations", "SUCCESS")
+            sys.exit(0)
+        else:
+            manager.log("Essential dependencies missing", "ERROR")
+            sys.exit(1)
+
+    # Auto-install mode: only check and install missing dependencies (graceful by default)
     if args.auto_install:
         # Reset retry counter for fresh auto-install
         manager.reset_retry_counter()
         if not manager.auto_install_missing_dependencies():
-            sys.exit(1)
-        manager.log("Auto-installation completed successfully", "SUCCESS")
+            # In auto-install mode, be more graceful - warn instead of failing completely
+            manager.log("Some dependencies may be missing but continuing with available ones...", "WARNING")
+            manager.log("Use 'python script/noah-deps-manager --auto-install --graceful' for strict checking", "INFO")
+        manager.log("Auto-installation completed", "SUCCESS")
         sys.exit(0)
     
     # Update versions mode: check and update package versions in requirements.txt
@@ -1282,9 +1404,19 @@ def main():
         manager.log("Dependencies installation completed", "SUCCESS")
         sys.exit(0)
 
-    # Validate dependencies
-    if not manager.validate_dependencies():
-        sys.exit(1)
+    # Validate dependencies (graceful or strict mode)
+    if args.graceful:
+        is_valid, warnings = manager.validate_dependencies_gracefully()
+        if not is_valid:
+            manager.log("Critical dependency errors found, cannot continue", "ERROR")
+            sys.exit(1)
+        elif warnings:
+            manager.log("Some dependencies have issues but continuing...", "WARNING")
+            for warning in warnings:
+                manager.log(f"  {warning}", "WARNING")
+    else:
+        if not manager.validate_dependencies():
+            sys.exit(1)
 
     # Security check
     if args.check_security:

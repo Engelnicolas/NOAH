@@ -39,7 +39,7 @@ spec:
               - ALL
           args:
             - "--provider=oidc"
-            - "--oidc-issuer-url=http://keycloak.noah.svc.cluster.local/realms/noah"
+            - "--oidc-issuer-url=https://keycloak.noah.local/realms/noah"
             - "--client-id=oauth2-proxy"
             - "--email-domain=*"
             - "--upstream=static://202"

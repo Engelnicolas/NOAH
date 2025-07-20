@@ -63,10 +63,9 @@ resources:
 persistence:
   enabled: true
   size: 20Gi
-  storageClass: ""
+  storageClass: "standard"
   accessMode: ReadWriteOnce
-  annotations:
-    volume.beta.kubernetes.io/storage-class: "default"
+  annotations: {}
 
 # =============================================================================
 # DATABASE CONFIGURATION
@@ -202,7 +201,7 @@ env:
 
 # Global settings
 global:
-  storageClass: ""
+  storageClass: "standard"
   domain: "noah.local"
   environment: "development"
   timezone: "UTC"

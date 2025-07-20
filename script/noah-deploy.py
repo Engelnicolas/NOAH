@@ -349,7 +349,7 @@ class HelmDeployer:
         # Deployment order - exact sequence required
         # Phase 1: Infrastructure foundations
         self.priority_charts = [
-            "noah-common",  # Common resources and shared configurations
+            # "noah-common" is a library chart, not installable
             "samba4",  # LDAP/AD directory services
             "keycloak",  # Authentication and authorization
             "oauth2-proxy",  # OAuth2 proxy for SSO

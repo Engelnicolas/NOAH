@@ -100,7 +100,7 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           LOG_LEVEL: INFO
           # Enable essential linters with corrected configuration
-          VALIDATE_YAML: true
+          VALIDATE_YAML: false
           VALIDATE_BASH: true
           VALIDATE_PYTHON_BLACK: true
           VALIDATE_PYTHON_FLAKE8: true

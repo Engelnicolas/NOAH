@@ -5,6 +5,7 @@ metadata:
   namespace: noah
   labels:
     app: oauth2-proxy-minimal
+    component: authentication-proxy
 spec:
   replicas: 1
   selector:
@@ -14,6 +15,7 @@ spec:
     metadata:
       labels:
         app: oauth2-proxy-minimal
+        component: authentication-proxy
     spec:
       securityContext:
         runAsNonRoot: true
@@ -90,6 +92,7 @@ metadata:
   namespace: noah
   labels:
     app: oauth2-proxy-minimal
+    component: authentication-proxy
 spec:
   type: ClusterIP
   ports:

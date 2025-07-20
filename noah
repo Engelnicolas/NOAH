@@ -224,36 +224,70 @@ check_technical_requirements() {
     # Exécuter la vérification des exigences techniques
     info "Exécution de la validation des exigences techniques..."
     
-    if "$PYTHON_CMD" script/noah-tech-requirements --profile minimal > /dev/null 2>&1; then
+    # Capture both stdout and stderr to show detailed errors
+    tech_output_file=$(mktemp)
+    tech_error_file=$(mktemp)
+    
+    if "$PYTHON_CMD" script/noah-tech-requirements --profile minimal > "$tech_output_file" 2> "$tech_error_file"; then
         success "Toutes les exigences techniques sont satisfaites"
+        # Clean up temp files
+        rm -f "$tech_output_file" "$tech_error_file"
         return 0
     else
         tech_exit_code=$?
+        
+        # Show detailed error information
+        if [[ -s "$tech_error_file" ]]; then
+            error "Erreurs détaillées lors de la validation des exigences techniques:"
+            echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+            cat "$tech_error_file"
+            echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+        fi
+        
+        if [[ -s "$tech_output_file" ]]; then
+            info "Sortie de la validation des exigences techniques:"
+            echo -e "${BLUE}───────────────────────────────────────────────────────────────${NC}"
+            cat "$tech_output_file"
+            echo -e "${BLUE}───────────────────────────────────────────────────────────────${NC}"
+        fi
+        
         case $tech_exit_code in
             1)
                 warning "Certaines exigences techniques ne sont pas satisfaites (80%+ OK)"
                 warning "Le système peut fonctionner mais avec des performances réduites"
-                info "Exécutez 'python script/noah-tech-requirements' pour plus de détails"
+                info "Consultez les détails ci-dessus pour les problèmes spécifiques"
+                # Clean up temp files
+                rm -f "$tech_output_file" "$tech_error_file"
                 return 0  # Continuer malgré les avertissements
                 ;;
             2)
                 error "Exigences techniques critiques non satisfaites"
                 error "Le système risque de ne pas fonctionner correctement"
-                info "Exécutez 'python script/noah-tech-requirements' pour voir les détails"
+                info "Consultez les erreurs détaillées ci-dessus"
                 echo -e "${YELLOW}Voulez-vous continuer malgré tout ? (y/N)${NC}"
                 read -r response
                 if [[ "$response" =~ ^[Yy]$ ]]; then
                     warning "Continuation forcée malgré les exigences non satisfaites"
+                    # Clean up temp files
+                    rm -f "$tech_output_file" "$tech_error_file"
                     return 0
                 else
+                    # Clean up temp files before exit
+                    rm -f "$tech_output_file" "$tech_error_file"
                     exit 1
                 fi
                 ;;
             *)
-                error "Erreur lors de la vérification des exigences techniques"
+                error "Erreur inattendue lors de la vérification des exigences techniques (code: $tech_exit_code)"
+                info "Consultez les erreurs détaillées ci-dessus"
+                # Clean up temp files
+                rm -f "$tech_output_file" "$tech_error_file"
                 exit 1
                 ;;
         esac
+        
+        # Clean up temp files
+        rm -f "$tech_output_file" "$tech_error_file"
     fi
 }
 

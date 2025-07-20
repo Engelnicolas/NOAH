@@ -188,22 +188,42 @@ class TechnicalRequirementsValidator:
                             print(
                                 f"  {Colors.YELLOW}⚠{Colors.END} {tool}: v{version} < v{config['required']} required"
                             )
-                            results[tool] = {"status": "warn", "version": version}
+                            print(f"    {Colors.BLUE}💡 Solution:{Colors.END} Update {tool} to version {config['required']} or higher")
+                            results[tool] = {"status": "warn", "version": version, "required": config["required"]}
                     else:
                         print(
                             f"  {Colors.YELLOW}⚠{Colors.END} {tool}: installed but version unknown"
                         )
-                        results[tool] = {"status": "warn", "version": "unknown"}
+                        print(f"    {Colors.BLUE}💡 Debug:{Colors.END} Command output: {result.stdout[:100]}...")
+                        results[tool] = {"status": "warn", "version": "unknown", "output": result.stdout}
                 else:
-                    print(f"  {Colors.RED}✗{Colors.END} {tool}: command failed")
-                    results[tool] = {"status": "fail", "version": None}
+                    print(f"  {Colors.RED}✗{Colors.END} {tool}: command failed (exit code: {result.returncode})")
+                    if result.stderr:
+                        print(f"    {Colors.RED}❌ Error:{Colors.END} {result.stderr.strip()}")
+                    if result.stdout:
+                        print(f"    {Colors.BLUE}📝 Output:{Colors.END} {result.stdout.strip()}")
+                    print(f"    {Colors.BLUE}💡 Solution:{Colors.END} Install {tool} or check PATH configuration")
+                    results[tool] = {"status": "fail", "version": None, "error": result.stderr, "output": result.stdout}
 
             except subprocess.TimeoutExpired:
-                print(f"  {Colors.RED}✗{Colors.END} {tool}: command timeout")
-                results[tool] = {"status": "fail", "version": None}
+                print(f"  {Colors.RED}✗{Colors.END} {tool}: command timeout (>10s)")
+                print(f"    {Colors.BLUE}💡 Solution:{Colors.END} Check if {tool} is responding or increase timeout")
+                results[tool] = {"status": "fail", "version": None, "error": "Command timeout"}
             except FileNotFoundError:
-                print(f"  {Colors.RED}✗{Colors.END} {tool}: not found")
-                results[tool] = {"status": "fail", "version": None}
+                print(f"  {Colors.RED}✗{Colors.END} {tool}: not found in PATH")
+                print(f"    {Colors.BLUE}💡 Solution:{Colors.END} Install {tool} using your package manager")
+                if tool == "python":
+                    print(f"    {Colors.BLUE}📦 Install:{Colors.END} sudo apt-get install python3 (Ubuntu/Debian)")
+                elif tool == "git":
+                    print(f"    {Colors.BLUE}📦 Install:{Colors.END} sudo apt-get install git (Ubuntu/Debian)")
+                elif tool == "make":
+                    print(f"    {Colors.BLUE}📦 Install:{Colors.END} sudo apt-get install build-essential (Ubuntu/Debian)")
+                results[tool] = {"status": "fail", "version": None, "error": "Command not found"}
+            except Exception as e:
+                print(f"  {Colors.RED}✗{Colors.END} {tool}: unexpected error")
+                print(f"    {Colors.RED}❌ Exception:{Colors.END} {str(e)}")
+                print(f"    {Colors.BLUE}💡 Solution:{Colors.END} Check system configuration or contact support")
+                results[tool] = {"status": "fail", "version": None, "error": str(e)}
 
         return results
 
@@ -273,8 +293,17 @@ class TechnicalRequirementsValidator:
                     results["storage_class"] = {"status": "warn"}
 
             else:
-                print(f"  {Colors.RED}✗{Colors.END} Cluster connectivity: Failed")
-                print(f"  {Colors.BLUE}ℹ{Colors.END} Attempting to set up Kubernetes cluster with Minikube...")
+                print(f"  {Colors.RED}✗{Colors.END} Cluster connectivity: Failed (exit code: {result.returncode})")
+                if result.stderr:
+                    print(f"    {Colors.RED}❌ Error details:{Colors.END} {result.stderr.strip()}")
+                if result.stdout:
+                    print(f"    {Colors.BLUE}📝 Output:{Colors.END} {result.stdout.strip()}")
+                print(f"    {Colors.BLUE}💡 Common causes:{Colors.END}")
+                print(f"      - No Kubernetes cluster running")
+                print(f"      - kubectl not configured (missing ~/.kube/config)")
+                print(f"      - Cluster endpoint unreachable")
+                print(f"      - Authentication issues")
+                print(f"  {Colors.BLUE}🔧 Attempting to set up Kubernetes cluster with Minikube...{Colors.END}")
                 
                 if self.setup_minikube_cluster():
                     # Retry connectivity check after setup
@@ -285,17 +314,40 @@ class TechnicalRequirementsValidator:
                         print(f"  {Colors.GREEN}✓{Colors.END} Cluster connectivity: OK (after setup)")
                         results["connectivity"] = {"status": "pass"}
                     else:
-                        print(f"  {Colors.RED}✗{Colors.END} Cluster setup failed")
-                        results["connectivity"] = {"status": "fail"}
+                        print(f"  {Colors.RED}✗{Colors.END} Cluster setup failed (exit code: {retry_result.returncode})")
+                        if retry_result.stderr:
+                            print(f"    {Colors.RED}❌ Setup error:{Colors.END} {retry_result.stderr.strip()}")
+                        print(f"    {Colors.BLUE}💡 Manual setup:{Colors.END} Run 'minikube start' manually")
+                        results["connectivity"] = {"status": "fail", "error": retry_result.stderr}
                 else:
-                    results["connectivity"] = {"status": "fail"}
+                    print(f"  {Colors.RED}✗{Colors.END} Minikube setup failed")
+                    print(f"    {Colors.BLUE}💡 Manual steps:{Colors.END}")
+                    print(f"      1. Install minikube: curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64")
+                    print(f"      2. Start cluster: minikube start")
+                    print(f"      3. Verify: kubectl cluster-info")
+                    results["connectivity"] = {"status": "fail", "error": "Minikube setup failed"}
 
         except subprocess.TimeoutExpired:
-            print(f"  {Colors.RED}✗{Colors.END} Cluster connectivity: Timeout")
-            results["connectivity"] = {"status": "fail"}
+            print(f"  {Colors.RED}✗{Colors.END} Cluster connectivity: Timeout (>15s)")
+            print(f"    {Colors.BLUE}💡 Possible causes:{Colors.END}")
+            print(f"      - Cluster endpoint is slow or unreachable")
+            print(f"      - Network connectivity issues")
+            print(f"      - Cluster is starting up")
+            print(f"    {Colors.BLUE}💡 Solution:{Colors.END} Check network and try again")
+            results["connectivity"] = {"status": "fail", "error": "Connection timeout"}
         except FileNotFoundError:
-            print(f"  {Colors.RED}✗{Colors.END} kubectl not found")
-            results["connectivity"] = {"status": "fail"}
+            print(f"  {Colors.RED}✗{Colors.END} kubectl not found in PATH")
+            print(f"    {Colors.BLUE}💡 Installation instructions:{Colors.END}")
+            print(f"      # Download kubectl")
+            print(f"      curl -LO \"https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl\"")
+            print(f"      chmod +x kubectl")
+            print(f"      sudo mv kubectl /usr/local/bin/")
+            results["connectivity"] = {"status": "fail", "error": "kubectl not installed"}
+        except Exception as e:
+            print(f"  {Colors.RED}✗{Colors.END} Unexpected error during Kubernetes check")
+            print(f"    {Colors.RED}❌ Exception:{Colors.END} {str(e)}")
+            print(f"    {Colors.BLUE}💡 Solution:{Colors.END} Check system configuration and try again")
+            results["connectivity"] = {"status": "fail", "error": str(e)}
 
         return results
 
@@ -1063,25 +1115,67 @@ class TechnicalRequirementsValidator:
         print("   python3 script/noah-tech-requirements --profile minimal --verbose")
 
     def validate_all(self) -> Dict:
-        """Run all validation checks"""
+        """Run all validation checks with enhanced error handling"""
         self.print_banner()
 
         results = {}
+        validation_errors = []
 
-        # System resources
-        results["system"] = self.check_system_resources()
+        try:
+            # System resources
+            print(f"\n{Colors.BLUE}🔍 Checking system resources...{Colors.END}")
+            results["system"] = self.check_system_resources()
+        except Exception as e:
+            error_msg = f"System resources check failed: {str(e)}"
+            print(f"  {Colors.RED}✗{Colors.END} {error_msg}")
+            validation_errors.append(error_msg)
+            results["system"] = {"status": "error", "error": str(e)}
 
-        # Software dependencies
-        results["software"] = self.check_software_dependencies()
+        try:
+            # Software dependencies
+            print(f"\n{Colors.BLUE}🔍 Checking software dependencies...{Colors.END}")
+            results["software"] = self.check_software_dependencies()
+        except Exception as e:
+            error_msg = f"Software dependencies check failed: {str(e)}"
+            print(f"  {Colors.RED}✗{Colors.END} {error_msg}")
+            validation_errors.append(error_msg)
+            results["software"] = {"status": "error", "error": str(e)}
 
-        # Kubernetes cluster
-        results["kubernetes"] = self.check_kubernetes_cluster()
+        try:
+            # Kubernetes cluster
+            print(f"\n{Colors.BLUE}🔍 Checking Kubernetes cluster...{Colors.END}")
+            results["kubernetes"] = self.check_kubernetes_cluster()
+        except Exception as e:
+            error_msg = f"Kubernetes cluster check failed: {str(e)}"
+            print(f"  {Colors.RED}✗{Colors.END} {error_msg}")
+            validation_errors.append(error_msg)
+            results["kubernetes"] = {"status": "error", "error": str(e)}
 
-        # Helm repositories
-        results["helm"] = self.check_helm_repositories()
+        try:
+            # Helm repositories
+            print(f"\n{Colors.BLUE}🔍 Checking Helm repositories...{Colors.END}")
+            results["helm"] = self.check_helm_repositories()
+        except Exception as e:
+            error_msg = f"Helm repositories check failed: {str(e)}"
+            print(f"  {Colors.RED}✗{Colors.END} {error_msg}")
+            validation_errors.append(error_msg)
+            results["helm"] = {"status": "error", "error": str(e)}
+
+        # Report any validation errors
+        if validation_errors:
+            print(f"\n{Colors.RED}❌ VALIDATION ERRORS ENCOUNTERED:{Colors.END}")
+            print("=" * 60)
+            for i, error in enumerate(validation_errors, 1):
+                print(f"{i}. {error}")
+            print("=" * 60)
+            print(f"{Colors.BLUE}💡 These errors prevented complete validation.{Colors.END}")
+            print(f"{Colors.BLUE}💡 Fix the errors above and re-run the validation.{Colors.END}")
 
         # Generate report
-        self.generate_report(results)
+        try:
+            self.generate_report(results)
+        except Exception as e:
+            print(f"\n{Colors.YELLOW}⚠{Colors.END} Failed to generate validation report: {str(e)}")
 
         return results
 
@@ -1128,42 +1222,103 @@ Examples:
         action="store_true",
         help="Run full comprehensive validation (default behavior)",
     )
+    parser.add_argument(
+        "--test-error",
+        action="store_true",
+        help="Test error handling (for debugging purposes)",
+    )
 
     args = parser.parse_args()
 
-    validator = TechnicalRequirementsValidator(profile=args.profile)
+    try:
+        validator = TechnicalRequirementsValidator(profile=args.profile)
 
-    # Handle different modes
-    if args.troubleshoot:
-        validator.show_troubleshooting_help()
-        return
+        # Handle different modes
+        if args.troubleshoot:
+            validator.show_troubleshooting_help()
+            return
 
-    if args.setup_k8s:
-        validator.setup_kubernetes_environment()
-        return
+        if args.setup_k8s:
+            validator.setup_kubernetes_environment()
+            return
 
-    if args.quick:
-        validator.quick_verify()
-        return
+        if args.quick:
+            validator.quick_verify()
+            return
 
-    # Default: Full validation
-    results = validator.validate_all()
+        if args.test_error:
+            # Force an error for testing
+            print(f"\n{Colors.YELLOW}🧪 Testing error handling...{Colors.END}")
+            raise Exception("This is a test error to demonstrate detailed error reporting")
 
-    # Exit with appropriate code
-    total_checks = sum(len(checks) for checks in results.values())
-    passed_checks = sum(
-        1
-        for checks in results.values()
-        for check in checks.values()
-        if check["status"] == "pass"
-    )
+        # Default: Full validation
+        results = validator.validate_all()
 
-    if passed_checks == total_checks:
-        sys.exit(0)
-    elif passed_checks >= total_checks * 0.8:
-        sys.exit(1)
-    else:
-        sys.exit(2)
+        # Exit with appropriate code based on validation results
+        total_checks = 0
+        passed_checks = 0
+        failed_checks = 0
+        error_checks = 0
+
+        for category, checks in results.items():
+            if isinstance(checks, dict):
+                if "status" in checks and checks["status"] == "error":
+                    # Handle category-level errors
+                    error_checks += 1
+                    total_checks += 1
+                else:
+                    # Handle individual checks
+                    for check_name, check_result in checks.items():
+                        if isinstance(check_result, dict) and "status" in check_result:
+                            total_checks += 1
+                            if check_result["status"] == "pass":
+                                passed_checks += 1
+                            elif check_result["status"] == "error":
+                                error_checks += 1
+                            else:
+                                failed_checks += 1
+
+        # Print final summary
+        print(f"\n{Colors.BOLD}VALIDATION SUMMARY:{Colors.END}")
+        print("=" * 50)
+        print(f"Total checks: {total_checks}")
+        print(f"{Colors.GREEN}✓ Passed: {passed_checks}{Colors.END}")
+        print(f"{Colors.YELLOW}⚠ Failed/Warning: {failed_checks}{Colors.END}")
+        print(f"{Colors.RED}❌ Errors: {error_checks}{Colors.END}")
+
+        if error_checks > 0:
+            print(f"\n{Colors.RED}❌ Critical errors encountered during validation.{Colors.END}")
+            print(f"{Colors.BLUE}💡 Fix the errors above and re-run validation.{Colors.END}")
+            sys.exit(2)
+        elif total_checks == 0:
+            print(f"\n{Colors.YELLOW}⚠ No checks could be performed.{Colors.END}")
+            sys.exit(2)
+        elif passed_checks == total_checks:
+            print(f"\n{Colors.GREEN}✅ All validation checks passed!{Colors.END}")
+            sys.exit(0)
+        elif passed_checks >= total_checks * 0.8:
+            print(f"\n{Colors.YELLOW}⚠ Most checks passed (≥80%), but some issues found.{Colors.END}")
+            sys.exit(1)
+        else:
+            print(f"\n{Colors.RED}❌ Multiple critical issues found.{Colors.END}")
+            sys.exit(2)
+
+    except KeyboardInterrupt:
+        print(f"\n\n{Colors.YELLOW}⚠ Validation interrupted by user{Colors.END}")
+        sys.exit(130)
+    except Exception as e:
+        print(f"\n{Colors.RED}❌ FATAL ERROR during validation:{Colors.END}")
+        print(f"   Exception: {str(e)}")
+        print(f"   Type: {type(e).__name__}")
+        
+        # Print traceback for debugging
+        import traceback
+        print(f"\n{Colors.BLUE}📋 Full traceback for debugging:{Colors.END}")
+        traceback.print_exc()
+        
+        print(f"\n{Colors.BLUE}💡 This is likely a bug in the validation script.{Colors.END}")
+        print(f"{Colors.BLUE}💡 Please report this error with the above traceback.{Colors.END}")
+        sys.exit(3)
 
 
 if __name__ == "__main__":

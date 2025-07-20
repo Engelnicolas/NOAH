@@ -343,8 +343,8 @@ class HelmDeployer:
         self.namespace = namespace
         self.timeout = timeout
         self.script_dir = Path(__file__).parent
-        self.helm_dir = self.script_dir.parent / "Helm"
-        self.values_file = self.helm_dir / "values" / "values-root.yaml"
+        self.helm_dir = self.script_dir.parent / "helm"
+        self.values_file = self.script_dir / "values" / "values-root.yaml"
 
         # Deployment order - exact sequence required
         # Phase 1: Infrastructure foundations

@@ -46,9 +46,9 @@ class TechnicalRequirementsValidator:
                 "python_version": "3.8",
             },
             "root": {
-                "cpu_cores": 8,
+                "cpu_cores": 6,
                 "ram_gb": 28,
-                "storage_gb": 500,
+                "storage_gb": 400,
                 "kubernetes_version": "1.24",
                 "helm_version": "3.10",
                 "docker_version": "20.10",

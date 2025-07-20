@@ -30,7 +30,7 @@ psutil>=7.0.0
 # =============================================================================
 
 # YAML parsing and generation
-# PyYAML>=6.0,<7.0
+PyYAML>=6.0,<7.0
 # Used by: helm-values-validator.py, noah.py dependency check
 # Features: helm values validation, YAML configuration parsing
 

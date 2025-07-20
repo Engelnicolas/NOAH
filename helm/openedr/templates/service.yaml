@@ -7,6 +7,6 @@ spec:
   selector:
     app: openedr
   ports:
-    - port: { { .Values.service.port } }
+    - port: {{ .Values.service.port }}
       targetPort: 8443
-  type: { { .Values.service.type } }
+  type: {{ .Values.service.type }}

@@ -410,6 +410,101 @@ class HelmDeployer:
             self.logger.error(f"Error creating namespace: {str(e)}")
             return False
 
+    def install_prometheus_crds(self) -> bool:
+        """Install Prometheus CRDs required for ServiceMonitor resources."""
+        self.logger.info("Installing Prometheus CRDs...")
+
+        try:
+            # Check if ServiceMonitor CRD already exists
+            result = subprocess.run(
+                ["kubectl", "get", "crd", "servicemonitors.monitoring.coreos.com"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode == 0:
+                self.logger.info("Prometheus CRDs already installed")
+                return True
+
+            # Install Prometheus Operator CRDs
+            crds_url = "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.70.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml"
+            
+            result = subprocess.run(
+                ["kubectl", "apply", "-f", crds_url],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+
+            if result.returncode == 0:
+                self.logger.success("Prometheus CRDs installed successfully")
+                return True
+            
+            self.logger.warning(f"Failed to install Prometheus CRDs from URL: {result.stderr}")
+            
+            # Fallback: try to install minimal ServiceMonitor CRD
+            return self._install_minimal_servicemonitor_crd()
+
+        except subprocess.TimeoutExpired:
+            self.logger.error("Prometheus CRDs installation timed out")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error installing Prometheus CRDs: {str(e)}")
+            return False
+
+    def _install_minimal_servicemonitor_crd(self) -> bool:
+        """Install a minimal ServiceMonitor CRD as fallback."""
+        self.logger.info("Installing minimal ServiceMonitor CRD...")
+
+        minimal_crd = """
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: servicemonitors.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+          status:
+            type: object
+  scope: Namespaced
+  names:
+    plural: servicemonitors
+    singular: servicemonitor
+    kind: ServiceMonitor
+"""
+
+        try:
+            result = subprocess.run(
+                ["kubectl", "apply", "-f", "-"],
+                input=minimal_crd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            if result.returncode == 0:
+                self.logger.success("Minimal ServiceMonitor CRD installed")
+                return True
+            
+            self.logger.warning(f"Failed to install minimal CRD: {result.stderr}")
+            return False
+
+        except Exception as e:
+            self.logger.error(f"Error installing minimal CRD: {str(e)}")
+            return False
+
     def deploy_chart(self, chart_name: str, dry_run: bool = False) -> bool:
         """Deploy a single helm chart."""
         chart_path = self.helm_dir / chart_name
@@ -431,6 +526,22 @@ class HelmDeployer:
             return True
 
         try:
+            # Build dependencies if Chart.yaml has dependencies
+            self.logger.debug(f"Building dependencies for {chart_name}")
+            dep_result = subprocess.run(
+                ["helm", "dependency", "build", str(chart_path)],
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minutes timeout for dependency build
+                check=False,
+            )
+            
+            if dep_result.returncode != 0:
+                self.logger.warning(f"Dependency build failed for {chart_name}: {dep_result.stderr}")
+                # Continue anyway - some charts might not have dependencies
+            else:
+                self.logger.debug(f"Dependencies built successfully for {chart_name}")
+
             # Update dependencies if Chart.lock exists
             chart_lock = chart_path / "Chart.lock"
             if chart_lock.exists():
@@ -551,6 +662,10 @@ class HelmDeployer:
 
         # Create namespace first
         if not self.create_namespace():
+            return False
+
+        # Install Prometheus CRDs
+        if not dry_run and not self.install_prometheus_crds():
             return False
 
         success_count = 0

@@ -299,6 +299,10 @@ samba4:
 # Keycloak configuration overrides for development
 keycloak:
   replicaCount: 1
+  image:
+    registry: quay.io
+    repository: keycloak/keycloak
+    tag: "22.0.5"  # Version stable avec support non-root
   resources:
     requests:
       memory: "512Mi"
@@ -318,17 +322,18 @@ keycloak:
     database: keycloak
     username: keycloak
   podSecurityContext:
-    runAsNonRoot: false
-    runAsUser: 0
-    runAsGroup: 0
-    fsGroup: 0
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
   securityContext:
-    allowPrivilegeEscalation: true
+    allowPrivilegeEscalation: false
     capabilities:
-      drop: []
+      drop:
+        - ALL
     readOnlyRootFilesystem: false
-    runAsNonRoot: false
-    runAsUser: 0
+    runAsNonRoot: true
+    runAsUser: 1000
 
 # OAuth2-proxy configuration overrides
 oauth2-proxy:

@@ -4,7 +4,7 @@ name: keycloak
 description: Production-ready Keycloak identity and access management with LDAP/AD integration, clustering, and persistence
 type: application
 version: 1.0.0
-appVersion: "23.0.1"
+appVersion: "22.0.5"
 keywords:
   - identity
   - authentication

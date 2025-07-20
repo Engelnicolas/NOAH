@@ -1,290 +1,90 @@
----
-{{/*
-=============================================================================
-Keycloak Deployment Template
-=============================================================================
-
-This template creates a Kubernetes Deployment for Keycloak, an open-source
-Identity and Access Management solution. The deployment provides:
-
-- High availability with configurable replica count
-- Rolling updates with zero downtime
-- Health checks and monitoring integration
-- Security context and pod security policies
-- Resource management and limits
-- Configuration management via ConfigMaps and Secrets
-- Database connectivity and clustering support
-- TLS/SSL termination capabilities
-
-Template Features:
-- Configurable replica count (supports auto-scaling)
-- Checksum-based configuration change detection
-- Flexible init container support
-- Security context enforcement
-- Resource quotas and limits
-- Custom annotations and labels
-- Database dependency management
-- High availability clustering
-
-Dependencies:
-- ConfigMap: Contains Keycloak configuration
-- Secret: Database credentials and admin passwords
-- ServiceAccount: RBAC permissions
-- PersistentVolumeClaim: Optional persistent storage
-
-Usage:
-This template is automatically rendered when installing the Keycloak helm chart.
-Configuration is managed through values.yaml parameters.
-=============================================================================
-*/}}
-
-# Kubernetes Deployment resource for Keycloak
 apiVersion: apps/v1
 kind: Deployment
-
-# =============================================================================
-# Metadata Section - Resource identification and organization
-# =============================================================================
 metadata:
-  # Generate consistent name using helm naming template
   name: {{ include "keycloak.fullname" . }}
-
-  # Place in the target namespace
   namespace: {{ .Release.Namespace | quote }}
-
-  # Apply standard labels for resource management and selection
   labels:
     {{- include "keycloak.labels" . | nindent 4 }}
-
-  # Optional common annotations for operational metadata
-  {{- with .Values.commonAnnotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-
-# =============================================================================
-# Deployment Specification - Desired state and behavior
-# =============================================================================
 spec:
-  # Replica count (disabled when auto-scaling is enabled)
-  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  {{- end }}
-
-  # Pod selection criteria - must match template labels
   selector:
     matchLabels:
       {{- include "keycloak.selectorLabels" . | nindent 6 }}
-
-  # =============================================================================
-  # Pod Template - Definition of pods to be created
-  # =============================================================================
   template:
     metadata:
-      # Annotations for configuration change detection and operational metadata
-      annotations:
-        # Force pod restart when configuration changes
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-
-        # Additional pod annotations from values
-        {{- with .Values.podAnnotations }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-
-      # Pod labels for identification and service selection
       labels:
         {{- include "keycloak.selectorLabels" . | nindent 8 }}
-        {{- with .Values.podLabels }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-
-    # =============================================================================
-    # Pod Specification - Container and security configuration
-    # =============================================================================
     spec:
-      # Image pull secrets for private container registries
-      {{- with .Values.image.pullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-
-      # Service account for RBAC permissions
       serviceAccountName: {{ include "keycloak.serviceAccountName" . }}
-
-      # Pod-level security context (user/group IDs, filesystem permissions)
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
-
-      # Optional init containers for setup tasks (database migration, etc.)
-      {{- with .Values.initContainers }}
-      initContainers:
-        {{- if kindIs "string" . }}
-        {{- tpl . $ | nindent 8 }}
-        {{- else }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-      {{- end }}
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
-        - name: keycloak
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command:
-            - /opt/keycloak/bin/kc.sh
           args:
-            - start
-            {{- if not .Values.production.enabled }}
-            - --dev
-            {{- end }}
-            - --config-file=/opt/keycloak/conf/keycloak.conf
+            - "start-dev"
+            - "--import-realm"
           env:
             - name: KEYCLOAK_ADMIN
-              value: {{ .Values.auth.adminUser | quote }}
+              value: "admin"
             - name: KEYCLOAK_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "keycloak.secretName" . }}
-                  key: {{ .Values.auth.passwordSecretKey }}
-            {{- if .Values.database.existingSecret }}
+                  name: {{ include "keycloak.fullname" . }}
+                  key: admin-password
+            - name: KC_DB
+              value: "postgres"
+            - name: KC_DB_URL_HOST
+              value: "{{ include "keycloak.databaseHost" . }}"
+            - name: KC_DB_URL_PORT
+              value: "{{ .Values.database.port }}"
+            - name: KC_DB_URL_DATABASE
+              value: "noah"
+            - name: KC_DB_USERNAME
+              value: "noah"
             - name: KC_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.database.existingSecret }}
-                  key: {{ .Values.database.existingSecretPasswordKey }}
-            {{- else if .Values.postgresql.enabled }}
-            - name: KC_DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "keycloak.postgresql.secretName" . }}
+                  name: keycloak-postgresql
                   key: password
-            {{- else }}
-            - name: KC_DB_PASSWORD
-              value: {{ .Values.database.password | quote }}
-            {{- end }}
-            {{- if .Values.ldap.enabled }}
-            - name: LDAP_BIND_CREDENTIAL
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "keycloak.ldapSecretName" . }}
-                  key: {{ .Values.ldap.existingSecretKey }}
-            {{- end }}
-            - name: JAVA_OPTS_APPEND
-              value: "{{ .Values.jvmHeap }} {{ .Values.jvmOpts }}"
-            {{- with .Values.extraEnvVars }}
-            {{- toYaml . | nindent 12 }}
-            {{- end }}
-          {{- with .Values.extraEnvVarsSecret }}
-          envFrom:
-            - secretRef:
-                name: {{ . }}
-          {{- end }}
-          {{- with .Values.extraEnvVarsConfigMap }}
-          envFrom:
-            - configMapRef:
-                name: {{ . }}
-          {{- end }}
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HOSTNAME_STRICT_HTTPS
+              value: "false"
+            - name: KC_PROXY
+              value: "edge"
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
-            {{- if .Values.production.enabled }}
-            - name: https
-              containerPort: 8443
-              protocol: TCP
-            {{- end }}
-          {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
             httpGet:
-              path: {{ .Values.livenessProbe.httpGet.path }}
-              port: {{ .Values.livenessProbe.httpGet.port }}
-            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
-          {{- end }}
-          {{- if .Values.readinessProbe.enabled }}
+              path: /
+              port: http
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
           readinessProbe:
             httpGet:
-              path: {{ .Values.readinessProbe.httpGet.path }}
-              port: {{ .Values.readinessProbe.httpGet.port }}
-            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
-          {{- end }}
-          {{- if .Values.startupProbe.enabled }}
-          startupProbe:
-            httpGet:
-              path: {{ .Values.startupProbe.httpGet.path }}
-              port: {{ .Values.startupProbe.httpGet.port }}
-            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
-          {{- end }}
+              path: /
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: keycloak-config
-              mountPath: /opt/keycloak/conf/keycloak.conf
-              subPath: keycloak.conf
-              readOnly: true
-            {{- if .Values.persistence.enabled }}
             - name: keycloak-data
               mountPath: /opt/keycloak/data
-            {{- end }}
-            {{- if .Values.themes.enabled }}
-            - name: keycloak-themes
-              mountPath: /opt/keycloak/themes/custom
-              readOnly: true
-            {{- end }}
-            {{- if .Values.providers.enabled }}
-            - name: keycloak-providers
-              mountPath: /opt/keycloak/providers
-              readOnly: true
-            {{- end }}
-            {{- with .Values.extraVolumeMounts }}
-            {{- toYaml . | nindent 12 }}
-            {{- end }}
-        {{- with .Values.sidecarContainers }}
-        {{- if kindIs "string" . }}
-        {{- tpl . $ | nindent 8 }}
-        {{- else }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-        {{- end }}
       volumes:
-        - name: keycloak-config
-          configMap:
-            name: {{ include "keycloak.fullname" . }}-config
-        {{- if .Values.persistence.enabled }}
         - name: keycloak-data
           persistentVolumeClaim:
-            claimName: {{ include "keycloak.fullname" . }}-data
-        {{- end }}
-        {{- if .Values.themes.enabled }}
-        - name: keycloak-themes
-          configMap:
-            name: {{ .Values.themes.existingConfigMap }}
-        {{- end }}
-        {{- if .Values.providers.enabled }}
-        - name: keycloak-providers
-          configMap:
-            name: {{ .Values.providers.existingConfigMap }}
-        {{- end }}
-        {{- with .Values.extraVolumes }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+            claimName: keycloak-data

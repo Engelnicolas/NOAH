@@ -276,3 +276,67 @@ backup:
   retention: 7
   storage:
     size: 10Gi
+
+# =============================================================================
+# CHART-SPECIFIC CONFIGURATIONS
+# =============================================================================
+
+# Samba4 configuration overrides for development
+samba4:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+  persistence:
+    enabled: true
+    size: 5Gi
+    accessMode: ReadWriteOnce
+
+# Keycloak configuration overrides for development
+keycloak:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "200m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  autoscaling:
+    enabled: false
+  auth:
+    adminPassword: "admin123!"
+  production:
+    enabled: false
+  database:
+    vendor: postgres
+    hostname: keycloak-postgresql
+    database: keycloak
+    username: keycloak
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+  securityContext:
+    allowPrivilegeEscalation: true
+    capabilities:
+      drop: []
+    readOnlyRootFilesystem: false
+    runAsNonRoot: false
+    runAsUser: 0
+
+# OAuth2-proxy configuration overrides
+oauth2-proxy:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"

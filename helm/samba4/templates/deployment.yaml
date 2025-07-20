@@ -19,12 +19,27 @@ spec:
         - name: samba4
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: USERID
+              value: "1000"
+            - name: GROUPID
+              value: "1000"
           ports:
-            - containerPort: 389
-              name: ldap
-          args:
-            - "-s"
-            - "-u"
-            - "user1;password1"
-            - "-g"
-            - "group1"
+            - containerPort: 139
+              name: netbios
+            - containerPort: 445
+              name: smb
+          volumeMounts:
+            - name: samba-data
+              mountPath: /share
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "250m"
+      volumes:
+        - name: samba-data
+          persistentVolumeClaim:
+            claimName: samba4-data

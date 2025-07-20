@@ -15,7 +15,7 @@ image:
   pullPolicy: IfNotPresent
   pullSecrets: []
 
-# Alternative images (uncomment to use)
+# Alternative images (comment to use alternative)
 # image:
 #   registry: ""
 #   repository: nowsci/samba-domain
@@ -26,7 +26,7 @@ domain:
   name: "NOAH"
   realm: "NOAH.LOCAL"
   dnsForwarder: "8.8.8.8"
-  adminPassword: ""
+  adminPassword: "Admin123!"
   existingSecret: ""
   existingSecretKey: "admin-password"
 

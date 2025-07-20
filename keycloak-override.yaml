@@ -1,0 +1,20 @@
+replicaCount: 1
+
+database:
+  vendor: postgres
+  hostname: postgresql
+  port: 5432
+  database: noah
+  username: noah
+  password: noah123
+
+postgresql:
+  enabled: false
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"

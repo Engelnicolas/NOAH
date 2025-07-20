@@ -90,13 +90,19 @@ class TechnicalRequirementsValidator:
                 "required": required_cores,
             }
         else:
+            cpu_gap = required_cores - cpu_cores
             print(
                 f"  {Colors.RED}✗{Colors.END} CPU: {cpu_cores} cores < {required_cores} required"
             )
+            print(f"    {Colors.YELLOW}📉 Missing: {cpu_gap} additional CPU core(s){Colors.END}")
+            print(f"    {Colors.BLUE}💡 Solution: Upgrade to a system with at least {required_cores} CPU cores{Colors.END}")
+            print(f"    {Colors.BLUE}🔧 Current: {cpu_cores} physical cores, {cpu_logical} logical threads{Colors.END}")
             results["cpu"] = {
                 "status": "fail",
                 "actual": cpu_cores,
                 "required": required_cores,
+                "missing": cpu_gap,
+                "details": f"Need {cpu_gap} more CPU cores for {self.profile} profile"
             }
 
         # RAM
@@ -111,13 +117,19 @@ class TechnicalRequirementsValidator:
                 "required": required_ram,
             }
         else:
+            ram_gap = required_ram - ram_gb
             print(
                 f"  {Colors.RED}✗{Colors.END} RAM: {ram_gb:.1f} GB < {required_ram} GB required"
             )
+            print(f"    {Colors.YELLOW}📉 Missing: {ram_gap:.1f} GB additional RAM{Colors.END}")
+            print(f"    {Colors.BLUE}💡 Solution: Upgrade system memory to at least {required_ram} GB{Colors.END}")
+            print(f"    {Colors.BLUE}🔧 Current: {ram_gb:.1f} GB total memory available{Colors.END}")
             results["ram"] = {
                 "status": "fail",
                 "actual": ram_gb,
                 "required": required_ram,
+                "missing": ram_gap,
+                "details": f"Need {ram_gap:.1f} GB more RAM for {self.profile} profile"
             }
 
         # Storage
@@ -135,13 +147,22 @@ class TechnicalRequirementsValidator:
                 "required": required_storage,
             }
         else:
+            storage_gap = required_storage - storage_gb
             print(
                 f"  {Colors.RED}✗{Colors.END} Storage: {storage_gb:.1f} GB < {required_storage} GB required"
             )
+            print(f"    {Colors.YELLOW}📉 Missing: {storage_gap:.1f} GB additional free storage{Colors.END}")
+            print(f"    {Colors.BLUE}💡 Solution: Free up {storage_gap:.1f} GB of disk space or add more storage{Colors.END}")
+            print(f"    {Colors.BLUE}🔧 Current: {storage_gb:.1f} GB available on root filesystem{Colors.END}")
+            disk_total = disk_usage.total / (1024**3)
+            disk_used = disk_usage.used / (1024**3)
+            print(f"    {Colors.BLUE}📊 Disk usage: {disk_used:.1f} GB used / {disk_total:.1f} GB total{Colors.END}")
             results["storage"] = {
                 "status": "fail",
                 "actual": storage_gb,
                 "required": required_storage,
+                "missing": storage_gap,
+                "details": f"Need {storage_gap:.1f} GB more free storage for {self.profile} profile"
             }
 
         return results
@@ -189,7 +210,14 @@ class TechnicalRequirementsValidator:
                                 f"  {Colors.YELLOW}⚠{Colors.END} {tool}: v{version} < v{config['required']} required"
                             )
                             print(f"    {Colors.BLUE}💡 Solution:{Colors.END} Update {tool} to version {config['required']} or higher")
-                            results[tool] = {"status": "warn", "version": version, "required": config["required"]}
+                            print(f"    {Colors.YELLOW}📉 Missing:{Colors.END} Need version {config['required']} or higher")
+                            results[tool] = {
+                                "status": "warn", 
+                                "version": version, 
+                                "required": config["required"],
+                                "missing": f"Upgrade from v{version} to v{config['required']}+",
+                                "details": f"{tool} version {version} is below required {config['required']}"
+                            }
                     else:
                         print(
                             f"  {Colors.YELLOW}⚠{Colors.END} {tool}: installed but version unknown"
@@ -203,7 +231,16 @@ class TechnicalRequirementsValidator:
                     if result.stdout:
                         print(f"    {Colors.BLUE}📝 Output:{Colors.END} {result.stdout.strip()}")
                     print(f"    {Colors.BLUE}💡 Solution:{Colors.END} Install {tool} or check PATH configuration")
-                    results[tool] = {"status": "fail", "version": None, "error": result.stderr, "output": result.stdout}
+                    print(f"    {Colors.YELLOW}📉 Missing:{Colors.END} {tool} v{config['required']} or higher")
+                    results[tool] = {
+                        "status": "fail", 
+                        "version": None, 
+                        "required": config["required"],
+                        "missing": f"Install {tool} v{config['required']}+",
+                        "details": f"{tool} command failed - needs to be installed and working",
+                        "error": result.stderr, 
+                        "output": result.stdout
+                    }
 
             except subprocess.TimeoutExpired:
                 print(f"  {Colors.RED}✗{Colors.END} {tool}: command timeout (>10s)")
@@ -212,13 +249,21 @@ class TechnicalRequirementsValidator:
             except FileNotFoundError:
                 print(f"  {Colors.RED}✗{Colors.END} {tool}: not found in PATH")
                 print(f"    {Colors.BLUE}💡 Solution:{Colors.END} Install {tool} using your package manager")
+                print(f"    {Colors.YELLOW}📉 Missing:{Colors.END} {tool} v{config['required']} or higher")
                 if tool == "python":
                     print(f"    {Colors.BLUE}📦 Install:{Colors.END} sudo apt-get install python3 (Ubuntu/Debian)")
                 elif tool == "git":
                     print(f"    {Colors.BLUE}📦 Install:{Colors.END} sudo apt-get install git (Ubuntu/Debian)")
                 elif tool == "make":
                     print(f"    {Colors.BLUE}📦 Install:{Colors.END} sudo apt-get install build-essential (Ubuntu/Debian)")
-                results[tool] = {"status": "fail", "version": None, "error": "Command not found"}
+                results[tool] = {
+                    "status": "fail", 
+                    "version": None, 
+                    "required": config["required"],
+                    "missing": f"Install {tool} v{config['required']}+",
+                    "details": f"{tool} not found in PATH - needs to be installed",
+                    "error": "Command not found"
+                }
             except Exception as e:
                 print(f"  {Colors.RED}✗{Colors.END} {tool}: unexpected error")
                 print(f"    {Colors.RED}❌ Exception:{Colors.END} {str(e)}")
@@ -977,12 +1022,13 @@ class TechnicalRequirementsValidator:
         return 0
 
     def generate_report(self, results: Dict) -> None:
-        """Generate summary report"""
+        """Generate summary report with detailed missing requirements"""
         print(f"\n{Colors.BOLD}📊 VALIDATION SUMMARY{Colors.END}")
         print("=" * 60)
 
         total_checks = 0
         passed_checks = 0
+        failed_requirements = []
 
         for category, checks in results.items():
             print(f"\n{Colors.BOLD}{category.title()}:{Colors.END}")
@@ -999,6 +1045,16 @@ class TechnicalRequirementsValidator:
                     passed_checks += 0.5
                 else:
                     print(f"  {Colors.RED}✗{Colors.END} {check_name}")
+                    # Collect detailed failure information
+                    if "missing" in check_result and "details" in check_result:
+                        failed_requirements.append({
+                            "category": category,
+                            "check": check_name,
+                            "actual": check_result.get("actual"),
+                            "required": check_result.get("required"),
+                            "missing": check_result.get("missing"),
+                            "details": check_result.get("details")
+                        })
 
         print(f"\n{Colors.BOLD}Results:{Colors.END}")
         print(f"  Total checks: {total_checks}")
@@ -1007,6 +1063,17 @@ class TechnicalRequirementsValidator:
         print(
             f"  Failed: {total_checks - int(passed_checks) - int((passed_checks % 1) * 2)}"
         )
+
+        # Show detailed missing requirements if any failures
+        if failed_requirements:
+            print(f"\n{Colors.RED}{Colors.BOLD}❌ MISSING REQUIREMENTS DETAILS:{Colors.END}")
+            print("=" * 60)
+            for i, req in enumerate(failed_requirements, 1):
+                print(f"\n{Colors.RED}[{i}] {req['category'].upper()} - {req['check'].upper()}:{Colors.END}")
+                print(f"    {Colors.YELLOW}Current:{Colors.END} {req['actual']}")
+                print(f"    {Colors.YELLOW}Required:{Colors.END} {req['required']}")
+                print(f"    {Colors.RED}Missing:{Colors.END} {req['missing']}")
+                print(f"    {Colors.BLUE}Details:{Colors.END} {req['details']}")
 
         if passed_checks == total_checks:
             print(

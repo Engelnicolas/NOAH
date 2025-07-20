@@ -9,6 +9,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Fonction pour afficher les erreurs
@@ -221,6 +222,27 @@ check_technical_requirements() {
     # Rendre le script exécutable si nécessaire
     chmod +x script/noah-tech-requirements
     
+    # Detect if this is a tech-requirements command and extract profile
+    tech_profile="minimal"  # Default profile for wrapper checks
+    if [[ "$1" == "tech-requirements" ]]; then
+        # Check if a specific profile is requested for tech-requirements command
+        args=("$@")
+        for i in "${!args[@]}"; do
+            if [[ "${args[i]}" == "--profile" && $((i+1)) -lt ${#args[@]} ]]; then
+                # Next argument should be the profile name
+                tech_profile="${args[$((i+1))]}"
+                break
+            elif [[ "${args[i]}" =~ ^--profile=(.+) ]]; then
+                # Profile specified with = format
+                tech_profile="${BASH_REMATCH[1]}"
+                break
+            fi
+        done
+        info "Validation des exigences techniques pour le profil: $tech_profile"
+    else
+        info "Validation des exigences techniques pour le profil par défaut: $tech_profile"
+    fi
+    
     # Exécuter la vérification des exigences techniques
     info "Exécution de la validation des exigences techniques..."
     
@@ -228,7 +250,7 @@ check_technical_requirements() {
     tech_output_file=$(mktemp)
     tech_error_file=$(mktemp)
     
-    if "$PYTHON_CMD" script/noah-tech-requirements --profile minimal > "$tech_output_file" 2> "$tech_error_file"; then
+    if "$PYTHON_CMD" script/noah-tech-requirements --profile "$tech_profile" > "$tech_output_file" 2> "$tech_error_file"; then
         success "Toutes les exigences techniques sont satisfaites"
         # Clean up temp files
         rm -f "$tech_output_file" "$tech_error_file"
@@ -236,26 +258,40 @@ check_technical_requirements() {
     else
         tech_exit_code=$?
         
-        # Show detailed error information
-        if [[ -s "$tech_error_file" ]]; then
-            error "Erreurs détaillées lors de la validation des exigences techniques:"
-            echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-            cat "$tech_error_file"
-            echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+        # Show the detailed validation output first (contains missing requirements details)
+        if [[ -s "$tech_output_file" ]]; then
+            echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+            echo -e "${CYAN}${BOLD}   RÉSULTATS DE LA VALIDATION DES EXIGENCES TECHNIQUES${NC}"
+            echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+            cat "$tech_output_file"
+            echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+            
+            # Extract and highlight missing requirements if present
+            if grep -q "MISSING REQUIREMENTS DETAILS" "$tech_output_file"; then
+                echo
+                error "⚠️  EXIGENCES MANQUANTES DÉTECTÉES ⚠️"
+                info "Consultez la section 'MISSING REQUIREMENTS DETAILS' ci-dessus pour:"
+                info "  • Les quantités exactes manquantes (CPU, RAM, stockage)"
+                info "  • Les versions de logiciels requises"
+                info "  • Les solutions recommandées pour chaque problème"
+                echo
+            fi
         fi
         
-        if [[ -s "$tech_output_file" ]]; then
-            info "Sortie de la validation des exigences techniques:"
-            echo -e "${BLUE}───────────────────────────────────────────────────────────────${NC}"
-            cat "$tech_output_file"
-            echo -e "${BLUE}───────────────────────────────────────────────────────────────${NC}"
+        # Show stderr only if there are actual errors (not just validation failures)
+        if [[ -s "$tech_error_file" ]]; then
+            warning "Erreurs système lors de la validation:"
+            echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
+            cat "$tech_error_file"
+            echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
         fi
         
         case $tech_exit_code in
             1)
                 warning "Certaines exigences techniques ne sont pas satisfaites (80%+ OK)"
                 warning "Le système peut fonctionner mais avec des performances réduites"
-                info "Consultez les détails ci-dessus pour les problèmes spécifiques"
+                info "📋 Consultez les détails précis des exigences manquantes ci-dessus"
+                info "💡 Les quantités exactes et solutions sont indiquées pour chaque problème"
                 # Clean up temp files
                 rm -f "$tech_output_file" "$tech_error_file"
                 return 0  # Continuer malgré les avertissements
@@ -263,15 +299,18 @@ check_technical_requirements() {
             2)
                 error "Exigences techniques critiques non satisfaites"
                 error "Le système risque de ne pas fonctionner correctement"
-                info "Consultez les erreurs détaillées ci-dessus"
+                info "📋 Consultez les exigences manquantes détaillées ci-dessus"
+                info "🔧 Appliquez les solutions recommandées pour chaque problème spécifique"
                 echo -e "${YELLOW}Voulez-vous continuer malgré tout ? (y/N)${NC}"
                 read -r response
                 if [[ "$response" =~ ^[Yy]$ ]]; then
                     warning "Continuation forcée malgré les exigences non satisfaites"
+                    warning "⚠️  Performances et stabilité peuvent être compromises"
                     # Clean up temp files
                     rm -f "$tech_output_file" "$tech_error_file"
                     return 0
                 else
+                    info "💡 Recommandé: Résolvez les problèmes listés puis relancez ce script"
                     # Clean up temp files before exit
                     rm -f "$tech_output_file" "$tech_error_file"
                     exit 1
@@ -279,7 +318,8 @@ check_technical_requirements() {
                 ;;
             *)
                 error "Erreur inattendue lors de la vérification des exigences techniques (code: $tech_exit_code)"
-                info "Consultez les erreurs détaillées ci-dessus"
+                info "📋 Consultez les erreurs détaillées ci-dessus"
+                info "🔧 Si le problème persiste, vérifiez la configuration système"
                 # Clean up temp files
                 rm -f "$tech_output_file" "$tech_error_file"
                 exit 1
@@ -291,7 +331,7 @@ check_technical_requirements() {
     fi
 }
 
-check_technical_requirements
+check_technical_requirements "$@"
 
 # =============================================================================
 # ÉTAPE 3: VÉRIFICATION ET INSTALLATION DES DÉPENDANCES

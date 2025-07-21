@@ -21,8 +21,6 @@ Next Open-source Architecture Hub
 
 *Une plateforme d'infrastructure automatisée et sécurisée pour déployer des solutions open-source à l'échelle entreprise*
 
-[🚀 Démarrage rapide](#-démarrage-rapide) • [📖 Documentation](#-documentation) • [💡 Fonctionnalités](#-fonctionnalités-principales) • [🔧 Installation](#-installation-complète) • [🌟 Contribution](#-contribution)
-
 </div>
 
 ---

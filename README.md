@@ -254,7 +254,7 @@ Ce projet est sous licence **GPL v3**. Voir [LICENSE](LICENSE) pour plus de dét
 **Nicolas Engel**
 📧 Email : [contact@nicolasengel.fr](mailto:contact@nicolasengel.fr)
 🌐 Site web : [nicolasengel.fr](https://nicolasengel.fr)
-💼 LinkedIn : [linkedin.com/in/nicolas-engel-france/](https://linkedin.com/in/nicolasengel)
+💼 LinkedIn : [linkedin.com/in/nicolas-engel/](https://www.linkedin.com/in/nicolas-engel-france/)
 
 *Passionné de cybersécurité, d'infrastructure open-source, DevSecOps, et de construction de solutions sécurisées et évolutives pour organisations de toutes tailles.*
 

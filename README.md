@@ -9,16 +9,6 @@
 [![Maintained](https://img.shields.io/badge/Maintained-Yes-brightgreen.svg)](https://github.com/Engelnicolas/NOAH/commits/main)
 [![Code Quality](https://img.shields.io/badge/Code%20Quality-Linted-success.svg)](https://github.com/Engelnicolas/NOAH)
 
-```
-███    ██  ██████   █████  ██   ██
-████   ██ ██    ██ ██   ██ ██   ██
-██ ██  ██ ██    ██ ███████ ███████
-██  ██ ██ ██    ██ ██   ██ ██   ██
-██   ████  ██████  ██   ██ ██   ██
-
-Next Open-source Architecture Hub
-```
-
 *Une plateforme d'infrastructure automatisée et sécurisée pour déployer des solutions open-source à l'échelle entreprise*
 
 </div>

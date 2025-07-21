@@ -31,16 +31,6 @@ Next Open-source Architecture Hub
 
 **NOAH** (Next Open-source Architecture Hub) est une plateforme d'automatisation d'infrastructure moderne et évolutive qui déploie un écosystème complet de services open-source de niveau entreprise. Conçue pour les organisations souhaitant maintenir un contrôle total sur leurs données et leur infrastructure, NOAH fournit une solution unifiée alliant sécurité, observabilité et collaboration.
 
-### 🔥 Nouveautés de la version 5.0.0
-
-- **🐍 CLI Python intelligent** : Interface unifiée avec découverte automatique des scripts et gestion intelligente des sous-commandes
-- **🎨 Interface utilisateur moderne** : Sortie colorée, aide contextuelle et messages d'erreur informatifs
-- **🔍 Auto-découverte des scripts** : Détection dynamique de tous les outils NOAH avec validation de syntaxe
-- **🔒 Gestion automatique des privilèges** : Élévation intelligente des permissions avec confirmation utilisateur
-- **📚 Documentation intégrée** : Aide complète avec exemples pratiques et catégorisation des commandes
-- **⚡ Validation en temps réel** : Vérification préalable de l'environnement et des prérequis
-- **🧪 Environnement de développement** : Configuration Python complète avec tests, linting et pre-commit hooks
-
 ### 🏗️ Architecture & Composants
 
 **NOAH** déploie une infrastructure complète composée de 11 charts Helm orchestrés via Ansible :
@@ -138,14 +128,6 @@ Le nouveau CLI NOAH offre une expérience utilisateur moderne et intuitive :
 ./noah deploy                    # Demande confirmation pour sudo si nécessaire
 ```
 
-**Caractéristiques avancées :**
-- 🎨 **Interface colorée** : Codes couleur pour une navigation claire
-- 🔍 **Auto-découverte** : Détection dynamique de tous les scripts Python et exécutables
-- 🔒 **Gestion des privilèges** : Élévation automatique avec confirmation utilisateur
-- 🏷️ **Catégorisation** : Organisation logique des commandes par domaine
-- ⚡ **Validation préalable** : Vérification de syntaxe et exécutabilité
-- 🆘 **Aide contextuelle** : Documentation intégrée avec exemples pratiques
-
 ### 📊 Commandes disponibles par catégorie
 
 #### 🏗️ Infrastructure
@@ -177,27 +159,6 @@ Le nouveau CLI NOAH offre une expérience utilisateur moderne et intuitive :
 ./noah deps-manager --update    # Mise à jour dépendances
 ```
 
-### 🧪 Environnement de développement
-
-NOAH v5.0.0 inclut un environnement de développement Python complet :
-
-```bash
-# Configuration automatisée
-source venv/bin/activate         # Environnement virtuel isolé
-make -f Makefile.python test     # Suite de tests automatisés
-make -f Makefile.python lint     # Linting et formatage du code
-
-# Outils qualité intégrés
-black .                          # Formatage automatique du code
-isort .                          # Organisation des imports
-flake8 .                         # Détection erreurs et style
-mypy .                           # Vérification types statiques
-bandit -r .                      # Analyse sécurité
-```
-
-**Stack de développement :**
-- **pytest** : Framework de tests avec couverture
----
 
 ## 🔧 Installation complète
 
@@ -273,15 +234,6 @@ kubectl get pods -n noah           # Validation déploiement
 
 ---
 
-## � Documentation
-
-### 📚 Guides disponibles
-
-- **[Guide utilisateur complet](docs/USER_GUIDE.md)** : Guide pas à pas pour déployer et utiliser NOAH
-- **[Exigences techniques](docs/TECHNICAL_REQUIREMENTS.md)** : Spécifications système détaillées
-- **[Profils de déploiement](docs/DEPLOYMENT_PROFILES.md)** : Configurations prédéfinies selon vos besoins
-- **[Guide des dépendances](docs/DEPENDENCIES_GUIDE.md)** : Gestion des packages et services
-
 ### 🎯 Cas d'usage principaux
 
 #### 👤 Développeurs individuels
@@ -305,89 +257,6 @@ kubectl get pods -n noah           # Validation déploiement
 - Déploiement on-premise avec contrôle total
 
 ---
-
-## 🛠️ Scripts et outils disponibles
-
-### 📋 Scripts principaux
-
-| Commande | Description | Privilèges |
-|----------|-------------|------------|
-| `deploy` | Déploiement complet NOAH (11 charts Helm) | 🔒 Root |
-| `monitoring` | Gestion Prometheus/Grafana et observabilité | 🔒 Root |
-| `linter` | Validation YAML/Ansible/Helm avec Super-Linter | 🔒 Root |
-| `setup` | Configuration environnement développement | 👤 User |
-| `tech-requirements` | Vérification prérequis système | 👤 User |
-| `deps-manager` | Gestion dépendances système et Python | 👤 User |
-
-### 🎯 Exemples d'usage avancés
-
-#### Déploiement personnalisé
-```bash
-# Avec configuration personnalisée
-./noah deploy --config my-custom-values.yaml --verbose
-
-# Déploiement sélectif
-./noah deploy --only keycloak,nextcloud
-
-# Mode dry-run (simulation)
-./noah deploy --dry-run
-```
-
-#### Maintenance et monitoring
-```bash
-# Surveillance continue
-./noah monitoring watch
-
-# Rapport de santé complet
-./noah monitoring status --detailed
-
-# Génération rapport linting
-./noah linter report --save
-```
-
----
-
-## 🌟 Contribution
-
-### 🤝 Comment contribuer
-
-NOAH est un projet open-source qui accueille les contributions ! Voici comment vous pouvez aider :
-
-#### 🔧 Développement
-```bash
-# Fork et clone
-git clone https://github.com/VOTRE-USERNAME/NOAH.git
-cd NOAH
-
-# Configuration environnement développement
-source venv/bin/activate
-make -f Makefile.python setup
-
-# Tests avant contribution
-./noah linter lint --all
-make -f Makefile.python test
-
-# Commit avec validation automatique
-git add .
-git commit -m "feat: nouvelle fonctionnalité"  # Pre-commit hooks s'exécutent
-```
-
-#### 📝 Standards de contribution
-- **Code Style** : Respect PEP 8, formatage avec black
-- **Tests** : Couverture minimale 80% pour nouveau code
-- **Documentation** : Mise à jour docs pour nouvelles fonctionnalités
-- **Commits** : Messages suivant convention Conventional Commits
-
-#### 🐛 Signaler un bug
-1. Vérifier les [issues existantes](https://github.com/Engelnicolas/NOAH/issues)
-2. Créer une nouvelle issue avec le template bug
-3. Inclure les logs complets et configuration système
-
-#### 💡 Proposer une fonctionnalité
-1. Ouvrir une discussion dans [Discussions](https://github.com/Engelnicolas/NOAH/discussions)
-2. Créer une issue avec le template feature request
-3. Soumettre une Pull Request avec implémentation
-
 ### 📜 Licence
 
 Ce projet est sous licence **GPL v3**. Voir [LICENSE](LICENSE) pour plus de détails.
@@ -407,30 +276,6 @@ Ce projet est sous licence **GPL v3**. Voir [LICENSE](LICENSE) pour plus de dét
 [🐛 Signaler un bug](https://github.com/Engelnicolas/NOAH/issues) • [💡 Demander une fonctionnalité](https://github.com/Engelnicolas/NOAH/discussions) • [📖 Wiki](https://github.com/Engelnicolas/NOAH/wiki)
 
 </div>
-| `noah-tech-requirements` | Vérification des prérequis techniques | 🔒 Root |
-
-### 💡 Exemples d'utilisation
-
-```bash
-# Déploiement complet avec logs détaillés
-./noah deploy --verbose
-
-# Validation complète du code
-./noah linter --all --strict
-
-# Status détaillé du monitoring
-./noah monitoring status --detailed
-
-# Vérification et installation des dépendances
-./noah deps-manager --install --requirements
-
-# Configuration pour développement
-./noah setup --dev --python-venv
-
-# Rapport technique complet
-./noah tech-requirements --report --export-json
-```
-
 ---
 
 ## 👨‍💻 Auteur
@@ -458,56 +303,3 @@ Merci spécial à la communauté open-source et aux mainteneurs de tous les outi
 - **🛡️ Wazuh** pour la surveillance sécuritaire
 - **🐳 Docker** pour la conteneurisation
 - **⎈ Helm** pour la gestion des applications Kubernetes
-
----
-
-## 🆕 Nouvelles fonctionnalités Version 5.0.0
-
-### � Modernisation Python complète
-- **CLI unifié** : Point d'entrée unique `./noah` pour toutes les opérations
-- **Découverte automatique** : Détection dynamique de tous les scripts Python et exécutables
-- **Gestion des privilèges intelligente** : Élévation automatique avec `sudo` quand nécessaire
-- **Interface colorée** : Codes couleur pour une meilleure expérience utilisateur
-
-### � Système d'aide avancé
-- **Documentation contextuelle** : Aide détaillée avec exemples pour chaque commande
-- **Validation en temps réel** : Vérification de syntaxe Python et d'exécutabilité
-- **Catégorisation automatique** : Organisation des commandes par domaine fonctionnel
-- **Messages d'erreur informatifs** : Guidance claire en cas de problème
-
-### 🏗️ Architecture développement
-- **Environnement virtuel Python** : Isolation complète des dépendances
-- **Tests automatisés** : Suite de tests avec pytest et coverage
-- **Qualité de code** : Linting avec flake8, mypy, bandit
-- **Formatage automatique** : Code standardisé avec black et isort
-- **Pre-commit hooks** : Validation automatique avant chaque commit
-
-### � Commandes disponibles
-
-```bash
-# 🏗️ Infrastructure
-./noah deploy               # Déploiement complet (11 charts Helm)
-./noah setup               # Configuration environnement
-./noah tech-requirements   # Vérification prérequis système
-
-# 📈 Monitoring
-./noah monitoring          # Gestion Prometheus/Grafana/alertes
-
-# 🔍 Qualité du code
-./noah linter              # Validation YAML/Ansible/Helm/Python
-./noah deps-manager        # Gestion dépendances système
-
-# ℹ️ Information et aide
-./noah --help             # Aide complète avec exemples
-./noah --list             # Liste détaillée des scripts
-./noah --version          # Information de version
-./noah COMMAND --help     # Aide spécifique commande
-```
-
-### 🎯 Améliorations utilisateur
-- **Messages multilingues** : Interface en français avec codes couleur
-- **Validation robuste** : Vérification complète avant exécution
-- **Gestion d'erreurs intelligente** : Récupération automatique et suggestions
-- **Logs structurés** : Journalisation détaillée pour debugging
-
-Pour plus d'informations, consultez la [documentation complète](https://github.com/Engelnicolas/NOAH/wiki).

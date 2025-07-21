@@ -261,23 +261,6 @@ kubectl get pods -n noah           # Validation déploiement
 
 Ce projet est sous licence **GPL v3**. Voir [LICENSE](LICENSE) pour plus de détails.
 
-### 🙏 Remerciements
-
-- Communauté Kubernetes pour l'écosystème
-- Projets open-source intégrés (Keycloak, Nextcloud, etc.)
-- Contributeurs et utilisateurs de NOAH
-
----
-
-<div align="center">
-
-**⭐ Si NOAH vous aide, n'hésitez pas à mettre une étoile !**
-
-[🐛 Signaler un bug](https://github.com/Engelnicolas/NOAH/issues) • [💡 Demander une fonctionnalité](https://github.com/Engelnicolas/NOAH/discussions) • [📖 Wiki](https://github.com/Engelnicolas/NOAH/wiki)
-
-</div>
----
-
 ## 👨‍💻 Auteur
 
 **Nicolas Engel**
@@ -291,7 +274,7 @@ Ce projet est sous licence **GPL v3**. Voir [LICENSE](LICENSE) pour plus de dét
 
 ## 🏆 Remerciements
 
-Merci spécial à la communauté open-source et aux mainteneurs de tous les outils incroyables qui rendent NOAH possible :
+Merci à la communauté open-source et aux mainteneurs de tous les outils qui rendent NOAH possible :
 
 - **🐍 Python Software Foundation** pour le langage Python
 - **☸️ CNCF** pour Kubernetes, Prometheus, et l'écosystème cloud-native

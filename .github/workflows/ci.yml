@@ -96,11 +96,10 @@ jobs:
         env:
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_LOCAL: false
-          VALIDATE_ALL_CODEBASE: false
+          RUN_LOCAL: true
           LOG_LEVEL: INFO
           # Enable essential linters with corrected configuration
-          VALIDATE_YAML: false
+          VALIDATE_YAML: true
           VALIDATE_BASH: true
           VALIDATE_PYTHON_BLACK: true
           VALIDATE_PYTHON_FLAKE8: true
@@ -112,7 +111,6 @@ jobs:
           MARKDOWN_CONFIG_FILE: ./script/.markdownlint.yml
           # Suppress ASCII art and enable error handling
           SUPPRESS_POSSUM: true
-          DISABLE_ERRORS: false
 
       - name: Run NOAH Linting Validator
         run: |

@@ -19,129 +19,70 @@ from datetime import datetime
 from pathlib import Path
 
 
-class DependencyManager:
-    """Manages automatic installation of missing Python modules."""
+# Configuration constants
+DEFAULT_NAMESPACE = "noah"
+DEFAULT_TIMEOUT = "600s"
+DEPENDENCY_MANAGER_TIMEOUT = 300  # 5 minutes
+KUBECTL_TIMEOUT = 10  # seconds
+MINIKUBE_START_TIMEOUT = 300  # 5 minutes
+HELM_DEPENDENCY_BUILD_TIMEOUT = 300  # 5 minutes
+HELM_DEPENDENCY_UPDATE_TIMEOUT = 60  # 1 minute
+PHASE_STABILIZATION_DELAY = 10  # seconds
+PROMETHEUS_CRD_TIMEOUT = 60  # seconds
+MINIMAL_CRD_TIMEOUT = 30  # seconds
+TECH_REQUIREMENTS_TIMEOUT = 60  # seconds
 
-    def __init__(self, requirements_file: str = "requirements.txt"):
-        self.requirements_file = Path(__file__).parent / requirements_file
-        self.missing_modules = []
 
-    def check_and_install_requirements(self) -> bool:
-        """Check and install missing Python requirements automatically."""
-        print(f"\n🔍 Vérification des dépendances Python...")
-
-        if not self.requirements_file.exists():
-            print(f"⚠️  Fichier {self.requirements_file} non trouvé")
+def run_dependency_manager(verbose: bool = False) -> bool:
+    """Run noah-deps-manager to check and install Python dependencies.
+    
+    Args:
+        verbose: Enable verbose output for debugging
+        
+    Returns:
+        bool: True if dependencies were successfully managed, False otherwise
+    """
+    print(f"{Color.CYAN}🔍 Vérification des dépendances Python via noah-deps-manager...{Color.RESET}")
+    
+    script_path = Path(__file__).parent / "noah-deps-manager"
+    
+    if not script_path.exists():
+        print(f"{Color.RED}❌ Script noah-deps-manager non trouvé: {script_path}{Color.RESET}")
+        return False
+    
+    try:
+        # Use --auto-install mode with graceful handling
+        cmd = [sys.executable, str(script_path), "--auto-install", "--graceful"]
+        if verbose:
+            cmd.append("--verbose")
+            
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=DEPENDENCY_MANAGER_TIMEOUT,
+            check=False,
+        )
+        
+        if result.returncode == 0:
+            print(f"{Color.GREEN}✅ Dépendances vérifiées avec succès{Color.RESET}")
+            if verbose and result.stdout:
+                print(f"{Color.BLUE}Output: {result.stdout}{Color.RESET}")
             return True
-
-        try:
-            # Read requirements file
-            with open(self.requirements_file, "r", encoding="utf-8") as f:
-                requirements = []
-                for line in f:
-                    line = line.strip()
-                    # Skip empty lines and comments
-                    if line and not line.startswith("#"):
-                        # Extract package name (before any version specifiers)
-                        package_name = (
-                            line.split(">=")[0]
-                            .split("==")[0]
-                            .split("<")[0]
-                            .split(">")[0]
-                            .strip()
-                        )
-                        if package_name:
-                            requirements.append((package_name, line))
-
-            # Check each requirement
-            for package_name, requirement_line in requirements:
-                if not self._is_module_installed(package_name):
-                    self.missing_modules.append(requirement_line)
-
-            # Install missing modules
-            if self.missing_modules:
-                print(f"📦 {len(self.missing_modules)} modules manquants détectés")
-                return self._install_missing_modules()
-            else:
-                print("✅ Toutes les dépendances sont installées")
-                return True
-
-        except Exception as e:
-            print(f"❌ Erreur lors de la vérification des dépendances: {e}")
+        else:
+            print(f"{Color.RED}❌ Échec de la vérification des dépendances{Color.RESET}")
+            if result.stderr:
+                print(f"{Color.RED}Erreur: {result.stderr}{Color.RESET}")
+            if verbose and result.stdout:
+                print(f"{Color.BLUE}Output: {result.stdout}{Color.RESET}")
             return False
-
-    def _is_module_installed(self, module_name: str) -> bool:
-        """Check if a Python module is installed."""
-        try:
-            # Handle special cases
-            import_name = self._get_import_name(module_name)
-            __import__(import_name)
-            return True
-        except ImportError:
-            return False
-
-    def _get_import_name(self, package_name: str) -> str:
-        """Convert package name to import name for special cases."""
-        mapping = {
-            "pyyaml": "yaml",
-            "pillow": "PIL",
-            "beautifulsoup4": "bs4",
-            "python-dateutil": "dateutil",
-            "msgpack-python": "msgpack",
-        }
-        return mapping.get(package_name.lower(), package_name)
-
-    def _install_missing_modules(self) -> bool:
-        """Install missing Python modules with retry mechanism."""
-        max_retries = 3
-
-        for requirement in self.missing_modules:
-            package_name = (
-                requirement.split(">=")[0]
-                .split("==")[0]
-                .split("<")[0]
-                .split(">")[0]
-                .strip()
-            )
-
-            for attempt in range(max_retries):
-                try:
-                    print(
-                        f"📥 Installation de {package_name} (tentative {attempt + 1}/{max_retries})..."
-                    )
-
-                    # Run pip install
-                    result = subprocess.run(
-                        [sys.executable, "-m", "pip", "install", requirement],
-                        capture_output=True,
-                        text=True,
-                        timeout=300,
-                    )
-
-                    if result.returncode == 0:
-                        print(f"✅ {package_name} installé avec succès")
-                        break
-                    else:
-                        print(f"⚠️  Échec installation {package_name}: {result.stderr}")
-                        if attempt == max_retries - 1:
-                            print(
-                                f"❌ Impossible d'installer {package_name} après {max_retries} tentatives"
-                            )
-                            return False
-                        else:
-                            time.sleep(2)
-
-                except subprocess.TimeoutExpired:
-                    print(f"⏰ Timeout lors de l'installation de {package_name}")
-                    if attempt == max_retries - 1:
-                        return False
-                except Exception as e:
-                    print(f"❌ Erreur lors de l'installation de {package_name}: {e}")
-                    if attempt == max_retries - 1:
-                        return False
-
-        print("✅ Toutes les dépendances ont été installées avec succès")
-        return True
+            
+    except subprocess.TimeoutExpired:
+        print(f"{Color.RED}❌ Timeout lors de la vérification des dépendances{Color.RESET}")
+        return False
+    except Exception as e:
+        print(f"{Color.RED}❌ Erreur lors de l'exécution de noah-deps-manager: {e}{Color.RESET}")
+        return False
 
 
 # ASCII Art Logo
@@ -170,15 +111,61 @@ class Color:
     UNDERLINE = "\033[4m"
     RESET = "\033[0m"
 
+    @classmethod
+    def colorize(cls, text: str, color: str) -> str:
+        """Colorize text with the given color.
+        
+        Args:
+            text: Text to colorize
+            color: Color constant from Color class
+            
+        Returns:
+            str: Colorized text with reset at the end
+        """
+        return f"{color}{text}{cls.RESET}"
+
 
 class NoahDeploymentError(Exception):
-    """Custom exception for deployment errors."""
+    """Custom exception for deployment errors.
+    
+    This exception is raised when critical deployment errors occur
+    that should stop the deployment process.
+    """
+    
+    def __init__(self, message: str, component: str = "", details: str = ""):
+        """Initialize the deployment error.
+        
+        Args:
+            message: Main error message
+            component: Component where the error occurred (optional)
+            details: Additional error details (optional)
+        """
+        self.component = component
+        self.details = details
+        super().__init__(message)
 
 
 class NoahLogger:
-    """Enhanced logging system for NOAH deployment."""
+    """Enhanced logging system for NOAH deployment.
+    
+    This logger provides both console and file logging with colored output
+    and different verbosity levels. It automatically creates log directories
+    and manages log files with timestamps.
+    
+    Attributes:
+        log_dir: Directory where log files are stored
+        verbose: Whether verbose logging is enabled
+        timestamp: Timestamp used for log file naming
+        logger: The underlying Python logger instance
+    """
 
     def __init__(self, log_dir: str = "logs", verbose: bool = False):
+        """Initialize the NOAH logger.
+        
+        Args:
+            log_dir: Directory to store log files (default: "logs")
+            verbose: Enable verbose logging (default: False)
+        """
         self.log_dir = Path(log_dir)
         self.verbose = verbose
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -276,7 +263,7 @@ class KubernetesChecker:
                 ["kubectl", "cluster-info"],
                 capture_output=True,
                 text=True,
-                timeout=10,
+                timeout=KUBECTL_TIMEOUT,
                 check=False,
             )
 
@@ -334,11 +321,35 @@ class KubernetesChecker:
 
 
 class HelmDeployer:
-    """helm chart deployment manager."""
+    """Helm chart deployment manager.
+    
+    This class manages the deployment of Helm charts in a specific order
+    across three phases: Priority Infrastructure, Core Services, and
+    Monitoring & Security.
+    
+    Attributes:
+        logger: Logger instance for deployment messages
+        namespace: Kubernetes namespace for deployments
+        timeout: Timeout for Helm operations
+        script_dir: Directory containing the deployment script
+        helm_dir: Directory containing Helm charts
+        values_file: Values file for Helm deployments
+        priority_charts: List of priority infrastructure charts
+        core_services: List of core service charts
+        monitoring_security: List of monitoring and security charts
+        deployment_order: Complete ordered list of all charts
+    """
 
     def __init__(
-        self, logger: NoahLogger, namespace: str = "noah", timeout: str = "600s"
+        self, logger: NoahLogger, namespace: str = DEFAULT_NAMESPACE, timeout: str = DEFAULT_TIMEOUT
     ):
+        """Initialize the Helm deployer.
+        
+        Args:
+            logger: Logger instance for output
+            namespace: Kubernetes namespace (default: "noah")
+            timeout: Helm operation timeout (default: "600s")
+        """
         self.logger = logger
         self.namespace = namespace
         self.timeout = timeout
@@ -428,7 +439,11 @@ class HelmDeployer:
                 return True
 
             # Install Prometheus Operator CRDs
-            crds_url = "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.70.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml"
+            crds_url = (
+                "https://raw.githubusercontent.com/prometheus-operator/"
+                "prometheus-operator/v0.70.0/example/prometheus-operator-crd/"
+                "monitoring.coreos.com_servicemonitors.yaml"
+            )
             
             result = subprocess.run(
                 ["kubectl", "apply", "-f", crds_url],
@@ -729,7 +744,24 @@ spec:
 
 
 class NoahDeployer:
-    """Main NOAH deployment orchestrator."""
+    """Main NOAH deployment orchestrator.
+    
+    This class coordinates the complete NOAH deployment process including:
+    - Technical requirements validation
+    - Dependencies installation
+    - Kubernetes cluster verification
+    - Helm charts deployment
+    - Deployment status checking
+    
+    Attributes:
+        namespace: Kubernetes namespace for deployment
+        timeout: Timeout for deployment operations
+        verbose: Whether verbose logging is enabled
+        priority_only: Whether to deploy only priority charts
+        logger: Logger instance for deployment messages
+        k8s_checker: Kubernetes cluster checker
+        helm_deployer: Helm chart deployer
+    """
 
     def __init__(
         self,
@@ -738,6 +770,14 @@ class NoahDeployer:
         verbose: bool = False,
         priority_only: bool = False,
     ):
+        """Initialize the NOAH deployer.
+        
+        Args:
+            namespace: Kubernetes namespace (default: "noah")
+            timeout: Deployment timeout (default: "600s")
+            verbose: Enable verbose logging (default: False)
+            priority_only: Deploy only priority charts (default: False)
+        """
         self.namespace = namespace
         self.timeout = timeout
         self.verbose = verbose
@@ -823,43 +863,24 @@ class NoahDeployer:
             return False
 
     def run_deps_manager(self) -> bool:
-        """Run noah-deps-manager to install dependencies."""
-        self.logger.info("Installing Python dependencies...")
-
-        script_path = Path(__file__).parent / "noah-deps-manager"
-
-        if not script_path.exists():
-            self.logger.error(f"Script not found: {script_path}")
-            return False
-
-        try:
-            cmd = [sys.executable, str(script_path), "--install-only"]
-            if self.verbose:
-                cmd.append("--verbose")
-
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=300, check=False
-            )
-
-            if result.returncode == 0:
-                self.logger.success("Dependencies installed successfully")
-                return True
-            else:
-                self.logger.error(f"Dependencies installation failed: {result.stderr}")
-                if self.verbose:
-                    self.logger.debug(f"Output: {result.stdout}")
-                return False
-
-        except subprocess.TimeoutExpired:
-            self.logger.error("Dependencies installation timed out")
-            return False
-        except Exception as e:
-            self.logger.error(f"Error installing dependencies: {str(e)}")
-            return False
+        """Run noah-deps-manager to install dependencies using the new integrated approach."""
+        return run_dependency_manager(verbose=self.verbose)
 
 
 def main():
-    """Main entry point."""
+    """Main entry point for the NOAH deployment script.
+    
+    This function:
+    1. Parses command line arguments
+    2. Checks and installs Python dependencies
+    3. Handles special modes (list-charts, dry-run)
+    4. Validates root privileges
+    5. Creates and runs the deployment orchestrator
+    
+    Exit codes:
+        0: Success
+        1: Failure or error during deployment
+    """
     parser = argparse.ArgumentParser(
         description="NOAH - Next Open-source Architecture Hub Deployment Script",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -922,10 +943,9 @@ Chart Deployment Phases:
 
     args = parser.parse_args()
 
-    # Check and install Python dependencies first
+    # Check and install Python dependencies first using noah-deps-manager
     print(f"{Color.CYAN}NOAH - Deployment Script v1.0.1{Color.RESET}")
-    dependency_manager = DependencyManager()
-    if not dependency_manager.check_and_install_requirements():
+    if not run_dependency_manager(verbose=args.verbose):
         print(
             f"{Color.RED}❌ Échec de l'installation des dépendances Python{Color.RESET}"
         )

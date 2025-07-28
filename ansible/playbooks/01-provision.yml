@@ -1,0 +1,102 @@
+---
+- name: Provision infrastructure for NOAH cluster
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    cloud_provider: "openstack"  # aws, gcp, openstack, vsphere
+    vm_config:
+      master_nodes: 2
+      worker_nodes: 1
+      vm_flavor: "m1.large"
+      vm_image: "ubuntu-20.04"
+      network_name: "noah-network"
+      security_group: "noah-sg"
+      key_name: "noah-keypair"
+    
+  tasks:
+    - name: Display provisioning start message
+      debug:
+        msg: "Starting infrastructure provisioning for {{ cloud_provider }}"
+
+    - name: Create network infrastructure
+      block:
+        - name: Create VPC/Network
+          debug:
+            msg: "Creating network {{ vm_config.network_name }}"
+          # Ici on ajouterait les tâches spécifiques au provider cloud
+          
+        - name: Create security groups
+          debug:
+            msg: "Creating security group {{ vm_config.security_group }}"
+          # Règles firewall pour K8s (ports 6443, 2379-2380, 10250, 10251, 10252, etc.)
+          
+        - name: Create SSH key pair
+          debug:
+            msg: "Creating SSH key pair {{ vm_config.key_name }}"
+
+    - name: Provision master nodes
+      debug:
+        msg: "Creating {{ vm_config.master_nodes }} master nodes"
+      loop: "{{ range(1, vm_config.master_nodes + 1) | list }}"
+      # Ici on créerait les VMs masters
+
+    - name: Provision worker nodes  
+      debug:
+        msg: "Creating {{ vm_config.worker_nodes }} worker nodes"
+      loop: "{{ range(1, vm_config.worker_nodes + 1) | list }}"
+      # Ici on créerait les VMs workers
+
+    - name: Configure DNS records
+      debug:
+        msg: "Configuring DNS records for cluster nodes"
+        
+    - name: Wait for VMs to be ready
+      debug:
+        msg: "Waiting for all VMs to be accessible via SSH"
+      # On attendrait que toutes les VMs soient prêtes
+
+    - name: Update inventory with actual IPs
+      debug:
+        msg: "Updating inventory with provisioned VM IPs"
+      # On mettrait à jour l'inventaire avec les vraies IPs
+
+    - name: Validate infrastructure
+      debug:
+        msg: "Infrastructure provisioning completed successfully"
+
+# Exemple de tâches spécifiques pour OpenStack
+- name: Configure OpenStack infrastructure
+  hosts: localhost
+  connection: local  
+  gather_facts: false
+  vars_files:
+    - ../vars/secrets.yml  # Fichier chiffré avec Ansible Vault
+  tasks:
+    - name: Create OpenStack instances
+      openstack.cloud.server:
+        state: present
+        name: "noah-{{ item.type }}-{{ item.id }}"
+        image: "{{ vm_config.vm_image }}"
+        flavor: "{{ vm_config.vm_flavor }}"
+        security_groups: "{{ vm_config.security_group }}"
+        key_name: "{{ vm_config.key_name }}"
+        network: "{{ vm_config.network_name }}"
+        meta:
+          hostname: "noah-{{ item.type }}-{{ item.id }}"
+          group: "{{ item.type }}"
+      loop:
+        - { type: "master", id: 1 }
+        - { type: "master", id: 2 }  
+        - { type: "worker", id: 1 }
+      register: created_servers
+      when: cloud_provider == "openstack"
+
+    - name: Add hosts to inventory
+      add_host:
+        name: "{{ item.server.name }}"
+        groups: "{{ 'kube_control_plane' if 'master' in item.server.name else 'kube_node' }}"
+        ansible_host: "{{ item.server.public_v4 }}"
+        private_ip: "{{ item.server.private_v4 }}"
+      loop: "{{ created_servers.results }}"
+      when: cloud_provider == "openstack" and created_servers is defined

@@ -93,7 +93,7 @@ spec:
               app.kubernetes.io/name: redis
       ports:
         - protocol: TCP
-          port: {{ .Values.redis.master.service.ports.redis | default 6379 }}
+          port: {{ .Values.redis.auth.port | default 6379 }}
     {{- else if .Values.sessionStorage.redis.connectionUrl }}
     - to: []
       ports:

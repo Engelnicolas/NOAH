@@ -1,0 +1,260 @@
+---
+- name: Deploy NOAH applications via Helm
+  hosts: kube_control_plane[0]
+  become: yes
+  become_user: "{{ ansible_user }}"
+  vars:
+    noah_namespace: "noah"
+    noah_chart_path: "../../helm/noah-chart"
+    values_file: "../../values/values-prod.yaml"
+    
+  tasks:
+    - name: Verify Helm is working
+      shell: helm version --short
+      register: helm_check
+
+    - name: Display Helm version
+      debug:
+        msg: "{{ helm_check.stdout }}"
+
+    - name: Check if NOAH namespace exists
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Namespace
+        name: "{{ noah_namespace }}"
+      register: namespace_check
+
+    - name: Create NOAH namespace if not exists
+      kubernetes.core.k8s:
+        name: "{{ noah_namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+      when: namespace_check.resources | length == 0
+
+    - name: Copy Helm chart to remote
+      copy:
+        src: "{{ noah_chart_path }}/"
+        dest: "/tmp/noah-chart/"
+        mode: '0644'
+
+    - name: Copy values file to remote  
+      copy:
+        src: "{{ values_file }}"
+        dest: "/tmp/values-prod.yaml"
+        mode: '0644'
+
+    - name: Validate Helm chart
+      shell: helm lint /tmp/noah-chart/
+      register: chart_validation
+
+    - name: Display chart validation result
+      debug:
+        msg: "{{ chart_validation.stdout_lines }}"
+
+    - name: Deploy PostgreSQL database
+      kubernetes.core.helm:
+        name: postgresql
+        chart_ref: bitnami/postgresql
+        release_namespace: "{{ noah_namespace }}"
+        values:
+          auth:
+            postgresPassword: "{{ vault_postgres_password }}"
+            database: noah
+            username: noah
+            password: "{{ vault_noah_db_password }}"
+          persistence:
+            enabled: true
+            storageClass: local-storage
+            size: 20Gi
+          metrics:
+            enabled: true
+
+    - name: Wait for PostgreSQL to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: StatefulSet
+        name: postgresql
+        namespace: "{{ noah_namespace }}"
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+
+    - name: Deploy Keycloak
+      kubernetes.core.helm:
+        name: keycloak
+        chart_ref: "../helm/keycloak"
+        release_namespace: "{{ noah_namespace }}"
+        values_files:
+          - "/tmp/values-prod.yaml"
+        values:
+          postgresql:
+            enabled: false
+          externalDatabase:
+            host: postgresql
+            database: noah
+            user: noah
+            password: "{{ vault_noah_db_password }}"
+          ingress:
+            enabled: true
+            annotations:
+              kubernetes.io/ingress.class: nginx
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+            hostname: keycloak.noah.local
+
+    - name: Deploy GitLab
+      kubernetes.core.helm:
+        name: gitlab
+        chart_ref: "../helm/gitlab"
+        release_namespace: "{{ noah_namespace }}"
+        values_files:
+          - "/tmp/values-prod.yaml"
+        values:
+          postgresql:
+            enabled: false
+          externalDatabase:
+            host: postgresql
+            database: noah
+            user: noah
+            password: "{{ vault_noah_db_password }}"
+          ingress:
+            enabled: true
+            annotations:
+              kubernetes.io/ingress.class: nginx
+            hostname: gitlab.noah.local
+
+    - name: Deploy Nextcloud
+      kubernetes.core.helm:
+        name: nextcloud
+        chart_ref: "../helm/nextcloud"
+        release_namespace: "{{ noah_namespace }}"
+        values_files:
+          - "/tmp/values-prod.yaml"
+        values:
+          postgresql:
+            enabled: false
+          externalDatabase:
+            host: postgresql
+            database: noah
+            user: noah
+            password: "{{ vault_noah_db_password }}"
+          persistence:
+            enabled: true
+            storageClass: local-storage
+            size: 50Gi
+
+    - name: Deploy Mattermost
+      kubernetes.core.helm:
+        name: mattermost
+        chart_ref: "../helm/mattermost"
+        release_namespace: "{{ noah_namespace }}"
+        values_files:
+          - "/tmp/values-prod.yaml"
+        values:
+          postgresql:
+            enabled: false
+          externalDatabase:
+            host: postgresql
+            database: noah
+            user: noah
+            password: "{{ vault_noah_db_password }}"
+
+    - name: Deploy Grafana (if not already deployed with monitoring)
+      kubernetes.core.helm:
+        name: grafana-noah
+        chart_ref: "../helm/grafana"
+        release_namespace: "{{ noah_namespace }}"
+        values_files:
+          - "/tmp/values-prod.yaml"
+        values:
+          persistence:
+            enabled: true
+            storageClassName: local-storage
+            size: 5Gi
+          adminPassword: "{{ vault_grafana_password }}"
+
+    - name: Deploy Prometheus (if not already deployed with monitoring)
+      kubernetes.core.helm:
+        name: prometheus-noah
+        chart_ref: "../helm/prometheus"
+        release_namespace: "{{ noah_namespace }}"
+        values_files:
+          - "/tmp/values-prod.yaml"
+
+    - name: Deploy Wazuh
+      kubernetes.core.helm:
+        name: wazuh
+        chart_ref: "../helm/wazuh"
+        release_namespace: "{{ noah_namespace }}"
+        values_files:
+          - "/tmp/values-prod.yaml"
+
+    - name: Deploy OpenEDR
+      kubernetes.core.helm:
+        name: openedr
+        chart_ref: "../helm/openedr"
+        release_namespace: "{{ noah_namespace }}"
+        values_files:
+          - "/tmp/values-prod.yaml"
+
+    - name: Deploy OAuth2 Proxy
+      kubernetes.core.helm:
+        name: oauth2-proxy
+        chart_ref: "../helm/oauth2-proxy"
+        release_namespace: "{{ noah_namespace }}"
+        values_files:
+          - "/tmp/values-prod.yaml"
+
+    - name: Wait for all deployments to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        namespace: "{{ noah_namespace }}"
+        label_selectors:
+          - "app.kubernetes.io/instance in (keycloak,gitlab,nextcloud,mattermost,grafana-noah,prometheus-noah,wazuh,openedr,oauth2-proxy)"
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 600
+
+    - name: Get deployment status
+      shell: |
+        echo "=== HELM RELEASES ==="
+        helm list -n {{ noah_namespace }}
+        echo ""
+        echo "=== PODS STATUS ==="
+        kubectl get pods -n {{ noah_namespace }} -o wide
+        echo ""
+        echo "=== SERVICES ==="
+        kubectl get svc -n {{ noah_namespace }}
+        echo ""
+        echo "=== INGRESS ==="
+        kubectl get ingress -n {{ noah_namespace }}
+        echo ""
+        echo "=== PERSISTENT VOLUMES ==="
+        kubectl get pv,pvc -n {{ noah_namespace }}
+      register: deployment_status
+
+    - name: Display deployment status
+      debug:
+        msg: "{{ deployment_status.stdout_lines }}"
+
+    - name: Verify application health
+      uri:
+        url: "http://{{ item }}.noah.local/health"
+        method: GET
+        status_code: [200, 401, 302]  # 401/302 peuvent être normaux avec l'auth
+      loop:
+        - keycloak
+        - gitlab  
+        - nextcloud
+        - mattermost
+      ignore_errors: yes
+      register: health_checks
+
+    - name: Display health check results
+      debug:
+        msg: "Health check for {{ item.item }}: Status {{ item.status | default('FAILED') }}"
+      loop: "{{ health_checks.results }}"
+      when: health_checks is defined

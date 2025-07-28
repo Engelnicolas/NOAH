@@ -1,0 +1,144 @@
+---
+- name: Verify NOAH deployment
+  hosts: kube_control_plane[0]
+  become: yes
+  become_user: "{{ ansible_user }}"
+  vars:
+    noah_namespace: "noah"
+    
+  tasks:
+    - name: Get cluster information
+      shell: kubectl cluster-info
+      register: cluster_info
+
+    - name: Get node resources
+      shell: kubectl top nodes --no-headers
+      register: node_resources
+      ignore_errors: yes
+
+    - name: Get pod resources in NOAH namespace
+      shell: kubectl top pods -n {{ noah_namespace }} --no-headers
+      register: pod_resources
+      ignore_errors: yes
+
+    - name: Check all pods are running
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ noah_namespace }}"
+      register: pods_status
+
+    - name: Count running pods
+      set_fact:
+        running_pods: "{{ pods_status.resources | selectattr('status.phase', 'equalto', 'Running') | list | length }}"
+        total_pods: "{{ pods_status.resources | length }}"
+        failed_pods: "{{ pods_status.resources | selectattr('status.phase', 'equalto', 'Failed') | list }}"
+
+    - name: Display pod statistics
+      debug:
+        msg: |
+          Total pods: {{ total_pods }}
+          Running pods: {{ running_pods }}
+          Failed pods: {{ failed_pods | length }}
+
+    - name: Display failed pods details
+      debug:
+        msg: "Failed pod: {{ item.metadata.name }} - Status: {{ item.status.phase }}"
+      loop: "{{ failed_pods }}"
+      when: failed_pods | length > 0
+
+    - name: Check persistent volume claims
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: PersistentVolumeClaim
+        namespace: "{{ noah_namespace }}"
+      register: pvcs_status
+
+    - name: Display PVC status
+      debug:
+        msg: "PVC {{ item.metadata.name }}: {{ item.status.phase }}"
+      loop: "{{ pvcs_status.resources }}"
+
+    - name: Check services endpoints
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Endpoints
+        namespace: "{{ noah_namespace }}"
+      register: endpoints_status
+
+    - name: Display services with no endpoints
+      debug:
+        msg: "Service {{ item.metadata.name }} has no endpoints!"
+      loop: "{{ endpoints_status.resources }}"
+      when: item.subsets is not defined or item.subsets | length == 0
+
+    - name: Test internal service connectivity
+      shell: |
+        kubectl run test-pod --rm -i --image=curlimages/curl --restart=Never -- \
+        curl -s -o /dev/null -w "%{http_code}" http://{{ item }}.{{ noah_namespace }}.svc.cluster.local
+      loop:
+        - postgresql
+        - keycloak
+        - gitlab
+        - nextcloud
+      register: connectivity_tests
+      ignore_errors: yes
+
+    - name: Display connectivity test results
+      debug:
+        msg: "Service {{ item.item }} connectivity: {{ item.stdout | default('FAILED') }}"
+      loop: "{{ connectivity_tests.results }}"
+
+    - name: Check ingress status
+      kubernetes.core.k8s_info:
+        api_version: networking.k8s.io/v1
+        kind: Ingress
+        namespace: "{{ noah_namespace }}"
+      register: ingress_status
+
+    - name: Display ingress information
+      debug:
+        msg: |
+          Ingress: {{ item.metadata.name }}
+          Hosts: {{ item.spec.rules | map(attribute='host') | list | join(', ') }}
+          Load Balancer: {{ item.status.loadBalancer.ingress | default([]) | map(attribute='ip') | list | join(', ') if item.status.loadBalancer.ingress is defined else 'Pending' }}
+      loop: "{{ ingress_status.resources }}"
+
+    - name: Generate deployment report
+      template:
+        src: "../templates/deployment_report.j2"
+        dest: "/tmp/noah-deployment-report.txt"
+      vars:
+        cluster_info: "{{ cluster_info.stdout_lines }}"
+        node_resources: "{{ node_resources.stdout_lines | default([]) }}"
+        pod_resources: "{{ pod_resources.stdout_lines | default([]) }}"
+        total_pods: "{{ total_pods }}"
+        running_pods: "{{ running_pods }}"
+        failed_pods: "{{ failed_pods }}"
+        pvcs: "{{ pvcs_status.resources }}"
+        ingresses: "{{ ingress_status.resources }}"
+        connectivity_results: "{{ connectivity_tests.results }}"
+
+    - name: Fetch deployment report
+      fetch:
+        src: "/tmp/noah-deployment-report.txt"
+        dest: "./reports/noah-deployment-report-{{ ansible_date_time.iso8601 }}.txt"
+        flat: yes
+
+    - name: Final deployment status
+      debug:
+        msg: |
+          ================================
+          NOAH DEPLOYMENT VERIFICATION
+          ================================
+          Cluster: {{ cluster_info.stdout_lines[0] if cluster_info.stdout_lines else 'Unknown' }}
+          Total Pods: {{ total_pods }}
+          Running Pods: {{ running_pods }}
+          Success Rate: {{ (running_pods / total_pods * 100) | round(1) if total_pods > 0 else 0 }}%
+          ================================
+          {% if failed_pods | length == 0 %}
+          ✅ All pods are running successfully!
+          {% else %}
+          ❌ {{ failed_pods | length }} pods failed to start
+          {% endif %}
+          ================================

@@ -56,7 +56,7 @@ spec:
                 - name: PGHOST
                   value: {{ include "openedr.postgresql.fullname" . }}
                 - name: PGPORT
-                  value: "{{ .Values.postgresql.primary.service.ports.postgresql | default 5432 }}"
+                  value: "5432"
                 - name: PGDATABASE
                   value: {{ .Values.postgresql.auth.database }}
                 - name: PGUSER

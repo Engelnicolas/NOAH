@@ -1,0 +1,125 @@
+NOAH DEPLOYMENT REPORT
+======================
+Generated on: {{ ansible_date_time.iso8601 }}
+Cluster: {{ cluster_info[0] if cluster_info else 'Unknown' }}
+
+CLUSTER INFORMATION
+-------------------
+{% for line in cluster_info %}
+{{ line }}
+{% endfor %}
+
+NODE RESOURCES
+--------------
+{% if node_resources %}
+{% for line in node_resources %}
+{{ line }}
+{% endfor %}
+{% else %}
+No resource information available
+{% endif %}
+
+DEPLOYMENT SUMMARY
+------------------
+Total Pods: {{ total_pods }}
+Running Pods: {{ running_pods }}
+Success Rate: {{ (running_pods / total_pods * 100) | round(1) if total_pods > 0 else 0 }}%
+
+{% if failed_pods %}
+FAILED PODS
+-----------
+{% for pod in failed_pods %}
+- {{ pod.metadata.name }}: {{ pod.status.phase }}
+  {% if pod.status.containerStatuses %}
+  Container statuses:
+  {% for container in pod.status.containerStatuses %}
+    - {{ container.name }}: {{ container.state.keys() | first }}
+    {% if container.state.waiting %}
+      Reason: {{ container.state.waiting.reason }}
+      Message: {{ container.state.waiting.message }}
+    {% elif container.state.terminated %}
+      Reason: {{ container.state.terminated.reason }}
+      Exit Code: {{ container.state.terminated.exitCode }}
+    {% endif %}
+  {% endfor %}
+  {% endif %}
+{% endfor %}
+{% endif %}
+
+POD RESOURCES USAGE
+-------------------
+{% if pod_resources %}
+{% for line in pod_resources %}
+{{ line }}
+{% endfor %}
+{% else %}
+No pod resource information available
+{% endif %}
+
+PERSISTENT VOLUME CLAIMS
+-------------------------
+{% for pvc in pvcs %}
+{{ pvc.metadata.name }}: {{ pvc.status.phase }}
+  Storage: {{ pvc.spec.resources.requests.storage }}
+  Storage Class: {{ pvc.spec.storageClassName | default('default') }}
+  {% if pvc.status.phase == 'Bound' %}
+  Volume: {{ pvc.spec.volumeName }}
+  {% endif %}
+{% endfor %}
+
+INGRESS CONFIGURATION
+---------------------
+{% for ingress in ingresses %}
+{{ ingress.metadata.name }}:
+  Hosts: {{ ingress.spec.rules | map(attribute='host') | list | join(', ') }}
+  {% if ingress.status.loadBalancer.ingress is defined %}
+  Load Balancer IP: {{ ingress.status.loadBalancer.ingress | map(attribute='ip') | list | join(', ') }}
+  {% else %}
+  Load Balancer: Pending
+  {% endif %}
+{% endfor %}
+
+CONNECTIVITY TESTS
+------------------
+{% for test in connectivity_results %}
+{{ test.item }}: {{ test.stdout | default('FAILED') }}
+{% endfor %}
+
+DEPLOYMENT STATUS
+-----------------
+{% if failed_pods | length == 0 %}
+✅ DEPLOYMENT SUCCESSFUL
+All pods are running and healthy.
+{% else %}
+❌ DEPLOYMENT ISSUES DETECTED
+{{ failed_pods | length }} pods failed to start properly.
+Please check the failed pods section above for details.
+{% endif %}
+
+NEXT STEPS
+----------
+1. Verify external access to applications via ingress
+2. Configure DNS records for *.noah.local
+3. Set up SSL certificates if not using cert-manager
+4. Configure backup procedures
+5. Set up monitoring alerts
+6. Review security settings
+
+USEFUL COMMANDS
+---------------
+# Check pod status
+kubectl get pods -n noah -o wide
+
+# Check logs for failed pods
+kubectl logs <pod-name> -n noah
+
+# Access applications
+curl -H "Host: keycloak.noah.local" http://<ingress-ip>
+curl -H "Host: gitlab.noah.local" http://<ingress-ip>
+curl -H "Host: nextcloud.noah.local" http://<ingress-ip>
+
+# Scale deployments
+kubectl scale deployment <deployment-name> --replicas=<count> -n noah
+
+# Update helm releases
+helm upgrade <release-name> <chart> -n noah -f values-prod.yaml

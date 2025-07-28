@@ -1,275 +1,273 @@
-# 🚀 NOAH - Next Open-source Architecture Hub
+# 🚀 NOAH - Network Operations & Automation Hub
 
 <div align="center">
 
-[![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Ansible](https://img.shields.io/badge/Ansible-2.16+-red.svg)](https://www.ansible.com/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Kubernetes](https://img.shields.io/badge/Platform-Kubernetes-blueviolet.svg)](https://kubernetes.io/)
-[![Version](https://img.shields.io/badge/Version-0.9-green.svg)](https://github.com/Engelnicolas/NOAH/releases)
+[![Version](https://img.shields.io/badge/Version-0.2.1-green.svg)](https://github.com/Engelnicolas/NOAH/releases)
 [![Maintained](https://img.shields.io/badge/Maintained-Yes-brightgreen.svg)](https://github.com/Engelnicolas/NOAH/commits/main)
-[![Code Quality](https://img.shields.io/badge/Code%20Quality-Linted-success.svg)](https://github.com/Engelnicolas/NOAH)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blue.svg)](https://github.com/features/actions)
 
-*Une plateforme d'infrastructure automatisée et sécurisée pour déployer des solutions open-source à l'échelle entreprise*
+*Modern infrastructure platform with Ansible/Helm CI/CD pipelines for deploying enterprise-grade open-source solutions*
 
 </div>
 
 ---
 
-## ✨ Vue d'ensemble
+## ✨ Overview
 
-**NOAH** (Next Open-source Architecture Hub) est une plateforme d'automatisation d'infrastructure moderne et évolutive qui déploie un écosystème complet de services open-source de niveau entreprise. Conçue pour les organisations souhaitant maintenir un contrôle total sur leurs données et leur infrastructure, NOAH fournit une solution unifiée alliant sécurité, observabilité et collaboration.
+**NOAH v0.2.1** is a next-generation infrastructure automation platform that uses **modern CI/CD pipelines** to deploy a complete ecosystem of enterprise-level open-source services.
 
-### 🏗️ Architecture & Composants
+### 🏗️ Architecture & Components
 
-**NOAH** déploie une infrastructure complète composée de 11 charts Helm :
+#### 🔐 Identity Management
+- **Samba4 Active Directory**: Centralized directory with LDAP authentication
+- **Keycloak**: Modern identity provider with SSO and federation
 
-#### 🔐 Gestion des Identités
-- **Samba4 Active Directory** : Annuaire centralisé avec authentification LDAP
-- **Keycloak** : Fournisseur d'identité moderne avec SSO et fédération
+#### 📦 Collaboration Platforms
+- **Nextcloud**: Secure file sharing and collaboration
+- **Mattermost**: Team messaging with DevOps integrations
+- **GitLab**: Software forge with integrated CI/CD
 
-#### 📦 Plateformes de Collaboration  
-- **Nextcloud** : Partage de fichiers et collaboration sécurisés
-- **Mattermost** : Messagerie d'équipe avec intégrations DevOps
-- **GitLab** : Forge logicielle avec CI/CD intégré
+#### 🛡️ Security & Monitoring
+- **Wazuh**: SIEM and intrusion detection
+- **OpenEDR**: Endpoint threat detection and response
+- **OAuth2 Proxy**: Reverse proxy with OAuth2 authentication
 
-#### 🛡️ Sécurité & Monitoring
-- **Wazuh** : SIEM et détection d'intrusions
-- **OpenEDR** : Détection et réponse aux menaces endpoint
-- **OpenVPN** : Accès VPN sécurisé avec authentification AD
-- **OAuth2 Proxy** : Reverse proxy avec authentification OAuth2
+#### 📈 Observability
+- **Prometheus**: Metrics collection and alerting
+- **Grafana**: Advanced visualization and dashboards
 
-#### 📈 Observabilité
-- **Prometheus** : Collecte de métriques et alerting
-- **Grafana** : Visualisation et tableaux de bord avancés
+#### ⚙️ Modern Infrastructure
+- **Ansible + Kubespray**: Automated Kubernetes v1.28.2 deployment
+- **GitHub Actions**: CI/CD pipeline with automatic deployment
+- **Helm 3.13+**: Cloud-native application management
 
 ---
 
-## 🚀 Démarrage rapide
+## 🚀 Quick Start (5 minutes)
 
-### 🔧 Prérequis
-- **Kubernetes** : Cluster fonctionnel avec kubectl configuré
-- **Helm** : Version 3.x installée
-- **Python** : Version 3.8+ avec pip
-- **Ressources** : 8GB+ RAM, 50GB+ stockage (voir [Exigences techniques](docs/TECHNICAL_REQUIREMENTS.md))
+### 🔧 Prerequisites
+- **Servers**: 2+ Ubuntu 20.04+ servers (8GB RAM, 50GB disk)
+- **Access**: SSH with passwordless sudo
+- **GitHub**: Repository with Actions enabled
+- **Local**: Git, Ansible 2.16+, kubectl (optional)
 
-### ⚡ Installation Express (5 minutes)
+### ⚡ Express Installation
+
+#### 1. Automatic Configuration
 ```bash
-# 1. Cloner le dépôt
+# Clone and configure
 git clone https://github.com/Engelnicolas/NOAH.git
 cd NOAH
 
-# 2. Activer l'environnement Python
-source venv/bin/activate
-# Alternative : make -f Makefile.python setup
+# Automatic configuration with defaults
+./script/configure-pipeline.sh --auto
 
-# 3. Découvrir les commandes disponibles
-./noah --help
-
-# 4. Vérifier les prérequis système
-./noah tech-requirements --check
-
-# 5. Déployer la plateforme complète
-./noah deploy --verbose
-
-# 6. Surveiller le déploiement
-./noah monitoring status
+# Or interactive mode for customization
+./script/configure-pipeline.sh
 ```
 
-### 🎯 Accès aux services déployés
+#### 2. GitHub Actions Configuration
+Copy the values displayed by the script to **GitHub secrets**:
+
+| Secret | Default Value | Description |
+|--------|---------------|-------------|
+| `SSH_PRIVATE_KEY` | *Displayed by script* | SSH private key for server access |
+| `ANSIBLE_VAULT_PASSWORD` | `N0ah_V4ult_P@ssw0rd_2025!SecureK8s#` | Ansible Vault password |
+| `MASTER_HOST` | `192.168.1.10` | Master server IP |
+
+#### 3. SSH Key Deployment
 ```bash
-# Keycloak (Gestion des identités)
-kubectl port-forward svc/keycloak 8080:8080
-# http://localhost:8080
+# Copy public key to your servers
+ssh-copy-id -i ~/.ssh/noah_pipeline.pub ubuntu@192.168.1.10
+ssh-copy-id -i ~/.ssh/noah_pipeline.pub ubuntu@192.168.1.12
+```
 
-# Nextcloud (Collaboration)
-kubectl port-forward svc/nextcloud 8081:80
-# http://localhost:8081
+#### 4. Pipeline Launch
+```bash
+git add .
+git commit -m "Configure NOAH pipeline with defaults"
+git push origin Ansible
+```
 
-# Mattermost (Communication)
-kubectl port-forward svc/mattermost 8082:8065
-# http://localhost:8082
+The GitHub Actions pipeline automatically launches and deploys:
+1. **Infrastructure** provisioning
+2. **Kubernetes** installation with Kubespray
+3. **Cluster** configuration (ingress, storage, monitoring)
+4. **Application** deployment via Helm
 
-# Grafana (Monitoring)
-kubectl port-forward svc/grafana 3000:3000
-# http://localhost:3000
+### 🎯 Default Configuration
+
+#### Servers
+- **Master**: `192.168.1.10`
+- **Worker**: `192.168.1.12`
+- **Ingress**: `192.168.1.10`
+
+#### Domains
+- **Base**: `noah.local`
+- **Keycloak**: `keycloak.noah.local`
+- **GitLab**: `gitlab.noah.local`
+- **Nextcloud**: `nextcloud.noah.local`
+- **Mattermost**: `mattermost.noah.local`
+- **Grafana**: `grafana.noah.local`
+
+#### Default Accounts
+| Service | Username | Password |
+|---------|----------|----------|
+| Keycloak | `admin` | `Keycl0ak_Admin_789!Strong` |
+| GitLab | `root` | `GitL@b_Root_Password_012!` |
+| Nextcloud | `admin` | `N3xtcloud_Admin_345!Safe` |
+| Grafana | `admin` | `Gr@fana_Monitoring_678!View` |
+
+### 🌐 Local DNS Configuration
+
+Add to your `/etc/hosts`:
+```bash
+192.168.1.10 keycloak.noah.local
+192.168.1.10 gitlab.noah.local
+192.168.1.10 nextcloud.noah.local
+192.168.1.10 mattermost.noah.local
+192.168.1.10 grafana.noah.local
+```
+
+### ✅ Access Deployed Services
+
+- **🔐 Keycloak**: https://keycloak.noah.local
+- **🦊 GitLab**: https://gitlab.noah.local  
+- **☁️ Nextcloud**: https://nextcloud.noah.local
+- **💬 Mattermost**: https://mattermost.noah.local
+- **📊 Grafana**: https://grafana.noah.local
+
+---
+
+## 🛠️ NOAH CLI v0.2.1
+
+### Main Commands
+```bash
+# Modern and fast CLI
+./noah --help                    # Complete help
+./noah --version                 # Version: v0.2.1
+
+# Deployment management
+./noah init                      # Initialize environment
+./noah configure --auto          # Automatic configuration
+./noah deploy --profile prod     # Production deployment
+./noah status --all              # Complete system status
+
+# Service management
+./noah start                     # Start all services
+./noah stop                      # Stop all services
+./noah restart                   # Restart all services
+./noah logs --service keycloak   # Service logs
+
+# Validation and tests
+./noah validate                  # Validate configuration
+./noah test                      # Connectivity tests
+./noah health                    # System health
+```
+
+### Monitoring and Debugging
+```bash
+# Status verification
+kubectl get pods -n noah
+kubectl get ingress -n noah
+
+# View logs
+kubectl logs -n noah deployment/keycloak
+kubectl logs -n noah deployment/gitlab
 ```
 
 ---
 
-## 💡 Fonctionnalités principales
+## 🔧 Customization
 
-### 🐍 CLI Python Intelligent
-
-Le nouveau CLI NOAH offre une expérience utilisateur moderne et intuitive :
-
+### Change Server IPs
 ```bash
-# Interface colorée et informative
-./noah --help                    # Aide complète avec catégorisation
-./noah --list                    # Liste détaillée de tous les scripts
-./noah --version                 # Information de version
+# Edit inventory
+nano ansible/inventory/mycluster/hosts.yaml
 
-# Découverte automatique des scripts
-./noah linter                    # Auto-détection des sous-commandes
-./noah monitoring status         # Exécution intelligente avec validation
-
-# Gestion automatique des privilèges
-./noah deploy                    # Demande confirmation pour sudo si nécessaire
+# Or use configuration script
+MASTER_IP=10.0.0.10 WORKER_IP=10.0.0.11 ./script/configure-pipeline.sh --auto
 ```
 
-### 📊 Commandes disponibles par catégorie
-
-#### 🏗️ Infrastructure
+### Change Domain
 ```bash
-./noah deploy                    # Déploiement complet (11 charts Helm)
-./noah setup                     # Configuration environnement développement
-./noah tech-requirements         # Vérification prérequis système
+# Edit Helm values
+nano helm/noah-common/values.yaml
+
+# Change line: domain: noah.local
+# For example: domain: noah.mycompany.com
 ```
 
-#### 📈 Monitoring & Observabilité
+### Modify Secrets
 ```bash
-./noah monitoring status         # État des services de monitoring
-./noah monitoring deploy         # Déploiement Prometheus/Grafana
-./noah monitoring teardown       # Suppression stack monitoring
-```
-
-#### 🔍 Qualité du code
-```bash
-./noah linter setup             # Configuration environnement linting
-./noah linter lint --all        # Validation YAML/Helm/Python
-./noah linter precommit         # Exécution hooks pre-commit
-./noah linter report --save     # Génération rapport qualité
-```
-
-#### 🔧 Gestion des dépendances
-```bash
-./noah deps-manager --check     # Vérification dépendances système
-./noah deps-manager --install   # Installation packages requis
-./noah deps-manager --update    # Mise à jour dépendances
-```
-
-
-## 🔧 Installation complète
-
-### 📋 Prérequis détaillés
-
-#### Environnement système
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install -y python3 python3-pip python3-venv kubectl helm docker.io
-
-# CentOS/RHEL
-sudo yum install -y python3 python3-pip kubectl helm docker
-
-# Validation
-python3 --version    # >= 3.8
-kubectl version      # Client et serveur
-helm version         # >= 3.0
-```
-
-#### Cluster Kubernetes
-- **Version** : 1.20+ (recommandé 1.24+)
-- **Ressources** : 4 nodes minimum, 8GB RAM par node
-- **StorageClass** : Classe de stockage par défaut configurée
-- **Network Policy** : Support CNI (Calico, Flannel, etc.)
-
-### 🏗️ Installation étape par étape
-
-#### 1. Préparation de l'environnement
-```bash
-# Cloner et configurer
-git clone https://github.com/Engelnicolas/NOAH.git
-cd NOAH
-
-# Activer l'environnement virtuel Python
-source venv/bin/activate
-
-# Vérifier la configuration
-./noah tech-requirements --report
-./noah --list
-```
-
-#### 2. Configuration avancée
-```bash
-# Configuration personnalisée (optionnel)
-cp tests/values/values-minimal.yaml my-custom-values.yaml
-# Éditer my-custom-values.yaml selon vos besoins
-
-# Validation de la configuration
-./noah linter setup
-./noah linter lint --all
-```
-
-#### 3. Déploiement par phases
-
-**Phase 1 : Infrastructure de base**
-```bash
-./noah deploy --profile minimal    # Seulement les services essentiels
-./noah monitoring status           # Vérification état
-```
-
-**Phase 2 : Services collaboratifs**
-```bash
-./noah deploy --profile standard   # Ajout Nextcloud, Mattermost
-kubectl get pods -n noah           # Validation déploiement
-```
-
-**Phase 3 : Sécurité et monitoring complets**
-```bash
-./noah deploy --profile complete   # Stack complète
-./noah monitoring deploy           # Monitoring avancé
+# Decrypt and edit with Ansible Vault
+ansible-vault edit ansible/vars/secrets.yml --vault-password-file ansible/.vault_pass
 ```
 
 ---
 
-### 🎯 Cas d'usage principaux
+## 🎯 Main Use Cases
 
-#### 👤 Développeurs individuels
-- Apprendre DevSecOps et pipelines d'automatisation
-- Tester des outils d'entreprise dans un environnement sandbox
-- Expérimenter avec des architectures cloud-native
+### 👤 Developers & DevOps
+- **Learning**: Master DevSecOps and automation pipelines
+- **Sandbox**: Test enterprise tools in a secure environment
+- **Prototyping**: Experiment with cloud-native architectures
 
-#### 🧑‍💼 PME & Startups
-- Remplacer les outils SaaS coûteux par des alternatives auto-hébergées
-- Économies de 60-80% des coûts comparé aux solutions propriétaires
-- Contrôle total des données et conformité RGPD
+### 🧑‍💼 SMEs & Startups
+- **Savings**: 60-80% savings vs proprietary SaaS solutions
+- **Control**: Complete data control and GDPR compliance
+- **Scalability**: Infrastructure that grows with your business
 
-#### 🏢 Entreprises
-- Infrastructure cloud hybride avec exigences de conformité
-- Intégrations personnalisées et scalabilité enterprise
-- Audit complet et traçabilité des opérations
+### 🏢 Enterprises
+- **Hybrid**: Hybrid cloud infrastructure with compliance requirements
+- **Integrations**: Custom integrations and connectors
+- **Governance**: Complete audit and operation traceability
 
-#### 🏛️ Secteur public
-- Infrastructure sécurisée et auditable
-- Souveraineté des données et conformité réglementaire
-- Déploiement on-premise avec contrôle total
-
----
-### 📜 Licence
-
-Ce projet est sous licence **GPL v3**. Voir [LICENSE](LICENSE) pour plus de détails.
-
-## 👨‍💻 Auteur
-
-**Nicolas Engel**
-📧 Email : [contact@nicolasengel.fr](mailto:contact@nicolasengel.fr)
-🌐 Site web : [nicolasengel.fr](https://nicolasengel.fr)
-💼 LinkedIn : [linkedin.com/in/nicolas-engel/](https://www.linkedin.com/in/nicolas-engel-france/)
-
-*Passionné de cybersécurité, d'infrastructure open-source, DevSecOps, et de construction de solutions sécurisées et évolutives pour organisations de toutes tailles.*
+### 🏛️ Public Sector
+- **Sovereignty**: Complete data and infrastructure control
+- **Compliance**: Respect for sector regulations
+- **Security**: Secure and audited architecture
 
 ---
 
-## 🏆 Remerciements
+## 📚 Documentation
 
-Merci à la communauté open-source et aux mainteneurs de tous les outils qui rendent NOAH possible :
+- **[CI/CD Pipeline](docs/PIPELINE_CI_CD.md)**: Modern pipeline architecture
+- **[NOAH CLI](docs/NOAH_CLI.md)**: Complete CLI guide
+- **[Domain Configuration](docs/DOMAIN_CONFIGURATION.md)**: DNS and SSL certificates
+- **[Security](docs/SECURITY.md)**: Security hardening and best practices
 
-- **🐍 Python Software Foundation** pour le langage Python
-- **☸️ CNCF** pour Kubernetes, Prometheus, et l'écosystème cloud-native
-- ** Keycloak Team** pour la gestion des identités et accès
-- **☁️ Nextcloud GmbH** pour les outils de collaboration sécurisée
-- **💬 Mattermost** pour la communication d'équipe
-- **📊 Grafana Labs** pour la visualisation et l'observabilité
-- **🛡️ Wazuh** pour la surveillance sécuritaire
-- **🐳 Docker** pour la conteneurisation
-- **⎈ Helm** pour la gestion des applications Kubernetes
+---
+
+## 📜 License
+
+This project is licensed under **GPL v3**. See [LICENSE](LICENSE) for more details.
+
+## 👨‍💻 Author
+
+**Nicolas Engel**  
+📧 Email: [contact@nicolasengel.fr](mailto:contact@nicolasengel.fr)  
+🌐 Website: [nicolasengel.fr](https://nicolasengel.fr)  
+💼 LinkedIn: [nicolas-engel-france](https://www.linkedin.com/in/nicolas-engel-france/)
+
+*Expert in cybersecurity, cloud-native infrastructure, and DevSecOps. Passionate about secure and scalable open-source solutions.*
+
+---
+
+## 🏆 Acknowledgments
+
+Thanks to the open-source community and maintainers of the tools that make NOAH possible:
+
+- **⚙️ Ansible** for infrastructure automation
+- **☸️ CNCF** for Kubernetes, Prometheus, and the cloud-native ecosystem
+- **⎈ Helm** for Kubernetes application management
+- **🔐 Keycloak** for identity and access management
+- **☁️ Nextcloud** for secure collaboration
+- **💬 Mattermost** for team communication
+- **📊 Grafana** for visualization and observability
+- **🛡️ Wazuh** for security monitoring
+- **🐙 GitHub** for CI/CD pipelines
+

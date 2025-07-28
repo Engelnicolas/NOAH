@@ -1,0 +1,89 @@
+# Variables globales pour le déploiement NOAH
+---
+# Configuration cluster
+cluster_name: "noah-cluster"
+kube_version: "v1.28.2"
+kube_network_plugin: "calico"
+
+# Configuration réseau
+pod_subnet: "10.233.64.0/18"
+service_subnet: "10.233.0.0/18"
+
+# Configuration ingress
+ingress_enabled: true
+ingress_class: "nginx"
+ingress_domain: "noah.local"
+
+# Configuration stockage
+storage_class: "local-storage"
+storage_provisioner: "kubernetes.io/no-provisioner"
+
+# Configuration monitoring
+monitoring_enabled: true
+metrics_retention: "30d"
+
+# Configuration namespaces
+namespaces:
+  - name: "noah"
+    labels:
+      environment: "production"
+  - name: "monitoring"
+    labels:
+      environment: "production"
+
+# Configuration des applications
+applications:
+  postgresql:
+    enabled: true
+    version: "15.4.0"
+    database: "noah"
+    username: "noah"
+    storage_size: "20Gi"
+    
+  keycloak:
+    enabled: true
+    realm: "noah"
+    hostname: "keycloak.noah.local"
+    
+  gitlab:
+    enabled: true
+    hostname: "gitlab.noah.local"
+    storage_size: "50Gi"
+    
+  nextcloud:
+    enabled: true
+    hostname: "nextcloud.noah.local" 
+    storage_size: "100Gi"
+    
+  mattermost:
+    enabled: true
+    hostname: "mattermost.noah.local"
+    
+  grafana:
+    enabled: true
+    hostname: "grafana.noah.local"
+    storage_size: "10Gi"
+    
+  prometheus:
+    enabled: true
+    storage_size: "20Gi"
+    retention: "30d"
+    
+  wazuh:
+    enabled: true
+    
+  openedr:
+    enabled: true
+    
+  oauth2_proxy:
+    enabled: true
+
+# Configuration SSL/TLS
+tls_enabled: true
+cert_manager_enabled: true
+letsencrypt_email: "admin@noah.local"
+
+# Configuration backup
+backup_enabled: true
+backup_schedule: "0 2 * * *"  # Tous les jours à 2h
+backup_retention: "30d"

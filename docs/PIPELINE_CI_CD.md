@@ -1,6 +1,7 @@
-# Pipeline CI/CD NOAH
-
-Ce document décrit le pipeline CI/CD automatisé pour le projet NOAH, basé sur Ansible, Kubespray, Helm et GitHub Actions.
+# Pipeline CI/CD NO3. **Initialisation**
+   ```bash
+   ./script/setup-pipeline.sh
+   ```Ce document décrit le pipeline CI/CD automatisé pour le projet NOAH, basé sur Ansible, Kubespray, Helm et GitHub Actions.
 
 ## 🏗️ Architecture
 
@@ -64,9 +65,12 @@ GitHub Actions (Orchestrateur)
 ├── helm/noah-chart/
 │   ├── Chart.yaml                  # Chart Helm principal
 │   └── templates/                  # Templates Kubernetes
-├── values/
-│   └── values-prod.yaml            # Configuration production
-└── setup-pipeline.sh               # Script d'initialisation
+├── script/
+│   ├── setup-pipeline.sh           # Script d'initialisation
+│   ├── configure-pipeline.sh       # Configuration
+│   └── generate-ssh-keys.sh        # Génération clés SSH
+└── values/
+    └── values-prod.yaml            # Configuration production
 ```
 
 ## 🔄 Workflow de déploiement

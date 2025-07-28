@@ -53,8 +53,8 @@ cd NOAH
 
 ### 2. **Configuration des Secrets GitHub**
 ```bash
-# Générer les clés SSH
-./generate-ssh-keys.sh
+# Générer des clés SSH pour le déploiement
+./script/generate-ssh-keys.sh
 
 # Configurer les secrets dans GitHub Actions :
 # - SSH_PRIVATE_KEY : Clé privée affichée

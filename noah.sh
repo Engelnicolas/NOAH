@@ -163,11 +163,11 @@ cmd_init() {
     fi
     
     # Lancer le script d'initialisation
-    if [[ -f "setup-pipeline.sh" ]]; then
+    if [[ -f "script/setup-pipeline.sh" ]]; then
         info "Lancement du script d'initialisation..."
-        ./setup-pipeline.sh
+        ./script/setup-pipeline.sh
     else
-        error "Script d'initialisation non trouvé: setup-pipeline.sh"
+        error "Script d'initialisation non trouvé: script/setup-pipeline.sh"
         exit 1
     fi
     
@@ -204,16 +204,16 @@ cmd_configure() {
     done
     
     # Lancer le script de configuration
-    if [[ -f "configure-pipeline.sh" ]]; then
+    if [[ -f "script/configure-pipeline.sh" ]]; then
         if [[ "$auto_mode" == "true" ]]; then
             info "Configuration automatique..."
-            ./configure-pipeline.sh --auto
+            ./script/configure-pipeline.sh --auto
         else
             info "Configuration interactive..."
-            ./configure-pipeline.sh
+            ./script/configure-pipeline.sh
         fi
     else
-        error "Script de configuration non trouvé: configure-pipeline.sh"
+        error "Script de configuration non trouvé: script/configure-pipeline.sh"
         exit 1
     fi
     

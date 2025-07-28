@@ -73,10 +73,10 @@ git clone https://github.com/Engelnicolas/NOAH.git
 cd NOAH
 
 # Configuration automatique avec valeurs par défaut
-./configure-pipeline.sh --auto
+./script/configure-pipeline.sh --auto
 
 # Ou mode interactif pour personnaliser
-./configure-pipeline.sh
+./script/configure-pipeline.sh
 ```
 
 #### 2. Configuration GitHub Actions
@@ -230,7 +230,7 @@ kubectl logs -n noah deployment/gitlab
 nano ansible/inventory/mycluster/hosts.yaml
 
 # Ou utiliser le script de configuration
-MASTER_IP=10.0.0.10 WORKER_IP=10.0.0.11 ./configure-pipeline.sh --auto
+MASTER_IP=10.0.0.10 WORKER_IP=10.0.0.11 ./script/configure-pipeline.sh --auto
 ```
 
 ### Changer le domaine

@@ -1,18 +1,16 @@
----
-# ansible Galaxy requirements for NOAH
 collections:
-  - name: kubernetes.core
-    version: ">=2.4.0"
-    source: https://galaxy.ansible.com
-  - name: community.general
-    version: ">=7.0.0"
-    source: https://galaxy.ansible.com
-  - name: ansible.posix
-    version: ">=1.5.0"
-    source: https://galaxy.ansible.com
-  - name: community.crypto
-    version: ">=2.15.0"
-    source: https://galaxy.ansible.com
-  - name: community.docker
-    version: ">=3.4.0"
-    source: https://galaxy.ansible.com
+- name: kubernetes.core
+  version: '>=2.4.0'
+  source: https://galaxy.ansible.com
+- name: community.general
+  version: '>=7.0.0'
+  source: https://galaxy.ansible.com
+- name: ansible.posix
+  version: '>=1.5.0'
+  source: https://galaxy.ansible.com
+- name: community.crypto
+  version: '>=2.15.0'
+  source: https://galaxy.ansible.com
+- name: community.docker
+  version: '>=3.4.0'
+  source: https://galaxy.ansible.com

@@ -47,250 +47,128 @@
 # Shared settings that apply across all Nextcloud components
 
 global:
-  # Container image registry override (leave empty for Docker Hub)
-  imageRegistry: ""
-
-  # Global image pull secrets for private registries
+  imageRegistry: ''
   imagePullSecrets: []
-
-  # Default storage class for persistent volumes
-  # Critical for file storage performance and reliability
-  storageClass: ""
-
-# =============================================================================
-# Nextcloud Application Configuration
-# =============================================================================
-
-# Number of Nextcloud application replicas
-# For high availability, use multiple replicas with shared storage
-# Note: File locking via Redis is required for multi-replica deployments
+  storageClass: ''
 replicaCount: 1
-
-# Container image configuration
 image:
-  # Container registry (leave empty for Docker Hub)
-  registry: ""
-
-  # Official Nextcloud Docker image
+  registry: ''
   repository: nextcloud
-
-  # Nextcloud version - use stable releases for production
-  # Format: major.minor.patch (e.g., 28.0.1)
-  tag: "28.0.1"
-
-  # Image pull policy
-  # IfNotPresent: Only pull if image doesn't exist locally
+  tag: 28.0.1
   pullPolicy: IfNotPresent
-
-  # Image pull secrets for this specific image
   pullSecrets: []
-
-# =============================================================================
-# Nextcloud Core Configuration
-# =============================================================================
-# Primary application settings and administrative configuration
-
 nextcloud:
-  # =============================================================================
-  # Administrative User Configuration
-  # =============================================================================
-
-  # Initial admin username (created during first installation)
   adminUser: admin
-
-  # Admin password (leave empty to use existingSecret)
-  # SECURITY: Always use existingSecret in production
-  adminPassword: ""
-
-  # Kubernetes secret containing admin credentials
-  existingSecret: ""
-  existingSecretUsernameKey: "nextcloud-admin-username"
-  existingSecretPasswordKey: "nextcloud-admin-password"
-
-  # =============================================================================
-  # External Access Configuration
-  # =============================================================================
-
-  # Primary hostname for Nextcloud access
-  # This must match the ingress hostname and certificate
-  host: "nextcloud.noah.local"
-
-  # Protocol for external access (https recommended for production)
-  protocol: "https"
-
-  # Trusted domains for Nextcloud access
-  # All domains that users will use to access Nextcloud
+  adminPassword: ''
+  existingSecret: ''
+  existingSecretUsernameKey: nextcloud-admin-username
+  existingSecretPasswordKey: nextcloud-admin-password
+  host: nextcloud.noah.local
+  protocol: https
   trustedDomains:
-    - "nextcloud.noah.local"
-
-  # =============================================================================
-  # File Storage Configuration
-  # =============================================================================
-
-  # Data directory inside the container for user files
-  # This directory will be mounted to persistent storage
-  dataDir: "/var/www/html/data"
-
-  # =============================================================================
-  # Advanced Configuration (config.php)
-  # =============================================================================
-  # Raw PHP configuration for advanced Nextcloud settings
-
-  config: |
-    <?php
-    $CONFIG = array (
-      // =================================================================
-      // Caching Configuration for Performance Optimization
-      // =================================================================
-
-      // Local caching using APCu for single-server setups
-      'memcache.local' => '\\OC\\Memcache\\APCu',
-
-      // Distributed caching using Redis for multi-server setups
-      'memcache.distributed' => '\\OC\\Memcache\\Redis',
-
-      // File locking using Redis to prevent conflicts in shared storage
-      'memcache.locking' => '\\OC\\Memcache\\Redis',
-
-      // Redis connection configuration
-      'redis' => array(
-        'host' => '{{ include "nextcloud.redis.host" . }}',
-        'port' => 6379,
-        {{- if .Values.redis.auth.enabled }}
-        'password' => '{{ .Values.redis.auth.password }}',
-        {{- end }}
-      ),
-
-      // =================================================================
-      // Network and Proxy Configuration
-      // =================================================================
-
-      // Trusted proxy networks (for ingress controllers and load balancers)
-      'trusted_proxies' => array(
-        '10.0.0.0/8',
-        '172.16.0.0/12',
-        '192.168.0.0/16',
-      ),
-      'overwriteprotocol' => 'https',
-      'overwritehost' => '{{ .Values.nextcloud.host }}',
-      'overwritewebroot' => '',
-      'overwrite.cli.url' => 'https://{{ .Values.nextcloud.host }}',
-      'htaccess.RewriteBase' => '/',
-      'default_phone_region' => 'US',
-      'maintenance_window_start' => 1,
-    );
-
-# OIDC Authentication
+  - nextcloud.noah.local
+  dataDir: /var/www/html/data
+  config: "<?php\n$CONFIG = array (\n  // =================================================================\n  // Caching\
+    \ Configuration for Performance Optimization\n  // =================================================================\n\
+    \n  // Local caching using APCu for single-server setups\n  'memcache.local' => '\\\\OC\\\\Memcache\\\\APCu',\n\n  //\
+    \ Distributed caching using Redis for multi-server setups\n  'memcache.distributed' => '\\\\OC\\\\Memcache\\\\Redis',\n\
+    \n  // File locking using Redis to prevent conflicts in shared storage\n  'memcache.locking' => '\\\\OC\\\\Memcache\\\\\
+    Redis',\n\n  // Redis connection configuration\n  'redis' => array(\n    'host' => '{{ include \"nextcloud.redis.host\"\
+    \ . }}',\n    'port' => 6379,\n    {{- if .Values.redis.auth.enabled }}\n    'password' => '{{ .Values.redis.auth.password\
+    \ }}',\n    {{- end }}\n  ),\n\n  // =================================================================\n  // Network and\
+    \ Proxy Configuration\n  // =================================================================\n\n  // Trusted proxy networks\
+    \ (for ingress controllers and load balancers)\n  'trusted_proxies' => array(\n    '10.0.0.0/8',\n    '172.16.0.0/12',\n\
+    \    '192.168.0.0/16',\n  ),\n  'overwriteprotocol' => 'https',\n  'overwritehost' => '{{ .Values.nextcloud.host }}',\n\
+    \  'overwritewebroot' => '',\n  'overwrite.cli.url' => 'https://{{ .Values.nextcloud.host }}',\n  'htaccess.RewriteBase'\
+    \ => '/',\n  'default_phone_region' => 'US',\n  'maintenance_window_start' => 1,\n);\n"
 oidc:
   enabled: true
-  provider: "Keycloak"
-  clientId: "nextcloud"
-  clientSecret: ""
-  existingSecret: ""
-  existingSecretKey: "oidc-client-secret"
-  discoveryUrl: "https://keycloak.noah.local/realms/noah/.well-known/openid_configuration"
-
-  # OIDC Configuration
+  provider: Keycloak
+  clientId: nextcloud
+  clientSecret: ''
+  existingSecret: ''
+  existingSecretKey: oidc-client-secret
+  discoveryUrl: https://keycloak.noah.local/realms/noah/.well-known/openid_configuration
   config:
     use_pkce: true
-    loginButtonName: "Login with Keycloak"
+    loginButtonName: Login with Keycloak
     autoRedirectOnLoginPage: false
-    redirectUrl: "https://nextcloud.noah.local/apps/oidc_login/oidc"
-    logoutUrl: "https://keycloak.noah.local/realms/noah/protocol/openid-connect/logout"
-
-    # User mapping
+    redirectUrl: https://nextcloud.noah.local/apps/oidc_login/oidc
+    logoutUrl: https://keycloak.noah.local/realms/noah/protocol/openid-connect/logout
     userMappings:
-      id: "preferred_username"
-      name: "name"
-      mail: "email"
-      quota: "quota"
-      home: "home_directory"
-      ldap_uid: "preferred_username"
-      groups: "groups"
-
-    # Group provisioning
+      id: preferred_username
+      name: name
+      mail: email
+      quota: quota
+      home: home_directory
+      ldap_uid: preferred_username
+      groups: groups
     groupProvisioning: true
     groupMappings:
-      admin: "Nextcloud-Admins"
-      users: "Nextcloud-Users"
-
-# LDAP Authentication (fallback/additional)
+      admin: Nextcloud-Admins
+      users: Nextcloud-Users
 ldap:
   enabled: true
-  host: "samba4.noah.svc.cluster.local"
+  host: samba4.noah.svc.cluster.local
   port: 389
-  dn: "dc=noah,dc=local"
-  bindUser: "cn=nextcloud-service,cn=Users,dc=noah,dc=local"
-  bindPassword: ""
-  existingSecret: ""
-  existingSecretKey: "ldap-password"
-
-  # User configuration
+  dn: dc=noah,dc=local
+  bindUser: cn=nextcloud-service,cn=Users,dc=noah,dc=local
+  bindPassword: ''
+  existingSecret: ''
+  existingSecretKey: ldap-password
   userSearch:
-    base: "cn=Users,dc=noah,dc=local"
-    filter: "(&(objectClass=user)(sAMAccountName=%uid))"
+    base: cn=Users,dc=noah,dc=local
+    filter: (&(objectClass=user)(sAMAccountName=%uid))
     attributes:
-      displayName: "displayName"
-      email: "mail"
-      quota: "description"
-      home: "homeDirectory"
-
-  # Group configuration
+      displayName: displayName
+      email: mail
+      quota: description
+      home: homeDirectory
   groupSearch:
-    base: "cn=Groups,dc=noah,dc=local"
-    filter: "(&(objectClass=group))"
-    memberAttribute: "member"
-
-# Service configuration
+    base: cn=Groups,dc=noah,dc=local
+    filter: (&(objectClass=group))
+    memberAttribute: member
 service:
   type: ClusterIP
   port: 80
   annotations: {}
   sessionAffinity: ClientIP
-
-# Ingress configuration
 ingress:
   enabled: true
   className: nginx
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "4G"
-    nginx.ingress.kubernetes.io/proxy-buffering: "off"
-    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hostname: "nextcloud.noah.local"
+    nginx.ingress.kubernetes.io/proxy-body-size: 4G
+    nginx.ingress.kubernetes.io/proxy-buffering: 'off'
+    nginx.ingress.kubernetes.io/proxy-request-buffering: 'off'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '300'
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hostname: nextcloud.noah.local
   path: /
   pathType: Prefix
   tls:
     enabled: true
     secretName: nextcloud-tls
-
-# Database configuration
 database:
   type: postgresql
-  host: ""
+  host: ''
   port: 5432
   name: nextcloud
   user: nextcloud
-  password: ""
-  existingSecret: ""
-  existingSecretPasswordKey: "postgresql-password"
-
-# External storage configuration
+  password: ''
+  existingSecret: ''
+  existingSecretPasswordKey: postgresql-password
 externalStorage:
   enabled: false
   s3:
     enabled: false
-    bucket: ""
-    hostname: ""
+    bucket: ''
+    hostname: ''
     port: 443
     ssl: true
-    accessKey: ""
-    secretKey: ""
-    existingSecret: ""
-
-# Resource limits and requests
+    accessKey: ''
+    secretKey: ''
+    existingSecret: ''
 resources:
   limits:
     cpu: 2000m
@@ -298,91 +176,76 @@ resources:
   requests:
     cpu: 500m
     memory: 1Gi
-
-# Auto-scaling
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 5
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
-# Node selection
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
-# Security Context
 podSecurityContext:
   runAsNonRoot: false
-  runAsUser: 33 # www-data user
+  runAsUser: 33
   runAsGroup: 33
   fsGroup: 33
-
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
     drop:
-      - ALL
+    - ALL
     add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - SETGID
+    - SETUID
   readOnlyRootFilesystem: false
   runAsUser: 33
-
-# Probes
 livenessProbe:
   enabled: true
   httpGet:
     path: /status.php
     port: http
     httpHeaders:
-      - name: Host
-        value: "nextcloud.noah.local"
+    - name: Host
+      value: nextcloud.noah.local
   initialDelaySeconds: 120
   periodSeconds: 30
   timeoutSeconds: 10
   failureThreshold: 3
-
 readinessProbe:
   enabled: true
   httpGet:
     path: /status.php
     port: http
     httpHeaders:
-      - name: Host
-        value: "nextcloud.noah.local"
+    - name: Host
+      value: nextcloud.noah.local
   initialDelaySeconds: 60
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
-
 startupProbe:
   enabled: true
   httpGet:
     path: /status.php
     port: http
     httpHeaders:
-      - name: Host
-        value: "nextcloud.noah.local"
+    - name: Host
+      value: nextcloud.noah.local
   initialDelaySeconds: 30
   periodSeconds: 15
   timeoutSeconds: 10
   failureThreshold: 20
-
-# Persistence
 persistence:
   enabled: true
-  storageClass: ""
+  storageClass: ''
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   size: 100Gi
   annotations: {}
-
-  # Separate volumes for different data types
   volumes:
     data:
       size: 50Gi
@@ -396,43 +259,36 @@ persistence:
     themes:
       size: 5Gi
       path: /var/www/html/themes
-
-# Apps configuration
 apps:
-  # Core apps to install/enable
   enabled:
-    - "oidc_login"
-    - "user_ldap"
-    - "files_external"
-    - "files_sharing"
-    - "files_versions"
-    - "files_trashbin"
-    - "activity"
-    - "notifications"
-    - "comments"
-    - "federatedfilesharing"
-    - "lookup_server_connector"
-    - "oauth2"
-    - "provisioning_api"
-    - "settings"
-    - "user_status"
-    - "workflowengine"
-
-  # Additional apps
+  - oidc_login
+  - user_ldap
+  - files_external
+  - files_sharing
+  - files_versions
+  - files_trashbin
+  - activity
+  - notifications
+  - comments
+  - federatedfilesharing
+  - lookup_server_connector
+  - oauth2
+  - provisioning_api
+  - settings
+  - user_status
+  - workflowengine
   additional:
-    - "calendar"
-    - "contacts"
-    - "mail"
-    - "notes"
-    - "tasks"
-    - "deck"
-    - "polls"
-    - "forms"
-
-# Cron jobs
+  - calendar
+  - contacts
+  - mail
+  - notes
+  - tasks
+  - deck
+  - polls
+  - forms
 cronjobs:
   enabled: true
-  schedule: "*/5 * * * *"
+  schedule: '*/5 * * * *'
   resources:
     limits:
       cpu: 100m
@@ -440,15 +296,13 @@ cronjobs:
     requests:
       cpu: 50m
       memory: 128Mi
-
-# PostgreSQL dependency
 postgresql:
   enabled: true
   auth:
-    postgresPassword: "postgres"
-    username: "nextcloud"
-    password: "nextcloud"
-    database: "nextcloud"
+    postgresPassword: postgres
+    username: nextcloud
+    password: nextcloud
+    database: nextcloud
   primary:
     persistence:
       enabled: true
@@ -460,13 +314,11 @@ postgresql:
       limits:
         memory: 1Gi
         cpu: 1000m
-
-# Redis dependency
 redis:
   enabled: true
   auth:
     enabled: true
-    password: "nextcloud"
+    password: nextcloud
   master:
     persistence:
       enabled: true
@@ -478,62 +330,42 @@ redis:
       limits:
         memory: 512Mi
         cpu: 500m
-
-# Backup configuration
 backup:
   enabled: true
-  schedule: "0 3 * * *"
-  retention: "7d"
+  schedule: 0 3 * * *
+  retention: 7d
   s3:
     enabled: false
-    bucket: ""
-    region: ""
-    accessKey: ""
-    secretKey: ""
-
-# Monitoring
+    bucket: ''
+    region: ''
+    accessKey: ''
+    secretKey: ''
 metrics:
   enabled: true
   serviceMonitor:
     enabled: true
-    namespace: ""
+    namespace: ''
     labels: {}
     interval: 30s
     scrapeTimeout: 10s
-
-# Service Account
 serviceAccount:
   create: true
   annotations: {}
-  name: ""
-
-# Network Policies
+  name: ''
 networkPolicy:
   enabled: true
   ingress:
     enabled: true
   egress:
     enabled: true
-
-# Pod annotations and labels
 podAnnotations: {}
 podLabels: {}
-
-# Common labels
 commonLabels: {}
 commonAnnotations: {}
-
-# Extra environment variables
 extraEnvVars: []
-extraEnvVarsSecret: ""
-extraEnvVarsConfigMap: ""
-
-# Extra volumes and mounts
+extraEnvVarsSecret: ''
+extraEnvVarsConfigMap: ''
 extraVolumes: []
 extraVolumeMounts: []
-
-# Init containers
 initContainers: []
-
-# Sidecar containers
 sidecarContainers: []

@@ -4,31 +4,24 @@
 # Essential configuration only - no extensive documentation
 
 # Global settings
-global:
-  storageClass: ""
 
-# Basic deployment
+global:
+  storageClass: ''
 replicaCount: 1
 image:
   repository: grafana/grafana
-  tag: "10.2.0"
+  tag: 10.2.0
   pullPolicy: IfNotPresent
-
-# Service configuration
 service:
   type: ClusterIP
   ports:
-    - name: http
-      port: 3000
-      protocol: TCP
-
-# Storage
+  - name: http
+    port: 3000
+    protocol: TCP
 persistence:
   enabled: true
   size: 10Gi
   accessMode: ReadWriteOnce
-
-# Resources
 resources:
   requests:
     cpu: 100m
@@ -36,22 +29,16 @@ resources:
   limits:
     cpu: 500m
     memory: 1Gi
-
-# External access
 ingress:
   enabled: false
   className: nginx
   host: grafana.local
   tls:
     enabled: false
-
-# Security
 securityContext:
   runAsUser: 472
   runAsGroup: 472
   readOnlyRootFilesystem: false
-
-# Authentication
 auth:
   admin:
     username: admin
@@ -60,34 +47,24 @@ auth:
     enabled: false
   oidc:
     enabled: false
-
-# Data sources
 datasources:
   prometheus:
     enabled: true
     url: http://prometheus:9090
-
-# Dashboards
 dashboards:
   enabled: true
   default:
     enabled: true
-
-# Monitoring
 serviceMonitor:
   enabled: false
   port: http
   path: /metrics
-
-# Networking
 networkPolicy:
   enabled: false
-
-# Configuration
 config:
   server:
     domain: grafana.local
-    rootUrl: ""
+    rootUrl: ''
   database:
     type: sqlite3
   smtp:

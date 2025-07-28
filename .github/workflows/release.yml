@@ -1,26 +1,22 @@
----
 name: Release
 permissions:
   contents: read
   pull-requests: write
   security-events: write
-
-on:
+true:
   push:
     tags:
-      - "v*"
-
+    - v*
 jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Create Release
-        uses: ncipollo/release-action@v1
-        with:
-          generateReleaseNotes: true
-          draft: false
-          prerelease: false
+    - name: Checkout Code
+      uses: actions/checkout@v4
+    - name: Create Release
+      uses: ncipollo/release-action@v1
+      with:
+        generateReleaseNotes: true
+        draft: false
+        prerelease: false

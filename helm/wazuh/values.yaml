@@ -48,247 +48,145 @@
 # Central component that processes security data, applies rules, and generates alerts
 
 manager:
-  # Number of Wazuh Manager replicas for high availability
-  # Multiple managers provide load balancing and failover capability
-  # Minimum 2 recommended for production environments
   replicaCount: 2
-
-  # Container image configuration
   image:
-    # Official Wazuh Manager image repository
     repository: wazuh/wazuh-manager
-
-    # Wazuh version - use stable releases for production
-    # Format: X.Y.Z (e.g., 4.7.1)
-    tag: "4.7.1"
-
-    # Image pull policy
+    tag: 4.7.1
     pullPolicy: IfNotPresent
-
-  # Resource allocation for Manager components
-  # Manager is CPU and memory intensive for rule processing
   resources:
     requests:
-      # Minimum memory required for rule engine and data processing
-      memory: "2Gi"
-
-      # Minimum CPU for real-time event processing
-      cpu: "1000m"
+      memory: 2Gi
+      cpu: 1000m
     limits:
-      # Maximum memory allocation to prevent OOM issues
-      memory: "4Gi"
-
-      # Maximum CPU allocation for resource management
-      cpu: "2000m"
-
-  # Kubernetes scheduling configuration
-  nodeSelector: {} # Node selection constraints
-  tolerations: [] # Tolerate specific node taints
-  affinity: {} # Pod affinity and anti-affinity rules
-
-  # =============================================================================
-  # Wazuh Manager Core Configuration
-  # =============================================================================
-  # Security rules, clustering, and authentication settings
-
+      memory: 4Gi
+      cpu: 2000m
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
   config:
-    # =============================================================================
-    # Cluster Configuration for High Availability
-    # =============================================================================
     cluster:
-      # Enable clustering for multi-manager deployments
       enabled: true
-
-      # Unique node name for this manager instance
-      node_name: "wazuh-manager"
-
-      # Node type in cluster hierarchy
-      # Options: master, worker, client
-      node_type: "master"
-
-      # Cluster communication encryption key
-      # SECURITY: Change this default key before production deployment
-      key: "c98b62a9b6169ac5f67dae55ae4a9088"
-
-      # IP address to bind for cluster communication
-      bind_addr: "0.0.0.0"
-
-      # Port for cluster communication between managers
+      node_name: wazuh-manager
+      node_type: master
+      key: c98b62a9b6169ac5f67dae55ae4a9088
+      bind_addr: 0.0.0.0
       port: 1516
-
-      # Hide this node from cluster status (for load balancers)
-      hidden: "no"
-
-      # Disable this node from active participation
-      disabled: "no"
-
-    # =============================================================================
-    # Authentication and Authorization Configuration
-    # =============================================================================
+      hidden: 'no'
+      disabled: 'no'
     auth:
-      # Authentication provider for Wazuh users
-      # Options: ldap, internal, api
-      auth_provider: "ldap"
-
-      # LDAP server URL for user authentication
-      ldap_url: "ldap://ldap.noah.svc.cluster.local:389"
-
-      # LDAP base distinguished name for user searches
-      ldap_base_dn: "dc=noah,dc=local"
-
-      # LDAP bind DN for authentication queries
-      ldap_bind_dn: "cn=admin,dc=noah,dc=local"
-
-      # LDAP search filter for user authentication
-      ldap_user_search: "(uid={username})"
-
-      # LDAP search filter for user group membership
-      ldap_group_search: "(memberUid={username})"
-
-    # =============================================================================
-    # Vulnerability Detection Configuration
-    # =============================================================================
+      auth_provider: ldap
+      ldap_url: ldap://ldap.noah.svc.cluster.local:389
+      ldap_base_dn: dc=noah,dc=local
+      ldap_bind_dn: cn=admin,dc=noah,dc=local
+      ldap_user_search: (uid={username})
+      ldap_group_search: (memberUid={username})
     vulnerability_detector:
-      # Enable vulnerability assessment capabilities
       enabled: true
-
-      # Interval between vulnerability scans
-      interval: "5m"
-
-      # Time to ignore repeated vulnerability findings
-      ignore_time: "6h"
-
-      # Run vulnerability scan on manager startup
+      interval: 5m
+      ignore_time: 6h
       run_on_start: true
-
-      # Vulnerability feed providers to use
       providers:
-        - "canonical" # Ubuntu/Canonical vulnerability feeds
-        - "debian" # Debian security advisories
-        - "redhat"
-        - "arch"
-
-    # Active response
+      - canonical
+      - debian
+      - redhat
+      - arch
     active_response:
       disabled: false
-      ca_store: "/var/ossec/etc/rootca.pem"
+      ca_store: /var/ossec/etc/rootca.pem
       ca_verification: true
-
-    # Rule testing
     rule_test:
       enabled: true
       threads: 1
       max_sessions: 64
       session_timeout: 15
-
-    # Monitoring
     monitoring:
       enabled: true
       frequency: 120
       compress: true
       day_wait: 7
-
-    # Email notification
     email_notification:
       enabled: true
-      smtp_server: "smtp.noah.local"
-      email_from: "wazuh@noah.local"
-      email_to: "admin@noah.local"
-      format: "plain"
-
-    # Integration with external tools
+      smtp_server: smtp.noah.local
+      email_from: wazuh@noah.local
+      email_to: admin@noah.local
+      format: plain
     integrations:
       slack:
         enabled: false
-        hook_url: ""
-        channel: "#security"
+        hook_url: ''
+        channel: '#security'
       pagerduty:
         enabled: false
-        api_key: ""
+        api_key: ''
       virustotal:
         enabled: false
-        api_key: ""
-
-    # Logging configuration
+        api_key: ''
     logging:
-      level: "info"
+      level: info
       use_geoip: true
-
-    # Database output (for Elasticsearch)
     database_output:
       enabled: true
       hosts:
-        - "elasticsearch.noah.svc.cluster.local:9200"
-      protocol: "https"
-      username: "wazuh"
-      password: "" # Set via secret
-      index_name: "wazuh-alerts"
-      index_template: "wazuh"
-      ssl_agent_ca: "/etc/ssl/root-ca.pem"
-      ssl_agent_cert: "/etc/ssl/filebeat.pem"
-      ssl_agent_key: "/etc/ssl/filebeat-key.pem"
+      - elasticsearch.noah.svc.cluster.local:9200
+      protocol: https
+      username: wazuh
+      password: ''
+      index_name: wazuh-alerts
+      index_template: wazuh
+      ssl_agent_ca: /etc/ssl/root-ca.pem
+      ssl_agent_cert: /etc/ssl/filebeat.pem
+      ssl_agent_key: /etc/ssl/filebeat-key.pem
       ssl_peer_validation: true
       ssl_hostname_validation: true
-
-# Wazuh Dashboard/Kibana Configuration
 dashboard:
   enabled: true
   replicaCount: 2
   image:
     repository: wazuh/wazuh-dashboard
-    tag: "4.7.1"
+    tag: 4.7.1
     pullPolicy: IfNotPresent
-
   resources:
     requests:
-      memory: "1Gi"
-      cpu: "500m"
+      memory: 1Gi
+      cpu: 500m
     limits:
-      memory: "2Gi"
-      cpu: "1000m"
-
+      memory: 2Gi
+      cpu: 1000m
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
   config:
     server:
-      host: "0.0.0.0"
+      host: 0.0.0.0
       port: 5601
       ssl:
         enabled: true
-        certificate: "/usr/share/wazuh-dashboard/certs/cert.pem"
-        key: "/usr/share/wazuh-dashboard/certs/cert-key.pem"
-
+        certificate: /usr/share/wazuh-dashboard/certs/cert.pem
+        key: /usr/share/wazuh-dashboard/certs/cert-key.pem
     opensearch:
-      hosts: ["https://elasticsearch.noah.svc.cluster.local:9200"]
-      username: "kibanaserver"
-      password: "" # Set via secret
+      hosts:
+      - https://elasticsearch.noah.svc.cluster.local:9200
+      username: kibanaserver
+      password: ''
       ssl:
-        verificationMode: "certificate"
-        certificateAuthorities: ["/usr/share/wazuh-dashboard/certs/root-ca.pem"]
-
+        verificationMode: certificate
+        certificateAuthorities:
+        - /usr/share/wazuh-dashboard/certs/root-ca.pem
     wazuh:
       api:
-        url: "https://wazuh-manager.noah.svc.cluster.local"
+        url: https://wazuh-manager.noah.svc.cluster.local
         port: 55000
-        username: "wazuh-wui"
-        password: "" # Set via secret
+        username: wazuh-wui
+        password: ''
         run_as: false
-
-    # Security configuration
     security:
       showAdvancedSettings: false
       allowLeadingWildcards: true
       disabledCapabilities: []
-
-    # Monitoring
     monitoring:
       enabled: true
       ui_enabled: true
-      cluster_alerts_index: ".wazuh-monitoring-*"
-
-    # Logging
+      cluster_alerts_index: .wazuh-monitoring-*
     logging:
       silent: false
       quiet: false
@@ -296,291 +194,257 @@ dashboard:
       dest: stdout
       filter:
         cookie: false
-
-# Elasticsearch Configuration (if using internal Elasticsearch)
 elasticsearch:
   enabled: true
-  clusterName: "wazuh-cluster"
-  nodeGroup: "master"
-
-  image: "elasticsearch"
-  imageTag: "8.12.0"
-  imagePullPolicy: "IfNotPresent"
-
+  clusterName: wazuh-cluster
+  nodeGroup: master
+  image: elasticsearch
+  imageTag: 8.12.0
+  imagePullPolicy: IfNotPresent
   esConfig:
-    elasticsearch.yml: |
-      cluster.name: wazuh-cluster
+    elasticsearch.yml: 'cluster.name: wazuh-cluster
+
       network.host: 0.0.0.0
+
       bootstrap.memory_lock: false
+
       discovery.seed_hosts: "elasticsearch-master-headless"
+
       cluster.initial_master_nodes: "elasticsearch-master-0,elasticsearch-master-1"
 
+
       # Security configuration
+
       xpack.security.enabled: true
+
       xpack.security.transport.ssl.enabled: true
+
       xpack.security.transport.ssl.verification_mode: certificate
+
       xpack.security.transport.ssl.keystore.path: certs/elastic-stack-ca.p12
+
       xpack.security.transport.ssl.truststore.path: certs/elastic-stack-ca.p12
+
       xpack.security.http.ssl.enabled: true
+
       xpack.security.http.ssl.keystore.path: certs/elastic-stack-ca.p12
+
       xpack.monitoring.collection.enabled: true
 
+      '
   replicas: 3
   minimumMasterNodes: 2
-
   resources:
     requests:
-      cpu: "1000m"
-      memory: "2Gi"
+      cpu: 1000m
+      memory: 2Gi
     limits:
-      cpu: "2000m"
-      memory: "4Gi"
-
+      cpu: 2000m
+      memory: 4Gi
   volumeClaimTemplate:
-    accessModes: ["ReadWriteOnce"]
-    storageClassName: "fast-ssd"
+    accessModes:
+    - ReadWriteOnce
+    storageClassName: fast-ssd
     resources:
       requests:
         storage: 100Gi
-
-  esJavaOpts: "-Xmx2g -Xms2g"
-
-# Wazuh Indexer Configuration (alternative to Elasticsearch)
+  esJavaOpts: -Xmx2g -Xms2g
 indexer:
   enabled: false
   replicaCount: 3
   image:
     repository: wazuh/wazuh-indexer
-    tag: "4.7.1"
+    tag: 4.7.1
     pullPolicy: IfNotPresent
-
   resources:
     requests:
-      memory: "2Gi"
-      cpu: "1000m"
+      memory: 2Gi
+      cpu: 1000m
     limits:
-      memory: "4Gi"
-      cpu: "2000m"
-
+      memory: 4Gi
+      cpu: 2000m
   persistence:
     enabled: true
-    storageClass: "fast-ssd"
+    storageClass: fast-ssd
     size: 100Gi
-
   config:
-    cluster.name: "wazuh-indexer-cluster"
-    network.host: "0.0.0.0"
+    cluster.name: wazuh-indexer-cluster
+    network.host: 0.0.0.0
     discovery.seed_hosts: []
     cluster.initial_master_nodes: []
-    plugins.security.ssl.transport.pemcert_filepath: "certs/indexer.pem"
-    plugins.security.ssl.transport.pemkey_filepath: "certs/indexer-key.pem"
-    plugins.security.ssl.transport.pemtrustedcas_filepath: "certs/root-ca.pem"
+    plugins.security.ssl.transport.pemcert_filepath: certs/indexer.pem
+    plugins.security.ssl.transport.pemkey_filepath: certs/indexer-key.pem
+    plugins.security.ssl.transport.pemtrustedcas_filepath: certs/root-ca.pem
     plugins.security.ssl.http.enabled: true
-    plugins.security.ssl.http.pemcert_filepath: "certs/indexer.pem"
-    plugins.security.ssl.http.pemkey_filepath: "certs/indexer-key.pem"
-    plugins.security.ssl.http.pemtrustedcas_filepath: "certs/root-ca.pem"
-
-# Agent Configuration (for managed agents)
+    plugins.security.ssl.http.pemcert_filepath: certs/indexer.pem
+    plugins.security.ssl.http.pemkey_filepath: certs/indexer-key.pem
+    plugins.security.ssl.http.pemtrustedcas_filepath: certs/root-ca.pem
 agent:
   enabled: false
   replicaCount: 1
   image:
     repository: wazuh/wazuh-agent
-    tag: "4.7.1"
+    tag: 4.7.1
     pullPolicy: IfNotPresent
-
   resources:
     requests:
-      memory: "256Mi"
-      cpu: "100m"
+      memory: 256Mi
+      cpu: 100m
     limits:
-      memory: "512Mi"
-      cpu: "500m"
-
+      memory: 512Mi
+      cpu: 500m
   config:
-    manager_address: "wazuh-manager.noah.svc.cluster.local"
-    protocol: "tcp"
+    manager_address: wazuh-manager.noah.svc.cluster.local
+    protocol: tcp
     port: 1514
     notify_time: 10
     time_reconnect: 60
-    auto_restart: "yes"
-    crypto_method: "aes"
-
-    # Active response
+    auto_restart: 'yes'
+    crypto_method: aes
     active_response:
       disabled: false
-      ca_store: "/var/ossec/etc/rootca.pem"
+      ca_store: /var/ossec/etc/rootca.pem
       ca_verification: true
-
-    # Monitoring
     localfile:
-      - log_format: "syslog"
-        location: "/var/log/messages"
-      - log_format: "syslog"
-        location: "/var/log/secure"
-      - log_format: "command"
-        command: "df -P"
-        frequency: 360
-      - log_format: "full_command"
-        command: |
-          netstat -tulpn | \
-          sed 's/\([[:alnum:]]\+\) \+[[:digit:]]\+ \+[[:digit:]]\+ \+\(.*\):\([[:digit:]]*\) \+\(.*\):\([[:digit:]]*\) \+\([[:alpha:]]\+\).*' \
-            -e '/\1 \2 \3 \4 \5 \6/' | \
-          sort -k 6 -g | \
-          sed 's/LISTEN/Listening/'
-        frequency: 360
-
-# Service Configuration
+    - log_format: syslog
+      location: /var/log/messages
+    - log_format: syslog
+      location: /var/log/secure
+    - log_format: command
+      command: df -P
+      frequency: 360
+    - log_format: full_command
+      command: "netstat -tulpn | \\\nsed 's/\\([[:alnum:]]\\+\\) \\+[[:digit:]]\\+ \\+[[:digit:]]\\+ \\+\\(.*\\):\\([[:digit:]]*\\\
+        ) \\+\\(.*\\):\\([[:digit:]]*\\) \\+\\([[:alpha:]]\\+\\).*' \\\n  -e '/\\1 \\2 \\3 \\4 \\5 \\6/' | \\\nsort -k 6 -g\
+        \ | \\\nsed 's/LISTEN/Listening/'\n"
+      frequency: 360
 service:
   manager:
     type: ClusterIP
     ports:
-      - name: api
-        port: 55000
-        targetPort: 55000
-        protocol: TCP
-      - name: agents
-        port: 1514
-        targetPort: 1514
-        protocol: TCP
-      - name: cluster
-        port: 1516
-        targetPort: 1516
-        protocol: TCP
+    - name: api
+      port: 55000
+      targetPort: 55000
+      protocol: TCP
+    - name: agents
+      port: 1514
+      targetPort: 1514
+      protocol: TCP
+    - name: cluster
+      port: 1516
+      targetPort: 1516
+      protocol: TCP
     annotations: {}
-
   dashboard:
     type: ClusterIP
     ports:
-      - name: http
-        port: 5601
-        targetPort: 5601
-        protocol: TCP
+    - name: http
+      port: 5601
+      targetPort: 5601
+      protocol: TCP
     annotations: {}
-
   indexer:
     type: ClusterIP
     ports:
-      - name: http
-        port: 9200
-        targetPort: 9200
-        protocol: TCP
-      - name: transport
-        port: 9300
-        targetPort: 9300
-        protocol: TCP
+    - name: http
+      port: 9200
+      targetPort: 9200
+      protocol: TCP
+    - name: transport
+      port: 9300
+      targetPort: 9300
+      protocol: TCP
     annotations: {}
-
-# Ingress Configuration
 ingress:
   manager:
     enabled: true
-    className: "nginx"
+    className: nginx
     annotations:
-      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-      nginx.ingress.kubernetes.io/ssl-redirect: "true"
-      nginx.ingress.kubernetes.io/auth-url: "https://oauth2-proxy.noah.local/oauth2/auth"
-      nginx.ingress.kubernetes.io/auth-signin: "https://oauth2-proxy.noah.local/oauth2/start?rd=https://$host$request_uri"
-      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+      nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+      nginx.ingress.kubernetes.io/auth-url: https://oauth2-proxy.noah.local/oauth2/auth
+      nginx.ingress.kubernetes.io/auth-signin: https://oauth2-proxy.noah.local/oauth2/start?rd=https://$host$request_uri
+      nginx.ingress.kubernetes.io/proxy-body-size: 100m
+      cert-manager.io/cluster-issuer: letsencrypt-prod
     hosts:
-      - host: wazuh-api.noah.local
-        paths:
-          - path: /
-            pathType: Prefix
+    - host: wazuh-api.noah.local
+      paths:
+      - path: /
+        pathType: Prefix
     tls:
-      - secretName: wazuh-api-tls
-        hosts:
-          - wazuh-api.noah.local
-
+    - secretName: wazuh-api-tls
+      hosts:
+      - wazuh-api.noah.local
   dashboard:
     enabled: true
-    className: "nginx"
+    className: nginx
     annotations:
-      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-      nginx.ingress.kubernetes.io/ssl-redirect: "true"
-      nginx.ingress.kubernetes.io/auth-url: "https://oauth2-proxy.noah.local/oauth2/auth"
-      nginx.ingress.kubernetes.io/auth-signin: "https://oauth2-proxy.noah.local/oauth2/start?rd=https://$host$request_uri"
-      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+      nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+      nginx.ingress.kubernetes.io/auth-url: https://oauth2-proxy.noah.local/oauth2/auth
+      nginx.ingress.kubernetes.io/auth-signin: https://oauth2-proxy.noah.local/oauth2/start?rd=https://$host$request_uri
+      nginx.ingress.kubernetes.io/proxy-body-size: 100m
+      nginx.ingress.kubernetes.io/proxy-read-timeout: '300'
+      nginx.ingress.kubernetes.io/proxy-send-timeout: '300'
+      cert-manager.io/cluster-issuer: letsencrypt-prod
     hosts:
-      - host: wazuh.noah.local
-        paths:
-          - path: /
-            pathType: Prefix
+    - host: wazuh.noah.local
+      paths:
+      - path: /
+        pathType: Prefix
     tls:
-      - secretName: wazuh-dashboard-tls
-        hosts:
-          - wazuh.noah.local
-
-# Persistence Configuration
+    - secretName: wazuh-dashboard-tls
+      hosts:
+      - wazuh.noah.local
 persistence:
   manager:
     enabled: true
-    storageClass: "fast-ssd"
+    storageClass: fast-ssd
     accessModes:
-      - ReadWriteOnce
+    - ReadWriteOnce
     size: 20Gi
     annotations: {}
-
   dashboard:
     enabled: true
-    storageClass: "fast-ssd"
+    storageClass: fast-ssd
     accessModes:
-      - ReadWriteOnce
+    - ReadWriteOnce
     size: 5Gi
     annotations: {}
-
-# Secret Management
 secrets:
-  # Wazuh API credentials
   api:
-    username: "wazuh"
-    password: "" # Generated if empty
-
-  # Wazuh WUI credentials
+    username: wazuh
+    password: ''
   wui:
-    username: "wazuh-wui"
-    password: "" # Generated if empty
-
-  # Elasticsearch/Indexer credentials
+    username: wazuh-wui
+    password: ''
   elastic:
-    username: "elastic"
-    password: "" # Generated if empty
-    kibana_username: "kibanaserver"
-    kibana_password: "" # Generated if empty
-
-  # LDAP bind credentials
+    username: elastic
+    password: ''
+    kibana_username: kibanaserver
+    kibana_password: ''
   ldap:
-    bind_password: ""
-
-  # TLS Certificates
+    bind_password: ''
   tls:
     create: true
     manager:
-      cert: ""
-      key: ""
+      cert: ''
+      key: ''
     dashboard:
-      cert: ""
-      key: ""
+      cert: ''
+      key: ''
     indexer:
-      cert: ""
-      key: ""
+      cert: ''
+      key: ''
     ca:
-      cert: ""
-      key: ""
-
-# RBAC Configuration
+      cert: ''
+      key: ''
 rbac:
   create: true
   serviceAccount:
     create: true
-    name: ""
+    name: ''
     annotations: {}
-
-# Pod Security Context
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
@@ -588,8 +452,6 @@ podSecurityContext:
   fsGroup: 1000
   seccompProfile:
     type: RuntimeDefault
-
-# Container Security Context
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
@@ -598,11 +460,9 @@ securityContext:
   runAsGroup: 1000
   capabilities:
     drop:
-      - ALL
+    - ALL
     add:
-      - NET_BIND_SERVICE
-
-# Horizontal Pod Autoscaler
+    - NET_BIND_SERVICE
 autoscaling:
   manager:
     enabled: true
@@ -614,84 +474,75 @@ autoscaling:
       scaleDown:
         stabilizationWindowSeconds: 300
         policies:
-          - type: Percent
-            value: 10
-            periodSeconds: 60
+        - type: Percent
+          value: 10
+          periodSeconds: 60
       scaleUp:
         stabilizationWindowSeconds: 0
         policies:
-          - type: Percent
-            value: 100
-            periodSeconds: 15
-          - type: Pods
-            value: 2
-            periodSeconds: 60
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 2
+          periodSeconds: 60
         selectPolicy: Max
-
   dashboard:
     enabled: true
     minReplicas: 2
     maxReplicas: 6
     targetCPUUtilizationPercentage: 70
     targetMemoryUtilizationPercentage: 80
-
-# Pod Disruption Budget
 podDisruptionBudget:
   manager:
     enabled: true
-    minAvailable: "50%"
-
+    minAvailable: 50%
   dashboard:
     enabled: true
     minAvailable: 1
-
   indexer:
     enabled: true
     minAvailable: 2
-
-# Network Policy
 networkPolicy:
   enabled: true
   ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 5601
-        - protocol: TCP
-          port: 55000
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: wazuh
-      ports:
-        - protocol: TCP
-          port: 1514
-        - protocol: TCP
-          port: 1516
-        - protocol: TCP
-          port: 9200
-        - protocol: TCP
-          port: 9300
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 5601
+    - protocol: TCP
+      port: 55000
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: wazuh
+    ports:
+    - protocol: TCP
+      port: 1514
+    - protocol: TCP
+      port: 1516
+    - protocol: TCP
+      port: 9200
+    - protocol: TCP
+      port: 9300
   egress:
-    - to: []
-      ports:
-        - protocol: TCP
-          port: 53
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 389
-        - protocol: TCP
-          port: 636
-        - protocol: TCP
-          port: 443
-        - protocol: TCP
-          port: 80
-
-# Service Monitor for Prometheus
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 389
+    - protocol: TCP
+      port: 636
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
 serviceMonitor:
   enabled: true
   namespace: monitoring
@@ -700,106 +551,78 @@ serviceMonitor:
   labels:
     app: wazuh
   endpoints:
-    - port: api
-      path: /metrics
-    - port: http
-      path: /api/status
-
-# Node Selection
+  - port: api
+    path: /metrics
+  - port: http
+    path: /api/status
 nodeSelector: {}
-
-# Tolerations
 tolerations: []
-
-# Affinity
 affinity:
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 100
-        podAffinityTerm:
-          labelSelector:
-            matchExpressions:
-              - key: app.kubernetes.io/name
-                operator: In
-                values:
-                  - wazuh
-          topologyKey: kubernetes.io/hostname
-
-# Init Containers
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - wazuh
+        topologyKey: kubernetes.io/hostname
 initContainers:
-  - name: wait-for-elasticsearch
-    image: busybox:1.35
-    command:
-      [
-        "sh",
-        "-c",
-        "until nslookup elasticsearch.noah.svc.cluster.local; do echo waiting for elasticsearch; sleep 2; done;",
-      ]
-  - name: wait-for-ldap
-    image: busybox:1.35
-    command:
-      [
-        "sh",
-        "-c",
-        "until nslookup ldap.noah.svc.cluster.local; do echo waiting for ldap; sleep 2; done;",
-      ]
-
-# Extra Environment Variables
+- name: wait-for-elasticsearch
+  image: busybox:1.35
+  command:
+  - sh
+  - -c
+  - until nslookup elasticsearch.noah.svc.cluster.local; do echo waiting for elasticsearch; sleep 2; done;
+- name: wait-for-ldap
+  image: busybox:1.35
+  command:
+  - sh
+  - -c
+  - until nslookup ldap.noah.svc.cluster.local; do echo waiting for ldap; sleep 2; done;
 extraEnvVars: []
-
-# Extra Volumes
 extraVolumes: []
-
-# Extra Volume Mounts
 extraVolumeMounts: []
-
-# Backup Configuration
 backup:
   enabled: true
-  schedule: "0 2 * * *"
-  retention: "30d"
+  schedule: 0 2 * * *
+  retention: 30d
   storage:
-    type: "s3"
+    type: s3
     s3:
-      bucket: "wazuh-backups"
-      region: "us-east-1"
-      accessKey: ""
-      secretKey: ""
-
-  # Backup what to include
+      bucket: wazuh-backups
+      region: us-east-1
+      accessKey: ''
+      secretKey: ''
   includes:
-    - "/var/ossec/etc/"
-    - "/var/ossec/rules/"
-    - "/var/ossec/decoders/"
-    - "/var/ossec/logs/alerts/"
-
-# Monitoring and Alerting
+  - /var/ossec/etc/
+  - /var/ossec/rules/
+  - /var/ossec/decoders/
+  - /var/ossec/logs/alerts/
 monitoring:
   enabled: true
   prometheus:
     enabled: true
     port: 9090
     path: /metrics
-
   grafana_dashboard:
     enabled: true
-    folder: "Wazuh"
-
+    folder: Wazuh
   alerts:
-    - name: "WazuhManagerDown"
-      severity: "critical"
-      condition: 'up{job="wazuh-manager"} == 0'
-      duration: "5m"
-    - name: "WazuhHighMemoryUsage"
-      severity: "warning"
-      condition: 'container_memory_usage_bytes{pod=~"wazuh-manager-.*"} / container_spec_memory_limit_bytes > 0.8'
-      duration: "10m"
-    - name: "WazuhHighCPUUsage"
-      severity: "warning"
-      condition: 'rate(container_cpu_usage_seconds_total{pod=~"wazuh-manager-.*"}[5m]) > 0.8'
-      duration: "10m"
-
-# Health Checks
+  - name: WazuhManagerDown
+    severity: critical
+    condition: up{job="wazuh-manager"} == 0
+    duration: 5m
+  - name: WazuhHighMemoryUsage
+    severity: warning
+    condition: container_memory_usage_bytes{pod=~"wazuh-manager-.*"} / container_spec_memory_limit_bytes > 0.8
+    duration: 10m
+  - name: WazuhHighCPUUsage
+    severity: warning
+    condition: rate(container_cpu_usage_seconds_total{pod=~"wazuh-manager-.*"}[5m]) > 0.8
+    duration: 10m
 healthCheck:
   enabled: true
   livenessProbe:
@@ -812,7 +635,6 @@ healthCheck:
     timeoutSeconds: 10
     successThreshold: 1
     failureThreshold: 3
-
   readinessProbe:
     httpGet:
       path: /
@@ -823,16 +645,10 @@ healthCheck:
     timeoutSeconds: 5
     successThreshold: 1
     failureThreshold: 3
-
-# Update Strategy
 updateStrategy:
   type: RollingUpdate
   rollingUpdate:
     maxUnavailable: 1
     maxSurge: 1
-
-# Pod Management Policy
 podManagementPolicy: OrderedReady
-
-# Termination Grace Period
 terminationGracePeriodSeconds: 60

@@ -10,18 +10,11 @@
 # =============================================================================
 
 # Single replica for minimal resource usage
-replicaCount: 1
 
-# Image configuration
+replicaCount: 1
 image:
   pullPolicy: IfNotPresent
-  tag: "latest"
-
-# =============================================================================
-# SECURITY CONFIGURATION
-# =============================================================================
-
-# Minimal security context for compatibility
+  tag: latest
 securityContext:
   runAsUser: 0
   runAsGroup: 0
@@ -30,19 +23,11 @@ securityContext:
   allowPrivilegeEscalation: true
   capabilities:
     drop:
-      - ALL
-
-# Pod security context
+    - ALL
 podSecurityContext:
   runAsUser: 0
   runAsGroup: 0
   fsGroup: 0
-
-# =============================================================================
-# RESOURCE MANAGEMENT
-# =============================================================================
-
-# Minimal resource allocation
 resources:
   requests:
     cpu: 100m
@@ -50,107 +35,47 @@ resources:
   limits:
     cpu: 500m
     memory: 1Gi
-
-# =============================================================================
-# STORAGE CONFIGURATION
-# =============================================================================
-
-# No persistence for testing (ephemeral storage)
 persistence:
   enabled: false
   size: 1Gi
-  storageClass: ""
+  storageClass: ''
   accessMode: ReadWriteOnce
-
-# =============================================================================
-# DATABASE CONFIGURATION
-# =============================================================================
-
-# Embedded database (no external PostgreSQL)
 postgresql:
   enabled: false
-  # SQLite or in-memory database will be used
-
-# =============================================================================
-# CACHE CONFIGURATION
-# =============================================================================
-
-# No external Redis (in-memory cache)
 redis:
   enabled: false
-  # Application will use in-memory caching
-
-# =============================================================================
-# NETWORKING CONFIGURATION
-# =============================================================================
-
-# Service configuration
 service:
   type: ClusterIP
   port: 80
   targetPort: 8080
-
-# No external access (internal only)
 ingress:
   enabled: false
-  className: "nginx"
+  className: nginx
   annotations: {}
   hosts: []
   tls: []
-
-# No network policies for minimal setup
 networkPolicy:
   enabled: false
-
-# =============================================================================
-# MONITORING CONFIGURATION
-# =============================================================================
-
-# No monitoring to reduce resource usage
 serviceMonitor:
   enabled: false
   interval: 30s
   scrapeTimeout: 10s
-
-# =============================================================================
-# SCALING CONFIGURATION
-# =============================================================================
-
-# No autoscaling for minimal setup
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 1
-
-# =============================================================================
-# ENVIRONMENT CONFIGURATION
-# =============================================================================
-
-# Minimal environment variables
 env:
-  - name: ENVIRONMENT
-    value: "minimal"
-  - name: DEBUG
-    value: "false"
-  - name: LOG_LEVEL
-    value: "info"
-
-# =============================================================================
-# GLOBAL CONFIGURATION
-# =============================================================================
-
-# Global settings for minimal deployment
+- name: ENVIRONMENT
+  value: minimal
+- name: DEBUG
+  value: 'false'
+- name: LOG_LEVEL
+  value: info
 global:
-  storageClass: ""
-  domain: "localhost"
-  environment: "development"
-  timezone: "UTC"
-
-# =============================================================================
-# HEALTH CHECKS
-# =============================================================================
-
-# Basic health checks
+  storageClass: ''
+  domain: localhost
+  environment: development
+  timezone: UTC
 livenessProbe:
   httpGet:
     path: /health
@@ -159,7 +84,6 @@ livenessProbe:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
-
 readinessProbe:
   httpGet:
     path: /ready
@@ -168,33 +92,15 @@ readinessProbe:
   periodSeconds: 5
   timeoutSeconds: 3
   failureThreshold: 3
-
-# =============================================================================
-# NODE CONFIGURATION
-# =============================================================================
-
-# No specific node requirements
 nodeSelector: {}
-
-# No tolerations
 tolerations: []
-
-# No affinity rules
 affinity: {}
-
-# =============================================================================
-# ADDITIONAL CONFIGURATION
-# =============================================================================
-
-# Labels for minimal deployment
 labels:
   app: noah-minimal
   tier: development
   profile: minimal
-
-# Annotations
 annotations:
-  description: "Minimal NOAH deployment for testing"
-  version: "2.0.0"
-  profile: "minimal"
-  maintainer: "NOAH Team"
+  description: Minimal NOAH deployment for testing
+  version: 2.0.0
+  profile: minimal
+  maintainer: NOAH Team

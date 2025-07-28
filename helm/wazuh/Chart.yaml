@@ -1,26 +1,25 @@
----
 apiVersion: v2
 name: wazuh
 description: Production-ready Wazuh SIEM platform with manager, agents, and Elasticsearch integration
 type: application
 version: 1.0.0
-appVersion: "4.7.1"
+appVersion: 4.7.1
 keywords:
-  - wazuh
-  - siem
-  - security
-  - monitoring
-  - threat-detection
-  - compliance
-  - elasticsearch
+- wazuh
+- siem
+- security
+- monitoring
+- threat-detection
+- compliance
+- elasticsearch
 home: https://wazuh.com/
 sources:
-  - https://github.com/wazuh/wazuh
+- https://github.com/wazuh/wazuh
 maintainers:
-  - name: N.O.A.H Team
-    email: admin@noah.local
+- name: N.O.A.H Team
+  email: admin@noah.local
 dependencies:
-  - name: elasticsearch
-    version: "8.5.1"
-    repository: https://helm.elastic.co
-    condition: elasticsearch.enabled
+- name: elasticsearch
+  version: 8.5.1
+  repository: https://helm.elastic.co
+  condition: elasticsearch.enabled

@@ -1,35 +1,29 @@
----
-# ansible/roles/openvpn_auth/tasks/main.yml
-# Configure OpenVPN authentication with LDAP/Keycloak integration
-
 - name: Wait for OpenVPN server to be ready
   kubernetes.core.k8s_info:
     api_version: v1
     kind: Pod
     namespace: openvpn
     label_selectors:
-      - "app=openvpn"
+    - app=openvpn
     wait: true
     wait_condition:
       type: Ready
-      status: "True"
+      status: 'True'
     wait_timeout: 300
   register: openvpn_pods
-
 - name: Wait for Samba4 LDAP to be ready
   kubernetes.core.k8s_info:
     api_version: v1
     kind: Pod
-    namespace: "{{ namespace }}"
+    namespace: '{{ namespace }}'
     label_selectors:
-      - "app=samba4"
+    - app=samba4
     wait: true
     wait_condition:
       type: Ready
-      status: "True"
+      status: 'True'
     wait_timeout: 300
   register: samba4_pods
-
 - name: Create OpenVPN LDAP authentication plugin ConfigMap
   kubernetes.core.k8s:
     definition:
@@ -39,121 +33,35 @@
         name: openvpn-ldap-auth
         namespace: openvpn
       data:
-        auth-ldap.conf: |
-          # OpenVPN LDAP Authentication Configuration
-          <LDAP>
-            # LDAP server URL
-            URL    ldap://samba4.{{ namespace }}.svc.cluster.local:389
-
-            # Bind credentials for LDAP search
-            BindDN    cn=openvpn-ldap,OU=Services,{{ ldap_base_dn }}
-            Password  {{ openvpn_ldap_password | default('changeme123') }}
-
-            # Network timeout (in seconds)
-            Timeout    15
-
-            # Enable Start TLS
-            TLSEnable  no
-
-            # TLS CA Certificate File
-            # TLSCACertFile  /etc/ssl/certs/ca-certificates.crt
-
-            # TLS CA Certificate Directory
-            # TLSCACertDir  /etc/ssl/certs
-
-            # Client Certificate and key
-            # If TLS client authentication is required
-            # TLSCertFile  client-cert.pem
-            # TLSKeyFile  client-key.pem
-
-            # Cipher Suite
-            # The defaults are usually fine here
-            # TLSCipherSuite  ALL:!ADH:@STRENGTH
-          </LDAP>
-
-          <Authorization>
-            # Base DN for user searches
-            BaseDN    OU=Users,{{ ldap_base_dn }}
-
-            # User Search Filter
-            SearchFilter  "(&(sAMAccountName=%u)(memberOf=cn=VPNUsers,OU=Groups,{{ ldap_base_dn }}))"
-
-            # Require group membership
-            RequireGroup  true
-
-            # Group Base DN
-            GroupBaseDN  OU=Groups,{{ ldap_base_dn }}
-
-            # Group Search Filter
-            GroupSearchFilter  "(&(objectClass=group)(member=%D))"
-
-            # Group member attribute
-            GroupMemberAttribute  member
-
-            # Require specific group for VPN access
-            <Group>
-              BaseDN    OU=Groups,{{ ldap_base_dn }}
-              SearchFilter  "(&(objectClass=group)(cn=VPNUsers))"
-              MemberAttribute  member
-            </Group>
-          </Authorization>
-
-        openvpn-ldap-script.sh: |
-          #!/bin/bash
-          # OpenVPN LDAP Authentication script
-
-          # Configuration
-          LDAP_SERVER="samba4.{{ namespace }}.svc.cluster.local"
-          LDAP_PORT="389"
-          BIND_DN="cn=openvpn-ldap,OU=Services,{{ ldap_base_dn }}"
-          BIND_PASSWORD="{{ openvpn_ldap_password | default('changeme123') }}"
-          BASE_DN="OU=Users,{{ ldap_base_dn }}"
-          GROUP_DN="OU=Groups,{{ ldap_base_dn }}"
-
-          # Get username and password from OpenVPN
-          USERNAME="$1"
-          PASSWORD="$2"
-
-          # Log authentication attempt
-          echo "$(date): VPN authentication attempt for user: $USERNAME" >> /var/log/openvpn-auth.log
-
-          # Validate user credentials against LDAP
-          USER_DN=$(ldapsearch -x -H ldap://$LDAP_SERVER:$LDAP_PORT \
-            -D "$BIND_DN" -w "$BIND_PASSWORD" \
-            -b "$BASE_DN" \
-            "(&(sAMAccountName=$USERNAME)(objectClass=user))" dn 2>/dev/null | \
-            grep "^dn:" | sed 's/^dn: //')
-
-          if [ -z "$USER_DN" ]; then
-            echo "$(date): User $USERNAME not found in LDAP" >> /var/log/openvpn-auth.log
-            exit 1
-          fi
-
-          # Test user password
-          ldapsearch -x -H ldap://$LDAP_SERVER:$LDAP_PORT \
-            -D "$USER_DN" -w "$PASSWORD" \
-            -b "$USER_DN" "(objectClass=*)" dn >/dev/null 2>&1
-
-          if [ $? -ne 0 ]; then
-            echo "$(date): Password verification failed for user $USERNAME" >> /var/log/openvpn-auth.log
-            exit 1
-          fi
-
-          # Check group membership for VPN access
-          GROUP_MEMBER=$(ldapsearch -x -H ldap://$LDAP_SERVER:$LDAP_PORT \
-            -D "$BIND_DN" -w "$BIND_PASSWORD" \
-            -b "$GROUP_DN" \
-            "(&(objectClass=group)(cn=VPNUsers)(member=$USER_DN))" dn 2>/dev/null | \
-            grep "^dn:")
-
-          if [ -z "$GROUP_MEMBER" ]; then
-            echo "$(date): User $USERNAME is not a member of VPNUsers group" >> /var/log/openvpn-auth.log
-            exit 1
-          fi
-
-          echo "$(date): User $USERNAME authenticated successfully" >> /var/log/openvpn-auth.log
-          exit 0
-
+        auth-ldap.conf: "# OpenVPN LDAP Authentication Configuration\n<LDAP>\n  # LDAP server URL\n  URL    ldap://samba4.{{\
+          \ namespace }}.svc.cluster.local:389\n\n  # Bind credentials for LDAP search\n  BindDN    cn=openvpn-ldap,OU=Services,{{\
+          \ ldap_base_dn }}\n  Password  {{ openvpn_ldap_password | default('changeme123') }}\n\n  # Network timeout (in seconds)\n\
+          \  Timeout    15\n\n  # Enable Start TLS\n  TLSEnable  no\n\n  # TLS CA Certificate File\n  # TLSCACertFile  /etc/ssl/certs/ca-certificates.crt\n\
+          \n  # TLS CA Certificate Directory\n  # TLSCACertDir  /etc/ssl/certs\n\n  # Client Certificate and key\n  # If TLS\
+          \ client authentication is required\n  # TLSCertFile  client-cert.pem\n  # TLSKeyFile  client-key.pem\n\n  # Cipher\
+          \ Suite\n  # The defaults are usually fine here\n  # TLSCipherSuite  ALL:!ADH:@STRENGTH\n</LDAP>\n\n<Authorization>\n\
+          \  # Base DN for user searches\n  BaseDN    OU=Users,{{ ldap_base_dn }}\n\n  # User Search Filter\n  SearchFilter\
+          \  \"(&(sAMAccountName=%u)(memberOf=cn=VPNUsers,OU=Groups,{{ ldap_base_dn }}))\"\n\n  # Require group membership\n\
+          \  RequireGroup  true\n\n  # Group Base DN\n  GroupBaseDN  OU=Groups,{{ ldap_base_dn }}\n\n  # Group Search Filter\n\
+          \  GroupSearchFilter  \"(&(objectClass=group)(member=%D))\"\n\n  # Group member attribute\n  GroupMemberAttribute\
+          \  member\n\n  # Require specific group for VPN access\n  <Group>\n    BaseDN    OU=Groups,{{ ldap_base_dn }}\n\
+          \    SearchFilter  \"(&(objectClass=group)(cn=VPNUsers))\"\n    MemberAttribute  member\n  </Group>\n</Authorization>\n"
+        openvpn-ldap-script.sh: "#!/bin/bash\n# OpenVPN LDAP Authentication script\n\n# Configuration\nLDAP_SERVER=\"samba4.{{\
+          \ namespace }}.svc.cluster.local\"\nLDAP_PORT=\"389\"\nBIND_DN=\"cn=openvpn-ldap,OU=Services,{{ ldap_base_dn }}\"\
+          \nBIND_PASSWORD=\"{{ openvpn_ldap_password | default('changeme123') }}\"\nBASE_DN=\"OU=Users,{{ ldap_base_dn }}\"\
+          \nGROUP_DN=\"OU=Groups,{{ ldap_base_dn }}\"\n\n# Get username and password from OpenVPN\nUSERNAME=\"$1\"\nPASSWORD=\"\
+          $2\"\n\n# Log authentication attempt\necho \"$(date): VPN authentication attempt for user: $USERNAME\" >> /var/log/openvpn-auth.log\n\
+          \n# Validate user credentials against LDAP\nUSER_DN=$(ldapsearch -x -H ldap://$LDAP_SERVER:$LDAP_PORT \\\n  -D \"\
+          $BIND_DN\" -w \"$BIND_PASSWORD\" \\\n  -b \"$BASE_DN\" \\\n  \"(&(sAMAccountName=$USERNAME)(objectClass=user))\"\
+          \ dn 2>/dev/null | \\\n  grep \"^dn:\" | sed 's/^dn: //')\n\nif [ -z \"$USER_DN\" ]; then\n  echo \"$(date): User\
+          \ $USERNAME not found in LDAP\" >> /var/log/openvpn-auth.log\n  exit 1\nfi\n\n# Test user password\nldapsearch -x\
+          \ -H ldap://$LDAP_SERVER:$LDAP_PORT \\\n  -D \"$USER_DN\" -w \"$PASSWORD\" \\\n  -b \"$USER_DN\" \"(objectClass=*)\"\
+          \ dn >/dev/null 2>&1\n\nif [ $? -ne 0 ]; then\n  echo \"$(date): Password verification failed for user $USERNAME\"\
+          \ >> /var/log/openvpn-auth.log\n  exit 1\nfi\n\n# Check group membership for VPN access\nGROUP_MEMBER=$(ldapsearch\
+          \ -x -H ldap://$LDAP_SERVER:$LDAP_PORT \\\n  -D \"$BIND_DN\" -w \"$BIND_PASSWORD\" \\\n  -b \"$GROUP_DN\" \\\n \
+          \ \"(&(objectClass=group)(cn=VPNUsers)(member=$USER_DN))\" dn 2>/dev/null | \\\n  grep \"^dn:\")\n\nif [ -z \"$GROUP_MEMBER\"\
+          \ ]; then\n  echo \"$(date): User $USERNAME is not a member of VPNUsers group\" >> /var/log/openvpn-auth.log\n \
+          \ exit 1\nfi\n\necho \"$(date): User $USERNAME authenticated successfully\" >> /var/log/openvpn-auth.log\nexit 0\n"
 - name: Deploy OpenVPN with LDAP authentication
   kubernetes.core.k8s:
     definition:
@@ -175,89 +83,115 @@
               app: openvpn-ldap
           spec:
             containers:
-              - name: openvpn
-                image: kylemanna/openvpn:2.4
-                ports:
-                  - containerPort: 1194
-                    protocol: UDP
-                securityContext:
-                  capabilities:
-                    add:
-                      - NET_ADMIN
-                volumeMounts:
-                  - name: openvpn-data
-                    mountPath: /etc/openvpn
-                  - name: ldap-auth-config
-                    mountPath: /etc/openvpn/auth
-                  - name: ldap-tools
-                    mountPath: /usr/local/bin/ldap-auth.sh
-                    subPath: openvpn-ldap-script.sh
-                env:
-                  - name: OVPN_DATA
-                    value: "/etc/openvpn"
-                command:
-                  - /bin/bash
-                  - -c
-                  - |
-                    set -e
-
-                    # Install LDAP client tools
-                    apt-get update && apt-get install -y ldap-utils
-
-                    # Make auth script executable
-                    chmod +x /usr/local/bin/ldap-auth.sh
-
-                    # Configure OpenVPN server with LDAP auth
-                    cat >> /etc/openvpn/server.conf << 'EOF'
-
-                    # LDAP Authentication
-                    plugin /usr/lib/openvpn/openvpn-auth-ldap.so /etc/openvpn/auth/auth-ldap.conf
-
-                    # Use script-based authentication as fallback
-                    auth-user-pass-verify /usr/local/bin/ldap-auth.sh via-env
-                    script-security 2
-
-                    # Require username/password authentication
-                    client-cert-not-required
-                    username-as-common-name
-
-                    # User-specific configuration
-                    client-config-dir /etc/openvpn/ccd
-
-                    # Logging
-                    verb 4
-                    log-append /var/log/openvpn.log
-
-                    EOF
-
-                    # Create client config directory
-                    mkdir -p /etc/openvpn/ccd
-
-                    # Create log file
-                    touch /var/log/openvpn-auth.log
-
-                    # Start OpenVPN
-                    exec openvpn --config /etc/openvpn/server.conf
-                resources:
-                  limits:
-                    cpu: 200m
-                    memory: 256Mi
-                  requests:
-                    cpu: 100m
-                    memory: 128Mi
-            volumes:
+            - name: openvpn
+              image: kylemanna/openvpn:2.4
+              ports:
+              - containerPort: 1194
+                protocol: UDP
+              securityContext:
+                capabilities:
+                  add:
+                  - NET_ADMIN
+              volumeMounts:
               - name: openvpn-data
-                persistentVolumeClaim:
-                  claimName: openvpn-data
+                mountPath: /etc/openvpn
               - name: ldap-auth-config
-                configMap:
-                  name: openvpn-ldap-auth
+                mountPath: /etc/openvpn/auth
               - name: ldap-tools
-                configMap:
-                  name: openvpn-ldap-auth
-                  defaultMode: 0755
-  register: openvpn_ldap_deployment
+                mountPath: /usr/local/bin/ldap-auth.sh
+                subPath: openvpn-ldap-script.sh
+              env:
+              - name: OVPN_DATA
+                value: /etc/openvpn
+              command:
+              - /bin/bash
+              - -c
+              - 'set -e
 
+
+                # Install LDAP client tools
+
+                apt-get update && apt-get install -y ldap-utils
+
+
+                # Make auth script executable
+
+                chmod +x /usr/local/bin/ldap-auth.sh
+
+
+                # Configure OpenVPN server with LDAP auth
+
+                cat >> /etc/openvpn/server.conf << ''EOF''
+
+
+                # LDAP Authentication
+
+                plugin /usr/lib/openvpn/openvpn-auth-ldap.so /etc/openvpn/auth/auth-ldap.conf
+
+
+                # Use script-based authentication as fallback
+
+                auth-user-pass-verify /usr/local/bin/ldap-auth.sh via-env
+
+                script-security 2
+
+
+                # Require username/password authentication
+
+                client-cert-not-required
+
+                username-as-common-name
+
+
+                # User-specific configuration
+
+                client-config-dir /etc/openvpn/ccd
+
+
+                # Logging
+
+                verb 4
+
+                log-append /var/log/openvpn.log
+
+
+                EOF
+
+
+                # Create client config directory
+
+                mkdir -p /etc/openvpn/ccd
+
+
+                # Create log file
+
+                touch /var/log/openvpn-auth.log
+
+
+                # Start OpenVPN
+
+                exec openvpn --config /etc/openvpn/server.conf
+
+                '
+              resources:
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+            volumes:
+            - name: openvpn-data
+              persistentVolumeClaim:
+                claimName: openvpn-data
+            - name: ldap-auth-config
+              configMap:
+                name: openvpn-ldap-auth
+            - name: ldap-tools
+              configMap:
+                name: openvpn-ldap-auth
+                defaultMode: 493
+  register: openvpn_ldap_deployment
 - name: Create OpenVPN service with LDAP auth
   kubernetes.core.k8s:
     definition:
@@ -271,28 +205,26 @@
       spec:
         type: LoadBalancer
         ports:
-          - port: 1194
-            protocol: UDP
-            targetPort: 1194
-            name: openvpn
+        - port: 1194
+          protocol: UDP
+          targetPort: 1194
+          name: openvpn
         selector:
           app: openvpn-ldap
   register: openvpn_ldap_service
-
 - name: Wait for OpenVPN LDAP pod to be ready
   kubernetes.core.k8s_info:
     api_version: v1
     kind: Pod
     namespace: openvpn
     label_selectors:
-      - "app=openvpn-ldap"
+    - app=openvpn-ldap
     wait: true
     wait_condition:
       type: Ready
-      status: "True"
+      status: 'True'
     wait_timeout: 600
   register: openvpn_ldap_pods
-
 - name: Create OpenVPN client configuration with password authentication
   kubernetes.core.k8s:
     definition:
@@ -302,97 +234,147 @@
         name: openvpn-client-ldap-configs
         namespace: openvpn
       data:
-        client-ldap.ovpn: |
-          client
+        client-ldap.ovpn: 'client
+
           dev tun
+
           proto udp
+
           remote vpn.local 1194
+
           resolv-retry infinite
+
           nobind
+
           persist-key
+
           persist-tun
+
 
           # Use username/password authentication
+
           auth-user-pass
+
           auth-nocache
 
+
           # Security settings
+
           cipher AES-256-CBC
+
           auth SHA256
+
           comp-lzo
+
           verb 3
+
 
           # CA Certificate (embed or reference)
+
           ca ca.crt
+
 
           # TLS Authentication
+
           tls-auth ta.key 1
+
 
           # DNS settings
+
           dhcp-option DNS 10.96.0.10
+
           dhcp-option DNS 8.8.8.8
 
+
           # Routes for NOAH services
+
           route 10.96.0.0 255.240.0.0  # Kubernetes service network
+
           route 10.244.0.0 255.255.0.0 # Pod network
 
+
           # Connect to internal services
+
           route 10.96.0.0 255.240.0.0
 
-        admin-client-ldap.ovpn: |
-          client
+          '
+        admin-client-ldap.ovpn: 'client
+
           dev tun
+
           proto udp
+
           remote vpn.local 1194
+
           resolv-retry infinite
+
           nobind
+
           persist-key
+
           persist-tun
 
+
           # Username/password authentication
+
           auth-user-pass
+
           auth-nocache
 
+
           # Security settings
+
           cipher AES-256-CBC
+
           auth SHA256
+
           comp-lzo
+
           verb 3
 
+
           # CA Certificate
+
           ca ca.crt
+
           tls-auth ta.key 1
 
+
           # Admin client with full access
+
           dhcp-option DNS 10.96.0.10
 
+
           # Full network access for admin
+
           redirect-gateway def1
 
+
           # Bypass local network
+
           route-nopull
+
           route 0.0.0.0 0.0.0.0
+
           route 10.0.0.0 255.255.255.0
+
           route 192.168.0.0 255.255.0.0
+
           route 172.16.0.0 255.240.0.0
 
+          '
 - name: Test LDAP connectivity from OpenVPN pod
   kubernetes.core.k8s_exec:
     namespace: openvpn
-    pod: "{{ openvpn_ldap_pods.resources[0].metadata.name }}"
+    pod: '{{ openvpn_ldap_pods.resources[0].metadata.name }}'
     command:
-      - /bin/bash
-      - -c
-      - |
-        # Test LDAP connectivity
-        ldapsearch -x -H ldap://samba4.{{ namespace }}.svc.cluster.local:389 \
-          -D "cn=openvpn-ldap,OU=Services,{{ ldap_base_dn }}" \
-          -w "{{ openvpn_ldap_password | default('changeme123') }}" \
-          -b "OU=Groups,{{ ldap_base_dn }}" \
-          "(cn=VPNUsers)" dn 2>/dev/null | grep "^dn:" || echo "LDAP test failed"
+    - /bin/bash
+    - -c
+    - "# Test LDAP connectivity\nldapsearch -x -H ldap://samba4.{{ namespace }}.svc.cluster.local:389 \\\n  -D \"cn=openvpn-ldap,OU=Services,{{\
+      \ ldap_base_dn }}\" \\\n  -w \"{{ openvpn_ldap_password | default('changeme123') }}\" \\\n  -b \"OU=Groups,{{ ldap_base_dn\
+      \ }}\" \\\n  \"(cn=VPNUsers)\" dn 2>/dev/null | grep \"^dn:\" || echo \"LDAP test failed\"\n"
   register: ldap_connectivity_test
   failed_when: false
-
 - name: Create VPN user management scripts
   kubernetes.core.k8s:
     definition:
@@ -402,46 +384,18 @@
         name: vpn-user-management
         namespace: openvpn
       data:
-        add-vpn-user.sh: |
-          #!/bin/bash
-          # Add user to VPN access group
-
-          USERNAME="$1"
-          if [ -z "$USERNAME" ]; then
-            echo "Usage: $0 <username>"
-            exit 1
-          fi
-
-          # Add user to VPNUsers group in LDAP
-          kubectl exec -n {{ namespace }} $(kubectl get pods -n {{ namespace }} -l app=samba4 -o jsonpath='{.items[0].metadata.name}') -- \
-            samba-tool group addmembers VPNUsers "$USERNAME"
-
-          echo "User $USERNAME added to VPN access group"
-
-        remove-vpn-user.sh: |
-          #!/bin/bash
-          # Remove user from VPN access group
-
-          USERNAME="$1"
-          if [ -z "$USERNAME" ]; then
-            echo "Usage: $0 <username>"
-            exit 1
-          fi
-
-          # Remove user from VPNUsers group in LDAP
-          kubectl exec -n {{ namespace }} $(kubectl get pods -n {{ namespace }} -l app=samba4 -o jsonpath='{.items[0].metadata.name}') -- \
-            samba-tool group removemembers VPNUsers "$USERNAME"
-
-          echo "User $USERNAME removed from VPN access group"
-
-        list-vpn-users.sh: |
-          #!/bin/bash
-          # List users in VPN access group
-
-          echo "Users with VPN access:"
-          kubectl exec -n {{ namespace }} $(kubectl get pods -n {{ namespace }} -l app=samba4 -o jsonpath='{.items[0].metadata.name}') -- \
-            samba-tool group listmembers VPNUsers
-
+        add-vpn-user.sh: "#!/bin/bash\n# Add user to VPN access group\n\nUSERNAME=\"$1\"\nif [ -z \"$USERNAME\" ]; then\n\
+          \  echo \"Usage: $0 <username>\"\n  exit 1\nfi\n\n# Add user to VPNUsers group in LDAP\nkubectl exec -n {{ namespace\
+          \ }} $(kubectl get pods -n {{ namespace }} -l app=samba4 -o jsonpath='{.items[0].metadata.name}') -- \\\n  samba-tool\
+          \ group addmembers VPNUsers \"$USERNAME\"\n\necho \"User $USERNAME added to VPN access group\"\n"
+        remove-vpn-user.sh: "#!/bin/bash\n# Remove user from VPN access group\n\nUSERNAME=\"$1\"\nif [ -z \"$USERNAME\" ];\
+          \ then\n  echo \"Usage: $0 <username>\"\n  exit 1\nfi\n\n# Remove user from VPNUsers group in LDAP\nkubectl exec\
+          \ -n {{ namespace }} $(kubectl get pods -n {{ namespace }} -l app=samba4 -o jsonpath='{.items[0].metadata.name}')\
+          \ -- \\\n  samba-tool group removemembers VPNUsers \"$USERNAME\"\n\necho \"User $USERNAME removed from VPN access\
+          \ group\"\n"
+        list-vpn-users.sh: "#!/bin/bash\n# List users in VPN access group\n\necho \"Users with VPN access:\"\nkubectl exec\
+          \ -n {{ namespace }} $(kubectl get pods -n {{ namespace }} -l app=samba4 -o jsonpath='{.items[0].metadata.name}')\
+          \ -- \\\n  samba-tool group listmembers VPNUsers\n"
 - name: Get OpenVPN LDAP service external IP
   kubernetes.core.k8s_info:
     api_version: v1
@@ -449,81 +403,27 @@
     name: openvpn-ldap
     namespace: openvpn
   register: openvpn_ldap_service_info
-
 - name: Display OpenVPN LDAP authentication status
   debug:
-    msg: |
-      OpenVPN LDAP authentication configuration completed:
-
-      🔐 OpenVPN LDAP Server:
-      - Service: openvpn-ldap
-      - External IP: {{ openvpn_ldap_service_info.resources[0].status.loadBalancer.ingress[0].ip | default('Pending') }}
-      - Port: 1194/UDP
-      - Authentication: LDAP + Password
-      - Pod: {{ openvpn_ldap_pods.resources[0].metadata.name }}
-
-      🔍 LDAP Integration:
-      - LDAP Server: samba4.{{ namespace }}.svc.cluster.local:389
-      - Base DN: {{ ldap_base_dn }}
-      - VPN Group: cn=VPNUsers,OU=Groups,{{ ldap_base_dn }}
-      - Service Account: cn=openvpn-ldap,OU=Services,{{ ldap_base_dn }}
-      - Connectivity Test: {{ 'Success' if 'dn:' in ldap_connectivity_test.stdout else 'Failed' }}
-
-      📱 Client Configuration:
-      - Authentication: Username/Password (no certificates required)
-      - Config Templates: client-ldap.ovpn, admin-client-ldap.ovpn
-      - DNS: Internal cluster DNS + public fallback
-      - Routes: Kubernetes networks + configurable access
-
-      👥 User Management:
-      - VPN Access Group: VPNUsers (in LDAP)
-      - Management Scripts: add-vpn-user.sh, remove-vpn-user.sh, list-vpn-users.sh
-      - User Validation: LDAP group membership required
-
-      📝 Client Setup Instructions:
-      1. Download client configuration file
-      2. Import into OpenVPN client
-      3. Connect using LDAP username/password
-      4. Ensure user is member of VPNUsers group
-
-      🛠️  User Management Commands:
-      # Add user to VPN access
-      kubectl exec -n openvpn deployment/openvpn-ldap -- /usr/local/bin/add-vpn-user.sh username
-
-      # Remove user from VPN access
-      kubectl exec -n openvpn deployment/openvpn-ldap -- /usr/local/bin/remove-vpn-user.sh username
-
-      # List VPN users
-      kubectl exec -n openvpn deployment/openvpn-ldap -- /usr/local/bin/list-vpn-users.sh
-
-      📊 Monitoring:
-      - Authentication logs: /var/log/openvpn-auth.log
-      - OpenVPN logs: /var/log/openvpn.log
-      - LDAP queries: Logged to authentication log
-
-      ⚠️  Security Notes:
-      - No client certificates required (password-based auth)
-      - LDAP group membership enforced
-      - Failed authentication attempts logged
-      - Consider enabling MFA for VPN access
-      - Regularly audit VPN user group membership
-      apiVersion: networking.k8s.io/v1
-      kind: Ingress
-      metadata:
-        name: openvpn-auth-ingress
-        namespace: noah
-        annotations:
-          nginx.ingress.kubernetes.io/auth-url: "https://oauth2-proxy.noah.svc.cluster.local/oauth2/auth"
-          nginx.ingress.kubernetes.io/auth-signin: "https://oauth2-proxy.noah.svc.cluster.local/oauth2/start"
-      spec:
-        rules:
-        - host: openvpn.local
-          http:
-            paths:
-            - path: /
-              pathType: Prefix
-              backend:
-                service:
-                  name: openvpn
-                  port:
-                    number: 1194
+    msg: "OpenVPN LDAP authentication configuration completed:\n\n\U0001F510 OpenVPN LDAP Server:\n- Service: openvpn-ldap\n\
+      - External IP: {{ openvpn_ldap_service_info.resources[0].status.loadBalancer.ingress[0].ip | default('Pending') }}\n\
+      - Port: 1194/UDP\n- Authentication: LDAP + Password\n- Pod: {{ openvpn_ldap_pods.resources[0].metadata.name }}\n\n\U0001F50D\
+      \ LDAP Integration:\n- LDAP Server: samba4.{{ namespace }}.svc.cluster.local:389\n- Base DN: {{ ldap_base_dn }}\n- VPN\
+      \ Group: cn=VPNUsers,OU=Groups,{{ ldap_base_dn }}\n- Service Account: cn=openvpn-ldap,OU=Services,{{ ldap_base_dn }}\n\
+      - Connectivity Test: {{ 'Success' if 'dn:' in ldap_connectivity_test.stdout else 'Failed' }}\n\n\U0001F4F1 Client Configuration:\n\
+      - Authentication: Username/Password (no certificates required)\n- Config Templates: client-ldap.ovpn, admin-client-ldap.ovpn\n\
+      - DNS: Internal cluster DNS + public fallback\n- Routes: Kubernetes networks + configurable access\n\n\U0001F465 User\
+      \ Management:\n- VPN Access Group: VPNUsers (in LDAP)\n- Management Scripts: add-vpn-user.sh, remove-vpn-user.sh, list-vpn-users.sh\n\
+      - User Validation: LDAP group membership required\n\n\U0001F4DD Client Setup Instructions:\n1. Download client configuration\
+      \ file\n2. Import into OpenVPN client\n3. Connect using LDAP username/password\n4. Ensure user is member of VPNUsers\
+      \ group\n\n\U0001F6E0️  User Management Commands:\n# Add user to VPN access\nkubectl exec -n openvpn deployment/openvpn-ldap\
+      \ -- /usr/local/bin/add-vpn-user.sh username\n\n# Remove user from VPN access\nkubectl exec -n openvpn deployment/openvpn-ldap\
+      \ -- /usr/local/bin/remove-vpn-user.sh username\n\n# List VPN users\nkubectl exec -n openvpn deployment/openvpn-ldap\
+      \ -- /usr/local/bin/list-vpn-users.sh\n\n\U0001F4CA Monitoring:\n- Authentication logs: /var/log/openvpn-auth.log\n\
+      - OpenVPN logs: /var/log/openvpn.log\n- LDAP queries: Logged to authentication log\n\n⚠️  Security Notes:\n- No client\
+      \ certificates required (password-based auth)\n- LDAP group membership enforced\n- Failed authentication attempts logged\n\
+      - Consider enabling MFA for VPN access\n- Regularly audit VPN user group membership\napiVersion: networking.k8s.io/v1\n\
+      kind: Ingress\nmetadata:\n  name: openvpn-auth-ingress\n  namespace: noah\n  annotations:\n    nginx.ingress.kubernetes.io/auth-url:\
+      \ \"https://oauth2-proxy.noah.svc.cluster.local/oauth2/auth\"\n    nginx.ingress.kubernetes.io/auth-signin: \"https://oauth2-proxy.noah.svc.cluster.local/oauth2/start\"\
+      \nspec:\n  rules:\n  - host: openvpn.local\n    http:\n      paths:\n      - path: /\n        pathType: Prefix\n   \
+      \     backend:\n          service:\n            name: openvpn\n            port:\n              number: 1194\n"

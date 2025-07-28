@@ -1,81 +1,63 @@
----
-# Global configuration
 global:
-  imageRegistry: ""
+  imageRegistry: ''
   imagePullSecrets: []
-  storageClass: ""
-
-# Samba4 AD configuration
-replicaCount: 1 # Single instance for AD consistency
-
+  storageClass: ''
+replicaCount: 1
 image:
-  registry: ""
+  registry: ''
   repository: dperson/samba
-  tag: "latest"
+  tag: latest
   pullPolicy: IfNotPresent
   pullSecrets: []
-
-# Alternative images (comment to use alternative)
-# image:
-#   registry: ""
-#   repository: nowsci/samba-domain
-#   tag: "4.19.2"
-
-# Domain configuration
 domain:
-  name: "NOAH"
-  realm: "NOAH.LOCAL"
-  dnsForwarder: "8.8.8.8"
-  adminPassword: "Admin123!"
-  existingSecret: ""
-  existingSecretKey: "admin-password"
-
-  # Organizational Units
+  name: NOAH
+  realm: NOAH.LOCAL
+  dnsForwarder: 8.8.8.8
+  adminPassword: Admin123!
+  existingSecret: ''
+  existingSecretKey: admin-password
   organizationalUnits:
-    - "Users"
-    - "Groups"
-    - "Computers"
-    - "Service-Accounts"
-
-  # Default groups
+  - Users
+  - Groups
+  - Computers
+  - Service-Accounts
   groups:
-    - name: "Domain Admins"
-      description: "Domain Administrators"
-    - name: "Keycloak-Admins"
-      description: "Keycloak Administrators"
-    - name: "GitLab-Admins"
-      description: "GitLab Administrators"
-    - name: "Grafana-Admins"
-      description: "Grafana Administrators"
-    - name: "Nextcloud-Users"
-      description: "Nextcloud Users"
-    - name: "Mattermost-Users"
-      description: "Mattermost Users"
-
-  # Service accounts
+  - name: Domain Admins
+    description: Domain Administrators
+  - name: Keycloak-Admins
+    description: Keycloak Administrators
+  - name: GitLab-Admins
+    description: GitLab Administrators
+  - name: Grafana-Admins
+    description: Grafana Administrators
+  - name: Nextcloud-Users
+    description: Nextcloud Users
+  - name: Mattermost-Users
+    description: Mattermost Users
   serviceAccounts:
-    - username: "keycloak-service"
-      password: ""
-      groups: ["Domain Users"]
-    - username: "gitlab-service"
-      password: ""
-      groups: ["Domain Users"]
-    - username: "grafana-service"
-      password: ""
-      groups: ["Domain Users"]
-    - username: "nextcloud-service"
-      password: ""
-      groups: ["Domain Users"]
-    - username: "mattermost-service"
-      password: ""
-      groups: ["Domain Users"]
-
-# Service configuration
+  - username: keycloak-service
+    password: ''
+    groups:
+    - Domain Users
+  - username: gitlab-service
+    password: ''
+    groups:
+    - Domain Users
+  - username: grafana-service
+    password: ''
+    groups:
+    - Domain Users
+  - username: nextcloud-service
+    password: ''
+    groups:
+    - Domain Users
+  - username: mattermost-service
+    password: ''
+    groups:
+    - Domain Users
 service:
   type: ClusterIP
   annotations: {}
-
-  # Service ports (for template compatibility)
   ports:
     ldap: 389
     ldaps: 636
@@ -83,52 +65,38 @@ service:
     kadmin: 464
     dns: 53
     smb: 445
-
-  # AD/LDAP ports
   ldap:
     port: 389
   ldaps:
     port: 636
-
-  # Kerberos ports
   kerberos:
     port: 88
     kadmin:
       port: 464
-
-  # DNS port
   dns:
     port: 53
-
-  # SMB/CIFS ports (if needed)
   smb:
     enabled: false
     port: 445
-
-# Ingress configuration (mainly for management)
 ingress:
   enabled: false
   className: nginx
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hostname: "samba4.noah.local"
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hostname: samba4.noah.local
   path: /
   pathType: Prefix
   tls:
     enabled: true
     secretName: samba4-tls
-
-# Persistence configuration
 persistence:
   enabled: true
-  storageClass: ""
+  storageClass: ''
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   size: 20Gi
   annotations: {}
-
-  # Multiple volumes for different data types
   volumes:
     data:
       size: 10Gi
@@ -139,8 +107,6 @@ persistence:
     logs:
       size: 5Gi
       path: /var/log/samba
-
-# Resource limits and requests
 resources:
   limits:
     cpu: 2000m
@@ -148,34 +114,27 @@ resources:
   requests:
     cpu: 500m
     memory: 1Gi
-
-# Node selection
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
-# Security Context
 podSecurityContext:
   runAsNonRoot: false
   runAsUser: 0
   fsGroup: 0
-
 securityContext:
   allowPrivilegeEscalation: true
   capabilities:
     add:
-      - NET_ADMIN
-      - NET_BIND_SERVICE
-      - SYS_ADMIN
-      - DAC_OVERRIDE
-      - CHOWN
-      - FOWNER
-      - SETGID
-      - SETUID
+    - NET_ADMIN
+    - NET_BIND_SERVICE
+    - SYS_ADMIN
+    - DAC_OVERRIDE
+    - CHOWN
+    - FOWNER
+    - SETGID
+    - SETUID
   readOnlyRootFilesystem: false
   runAsUser: 0
-
-# Probes
 livenessProbe:
   enabled: true
   tcpSocket:
@@ -184,7 +143,6 @@ livenessProbe:
   periodSeconds: 30
   timeoutSeconds: 10
   failureThreshold: 3
-
 readinessProbe:
   enabled: true
   tcpSocket:
@@ -193,7 +151,6 @@ readinessProbe:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
-
 startupProbe:
   enabled: true
   tcpSocket:
@@ -202,192 +159,115 @@ startupProbe:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 30
-
-# Network Policies
 networkPolicy:
   enabled: true
   ingress:
     enabled: true
     allowedNamespaces:
-      - default
-      - kube-system
+    - default
+    - kube-system
     allowedPorts:
-      - 389 # LDAP
-      - 636 # LDAPS
-      - 88 # Kerberos
-      - 464 # Kadmin
-      - 53 # DNS
+    - 389
+    - 636
+    - 88
+    - 464
+    - 53
   egress:
     enabled: true
-
-# DNS Configuration
 dns:
   enabled: true
   forwarders:
-    - "8.8.8.8"
-    - "1.1.1.1"
-
-  # Custom DNS records
+  - 8.8.8.8
+  - 1.1.1.1
   customRecords: []
-  # Example:
-  # - name: "keycloak"
-  #   type: "A"
-  #   value: "10.96.100.1"
-
-# Monitoring
 metrics:
-  enabled: false # Samba doesn't have native Prometheus metrics
+  enabled: false
   serviceMonitor:
     enabled: false
-
-# Samba configuration template
-sambaConfig: |
-  [global]
-      netbios name = {{ upper .Values.domain.name }}
-      realm = {{ upper .Values.domain.realm }}
-      domain master = yes
-      domain logons = yes
-      preferred master = yes
-      os level = 255
-      wins support = yes
-      dns forwarder = {{ .Values.domain.dnsForwarder }}
-      server role = active directory domain controller
-      workgroup = {{ upper .Values.domain.name }}
-
-      # Security settings
-      server min protocol = SMB2_10
-      client min protocol = SMB2_10
-      ntlm auth = mschapv2-and-ntlmv2-only
-
-      # Logging
-      log level = 1
-      log file = /var/log/samba/log.%m
-      max log size = 1000
-
-      # Performance
-      socket options = >-
-        TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072
-      deadtime = 30
-      getwd cache = yes
-
-      # DNS
-      allow dns updates = secure only
-      dns update command = /usr/bin/samba-tool dns update
-
-  [sysvol]
-      path = /var/lib/samba/sysvol
-      read only = no
-
-  [netlogon]
-      path = /var/lib/samba/sysvol/{{ lower .Values.domain.realm }}/scripts
-      read only = no
-
-# Environment variables
+sambaConfig: "[global]\n    netbios name = {{ upper .Values.domain.name }}\n    realm = {{ upper .Values.domain.realm }}\n\
+  \    domain master = yes\n    domain logons = yes\n    preferred master = yes\n    os level = 255\n    wins support = yes\n\
+  \    dns forwarder = {{ .Values.domain.dnsForwarder }}\n    server role = active directory domain controller\n    workgroup\
+  \ = {{ upper .Values.domain.name }}\n\n    # Security settings\n    server min protocol = SMB2_10\n    client min protocol\
+  \ = SMB2_10\n    ntlm auth = mschapv2-and-ntlmv2-only\n\n    # Logging\n    log level = 1\n    log file = /var/log/samba/log.%m\n\
+  \    max log size = 1000\n\n    # Performance\n    socket options = >-\n      TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072\
+  \ SO_SNDBUF=131072\n    deadtime = 30\n    getwd cache = yes\n\n    # DNS\n    allow dns updates = secure only\n    dns\
+  \ update command = /usr/bin/samba-tool dns update\n\n[sysvol]\n    path = /var/lib/samba/sysvol\n    read only = no\n\n\
+  [netlogon]\n    path = /var/lib/samba/sysvol/{{ lower .Values.domain.realm }}/scripts\n    read only = no\n"
 extraEnvVars:
-  - name: DOMAIN
-    value: "{{ .Values.domain.realm }}"
-  - name: DOMAINPASS
-    valueFrom:
-      secretKeyRef:
-        name: '{{ include "samba4.secretName" . }}'
-        key: "{{ .Values.domain.existingSecretKey }}"
-  - name: DNSFORWARDER
-    value: "{{ .Values.domain.dnsForwarder }}"
-  - name: HOSTIP
-    valueFrom:
-      fieldRef:
-        fieldPath: status.podIP
-
-# Extra volumes and mounts
+- name: DOMAIN
+  value: '{{ .Values.domain.realm }}'
+- name: DOMAINPASS
+  valueFrom:
+    secretKeyRef:
+      name: '{{ include "samba4.secretName" . }}'
+      key: '{{ .Values.domain.existingSecretKey }}'
+- name: DNSFORWARDER
+  value: '{{ .Values.domain.dnsForwarder }}'
+- name: HOSTIP
+  valueFrom:
+    fieldRef:
+      fieldPath: status.podIP
 extraVolumes: []
 extraVolumeMounts: []
-
-# Init containers for domain provisioning
 initContainers: []
-
-# Pod annotations and labels
 podAnnotations: {}
 podLabels: {}
-
-# Common labels
 commonLabels: {}
 commonAnnotations: {}
-
-# RBAC Configuration
 rbac:
   create: true
-
-# Pod Disruption Budget
 podDisruptionBudget:
   enabled: false
   minAvailable: 1
-
-# Replication Configuration
 replication:
   enabled: false
   readOnlyDomainControllers: []
-
-# Samba Configuration (for template compatibility)
 samba:
-  workgroup: "NOAH"
-  realm: "NOAH.LOCAL"
-  netbiosName: "NOAH-DC"
-  serverRole: "active directory domain controller"
-  dnsForwarder: "8.8.8.8"
+  workgroup: NOAH
+  realm: NOAH.LOCAL
+  netbiosName: NOAH-DC
+  serverRole: active directory domain controller
+  dnsForwarder: 8.8.8.8
   logLevel: 1
   maxLogSize: 1000
-
-  # Protocol versions
-  minProtocol: "SMB2_10"
-  maxProtocol: "SMB3"
-  clientMinProtocol: "SMB2_10"
-  clientMaxProtocol: "SMB3"
-
-  # TLS settings
+  minProtocol: SMB2_10
+  maxProtocol: SMB3
+  clientMinProtocol: SMB2_10
+  clientMaxProtocol: SMB3
   tls:
     enabled: false
-    keyFile: "/etc/ssl/private/samba.key"
-    certFile: "/etc/ssl/certs/samba.crt"
-    caFile: "/etc/ssl/certs/ca.crt"
-
-  # LDAP settings
+    keyFile: /etc/ssl/private/samba.key
+    certFile: /etc/ssl/certs/samba.crt
+    caFile: /etc/ssl/certs/ca.crt
   ldap:
-    requireStrongAuth: "yes"
-
-  # Performance settings
-  socketOptions: "TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072"
-  readRaw: "yes"
-  writeRaw: "yes"
+    requireStrongAuth: 'yes'
+  socketOptions: TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072
+  readRaw: 'yes'
+  writeRaw: 'yes'
   maxXmit: 65536
-
-  # Misc settings
-  loadPrinters: "no"
-  printing: "bsd"
-  disableSpoolss: "yes"
-
-# Auto-scaling Configuration
+  loadPrinters: 'no'
+  printing: bsd
+  disableSpoolss: 'yes'
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 3
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
-# Backup Configuration
 backup:
   enabled: true
-  schedule: "0 2 * * *"
-  retention: "7d"
+  schedule: 0 2 * * *
+  retention: 7d
   image:
-    registry: ""
-    repository: "alpine"
-    tag: "latest"
+    registry: ''
+    repository: alpine
+    tag: latest
     pullPolicy: IfNotPresent
   persistence:
     enabled: true
-    storageClass: ""
+    storageClass: ''
     accessModes:
-      - ReadWriteOnce
+    - ReadWriteOnce
     size: 10Gi
   resources:
     limits:
@@ -398,34 +278,28 @@ backup:
       memory: 128Mi
   s3:
     enabled: false
-    bucket: ""
-    region: ""
-    accessKey: ""
-    secretKey: ""
-
-# Kerberos Configuration
+    bucket: ''
+    region: ''
+    accessKey: ''
+    secretKey: ''
 kerberos:
-  dnsLookupRealm: "true"
-  dnsLookupKdc: "true"
-  ticketLifetime: "24h"
-  renewLifetime: "7d"
-  forwardable: "true"
+  dnsLookupRealm: 'true'
+  dnsLookupKdc: 'true'
+  ticketLifetime: 24h
+  renewLifetime: 7d
+  forwardable: 'true'
   extraConfig: {}
-
-# Service Account Configuration
 serviceAccount:
   create: true
   annotations: {}
-  name: ""
+  name: ''
   automount: true
-
-# Monitoring Configuration
 serviceMonitor:
   enabled: false
-  namespace: ""
+  namespace: ''
   labels: {}
   interval: 30s
   scrapeTimeout: 10s
   endpoints:
-    - port: metrics
-      path: /metrics
+  - port: metrics
+    path: /metrics

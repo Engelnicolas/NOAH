@@ -22,75 +22,28 @@
 # =============================================================================
 
 # Global configuration shared across all components
+
 global:
-  # Container image registry override (leave empty to use default)
-  imageRegistry: ""
-
-  # Global image pull secrets for private registries
+  imageRegistry: ''
   imagePullSecrets: []
-
-  # Default storage class for all persistent volumes
-  # If not specified, cluster default storage class will be used
-  storageClass: ""
-
-# =============================================================================
-# Mattermost Application Configuration
-# =============================================================================
-
-# Number of Mattermost pod replicas to run
-# For high availability, set to 2 or more with appropriate database clustering
+  storageClass: ''
 replicaCount: 1
-
-# Container image configuration
 image:
-  # Override global registry if needed
-  registry: ""
-
-  # Mattermost Docker image repository
-  # Available editions: mattermost-team-edition, mattermost-enterprise-edition
+  registry: ''
   repository: mattermost/mattermost-team-edition
-
-  # Mattermost version tag
-  # It's recommended to pin to specific versions for production
-  tag: "9.2.0"
-
-  # Image pull policy
-  # Options: Always, IfNotPresent, Never
+  tag: 9.2.0
   pullPolicy: IfNotPresent
-
-  # Image pull secrets for this specific image
   pullSecrets: []
-
-# =============================================================================
-# Mattermost Server Configuration
-# =============================================================================
-# These settings configure the core Mattermost server behavior and features.
-# They correspond to the config.json file in a standard Mattermost installation.
-
 mattermost:
-  # =============================================================================
-  # Basic Configuration
-  # =============================================================================
-
-  # Primary site URL - MUST be accessible to all users
-  # This URL is used for:
-  # - Email notifications and links
-  # - Mobile app connections
-  # - API endpoint discovery
-  # - OAuth redirect URLs
-  siteUrl: "https://mattermost.noah.local"
-
-  # =============================================================================
-  # Service Settings - Core server behavior
-  # =============================================================================
+  siteUrl: https://mattermost.noah.local
   servicesSettings:
-    siteURL: "https://mattermost.noah.local"
-    websocketURL: "wss://mattermost.noah.local"
-    allowCorsFrom: "*"
-    corsExposedHeaders: ""
+    siteURL: https://mattermost.noah.local
+    websocketURL: wss://mattermost.noah.local
+    allowCorsFrom: '*'
+    corsExposedHeaders: ''
     corsAllowCredentials: false
     corsDebug: false
-    allowedUntrustedInternalConnections: ""
+    allowedUntrustedInternalConnections: ''
     trustedProxyIPHeader: []
     enableIncomingWebhooks: true
     enableOutgoingWebhooks: true
@@ -113,115 +66,104 @@ mattermost:
     sessionIdleTimeoutInMinutes: 43200
     websocketSecurePort: 443
     websocketPort: 80
-    webserverMode: "gzip"
+    webserverMode: gzip
     enableCustomEmoji: true
     enableEmojiPicker: true
     enableGifPicker: true
-    restrictCustomEmojiCreation: "all"
+    restrictCustomEmojiCreation: all
     enableLinkPreviews: true
-    restrictLinkPreviews: ""
+    restrictLinkPreviews: ''
     enablePermalinkPreviews: true
-    maxFileSize: 104857600 # 100MB
+    maxFileSize: 104857600
     enablePublicLink: true
-    publicLinkSalt: ""
+    publicLinkSalt: ''
     enableUploads: true
-    allowedFileTypes: ""
-
-  # Team settings
+    allowedFileTypes: ''
   teamSettings:
-    siteName: "NOAH Mattermost"
+    siteName: NOAH Mattermost
     maxUsersPerTeam: 1000
     enableTeamCreation: true
     enableUserCreation: true
     enableOpenServer: false
     enableUserDeactivation: true
-    restrictCreationToDomains: "noah.local"
+    restrictCreationToDomains: noah.local
     enableCustomBrand: false
-    customBrandText: ""
-    customDescriptionText: ""
-    restrictDirectMessage: "any"
-    restrictTeamInvite: "all"
-    restrictPublicChannelManagement: "all"
-    restrictPrivateChannelManagement: "all"
-    restrictPublicChannelCreation: "all"
-    restrictPrivateChannelCreation: "all"
-    restrictPublicChannelDeletion: "all"
-    restrictPrivateChannelDeletion: "all"
-    restrictPrivateChannelManageMembers: "all"
+    customBrandText: ''
+    customDescriptionText: ''
+    restrictDirectMessage: any
+    restrictTeamInvite: all
+    restrictPublicChannelManagement: all
+    restrictPrivateChannelManagement: all
+    restrictPublicChannelCreation: all
+    restrictPrivateChannelCreation: all
+    restrictPublicChannelDeletion: all
+    restrictPrivateChannelDeletion: all
+    restrictPrivateChannelManageMembers: all
     enableXToLeaveChannelsFromLHS: false
     userStatusAwayTimeout: 300
     maxChannelsPerTeam: 2000
     maxNotificationsPerChannel: 1000
     enableConfirmNotificationsToChannel: true
-    teammateNameDisplay: "username"
+    teammateNameDisplay: username
     experimentalViewArchivedChannels: false
     experimentalEnableAutomaticReplies: false
     experimentalHideTownSquareinLHS: false
     experimentalTownSquareIsReadOnly: false
-    experimentalPrimaryTeam: ""
+    experimentalPrimaryTeam: ''
     experimentalDefaultChannels: []
-
-  # SQL settings
   sqlSettings:
-    driverName: "postgres"
-    dataSource: ""
+    driverName: postgres
+    dataSource: ''
     dataSourceReplicas: []
     dataSourceSearchReplicas: []
     maxIdleConns: 20
     connMaxLifetimeMilliseconds: 3600000
     maxOpenConns: 300
     trace: false
-    atRestEncryptKey: ""
+    atRestEncryptKey: ''
     queryTimeout: 30
     disableDatabaseSearch: false
-
-  # Log settings
   logSettings:
     enableConsole: true
-    consoleLevel: "INFO"
+    consoleLevel: INFO
     consoleJson: true
     enableFile: true
-    fileLevel: "INFO"
+    fileLevel: INFO
     fileJson: true
-    fileLocation: ""
+    fileLocation: ''
     enableWebhookDebugging: true
     enableDiagnostics: true
-
-  # File settings
   fileSettings:
     enableFileAttachments: true
     enableMobileUpload: true
     enableMobileDownload: true
     maxFileSize: 104857600
-    driverName: "local"
-    directory: "/mattermost/data/"
+    driverName: local
+    directory: /mattermost/data/
     enablePublicLink: true
-    publicLinkSalt: ""
+    publicLinkSalt: ''
     thumbnailWidth: 120
     thumbnailHeight: 100
     previewWidth: 1920
     previewHeight: 1080
     profileWidth: 128
     profileHeight: 128
-    initialFont: "nunito-bold.ttf"
-    amazonS3AccessKeyId: ""
-    amazonS3SecretAccessKey: ""
-    amazonS3Bucket: ""
-    amazonS3Region: ""
-    amazonS3Endpoint: ""
+    initialFont: nunito-bold.ttf
+    amazonS3AccessKeyId: ''
+    amazonS3SecretAccessKey: ''
+    amazonS3Bucket: ''
+    amazonS3Region: ''
+    amazonS3Endpoint: ''
     amazonS3SSL: true
     amazonS3SignV2: false
     amazonS3SSE: false
     amazonS3Trace: false
-    # Nested amazons3 config for template compatibility
     amazons3:
-      bucket: ""
-      region: ""
-      endpoint: ""
-      accessKeyId: ""
-      secretAccessKey: ""
-
-  # Email settings
+      bucket: ''
+      region: ''
+      endpoint: ''
+      accessKeyId: ''
+      secretAccessKey: ''
   emailSettings:
     enableSignUpWithEmail: true
     enableSignInWithEmail: true
@@ -229,28 +171,26 @@ mattermost:
     sendEmailNotifications: true
     useChannelInEmailNotifications: true
     requireEmailVerification: true
-    feedbackName: ""
-    feedbackEmail: "admin@noah.local"
-    replyToAddress: "admin@noah.local"
-    feedbackOrganization: "NOAH"
+    feedbackName: ''
+    feedbackEmail: admin@noah.local
+    replyToAddress: admin@noah.local
+    feedbackOrganization: NOAH
     enableSMTPAuth: true
-    smtpUsername: ""
-    smtpPassword: ""
-    smtpServer: ""
-    smtpPort: "587"
+    smtpUsername: ''
+    smtpPassword: ''
+    smtpServer: ''
+    smtpPort: '587'
     smtpServerTimeout: 10
-    connectionSecurity: "STARTTLS"
+    connectionSecurity: STARTTLS
     sendPushNotifications: true
-    pushNotificationServer: "https://push.mattermost.com"
-    pushNotificationContents: "full"
+    pushNotificationServer: https://push.mattermost.com
+    pushNotificationContents: full
     enableEmailBatching: false
     emailBatchingBufferSize: 256
     emailBatchingInterval: 30
     enablePreviewModeBanner: true
     enableLoginWithEmail: true
     enableLoginWithUsername: true
-
-  # Rate limit settings
   rateLimitSettings:
     enable: true
     perSec: 10
@@ -258,74 +198,60 @@ mattermost:
     memoryStoreSize: 10000
     varyByRemoteAddr: true
     varyByUser: false
-    varyByHeader: ""
-
-  # Privacy settings
+    varyByHeader: ''
   privacySettings:
     showEmailAddress: true
     showFullName: true
-
-  # Support settings
   supportSettings:
-    termsOfServiceLink: "https://mattermost.com/terms-of-service/"
-    privacyPolicyLink: "https://mattermost.com/privacy-policy/"
-    aboutLink: "https://about.mattermost.com/default-about/"
-    helpLink: "https://about.mattermost.com/default-help/"
-    reportAProblemLink: "https://about.mattermost.com/default-report-a-problem/"
-    supportEmail: "admin@noah.local"
+    termsOfServiceLink: https://mattermost.com/terms-of-service/
+    privacyPolicyLink: https://mattermost.com/privacy-policy/
+    aboutLink: https://about.mattermost.com/default-about/
+    helpLink: https://about.mattermost.com/default-help/
+    reportAProblemLink: https://about.mattermost.com/default-report-a-problem/
+    supportEmail: admin@noah.local
     customTermsOfServiceEnabled: false
     customTermsOfServiceReAcceptancePeriod: 365
     enableAskCommunityLink: true
-
-  # Announcement settings
   announcementSettings:
     enableBanner: false
-    bannerText: ""
-    bannerColor: "#f2a93b"
-    bannerTextColor: "#333333"
+    bannerText: ''
+    bannerColor: '#f2a93b'
+    bannerTextColor: '#333333'
     allowBannerDismissal: true
-
-  # Theme settings
   themeSettings:
     enableThemeSelection: true
-    defaultTheme: "default"
+    defaultTheme: default
     allowCustomThemes: true
     allowedThemes: []
-
-  # Git settings
   gitLabSettings:
     enable: false
-    secret: ""
-    id: ""
-    scope: ""
-    authEndpoint: ""
-    tokenEndpoint: ""
-    userApiEndpoint: ""
-
-  # Plugin settings
+    secret: ''
+    id: ''
+    scope: ''
+    authEndpoint: ''
+    tokenEndpoint: ''
+    userApiEndpoint: ''
   pluginSettings:
     enable: true
     enableUploads: true
     allowInsecureDownloadUrl: false
     enableHealthCheck: true
-    directory: "./plugins"
-    clientDirectory: "./client/plugins"
+    directory: ./plugins
+    clientDirectory: ./client/plugins
     enableMarketplace: true
     enableRemoteMarketplace: true
     automaticPrepackagedPlugins: true
     requirePluginSignature: false
-    marketplaceUrl: "https://api.integrations.mattermost.com"
+    marketplaceUrl: https://api.integrations.mattermost.com
     signaturePublicKeyFiles: []
-
-  # Security Configuration - TLS and Connection Settings
   security:
     enableTLS: false
-    tlsCertFile: ""
-    tlsKeyFile: ""
+    tlsCertFile: ''
+    tlsKeyFile: ''
     readTimeout: 300
     writeTimeout: 300
     idleTimeout: 60
-    connectionSecurity: "TLS"
+    connectionSecurity: TLS
     allowInsecureOutgoingConnections: false
     enableMultifactorAuthentication: false
     sessionLengthWebInDays: 30
@@ -333,128 +259,78 @@ mattermost:
     sessionCacheInMinutes: 10
     websocketSecurePort: 443
     useExperimentalGossip: false
-
-# =============================================================================
-# Authentication and Security Configuration
-# =============================================================================
-
-# Application authentication settings
 auth:
-  # Secret key for signing tokens and cookies
-  # Generate a random 256-bit key: openssl rand -hex 32
-  secretKey: ""
-
-# =============================================================================
-# OIDC Authentication with Keycloak Integration
-# =============================================================================
-# Configure OpenID Connect authentication for single sign-on (SSO)
-# This enables users to authenticate using Keycloak identity provider
-
+  secretKey: ''
 oidc:
-  # Enable OIDC authentication
   enabled: true
-
-  # OIDC provider name (displayed to users)
-  provider: "Keycloak"
-
-  # OAuth2 client ID registered in Keycloak
-  clientId: "mattermost"
-
-  # OAuth2 client secret (leave empty if using existingSecret)
-  clientSecret: ""
-
-  # Use existing Kubernetes secret for client secret
-  existingSecret: ""
-  existingSecretKey: "oidc-client-secret"
-
-  # OIDC discovery URL for automatic configuration
-  # This URL provides all necessary OIDC endpoints and keys
-  discoveryUrl: "https://keycloak.noah.local/realms/noah/.well-known/openid_configuration"
-
-  # Login button customization
-  buttonText: "Login with Keycloak"
-  buttonColor: "#145dbf"
-
-# =============================================================================
-# LDAP Authentication (Fallback/Additional)
-# =============================================================================
-# Configure LDAP/Active Directory authentication
-# Can be used alongside OIDC or as primary authentication method
-
+  provider: Keycloak
+  clientId: mattermost
+  clientSecret: ''
+  existingSecret: ''
+  existingSecretKey: oidc-client-secret
+  discoveryUrl: https://keycloak.noah.local/realms/noah/.well-known/openid_configuration
+  buttonText: Login with Keycloak
+  buttonColor: '#145dbf'
 ldap:
   enabled: true
-  host: "samba4.noah.svc.cluster.local"
+  host: samba4.noah.svc.cluster.local
   port: 389
-  dn: "dc=noah,dc=local"
-  bindUser: "cn=mattermost-service,cn=Users,dc=noah,dc=local"
-  bindPassword: ""
-  existingSecret: ""
-  existingSecretKey: "ldap-password"
-
-  # User configuration
+  dn: dc=noah,dc=local
+  bindUser: cn=mattermost-service,cn=Users,dc=noah,dc=local
+  bindPassword: ''
+  existingSecret: ''
+  existingSecretKey: ldap-password
   userSearch:
-    base: "cn=Users,dc=noah,dc=local"
-    filter: "(&(objectClass=user)(sAMAccountName=%v))"
+    base: cn=Users,dc=noah,dc=local
+    filter: (&(objectClass=user)(sAMAccountName=%v))
     attributes:
-      id: "sAMAccountName"
-      username: "sAMAccountName"
-      email: "mail"
-      firstName: "givenName"
-      lastName: "sn"
-      nickname: "displayName"
-      position: "title"
-
-  # Group configuration
+      id: sAMAccountName
+      username: sAMAccountName
+      email: mail
+      firstName: givenName
+      lastName: sn
+      nickname: displayName
+      position: title
   groupSearch:
-    base: "cn=Groups,dc=noah,dc=local"
-    filter: "(&(objectClass=group))"
-    groupDisplayNameAttribute: "cn"
-    groupIdAttribute: "cn"
-
-  # Sync settings
+    base: cn=Groups,dc=noah,dc=local
+    filter: (&(objectClass=group))
+    groupDisplayNameAttribute: cn
+    groupIdAttribute: cn
   syncIntervalMinutes: 60
   maxPageSize: 2000
-  loginIdAttribute: "sAMAccountName"
+  loginIdAttribute: sAMAccountName
   skipCertificateVerification: false
   connectionTimeout: 10000
   requestTimeout: 10000
-
-# Service configuration
 service:
   type: ClusterIP
   port: 8065
   metricsPort: 8067
   annotations: {}
-
-# Ingress configuration
 ingress:
   enabled: true
   className: nginx
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hostname: "mattermost.noah.local"
+    nginx.ingress.kubernetes.io/proxy-body-size: 50m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '600'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '600'
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hostname: mattermost.noah.local
   path: /
   pathType: Prefix
   tls:
     enabled: true
     secretName: mattermost-tls
-
-# Database configuration
 database:
   type: postgresql
-  host: ""
+  host: ''
   port: 5432
   name: mattermost
   user: mattermost
-  password: ""
-  existingSecret: ""
-  existingSecretPasswordKey: "postgresql-password"
-
-# Resource limits and requests
+  password: ''
+  existingSecret: ''
+  existingSecretPasswordKey: postgresql-password
 resources:
   limits:
     cpu: 2000m
@@ -462,36 +338,27 @@ resources:
   requests:
     cpu: 500m
     memory: 2Gi
-
-# Auto-scaling
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 5
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
-# Node selection
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
-# Security Context
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 2000
   runAsGroup: 2000
   fsGroup: 2000
-
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
     drop:
-      - ALL
+    - ALL
   readOnlyRootFilesystem: false
   runAsUser: 2000
-
-# Probes
 livenessProbe:
   enabled: true
   httpGet:
@@ -501,7 +368,6 @@ livenessProbe:
   periodSeconds: 30
   timeoutSeconds: 10
   failureThreshold: 3
-
 readinessProbe:
   enabled: true
   httpGet:
@@ -511,7 +377,6 @@ readinessProbe:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
-
 startupProbe:
   enabled: true
   httpGet:
@@ -521,96 +386,46 @@ startupProbe:
   periodSeconds: 15
   timeoutSeconds: 10
   failureThreshold: 20
-
-# =============================================================================
-# Persistent Storage Configuration
-# =============================================================================
-# Configure persistent volumes for Mattermost data storage
-# Each volume type serves a specific purpose and can be configured independently
-
 persistence:
-  # =============================================================================
-  # Data Volume - Core application data and user uploads
-  # =============================================================================
   data:
-    # Enable persistent storage for application data
     enabled: true
-
-    # Storage class for this specific volume (overrides global.storageClass)
-    storageClass: ""
-
-    # Volume access modes
-    # ReadWriteOnce: Single node read-write access (recommended for most storage)
-    # ReadWriteMany: Multi-node read-write access (requires shared storage)
+    storageClass: ''
     accessModes:
-      - ReadWriteOnce
-
-    # Volume size - stores user uploads, files, and application data
-    # Recommendation: Start with 20Gi, monitor usage and scale as needed
+    - ReadWriteOnce
     size: 20Gi
-
-    # Additional annotations for the PVC (storage-specific metadata)
     annotations: {}
-
-    # Mount path inside the container
     path: /mattermost/data
-
-  # =============================================================================
-  # Config Volume - Configuration files and customizations
-  # =============================================================================
   config:
-    # Enable persistent storage for configuration
     enabled: true
-    storageClass: ""
+    storageClass: ''
     accessModes:
-      - ReadWriteOnce
-
-    # Volume size - stores configuration files and customizations
-    # Recommendation: 5Gi is typically sufficient for configuration data
+    - ReadWriteOnce
     size: 5Gi
     annotations: {}
     path: /mattermost/config
-
-  # =============================================================================
-  # Logs Volume - Application logs and audit trails
-  # =============================================================================
   logs:
-    # Enable persistent storage for logs
     enabled: true
-    storageClass: ""
+    storageClass: ''
     accessModes:
-      - ReadWriteOnce
-
-    # Volume size - stores application logs for debugging and audit
-    # Recommendation: 10Gi with log rotation enabled
+    - ReadWriteOnce
     size: 10Gi
     annotations: {}
     path: /mattermost/logs
-
-  # =============================================================================
-  # Plugins Volume - Mattermost plugins and extensions
-  # =============================================================================
   plugins:
-    # Enable persistent storage for plugins
     enabled: true
-    storageClass: ""
+    storageClass: ''
     accessModes:
-      - ReadWriteOnce
-
-    # Volume size - stores installed plugins and their data
-    # Recommendation: 10Gi allows for multiple plugins and their assets
+    - ReadWriteOnce
     size: 10Gi
     annotations: {}
     path: /mattermost/plugins
-
-# PostgreSQL dependency
 postgresql:
   enabled: true
   auth:
-    postgresPassword: "postgres"
-    username: "mattermost"
-    password: "mattermost"
-    database: "mattermost"
+    postgresPassword: postgres
+    username: mattermost
+    password: mattermost
+    database: mattermost
   primary:
     persistence:
       enabled: true
@@ -622,13 +437,11 @@ postgresql:
       limits:
         memory: 1Gi
         cpu: 1000m
-
-# Redis dependency (for caching and sessions)
 redis:
   enabled: true
   auth:
     enabled: true
-    password: "mattermost"
+    password: mattermost
   master:
     persistence:
       enabled: true
@@ -640,146 +453,118 @@ redis:
       limits:
         memory: 512Mi
         cpu: 500m
-
-# Elasticsearch dependency (for advanced search)
 elasticsearch:
   enabled: false
-  clusterName: "mattermost-elasticsearch"
-  nodeGroup: "master"
-  masterService: "mattermost-elasticsearch"
+  clusterName: mattermost-elasticsearch
+  nodeGroup: master
+  masterService: mattermost-elasticsearch
   roles:
-    master: "true"
-    ingest: "true"
-    data: "true"
+    master: 'true'
+    ingest: 'true'
+    data: 'true'
   replicas: 1
   minimumMasterNodes: 1
-  esMajorVersion: ""
+  esMajorVersion: ''
   esConfig:
-    elasticsearch.yml: |
-      cluster.name: "mattermost-elasticsearch"
+    elasticsearch.yml: 'cluster.name: "mattermost-elasticsearch"
+
       network.host: 0.0.0.0
+
       discovery.type: single-node
+
       xpack.security.enabled: false
+
+      '
   resources:
     requests:
-      cpu: "1000m"
-      memory: "2Gi"
+      cpu: 1000m
+      memory: 2Gi
     limits:
-      cpu: "2000m"
-      memory: "4Gi"
+      cpu: 2000m
+      memory: 4Gi
   volumeClaimTemplate:
-    accessModes: ["ReadWriteOnce"]
+    accessModes:
+    - ReadWriteOnce
     resources:
       requests:
         storage: 30Gi
-
-# Monitoring
 metrics:
   enabled: true
   serviceMonitor:
     enabled: true
-    namespace: ""
+    namespace: ''
     labels: {}
     interval: 30s
     scrapeTimeout: 10s
   grafanaDashboard:
     enabled: true
-    folder: "mattermost"
+    folder: mattermost
     labels: {}
-
-# Service Account
 serviceAccount:
   create: true
   annotations: {}
-  name: ""
+  name: ''
   automountServiceAccountToken: true
-
-# RBAC Configuration
 rbac:
   create: true
-
-# Network Policies
 networkPolicy:
   enabled: true
   ingress:
     enabled: true
   egress:
     enabled: true
-
-# Pod annotations and labels
 podAnnotations: {}
 podLabels: {}
-
-# Common labels
 commonLabels: {}
 commonAnnotations: {}
-
-# Extra environment variables
 extraEnvVars: []
-extraEnvVarsSecret: ""
-extraEnvVarsConfigMap: ""
-
-# Extra volumes and mounts
+extraEnvVarsSecret: ''
+extraEnvVarsConfigMap: ''
 extraVolumes: []
 extraVolumeMounts: []
-
-# Init containers
 initContainers: []
-
-# Sidecar containers
 sidecarContainers: []
-
-# Plugins configuration
 plugins:
   enabled: true
-  # List of plugins to install
   install:
-    - name: "github"
-      version: "latest"
-    - name: "jitsi"
-      version: "latest"
-    - name: "zoom"
-      version: "latest"
-    - name: "antivirus"
-      version: "latest"
-    - name: "autolink"
-      version: "latest"
-    - name: "custom-attributes"
-      version: "latest"
-    - name: "welcomebot"
-      version: "latest"
-
-# Backup configuration
+  - name: github
+    version: latest
+  - name: jitsi
+    version: latest
+  - name: zoom
+    version: latest
+  - name: antivirus
+    version: latest
+  - name: autolink
+    version: latest
+  - name: custom-attributes
+    version: latest
+  - name: welcomebot
+    version: latest
 backup:
   enabled: true
-  schedule: "0 2 * * *"
-  retention: "7d"
+  schedule: 0 2 * * *
+  retention: 7d
   s3:
     enabled: false
-    bucket: ""
-    region: ""
-    accessKey: ""
-    secretKey: ""
-
-# Pod Disruption Budget
+    bucket: ''
+    region: ''
+    accessKey: ''
+    secretKey: ''
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
-
-# External Database Configuration (when not using PostgreSQL dependency)
 externalDatabase:
   enabled: false
-  host: ""
+  host: ''
   port: 5432
-  database: "mattermost"
-  username: "mattermost"
-  password: ""
-  existingSecret: ""
-  existingSecretKey: ""
-
-  # Pod Disruption Budget
+  database: mattermost
+  username: mattermost
+  password: ''
+  existingSecret: ''
+  existingSecretKey: ''
   servicesSettings:
-    websocketURL: ""
+    websocketURL: ''
     enableIncomingWebhooks: true
     enableOutgoingWebhooks: true
     enableCommands: true
@@ -790,84 +575,71 @@ externalDatabase:
     enableOAuthServiceProvider: true
     enableMultifactorAuthentication: false
     maxFileSize: 104857600
-
-  # Team Settings
   teamSettings:
-    siteName: "Mattermost"
+    siteName: Mattermost
     maxUsersPerTeam: 50
     enableTeamCreation: true
     enableUserCreation: true
     enableOpenServer: false
-    restrictCreationToDomains: ""
+    restrictCreationToDomains: ''
     enableCustomBrand: false
-    customBrandText: ""
-    customDescriptionText: ""
-    restrictDirectMessage: "any"
-    restrictTeamInvite: "all"
-    restrictPublicChannelManagement: "all"
-    restrictPrivateChannelManagement: "all"
-
-  # SQL Settings
+    customBrandText: ''
+    customDescriptionText: ''
+    restrictDirectMessage: any
+    restrictTeamInvite: all
+    restrictPublicChannelManagement: all
+    restrictPrivateChannelManagement: all
   sqlSettings:
-    driverName: "postgres"
+    driverName: postgres
     maxIdleConns: 20
     maxOpenConns: 300
     queryTimeout: 30
     connMaxLifetimeMilliseconds: 3600000
     trace: false
-
-  # Log Settings
   logSettings:
     enableConsole: true
-    consoleLevel: "INFO"
+    consoleLevel: INFO
     consoleJson: true
     enableFile: true
-    fileLevel: "INFO"
+    fileLevel: INFO
     fileJson: true
-    fileLocation: ""
+    fileLocation: ''
     enableWebhookDebugging: true
     enableDiagnostics: true
-
-  # File Settings (template reference)
   fileSettings:
-    driverName: "local"
-    directory: "/mattermost/data/"
+    driverName: local
+    directory: /mattermost/data/
     enableFileAttachments: true
     enableMobileUpload: true
     enableMobileDownload: true
     maxFileSize: 104857600
     enablePublicLink: true
-    publicLinkSalt: ""
+    publicLinkSalt: ''
     thumbnailWidth: 120
     thumbnailHeight: 100
     previewWidth: 1920
     previewHeight: 1080
     profileWidth: 128
     profileHeight: 128
-    # S3 configuration for template compatibility
     amazons3:
-      bucket: ""
-      region: ""
-      endpoint: ""
-      accessKeyId: ""
-      secretAccessKey: ""
-
-  # Plugin Settings (template reference)
+      bucket: ''
+      region: ''
+      endpoint: ''
+      accessKeyId: ''
+      secretAccessKey: ''
   pluginSettings:
     enable: true
     enableUploads: true
     allowInsecureDownloadUrl: false
     enableHealthCheck: true
-    directory: "./plugins"
-    clientDirectory: "./client/plugins"
+    directory: ./plugins
+    clientDirectory: ./client/plugins
     enableMarketplace: true
     enableRemoteMarketplace: true
     automaticPrepackagedPlugins: true
     requirePluginSignature: false
-    marketplaceUrl: "https://api.integrations.mattermost.com"
+    marketplaceUrl: https://api.integrations.mattermost.com
     signaturePublicKeyFiles: []
-
-  # Email Settings (template reference)
   emailSettings:
     enableSignUpWithEmail: true
     enableSignInWithEmail: true
@@ -875,132 +647,124 @@ externalDatabase:
     sendEmailNotifications: true
     useChannelInEmailNotifications: false
     requireEmailVerification: false
-    feedbackName: ""
-    feedbackEmail: ""
-    replyToAddress: ""
-    feedbackOrganization: ""
+    feedbackName: ''
+    feedbackEmail: ''
+    replyToAddress: ''
+    feedbackOrganization: ''
     enableSMTPAuth: false
-    smtpUsername: ""
-    smtpPassword: ""
-    smtpServer: ""
-    smtpPort: "587"
+    smtpUsername: ''
+    smtpPassword: ''
+    smtpServer: ''
+    smtpPort: '587'
     smtpServerTimeout: 10
-    connectionSecurity: ""
+    connectionSecurity: ''
     enablePreviewModeBanner: true
     skipServerCertificateVerification: false
-    emailNotificationContentsType: "full"
+    emailNotificationContentsType: full
     emailBatchingBufferSize: 256
     emailBatchingInterval: 30
     enableEmailBatching: false
     sendPushNotifications: false
-    pushNotificationServer: ""
-    pushNotificationContents: "generic"
+    pushNotificationServer: ''
+    pushNotificationContents: generic
     pushNotificationBuffer: 1000
-
-  # Team Settings (template reference)
   team:
-    siteName: "Mattermost"
+    siteName: Mattermost
     maxUsersPerTeam: 50
     enableTeamCreation: true
     enableUserCreation: true
     enableOpenServer: false
     enableUserDeactivation: false
-    restrictCreationToDomains: ""
+    restrictCreationToDomains: ''
     enableCustomUserStatuses: true
     enableCustomBrand: false
-    customBrandText: ""
-    customDescriptionText: ""
-    restrictDirectMessage: "any"
-    restrictTeamInvite: "all"
-    restrictPublicChannelManagement: "all"
-    restrictPrivateChannelManagement: "all"
-    restrictPublicChannelCreation: "all"
-    restrictPrivateChannelCreation: "all"
-    restrictPublicChannelDeletion: "all"
-    restrictPrivateChannelDeletion: "all"
-    restrictPrivateChannelManageMembers: "all"
+    customBrandText: ''
+    customDescriptionText: ''
+    restrictDirectMessage: any
+    restrictTeamInvite: all
+    restrictPublicChannelManagement: all
+    restrictPrivateChannelManagement: all
+    restrictPublicChannelCreation: all
+    restrictPrivateChannelCreation: all
+    restrictPublicChannelDeletion: all
+    restrictPrivateChannelDeletion: all
+    restrictPrivateChannelManageMembers: all
     enableXToLeaveChannelsFromLHS: false
     userStatusAwayTimeout: 300
     maxChannelsPerTeam: 2000
     maxNotificationsPerChannel: 1000
     enableConfirmNotificationsToChannel: true
-    teammateNameDisplay: "username"
+    teammateNameDisplay: username
     experimentalViewArchivedChannels: false
     experimentalEnableAuthenticationTransfer: true
     experimentalEnableHardenedMode: false
     experimentalEnableAutomaticReplies: false
     experimentalHideTownSquareinLHS: false
     experimentalTownSquareIsReadOnly: false
-    experimentalPrimaryTeam: ""
+    experimentalPrimaryTeam: ''
     experimentalDefaultChannels: []
-
-  # SMTP Settings (template reference)
   smtp:
     enabled: false
-    server: ""
+    server: ''
     port: 587
-    username: ""
-    password: ""
+    username: ''
+    password: ''
     authentication: true
     enableSecurity: false
     insecureSkipVerify: false
-
-  # OAuth Settings (template reference)
   oauth:
     enabled: false
     gitlab:
       enabled: false
-      id: ""
-      secret: ""
-      scope: ""
-      authEndpoint: ""
-      tokenEndpoint: ""
-      userAPIEndpoint: ""
+      id: ''
+      secret: ''
+      scope: ''
+      authEndpoint: ''
+      tokenEndpoint: ''
+      userAPIEndpoint: ''
     google:
       enabled: false
-      id: ""
-      secret: ""
-      scope: "profile email"
-      authEndpoint: "https://accounts.google.com/o/oauth2/v2/auth"
-      tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token"
-      userAPIEndpoint: "https://www.googleapis.com/oauth2/v2/userinfo"
+      id: ''
+      secret: ''
+      scope: profile email
+      authEndpoint: https://accounts.google.com/o/oauth2/v2/auth
+      tokenEndpoint: https://www.googleapis.com/oauth2/v4/token
+      userAPIEndpoint: https://www.googleapis.com/oauth2/v2/userinfo
     office365:
       enabled: false
-      id: ""
-      secret: ""
-      scope: "https://graph.microsoft.com/User.Read"
-      authEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
-      tokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token"
-      userAPIEndpoint: "https://graph.microsoft.com/v1.0/me"
-
-  # LDAP Settings (template reference)
+      id: ''
+      secret: ''
+      scope: https://graph.microsoft.com/User.Read
+      authEndpoint: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+      tokenEndpoint: https://login.microsoftonline.com/common/oauth2/v2.0/token
+      userAPIEndpoint: https://graph.microsoft.com/v1.0/me
   ldap:
     enabled: false
-    server: ""
+    server: ''
     port: 389
-    connectionSecurity: ""
-    baseDN: ""
-    bindUsername: ""
-    bindPassword: ""
-    userFilter: ""
-    groupFilter: ""
-    guestFilter: ""
+    connectionSecurity: ''
+    baseDN: ''
+    bindUsername: ''
+    bindPassword: ''
+    userFilter: ''
+    groupFilter: ''
+    guestFilter: ''
     enableAdminFilter: false
-    adminFilter: ""
-    groupDisplayNameAttribute: ""
-    groupIdAttribute: ""
-    userIdAttribute: ""
-    usernameAttribute: ""
-    nicknameAttribute: ""
-    emailAttribute: ""
-    firstNameAttribute: ""
-    lastNameAttribute: ""
-    positionAttribute: ""
+    adminFilter: ''
+    groupDisplayNameAttribute: ''
+    groupIdAttribute: ''
+    userIdAttribute: ''
+    usernameAttribute: ''
+    nicknameAttribute: ''
+    emailAttribute: ''
+    firstNameAttribute: ''
+    lastNameAttribute: ''
+    positionAttribute: ''
     syncIntervalMinutes: 60
     skipCertificateVerification: false
     queryTimeout: 60
     maxPageSize: 0
-    loginFieldName: ""
-    loginButtonColor: "#0000"
-    loginButtonBorderColor: "#2389D7"
-    loginButtonTextColor: "#2389D7"
+    loginFieldName: ''
+    loginButtonColor: '#0000'
+    loginButtonBorderColor: '#2389D7'
+    loginButtonTextColor: '#2389D7'

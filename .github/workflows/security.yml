@@ -1,32 +1,29 @@
----
 name: Security
 permissions:
   contents: read
   pull-requests: write
   security-events: write
-
-on:
+true:
   schedule:
-    - cron: "0 0 * * 1" # Weekly on Monday
-  workflow_dispatch:
-
+  - cron: 0 0 * * 1
+  workflow_dispatch: null
 jobs:
   scan:
     name: Security Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Run Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH"
-          exit-code: "0" # Don't fail the build
-      - name: Upload Results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: "trivy-results.sarif"
+    - uses: actions/checkout@v4
+    - name: Run Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: fs
+        scan-ref: .
+        format: sarif
+        output: trivy-results.sarif
+        severity: CRITICAL,HIGH
+        exit-code: '0'
+    - name: Upload Results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: trivy-results.sarif

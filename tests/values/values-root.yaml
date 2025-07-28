@@ -10,18 +10,11 @@
 # =============================================================================
 
 # Single replica for development/testing
-replicaCount: 1
 
-# Image configuration
+replicaCount: 1
 image:
   pullPolicy: Always
-  tag: "latest"
-
-# =============================================================================
-# SECURITY CONFIGURATION
-# =============================================================================
-
-# Root user security context for maximum compatibility
+  tag: latest
 securityContext:
   runAsUser: 0
   runAsGroup: 0
@@ -30,23 +23,15 @@ securityContext:
   allowPrivilegeEscalation: true
   capabilities:
     add:
-      - SYS_ADMIN
-      - NET_ADMIN
-      - DAC_OVERRIDE
+    - SYS_ADMIN
+    - NET_ADMIN
+    - DAC_OVERRIDE
     drop:
-      - ALL
-
-# Pod security context
+    - ALL
 podSecurityContext:
   runAsUser: 0
   runAsGroup: 0
   fsGroup: 0
-
-# =============================================================================
-# RESOURCE MANAGEMENT
-# =============================================================================
-
-# Moderate resources for root deployments
 resources:
   requests:
     cpu: 500m
@@ -54,24 +39,12 @@ resources:
   limits:
     cpu: 2000m
     memory: 4Gi
-
-# =============================================================================
-# STORAGE CONFIGURATION
-# =============================================================================
-
-# Enable persistence for proper application functionality
 persistence:
   enabled: true
   size: 20Gi
-  storageClass: "standard"
+  storageClass: standard
   accessMode: ReadWriteOnce
   annotations: {}
-
-# =============================================================================
-# DATABASE CONFIGURATION
-# =============================================================================
-
-# PostgreSQL configuration
 postgresql:
   enabled: true
   auth:
@@ -94,12 +67,6 @@ postgresql:
       runAsUser: 999
       runAsGroup: 999
       fsGroup: 999
-
-# =============================================================================
-# CACHE CONFIGURATION
-# =============================================================================
-
-# Redis configuration
 redis:
   enabled: true
   auth:
@@ -121,43 +88,27 @@ redis:
       runAsUser: 999
       runAsGroup: 999
       fsGroup: 999
-
-# =============================================================================
-# NETWORKING CONFIGURATION
-# =============================================================================
-
-# Service configuration
 service:
   type: ClusterIP
   port: 80
   targetPort: 8080
   annotations: {}
-
-# Ingress configuration (disabled for internal access)
 ingress:
   enabled: false
-  className: "nginx"
+  className: nginx
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: '60'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '60'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '60'
   hosts:
-    - host: app.noah.local
-      paths:
-        - path: /
-          pathType: Prefix
+  - host: app.noah.local
+    paths:
+    - path: /
+      pathType: Prefix
   tls: []
-
-# Network policies disabled for compatibility
 networkPolicy:
   enabled: false
-
-# =============================================================================
-# MONITORING CONFIGURATION
-# =============================================================================
-
-# Service monitor for Prometheus
 serviceMonitor:
   enabled: true
   interval: 30s
@@ -165,53 +116,29 @@ serviceMonitor:
   labels:
     app: noah-root
   path: /metrics
-
-# =============================================================================
-# SCALING CONFIGURATION
-# =============================================================================
-
-# Autoscaling disabled for testing
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 3
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
-# =============================================================================
-# ENVIRONMENT CONFIGURATION
-# =============================================================================
-
-# Environment variables
 env:
-  - name: ENVIRONMENT
-    value: "development"
-  - name: DEBUG
-    value: "true"
-  - name: LOG_LEVEL
-    value: "debug"
-  - name: ROOT_USER
-    value: "true"
-  - name: SECURITY_PROFILE
-    value: "root"
-
-# =============================================================================
-# GLOBAL CONFIGURATION
-# =============================================================================
-
-# Global settings
+- name: ENVIRONMENT
+  value: development
+- name: DEBUG
+  value: 'true'
+- name: LOG_LEVEL
+  value: debug
+- name: ROOT_USER
+  value: 'true'
+- name: SECURITY_PROFILE
+  value: root
 global:
-  storageClass: "standard"
-  domain: "noah.local"
-  environment: "development"
-  timezone: "UTC"
-  securityProfile: "root"
-
-# =============================================================================
-# HEALTH CHECKS
-# =============================================================================
-
-# Health checks with root privileges
+  storageClass: standard
+  domain: noah.local
+  environment: development
+  timezone: UTC
+  securityProfile: root
 livenessProbe:
   httpGet:
     path: /health
@@ -220,7 +147,6 @@ livenessProbe:
   periodSeconds: 30
   timeoutSeconds: 10
   failureThreshold: 3
-
 readinessProbe:
   httpGet:
     path: /ready
@@ -229,91 +155,59 @@ readinessProbe:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
-
-# =============================================================================
-# NODE CONFIGURATION
-# =============================================================================
-
-# Node selector
 nodeSelector: {}
-
-# Tolerations for root deployments
 tolerations:
-  - key: "node-role.kubernetes.io/master"
-    operator: "Exists"
-    effect: "NoSchedule"
-
-# Affinity rules
+- key: node-role.kubernetes.io/master
+  operator: Exists
+  effect: NoSchedule
 affinity: {}
-
-# =============================================================================
-# ADDITIONAL CONFIGURATION
-# =============================================================================
-
-# Labels for root deployment
 labels:
   app: noah-root
   tier: development
   profile: root
   security: privileged
-
-# Annotations
 annotations:
-  description: "NOAH deployment with root privileges"
-  version: "2.0.0"
-  profile: "root"
-  security: "privileged"
-  maintainer: "NOAH Team"
-
-# =============================================================================
-# BACKUP CONFIGURATION
-# =============================================================================
-
-# Backup configuration
+  description: NOAH deployment with root privileges
+  version: 2.0.0
+  profile: root
+  security: privileged
+  maintainer: NOAH Team
 backup:
   enabled: false
-  schedule: "0 2 * * *"
+  schedule: 0 2 * * *
   retention: 7
   storage:
     size: 10Gi
-
-# =============================================================================
-# CHART-SPECIFIC CONFIGURATIONS
-# =============================================================================
-
-# Samba4 configuration overrides for development
 samba4:
   replicaCount: 1
   resources:
     requests:
-      memory: "256Mi"
-      cpu: "100m"
+      memory: 256Mi
+      cpu: 100m
     limits:
-      memory: "512Mi"
-      cpu: "250m"
+      memory: 512Mi
+      cpu: 250m
   persistence:
     enabled: true
     size: 5Gi
     accessMode: ReadWriteOnce
-
-# Keycloak configuration overrides for development
 keycloak:
   replicaCount: 1
   image:
     registry: quay.io
     repository: keycloak/keycloak
-    tag: "22.0.5"  # Version stable avec support non-root
+    tag: 22.0.5
   resources:
     requests:
-      memory: "512Mi"
-      cpu: "200m"
+      memory: 512Mi
+      cpu: 200m
     limits:
-      memory: "1Gi"
-      cpu: "500m"
+      memory: 1Gi
+      cpu: 500m
   autoscaling:
     enabled: false
   auth:
-    adminPassword: "admin123!"
+    adminPassword: admin123!
   production:
     enabled: false
   database:
@@ -330,17 +224,15 @@ keycloak:
     allowPrivilegeEscalation: false
     capabilities:
       drop:
-        - ALL
+      - ALL
     readOnlyRootFilesystem: false
     runAsNonRoot: true
     runAsUser: 1000
-
-# OAuth2-proxy configuration overrides
 oauth2-proxy:
   replicaCount: 1
   config:
-    clientSecret: "oauth2-secret-123!"
-    cookieSecret: "cookiesecret1234567890abcdef12"
+    clientSecret: oauth2-secret-123!
+    cookieSecret: cookiesecret1234567890abcdef12
   podSecurityContext:
     runAsNonRoot: true
     runAsUser: 2000
@@ -356,8 +248,8 @@ oauth2-proxy:
     runAsGroup: 2000
   resources:
     requests:
-      memory: "64Mi"
-      cpu: "50m"
+      memory: 64Mi
+      cpu: 50m
     limits:
-      memory: "128Mi"
-      cpu: "100m"
+      memory: 128Mi
+      cpu: 100m

@@ -1,26 +1,25 @@
----
 apiVersion: v2
 name: keycloak
 description: Production-ready Keycloak identity and access management with LDAP/AD integration, clustering, and persistence
 type: application
 version: 1.0.0
-appVersion: "22.0.5"
+appVersion: 22.0.5
 keywords:
-  - identity
-  - authentication
-  - authorization
-  - sso
-  - ldap
-  - oidc
-  - saml
+- identity
+- authentication
+- authorization
+- sso
+- ldap
+- oidc
+- saml
 home: https://www.keycloak.org/
 sources:
-  - https://github.com/keycloak/keycloak
+- https://github.com/keycloak/keycloak
 maintainers:
-  - name: N.O.A.H Team
-    email: admin@noah.local
+- name: N.O.A.H Team
+  email: admin@noah.local
 dependencies:
-  - name: postgresql
-    version: "12.12.10"
-    repository: https://charts.bitnami.com/bitnami
-    condition: postgresql.enabled
+- name: postgresql
+  version: 12.12.10
+  repository: https://charts.bitnami.com/bitnami
+  condition: postgresql.enabled

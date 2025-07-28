@@ -29,7 +29,7 @@ class Colors:
 class HelmValuesValidator:
     def __init__(self, values_dir: Optional[str] = None):
         if values_dir is None:
-            # Use relative path from script directory
+            # Use relative path from tests directory to values
             script_dir = Path(__file__).parent
             values_dir = str(script_dir / "values")
         self.values_dir = Path(values_dir)

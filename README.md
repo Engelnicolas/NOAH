@@ -192,7 +192,7 @@ source venv/bin/activate
 #### 2. Configuration avancée
 ```bash
 # Configuration personnalisée (optionnel)
-cp script/values/values-minimal.yaml my-custom-values.yaml
+cp tests/values/values-minimal.yaml my-custom-values.yaml
 # Éditer my-custom-values.yaml selon vos besoins
 
 # Validation de la configuration

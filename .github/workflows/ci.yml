@@ -29,26 +29,26 @@ jobs:
       - name: Test NOAH Linter Prerequisites
         run: |
           echo "Testing NOAH linter prerequisites..."
-          python3 ./script/noah-linter.py report
+          python3 ./tests/noah-linter.py report
           echo "Prerequisites check completed"
 
       - name: Setup NOAH Development Environment
         run: |
           echo "Setting up NOAH development environment..."
-          python3 ./script/noah-linter.py setup
+          python3 ./tests/noah-linter.py setup
           echo "Development environment setup completed"
 
       - name: Run NOAH Linter with Docker
         run: |
           echo "Running NOAH linter with Docker..."
-          python3 ./script/noah-linter.py lint --verbose
+          python3 ./tests/noah-linter.py lint --verbose
           echo "NOAH linter completed"
         continue-on-error: true
 
       - name: Generate and Upload Linting Report
         run: |
           echo "Generating comprehensive linting report..."
-          python3 ./script/noah-linter.py report --save --verbose
+          python3 ./tests/noah-linter.py report --save --verbose
           echo "Linting report generated"
         continue-on-error: true
 
@@ -115,7 +115,7 @@ jobs:
       - name: Run NOAH Linting Validator
         run: |
           echo "Running NOAH unified linting validator..."
-          python3 ./script/noah-linter.py report --save
+          python3 ./tests/noah-linter.py report --save
           echo "Linting report generated successfully"
         continue-on-error: true
 

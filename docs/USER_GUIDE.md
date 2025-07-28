@@ -317,7 +317,7 @@ Le nouveau CLI Python découvre automatiquement tous les scripts NOAH disponible
 #     └─ noah-deps-manager (executable)
 #
 #   linter               NOAH Linting Validator
-#     └─ noah-linter.py (python) [ROOT]
+#     └─ noah-linter.py (python) [ROOT] (now in tests/)
 #
 #   monitoring           NOAH Monitoring Management
 #     └─ noah-monitoring.py (python) [ROOT]

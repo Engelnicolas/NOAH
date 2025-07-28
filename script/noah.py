@@ -244,10 +244,10 @@ class NoahCLI:
             print(f"{Colors.GREEN}[SUCCESS] Environnement virtuel actif: {venv_path}{Colors.NC}")
 
     def _discover_scripts(self) -> Dict[str, Dict]:
-        """Discover all Python scripts in the script directory."""
+        """Discover all Python scripts in the script directory and tests directory."""
         commands = {}
         
-        # Scan for Python files
+        # Scan for Python files in script directory
         for script_path in self.script_dir.glob("noah-*.py"):
             if script_path.is_file():
                 command_name = script_path.stem.replace("noah-", "")
@@ -263,6 +263,25 @@ class NoahCLI:
                     "requires_subcommand": self._check_requires_subcommand(script_path),
                     "subcommands": self._get_script_subcommands(script_path)
                 }
+        
+        # Also scan tests directory for noah-*.py files
+        tests_dir = self.script_dir.parent / "tests"
+        if tests_dir.exists():
+            for script_path in tests_dir.glob("noah-*.py"):
+                if script_path.is_file():
+                    command_name = script_path.stem.replace("noah-", "")
+                    
+                    # Try to extract description from docstring
+                    description = self._extract_description(script_path)
+                    
+                    commands[command_name] = {
+                        "script_path": script_path,
+                        "execution_method": "python",
+                        "description": f"{description} (test/dev tool)",
+                        "requires_root": self._check_requires_root(script_path),
+                        "requires_subcommand": self._check_requires_subcommand(script_path),
+                        "subcommands": self._get_script_subcommands(script_path)
+                    }
         
         # Scan for executable scripts without .py extension
         for script_path in self.script_dir.glob("noah-*"):

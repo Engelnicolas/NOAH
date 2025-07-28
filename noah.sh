@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 
 # Variables globales
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NOAH_VERSION="2.0.0"
+NOAH_VERSION="0.2.1"
 PIPELINE_MODE="modern"
 
 # Fonctions d'affichage

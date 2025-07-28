@@ -5,7 +5,7 @@
 [![Ansible](https://img.shields.io/badge/Ansible-2.16+-red.svg)](https://www.ansible.com/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Kubernetes](https://img.shields.io/badge/Platform-Kubernetes-blueviolet.svg)](https://kubernetes.io/)
-[![Version](https://img.shields.io/badge/Version-2.0.0-green.svg)](https://github.com/Engelnicolas/NOAH/releases)
+[![Version](https://img.shields.io/badge/Version-0.2.1-green.svg)](https://github.com/Engelnicolas/NOAH/releases)
 [![Maintained](https://img.shields.io/badge/Maintained-Yes-brightgreen.svg)](https://github.com/Engelnicolas/NOAH/commits/main)
 [![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blue.svg)](https://github.com/features/actions)
 
@@ -17,9 +17,9 @@
 
 ## ✨ Vue d'ensemble
 
-**NOAH v2.0** est une plateforme d'automatisation d'infrastructure de nouvelle génération qui utilise des **pipelines CI/CD modernes** pour déployer un écosystème complet de services open-source de niveau entreprise. 
+**NOAH v0.2** est une plateforme d'automatisation d'infrastructure de nouvelle génération qui utilise des **pipelines CI/CD modernes** pour déployer un écosystème complet de services open-source de niveau entreprise. 
 
-🔥 **Nouveautés v2.0 :**
+🔥 **Nouveautés v0.2 :**
 - **Pipeline CI/CD GitHub Actions** pour déploiement automatisé
 - **Ansible + Kubespray** pour provision d'infrastructure Kubernetes
 - **Helm Charts** pour gestion applicative avancée
@@ -28,7 +28,7 @@
 
 ### 🏗️ Architecture & Composants
 
-**NOAH v2.0** déploie une infrastructure complète via **pipelines CI/CD modernes** :
+**NOAH v0.2** déploie une infrastructure complète via **pipelines CI/CD modernes** :
 
 #### 🔐 Gestion des Identités
 - **Samba4 Active Directory** : Annuaire centralisé avec authentification LDAP
@@ -152,13 +152,13 @@ Ajoutez à votre `/etc/hosts` :
 
 ---
 
-## 🛠️ CLI NOAH v2.0
+## 🛠️ CLI NOAH v0.2
 
 ### Commandes principales
 ```bash
 # Nouveau CLI moderne et rapide
 ./noah.sh --help                    # Aide complète
-./noah.sh --version                 # Version: v2.0.0
+./noah.sh --version                 # Version: v0.2.1
 
 # Gestion du déploiement
 ./noah.sh init                      # Initialiser l'environnement
@@ -331,7 +331,7 @@ kubectl delete certificate -n noah --all
 ## 📚 Documentation
 
 - **[Pipeline CI/CD](docs/PIPELINE_CI_CD.md)** : Architecture des pipelines modernes
-- **[CLI v2.0](docs/NOAH_CLI_v2.md)** : Guide complet du nouveau CLI
+- **[CLI v0.2](docs/NOAH_CLI_v2.md)** : Guide complet du nouveau CLI
 - **[Configuration domaine](docs/DOMAIN_CONFIGURATION.md)** : DNS et certificats SSL
 - **[Sécurité](docs/SECURITY.md)** : Guide de sécurisation et bonnes pratiques
 
@@ -380,7 +380,7 @@ Merci à la communauté open-source et aux mainteneurs des outils qui rendent NO
 
 <div align="center">
 
-**🎉 Félicitations ! Votre plateforme NOAH v2.0 est maintenant prête à déployer une infrastructure moderne et sécurisée !**
+**🎉 Félicitations ! Votre plateforme NOAH v0.2 est maintenant prête à déployer une infrastructure moderne et sécurisée !**
 
 *Rejoignez la révolution DevSecOps avec NOAH* 🚀
 

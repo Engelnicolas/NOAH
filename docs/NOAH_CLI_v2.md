@@ -1,8 +1,8 @@
-# NOAH CLI v2.0.0 - Guide Complet
+# NOAH CLI v0.2.1 - Guide Complet
 
 ## 🚀 **Nouveau CLI Moderne**
 
-NOAH CLI v2.0.0 marque une révolution dans la gestion de la plateforme NOAH. Fini l'ancien CLI Python complexe, place à une interface moderne, rapide et intuitive basée sur les pipelines CI/CD.
+NOAH CLI v0.2.1 marque une révolution dans la gestion de la plateforme NOAH. Fini l'ancien CLI Python complexe, place à une interface moderne, rapide et intuitive basée sur les pipelines CI/CD.
 
 ## ✨ **Fonctionnalités Principales**
 
@@ -14,7 +14,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 python script/noah.py deploy --profile prod
 
-# Nouveau CLI (v2.0) - Simple
+# Nouveau CLI (v0.2) - Simple
 noah deploy --profile prod
 ```
 
@@ -99,9 +99,9 @@ graph TB
     E --> I
 ```
 
-## 📊 **Comparaison v1.x vs v2.0**
+## 📊 **Comparaison v1.x vs v0.2**
 
-| Aspect | v1.x (Python) | v2.0 (Modern) | Amélioration |
+| Aspect | v1.x (Python) | v0.2 (Modern) | Amélioration |
 |--------|---------------|---------------|-------------|
 | **Démarrage** | 3-5 secondes | 0.1 seconde | **50x plus rapide** |
 | **Installation** | 10+ étapes | 2 étapes | **80% moins d'effort** |
@@ -249,6 +249,6 @@ noah status --help    # Options de la commande
 
 ---
 
-🎉 **Bienvenue dans l'ère NOAH 2.0 !**
+🎉 **Bienvenue dans l'ère NOAH 0.2 !**
 
 *L'automatisation réseau n'a jamais été aussi simple et puissante.*

@@ -1,4 +1,4 @@
-# 🔐 NOAH v2.0 - Guide de Sécurité
+# 🔐 NOAH v0.2 - Guide de Sécurité
 
 ## 🛡️ Architecture de Sécurité
 

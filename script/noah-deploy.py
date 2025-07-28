@@ -33,7 +33,7 @@ TECH_REQUIREMENTS_TIMEOUT = 60  # seconds
 
 
 def run_dependency_manager(verbose: bool = False) -> bool:
-    """Run noah-deps-manager to check and install Python dependencies.
+    """Run noah-deps-manager.py to check and install Python dependencies.
 
     Args:
         verbose: Enable verbose output for debugging
@@ -42,14 +42,14 @@ def run_dependency_manager(verbose: bool = False) -> bool:
         bool: True if dependencies were successfully managed, False otherwise
     """
     print(
-        f"{Color.CYAN}🔍 Vérification des dépendances Python via noah-deps-manager...{Color.RESET}"
+        f"{Color.CYAN}🔍 Vérification des dépendances Python via noah-deps-manager.py...{Color.RESET}"
     )
 
-    script_path = Path(__file__).parent / "noah-deps-manager"
+    script_path = Path(__file__).parent / "noah-deps-manager.py"
 
     if not script_path.exists():
         print(
-            f"{Color.RED}❌ Script noah-deps-manager non trouvé: {script_path}{Color.RESET}"
+            f"{Color.RED}❌ Script noah-deps-manager.py non trouvé: {script_path}{Color.RESET}"
         )
         return False
 
@@ -89,7 +89,7 @@ def run_dependency_manager(verbose: bool = False) -> bool:
         return False
     except Exception as e:
         print(
-            f"{Color.RED}❌ Erreur lors de l'exécution de noah-deps-manager: {e}{Color.RESET}"
+            f"{Color.RED}❌ Erreur lors de l'exécution de noah-deps-manager.py: {e}{Color.RESET}"
         )
         return False
 
@@ -882,7 +882,7 @@ class NoahDeployer:
             return False
 
     def run_deps_manager(self) -> bool:
-        """Run noah-deps-manager to install dependencies using the new integrated approach."""
+        """Run noah-deps-manager.py to install dependencies using the new integrated approach."""
         return run_dependency_manager(verbose=self.verbose)
 
 

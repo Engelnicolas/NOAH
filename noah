@@ -348,8 +348,8 @@ check_and_install_dependencies() {
         fi
     done
     
-    if [[ ! -f "script/noah-deps-manager" ]]; then
-        warning "Script noah-deps-manager non trouvé"
+    if [[ ! -f "script/noah-deps-manager.py" ]]; then
+        warning "Script noah-deps-manager.py non trouvé"
         if [[ "$is_help_operation" == "true" ]]; then
             info "Opération d'aide détectée, continuation avec dépendances minimales"
             return 0
@@ -373,7 +373,7 @@ check_and_install_dependencies() {
     fi
     
     # Rendre le script exécutable si nécessaire
-    chmod +x script/noah-deps-manager
+    chmod +x script/noah-deps-manager.py
     
     # Vérifier d'abord si les dépendances sont déjà installées
     info "Vérification des dépendances existantes..."
@@ -381,7 +381,7 @@ check_and_install_dependencies() {
     # Utiliser la vérification minimale pour les opérations d'aide
     if [[ "$is_help_operation" == "true" ]]; then
         info "Opération d'aide détectée - vérification minimale des dépendances"
-        if "$PYTHON_CMD" script/noah-deps-manager --help-mode; then
+        if "$PYTHON_CMD" script/noah-deps-manager.py --help-mode; then
             success "Dépendances minimales disponibles pour l'aide"
             return 0
         else
@@ -391,14 +391,14 @@ check_and_install_dependencies() {
     fi
     
     # Utiliser l'option --auto-install pour vérifier et installer uniquement ce qui manque
-    if "$PYTHON_CMD" script/noah-deps-manager --auto-install; then
+    if "$PYTHON_CMD" script/noah-deps-manager.py --auto-install; then
         success "Toutes les dépendances critiques sont installées et à jour"
         return 0
     else
         deps_exit_code=$?
         error "Échec de l'installation ou de la vérification des dépendances critiques"
         error "Code de sortie: $deps_exit_code"
-        info "Essayez manuellement: python script/noah-deps-manager --auto-install"
+        info "Essayez manuellement: python script/noah-deps-manager.py --auto-install"
         exit 1
     fi
 }

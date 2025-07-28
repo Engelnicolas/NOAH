@@ -875,7 +875,7 @@ class TechnicalRequirementsValidator:
         
         # Step 1: Ensure system tools are available
         print(f"{Colors.BOLD}Step 1: Checking system tools{Colors.END}")
-        print(f"💡 Use 'python3 script/noah-deps-manager --check-system-tools' if tools are missing")
+        print(f"💡 Use 'python3 script/noah-deps-manager.py --check-system-tools' if tools are missing")
         
         tools_check = {
             "docker": ["docker", "--version"],
@@ -904,7 +904,7 @@ class TechnicalRequirementsValidator:
         
         if not tools_available:
             print(f"\n{Colors.RED}❌ Required tools are missing. Please run:{Colors.END}")
-            print(f"   python3 script/noah-deps-manager --check-system-tools")
+            print(f"   python3 script/noah-deps-manager.py --check-system-tools")
             return
         
         print()
@@ -1135,7 +1135,7 @@ class TechnicalRequirementsValidator:
             print(f"  💡 Run with --full for comprehensive system validation")
         else:
             print(f"  {Colors.RED}⚠ Some tools are missing or not accessible{Colors.END}")
-            print(f"  💡 Use noah-deps-manager --check-system-tools for Docker/kubectl/Helm installation")
+            print(f"  💡 Use noah-deps-manager.py --check-system-tools for Docker/kubectl/Helm installation")
 
     def show_troubleshooting_help(self) -> None:
         """Show troubleshooting guidance for common issues"""
@@ -1149,7 +1149,7 @@ class TechnicalRequirementsValidator:
 
         print(f"{Colors.RED}❌ System tools (Docker/kubectl/Helm) missing{Colors.END}")
         print("   Solution: Use the dependency manager to install them")
-        print("   python3 script/noah-deps-manager --check-system-tools")
+        print("   python3 script/noah-deps-manager.py --check-system-tools")
         print()
 
         print(f"{Colors.RED}❌ kubectl: connection refused{Colors.END}")

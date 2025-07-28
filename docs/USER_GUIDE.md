@@ -312,8 +312,8 @@ Le nouveau CLI Python découvre automatiquement tous les scripts NOAH disponible
 #   deploy               NOAH - Next Open-source Architecture Hub Deployment Script (Fixed Version)
 #     └─ noah-deploy.py (python) [ROOT]
 #
-#   deps-manager         Script exécutable: noah-deps-manager
-#     └─ noah-deps-manager (executable)
+#   deps-manager         Script exécutable: noah-deps-manager.py
+#     └─ noah-deps-manager.py (executable)
 #
 #   linter               NOAH Linting Validator
 #     └─ noah-linter.py (python) [ROOT] (now in tests/)

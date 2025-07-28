@@ -197,11 +197,11 @@ def install_requirements_if_missing():
         return False
 
     # Check if deps-manager exists and use it
-    deps_manager = script_dir / "noah-deps-manager"
+    deps_manager = script_dir / "noah-deps-manager.py"
     if deps_manager.exists() and os.access(deps_manager, os.X_OK):
         try:
             print(
-                f"{Colors.BLUE}[INFO] Vérification des dépendances avec noah-deps-manager...{Colors.NC}"
+                f"{Colors.BLUE}[INFO] Vérification des dépendances avec noah-deps-manager.py...{Colors.NC}"
             )
             result = subprocess.run(
                 [sys.executable, str(deps_manager), '--auto-install'],
@@ -216,11 +216,11 @@ def install_requirements_if_missing():
                 return True
             else:
                 print(
-                    f"{Colors.YELLOW}[WARNING] noah-deps-manager a signalé des problèmes{Colors.NC}"
+                    f"{Colors.YELLOW}[WARNING] noah-deps-manager.py a signalé des problèmes{Colors.NC}"
                 )
         except Exception as e:
             print(
-                f"{Colors.YELLOW}[WARNING] Erreur avec noah-deps-manager: {e}{Colors.NC}"
+                f"{Colors.YELLOW}[WARNING] Erreur avec noah-deps-manager.py: {e}{Colors.NC}"
             )
 
     # Fallback: install directly from requirements.txt

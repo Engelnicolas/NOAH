@@ -1199,37 +1199,6 @@ class DependencyManager:
             self.log(f"❌ Helm installation failed: {output}", "ERROR")
             return False
 
-    def run_command(self, command, shell: bool = False, timeout: int = 120) -> Tuple[bool, str]:
-        """Run a system command and return success status and output"""
-        try:
-            if isinstance(command, str) and shell:
-                result = subprocess.run(
-                    command,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout
-                )
-            elif isinstance(command, list):
-                result = subprocess.run(
-                    command,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout
-                )
-            else:
-                return False, "Invalid command format"
-            
-            output = result.stdout + result.stderr
-            return result.returncode == 0, output.strip()
-            
-        except subprocess.TimeoutExpired:
-            return False, f"Command timed out after {timeout} seconds"
-        except FileNotFoundError:
-            return False, "Command not found"
-        except Exception as e:
-            return False, str(e)
-
     def _compare_versions(self, version1: str, version2: str) -> int:
         """Compare semantic versions"""
         def normalize(v):
@@ -1353,7 +1322,7 @@ def main():
         if not manager.auto_install_missing_dependencies():
             # In auto-install mode, be more graceful - warn instead of failing completely
             manager.log("Some dependencies may be missing but continuing with available ones...", "WARNING")
-            manager.log("Use 'python script/noah-deps-manager --auto-install --graceful' for strict checking", "INFO")
+            manager.log("Use 'python script/noah-deps-manager.py --auto-install --graceful' for strict checking", "INFO")
         manager.log("Auto-installation completed", "SUCCESS")
         sys.exit(0)
     

@@ -1,89 +1,78 @@
-# 🔐 NOAH v0.2 - Guide de Sécurité
+# 🔐 NOAH v0.2.1 - Security Guide
 
-## 🛡️ Architecture de Sécurité
+## 🛡️ Security Architecture
 
-### Authentification & Autorisation
-- **Keycloak** : Fournisseur d'identité centralisé avec SSO/SAML/OIDC
-- **OAuth2 Proxy** : Proxy d'authentification pour protection des services
-- **RBAC Kubernetes** : Contrôles d'accès granulaires
+### Authentication & Authorization
+- **Keycloak**: Centralized identity provider with SSO/SAML/OIDC
+- **OAuth2 Proxy**: Authentication proxy for service protection
+- **Kubernetes RBAC**: Granular access controls
 
-### Sécurité Réseau
-- **TLS/SSL** : Chiffrement automatique avec cert-manager
-- **Network Policies** : Segmentation réseau native Kubernetes
-- **Ingress Controller** : Terminaison TLS et routage sécurisé
+### Network Security
+- **TLS/SSL**: Automatic encryption with cert-manager
+- **Network Policies**: Native Kubernetes network segmentation
+- **Ingress Controller**: TLS termination and secure routing
 
-### Sécurité des Données
-- **Ansible Vault** : Chiffrement des secrets et configurations
-- **Secrets Kubernetes** : Gestion sécurisée des credentials
-- **Volumes chiffrés** : Stockage persistant sécurisé
+### Data Security
+- **Ansible Vault**: Encryption of secrets and configurations
+- **Kubernetes Secrets**: Secure credential management
+- **Encrypted Volumes**: Secure persistent storage
 
-## � Comptes par Défaut
+## 🔑 Default Accounts
 
-⚠️ **IMPORTANT** : Changez ces mots de passe après le déploiement !
+⚠️ **IMPORTANT**: Change these passwords after deployment!
 
-| Service | Utilisateur | Mot de passe par défaut |
-|---------|-------------|-------------------------|
+| Service | Username | Default Password |
+|---------|----------|------------------|
 | Keycloak | `admin` | `Keycl0ak_Admin_789!Strong` |
 | GitLab | `root` | `GitL@b_Root_Password_012!` |
 | Nextcloud | `admin` | `N3xtcloud_Admin_345!Safe` |
 | Grafana | `admin` | `Gr@fana_Monitoring_678!View` |
 
-## 🔧 Configuration Sécurisée
+## 🔧 Secure Configuration
 
-### Changer les mots de passe
+### Change Passwords
 ```bash
-# Décrypter et éditer les secrets
+# Decrypt and edit secrets
 ansible-vault edit ansible/vars/secrets.yml --vault-password-file ansible/.vault_pass
 
-# Ou via le CLI
-./noah.sh configure --secrets
+# Or via CLI
+./noah configure --secrets
 ```
 
-### Configurer HTTPS
+### Configure HTTPS
 ```bash
-# Les certificats SSL sont automatiquement gérés par cert-manager
-# Pour domaines personnalisés, éditer :
+# SSL certificates are automatically managed by cert-manager
+# For custom domains, edit:
 nano helm/noah-common/values.yaml
 ```
 
-### Audit et Logs
+### Audit and Logging
 ```bash
-# Consulter les logs de sécurité
+# View security logs
 kubectl logs -n noah -l app=keycloak
 kubectl logs -n kube-system -l app=audit-policy-controller
 ```
 
-## 🚨 Bonnes Pratiques
+## 🚨 Best Practices
 
-1. **Mots de passe** : Changez tous les mots de passe par défaut
-2. **Réseau** : Utilisez des Network Policies pour isoler les services
-3. **Accès** : Configurez RBAC Kubernetes approprié
-4. **Monitoring** : Surveillez les logs d'authentification
-5. **Mises à jour** : Maintenez les composants à jour
+1. **Passwords**: Change all default passwords
+2. **Network**: Use Network Policies to isolate services
+3. **Access**: Configure appropriate Kubernetes RBAC
+4. **Monitoring**: Monitor authentication logs
+5. **Updates**: Keep components up to date
 
-## 🔍 Vérification de Sécurité
+## 🔍 Security Verification
 
 ```bash
-# Vérifier la configuration TLS
-./noah.sh test --security
+# Verify TLS configuration
+./noah test --security
 
-# Audit des permissions
+# Audit permissions
 kubectl auth can-i --list
 
-# État des certificats
+# Certificate status
 kubectl get certificates -n noah
 ```
-
-⚠️ **Important**: Change all default passwords before production deployment.
-
-### Keycloak Admin
-- **Username**: `admin`
-- **Password**: `noah-admin-2024`
-- **URL**: `https://keycloak.noah.local/admin`
-
-### Database Access
-- **PostgreSQL**: Auto-generated passwords stored in Kubernetes secrets
-- **Redis**: Authentication via secret keys
 
 ## 🔒 Security Features
 

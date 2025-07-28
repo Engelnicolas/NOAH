@@ -1,68 +1,67 @@
-# NOAH CLI v0.2.1 - Guide Complet
+# NOAH CLI v0.2.1 - Complete Guide
 
-## ✨ **Fonctionnalités Principales**
+## ✨ **Main Features**
 
-
-### 🎯 **Commandes**
+### 🎯 **Commands**
 ```bash
-noah init              # Initialiser l'environnement
-noah configure --auto  # Configuration automatique
-noah deploy            # Déploiement complet
-noah status            # État du système
-noah logs --service gitlab  # Logs spécifiques
-noah validate          # Validation complète
-noah test              # Tests de connectivité
-noah dashboard         # Ouvrir Grafana
+noah init              # Initialize environment
+noah configure --auto  # Automatic configuration
+noah deploy            # Complete deployment
+noah status            # System status
+noah logs --service gitlab  # Specific logs
+noah validate          # Complete validation
+noah test              # Connectivity tests
+noah dashboard         # Open Grafana
 ```
 
-## 📋 **Guide de Démarrage Rapide**
+## 📋 **Quick Start Guide**
 
-### 1. **Initialisation (1ère fois)**
+### 1. **Initialization (first time)**
 ```bash
-# Cloner le projet
+# Clone the project
 git clone https://github.com/Engelnicolas/NOAH.git
 cd NOAH
 
-# Initialiser l'environnement
+# Initialize environment
 ./noah init
 
-# Configuration automatique
+# Automatic configuration
 ./noah configure --auto
 ```
 
-### 2. **Configuration des Secrets GitHub**
+### 2. **GitHub Secrets Configuration**
 ```bash
-# Générer des clés SSH pour le déploiement
+# Generate SSH keys for deployment
 ./script/generate-ssh-keys.sh
 
-# Configurer les secrets dans GitHub Actions :
-# - SSH_PRIVATE_KEY : Clé privée affichée
-# - ANSIBLE_VAULT_PASSWORD : Mot de passe Vault
-# - MASTER_HOST : IP du serveur master
+# Configure secrets in GitHub Actions:
+# - SSH_PRIVATE_KEY: Displayed private key
+# - ANSIBLE_VAULT_PASSWORD: Vault password
+# - MASTER_HOST: Master server IP
 ```
 
-### 3. **Déploiement**
+### 3. **Deployment**
 ```bash
-# Déploiement local
+# Local deployment
 ./noah deploy --profile prod
 
-# Ou via GitHub Actions (recommandé)
-git push origin Ansible  # Déclenche le pipeline automatique
+# Or via GitHub Actions (recommended)
+git push origin Ansible  # Triggers automatic pipeline
 ```
 
-### 4. **Monitoring et Gestion**
+### 4. **Monitoring and Management**
 ```bash
-# Vérifier l'état
+# Check status
 ./noah status --detailed
 
-# Voir les logs
+# View logs
 ./noah logs --follow
 
-# Accéder au dashboard
+# Access dashboard
 ./noah dashboard
 ```
 
-## 🏗️ **Architecture Moderne**
+## 🏗️ **Modern Architecture**
 
 ```mermaid
 graph TB
@@ -71,50 +70,50 @@ graph TB
     B --> D[Helm Charts]
     C --> E[Kubernetes Cluster]
     D --> E
-    E --> F[Applications NOAH]
+    E --> F[NOAH Applications]
     
     G[GitHub Actions] --> B
     H[Monitoring] --> I[Grafana/Prometheus]
     E --> I
 ```
 
-## 📊 **Comparaison v1.x vs v0.2**
+## 📊 **Comparison v1.x vs v0.2**
 
-| Aspect | v1.x (Python) | v0.2 (Modern) | Amélioration |
+| Aspect | v1.x (Python) | v0.2 (Modern) | Improvement |
 |--------|---------------|---------------|-------------|
-| **Démarrage** | 3-5 secondes | 0.1 seconde | **50x plus rapide** |
-| **Installation** | 10+ étapes | 2 étapes | **80% moins d'effort** |
-| **Maintenance** | Complexe | Automatique | **90% moins de travail** |
-| **Monitoring** | Basique | Grafana/Prometheus | **Monitoring professionnel** |
-| **CI/CD** | Manuel | GitHub Actions | **Déploiement automatique** |
-| **Scalabilité** | Limitée | Kubernetes | **Production-ready** |
+| **Startup** | 3-5 seconds | 0.1 second | **50x faster** |
+| **Installation** | 10+ steps | 2 steps | **80% less effort** |
+| **Maintenance** | Complex | Automatic | **90% less work** |
+| **Monitoring** | Basic | Grafana/Prometheus | **Professional monitoring** |
+| **CI/CD** | Manual | GitHub Actions | **Automatic deployment** |
+| **Scalability** | Limited | Kubernetes | **Production-ready** |
 
-## 🎯 **Cas d'Usage Principaux**
+## 🎯 **Main Use Cases**
 
-### 🏢 **Environnement d'Entreprise**
+### 🏢 **Enterprise Environment**
 ```bash
-# Configuration pour production
+# Production configuration
 noah configure
-# Personnaliser les IPs et domaines
+# Customize IPs and domains
 noah deploy --profile prod
-# Monitoring automatique
+# Automatic monitoring
 noah health --all
 ```
 
-### 🧪 **Développement et Tests**
+### 🧪 **Development and Testing**
 ```bash
-# Configuration rapide pour dev
+# Quick dev configuration
 noah configure --auto
 noah deploy --dry-run  # Simulation
-noah test              # Tests automatiques
-noah validate          # Vérification
+noah test              # Automatic tests
+noah validate          # Verification
 ```
 
-### 🔧 **Maintenance Opérationnelle**
+### 🔧 **Operational Maintenance**
 ```bash
-# Gestion des services
-noah stop              # Arrêt propre
-noah start             # Redémarrage
+# Service management
+noah stop              # Clean shutdown
+noah start             # Restart
 noah logs --service keycloak  # Debug
 
 # Monitoring
@@ -122,101 +121,101 @@ noah status --detailed
 noah dashboard         # Grafana
 ```
 
-## 🛠️ **Personnalisation Avancée**
+## 🛠️ **Advanced Customization**
 
-### Configuration des Domaines
+### Domain Configuration
 ```bash
-# Éditer la configuration
+# Edit configuration
 nano values/values-prod.yaml
 
-# Changer de noah.local vers votre domaine
+# Change from noah.local to your domain
 global:
   domain: noah.mycompany.com
 ```
 
-### Gestion des Secrets
+### Secrets Management
 ```bash
-# Éditer les secrets chiffrés
+# Edit encrypted secrets
 ansible-vault edit ansible/vars/secrets.yml
 ```
 
-### Adaptation des Resources
+### Resource Adaptation
 ```bash
-# Modifier les ressources Kubernetes
+# Modify Kubernetes resources
 nano values/values-prod.yaml
 
-# Ajuster CPU/RAM selon vos besoins
+# Adjust CPU/RAM according to your needs
 resources:
   requests:
     memory: "1Gi"
     cpu: "500m"
 ```
 
-## 🔍 **Dépannage**
+## 🔍 **Troubleshooting**
 
-### Problèmes Courants
+### Common Issues
 
 #### "Command not found"
 ```bash
 chmod +x noah.sh noah
-ls -la noah*  # Vérifier les permissions
+ls -la noah*  # Check permissions
 ```
 
 #### "Ansible not found"
 ```bash
 sudo apt install ansible
-# ou
+# or
 pip3 install ansible
 ```
 
 #### "Connection refused" 
 ```bash
-noah test              # Tester la connectivité
-noah validate          # Vérifier la config
-ssh-copy-id ubuntu@IP_SERVER  # Déployer les clés
+noah test              # Test connectivity
+noah validate          # Verify config
+ssh-copy-id ubuntu@SERVER_IP  # Deploy keys
 ```
 
-#### Applications inaccessibles
+#### Inaccessible applications
 ```bash
-noah status            # Vérifier les pods
-kubectl get ingress -n noah  # Vérifier l'ingress
-# Ajouter au /etc/hosts si domaines .local
+noah status            # Check pods
+kubectl get ingress -n noah  # Check ingress
+# Add to /etc/hosts if .local domains
 ```
 
-### Logs de Debug
+### Debug Logs
 ```bash
-# Logs détaillés
+# Detailed logs
 noah logs --service gitlab --follow
 
-# Mode verbose
+# Verbose mode
 noah --verbose deploy
 
-# Vérification complète
+# Complete verification
 noah health --detailed
 ```
 
-## 🤝 **Contribution**
+## 🤝 **Contributing**
 
 ```bash
-# Développement
-git checkout -b feature/nouvelle-fonctionnalite
-noah validate          # Tests avant commit
+# Development
+git checkout -b feature/new-feature
+noah validate          # Tests before commit
 git commit -m "Add new feature"
-git push origin feature/nouvelle-fonctionnalite
+git push origin feature/new-feature
 ```
 
 ## 📞 **Support**
 
-### Aide Contextuelle
+### Contextual Help
 ```bash
-noah --help           # Aide générale
-noah deploy --help    # Aide spécifique
-noah status --help    # Options de la commande
+noah --help           # General help
+noah deploy --help    # Specific help
+noah status --help    # Command options
 ```
 
-### Ressources
-- **GitHub Issues** : [Signaler un problème](https://github.com/Engelnicolas/NOAH/issues)
-- **Discussions** : [Forum communautaire](https://github.com/Engelnicolas/NOAH/discussions)
-- **Wiki** : [Documentation détaillée](https://github.com/Engelnicolas/NOAH/wiki)
+### Resources
+- **GitHub Issues**: [Report an issue](https://github.com/Engelnicolas/NOAH/issues)
+- **Discussions**: [Community forum](https://github.com/Engelnicolas/NOAH/discussions)
+- **Wiki**: [Detailed documentation](https://github.com/Engelnicolas/NOAH/wiki)
 
 ---

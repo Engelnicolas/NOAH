@@ -1,6 +1,5 @@
 #!/bin/bash
 # NOAH CLI - Interface pour les pipelines CI/CD modernes
-# Ce script remplace l'ancien CLI Python par une interface pour les pipelines Ansible/Helm/Kubernetes
 
 set -e
 

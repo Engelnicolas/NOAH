@@ -1,14 +1,14 @@
-# Configuration des domaines pour NOAH
-# Ce fichier vous aide à configurer vos domaines selon votre environnement
+# Domain Configuration for NOAH
+# This file helps you configure your domains according to your environment
 
-## 🏠 Configuration pour environnement local/développement
+## 🏠 Local/Development Environment Configuration
 
-### Option 1 : Domaines .local (recommandé pour dev)
+### Option 1: .local domains (recommended for dev)
 ```yaml
 global:
   domain: noah.local
   
-# Applications accessibles via :
+# Applications accessible via:
 # - https://keycloak.noah.local
 # - https://gitlab.noah.local  
 # - https://nextcloud.noah.local
@@ -16,32 +16,32 @@ global:
 # - https://grafana.noah.local
 ```
 
-### Option 2 : Domaines avec IP (pour tests rapides)
+### Option 2: IP-based domains (for quick testing)
 ```yaml
 global:
-  domain: 192-168-1-100.nip.io    # Remplacez 192-168-1-100 par votre IP d'ingress
+  domain: 192-168-1-100.nip.io    # Replace 192-168-1-100 with your ingress IP
   
-# Applications accessibles via :
+# Applications accessible via:
 # - https://keycloak.192-168-1-100.nip.io
 # - https://gitlab.192-168-1-100.nip.io
 ```
 
-## 🌐 Configuration pour environnement de production
+## 🌐 Production Environment Configuration
 
-### Option 3 : Domaine d'entreprise
+### Option 3: Corporate domain
 ```yaml
 global:
   domain: noah.mycompany.com
   
-# Applications accessibles via :
+# Applications accessible via:
 # - https://keycloak.noah.mycompany.com
 # - https://gitlab.noah.mycompany.com
 # - https://nextcloud.noah.mycompany.com
 ```
 
-### Option 4 : Sous-domaines séparés
+### Option 4: Separate subdomains
 ```yaml
-# Dans ce cas, configurez chaque service individuellement :
+# In this case, configure each service individually:
 keycloak:
   ingress:
     hostname: auth.mycompany.com
@@ -57,12 +57,12 @@ nextcloud:
     host: files.mycompany.com
 ```
 
-## 🔧 Configuration DNS requise
+## 🔧 Required DNS Configuration
 
-### Pour domaines .local (développement)
-Ajoutez à votre /etc/hosts :
+### For .local domains (development)
+Add to your /etc/hosts:
 ```bash
-# Remplacez INGRESS_IP par l'IP de votre ingress controller
+# Replace INGRESS_IP with your ingress controller IP
 INGRESS_IP keycloak.noah.local
 INGRESS_IP gitlab.noah.local
 INGRESS_IP nextcloud.noah.local
@@ -70,60 +70,60 @@ INGRESS_IP mattermost.noah.local
 INGRESS_IP grafana.noah.local
 ```
 
-### Pour domaines publics (production)
-Configurez vos enregistrements DNS :
+### For public domains (production)
+Configure your DNS records:
 ```
-Type  | Nom                    | Valeur
+Type  | Name                   | Value
 ------|------------------------|------------------
-A     | keycloak.noah.company  | IP_INGRESS
-A     | gitlab.noah.company    | IP_INGRESS
-A     | nextcloud.noah.company | IP_INGRESS
-A     | mattermost.noah.company| IP_INGRESS
-A     | grafana.noah.company   | IP_INGRESS
+A     | keycloak.noah.company  | INGRESS_IP
+A     | gitlab.noah.company    | INGRESS_IP
+A     | nextcloud.noah.company | INGRESS_IP
+A     | mattermost.noah.company| INGRESS_IP
+A     | grafana.noah.company   | INGRESS_IP
 ```
 
-## 🔐 Configuration SSL/TLS
+## 🔐 SSL/TLS Configuration
 
-### Let's Encrypt automatique (recommandé)
+### Automatic Let's Encrypt (recommended)
 ```yaml
-# Déjà configuré dans values-prod.yaml
+# Already configured in values-prod.yaml
 annotations:
   cert-manager.io/cluster-issuer: letsencrypt-prod
 ```
 
-### Certificats personnalisés
+### Custom certificates
 ```yaml
-# Stockez vos certificats dans Ansible Vault (secrets.yml)
+# Store your certificates in Ansible Vault (secrets.yml)
 vault_tls_cert: |
   -----BEGIN CERTIFICATE-----
-  Votre certificat SSL ici
+  Your SSL certificate here
   -----END CERTIFICATE-----
   
 vault_tls_key: |
   -----BEGIN PRIVATE KEY-----
-  Votre clé privée SSL ici  
+  Your SSL private key here  
   -----END PRIVATE KEY-----
 ```
 
-## 🚀 Script de configuration rapide
+## 🚀 Quick Configuration Script
 
-Pour configurer automatiquement vos domaines :
+To automatically configure your domains:
 
 ```bash
 #!/bin/bash
-# Configuration rapide des domaines NOAH
+# NOAH domains quick configuration
 
-DOMAIN="noah.local"                    # 🔧 Changez selon vos besoins
-INGRESS_IP="192.168.1.100"            # 🔧 IP de votre ingress controller
+DOMAIN="noah.local"                    # 🔧 Change according to your needs
+INGRESS_IP="192.168.1.100"            # 🔧 Your ingress controller IP
 
-echo "Configuration des domaines pour $DOMAIN..."
+echo "Configuring domains for $DOMAIN..."
 
-# Mise à jour du fichier values
+# Update values file
 sed -i "s/domain: noah.local/domain: $DOMAIN/g" values/values-prod.yaml
 
-# Mise à jour du /etc/hosts pour dev local
+# Update /etc/hosts for local dev
 if [[ "$DOMAIN" == *.local ]]; then
-    echo "Ajout des entrées DNS locales..."
+    echo "Adding local DNS entries..."
     sudo tee -a /etc/hosts << EOF
 $INGRESS_IP keycloak.$DOMAIN
 $INGRESS_IP gitlab.$DOMAIN
@@ -133,5 +133,5 @@ $INGRESS_IP grafana.$DOMAIN
 EOF
 fi
 
-echo "✅ Configuration terminée pour $DOMAIN"
+echo "✅ Configuration completed for $DOMAIN"
 ```

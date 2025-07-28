@@ -1,161 +1,160 @@
-# Pipeline CI/CD NO3. **Initialisation**
-   ```bash
-   ./script/setup-pipeline.sh
-   ```Ce document décrit le pipeline CI/CD automatisé pour le projet NOAH, basé sur Ansible, Kubespray, Helm et GitHub Actions.
+# NOAH CI/CD Pipeline
+
+This document describes the automated CI/CD pipeline for the NOAH project, based on Ansible, Kubespray, Helm, and GitHub Actions.
 
 ## 🏗️ Architecture
 
 ```
-GitHub Actions (Orchestrateur)
+GitHub Actions (Orchestrator)
 ├── Ansible (Infrastructure & Config)
 │   ├── Provision VMs (01-provision.yml)
 │   ├── Install Kubernetes via Kubespray (02-install-k8s.yml)  
 │   ├── Configure Cluster (03-configure-cluster.yml)
 │   └── Deploy Apps via Helm (04-deploy-apps.yml)
-└── Helm (Déploiement applicatif)
-    └── noah-chart (Chart principal)
+└── Helm (Application Deployment)
+    └── noah-chart (Main Chart)
 ```
 
-## 🚀 Démarrage rapide
+## 🚀 Quick Start
 
-1. **Initialiser l'environnement**
+1. **Initialize environment**
    ```bash
-   ./setup-pipeline.sh
+   ./script/setup-pipeline.sh
    ```
 
-2. **Configurer les secrets GitHub**
-   - `SSH_PRIVATE_KEY` : Clé privée SSH pour accéder aux serveurs
-   - `ANSIBLE_VAULT_PASSWORD` : Mot de passe pour décrypter les secrets Ansible
-   - `MASTER_HOST` : IP du serveur master pour la configuration SSH
+2. **Configure GitHub secrets**
+   - `SSH_PRIVATE_KEY`: SSH private key to access servers
+   - `ANSIBLE_VAULT_PASSWORD`: Password to decrypt Ansible secrets
+   - `MASTER_HOST`: Master server IP for SSH configuration
 
-3. **Personnaliser la configuration**
-   - Modifier `ansible/inventory/mycluster/hosts.yaml` avec vos IPs
-   - Ajuster `values/values-prod.yaml` selon vos besoins
-   - Mettre à jour `ansible/vars/secrets.yml` avec vos secrets
+3. **Customize configuration**
+   - Modify `ansible/inventory/mycluster/hosts.yaml` with your IPs
+   - Adjust `values/values-prod.yaml` according to your needs
+   - Update `ansible/vars/secrets.yml` with your secrets
 
-4. **Déclencher le déploiement**
+4. **Trigger deployment**
    ```bash
    git push origin Ansible
    ```
 
-## 📁 Structure des fichiers
+## 📁 File Structure
 
 ```
 .
-├── .github/workflows/deploy.yml     # Workflow GitHub Actions
+├── .github/workflows/deploy.yml     # GitHub Actions workflow
 ├── ansible/
-│   ├── ansible.cfg                  # Configuration Ansible
-│   ├── requirements.yml             # Collections Ansible requises
+│   ├── ansible.cfg                  # Ansible configuration
+│   ├── requirements.yml             # Required Ansible collections
 │   ├── inventory/mycluster/
-│   │   └── hosts.yaml              # Inventaire des serveurs
-│   ├── kubespray/                  # Submodule Kubespray (auto-cloné)
+│   │   └── hosts.yaml              # Server inventory
+│   ├── kubespray/                  # Kubespray submodule (auto-cloned)
 │   ├── playbooks/
-│   │   ├── 01-provision.yml        # Provision infrastructure
-│   │   ├── 02-install-k8s.yml      # Installation Kubernetes
-│   │   ├── 03-configure-cluster.yml # Configuration cluster
-│   │   ├── 04-deploy-apps.yml      # Déploiement applications
-│   │   ├── 05-verify-deployment.yml # Vérification déploiement
-│   │   └── 99-cleanup.yml          # Nettoyage en cas d'échec
+│   │   ├── 01-provision.yml        # Infrastructure provisioning
+│   │   ├── 02-install-k8s.yml      # Kubernetes installation
+│   │   ├── 03-configure-cluster.yml # Cluster configuration
+│   │   ├── 04-deploy-apps.yml      # Application deployment
+│   │   ├── 05-verify-deployment.yml # Deployment verification
+│   │   └── 99-cleanup.yml          # Cleanup on failure
 │   ├── templates/
-│   │   ├── k8s-cluster.yml.j2      # Template config Kubespray
-│   │   └── deployment_report.j2    # Template rapport déploiement
+│   │   ├── k8s-cluster.yml.j2      # Kubespray config template
+│   │   └── deployment_report.j2    # Deployment report template
 │   └── vars/
-│       ├── global.yml              # Variables globales
-│       └── secrets.yml             # Secrets (chiffrés avec Vault)
+│       ├── global.yml              # Global variables
+│       └── secrets.yml             # Secrets (encrypted with Vault)
 ├── helm/noah-chart/
-│   ├── Chart.yaml                  # Chart Helm principal
-│   └── templates/                  # Templates Kubernetes
+│   ├── Chart.yaml                  # Main Helm chart
+│   └── templates/                  # Kubernetes templates
 ├── script/
-│   ├── setup-pipeline.sh           # Script d'initialisation
+│   ├── setup-pipeline.sh           # Initialization script
 │   ├── configure-pipeline.sh       # Configuration
-│   └── generate-ssh-keys.sh        # Génération clés SSH
+│   └── generate-ssh-keys.sh        # SSH key generation
 └── values/
-    └── values-prod.yaml            # Configuration production
+    └── values-prod.yaml            # Production configuration
 ```
 
-## 🔄 Workflow de déploiement
+## 🔄 Deployment Workflow
 
-### 1. Provision de l'infrastructure
-- Création des VMs sur le cloud provider
-- Configuration réseau et sécurité
-- Attribution des rôles master/worker
+### 1. Infrastructure Provisioning
+- VM creation on cloud provider
+- Network and security configuration
+- Master/worker role assignment
 
-### 2. Installation Kubernetes
-- Préparation des nœuds (packages, kernel modules, etc.)
-- Utilisation de Kubespray pour installer K8s
-- Configuration du réseau avec Calico
-- Récupération du kubeconfig
+### 2. Kubernetes Installation
+- Node preparation (packages, kernel modules, etc.)
+- Using Kubespray to install K8s
+- Network configuration with Calico
+- Kubeconfig retrieval
 
-### 3. Configuration du cluster
-- Installation de Helm
-- Déploiement d'un ingress controller (NGINX)
-- Configuration du monitoring (Prometheus/Grafana)
-- Création des namespaces et secrets
+### 3. Cluster Configuration
+- Helm installation
+- Ingress controller deployment (NGINX)
+- Monitoring setup (Prometheus/Grafana)
+- Namespaces and secrets creation
 
-### 4. Déploiement des applications
-- PostgreSQL (base de données partagée)
-- Keycloak (authentification SSO)
-- GitLab (gestion de code)
-- Nextcloud (stockage et collaboration)
-- Mattermost (messagerie)
+### 4. Application Deployment
+- PostgreSQL (shared database)
+- Keycloak (SSO authentication)
+- GitLab (code management)
+- Nextcloud (storage and collaboration)
+- Mattermost (messaging)
 - Grafana & Prometheus (monitoring)
-- Wazuh & OpenEDR (sécurité)
-- OAuth2 Proxy (reverse proxy avec auth)
+- Wazuh & OpenEDR (security)
+- OAuth2 Proxy (reverse proxy with auth)
 
-### 5. Vérification
-- Tests de connectivité
-- Vérification de l'état des pods
-- Génération d'un rapport de déploiement
+### 5. Verification
+- Connectivity tests
+- Pod status verification
+- Deployment report generation
 
-## 🔐 Gestion des secrets
+## 🔐 Secrets Management
 
-Les secrets sont gérés avec Ansible Vault :
+Secrets are managed with Ansible Vault:
 
 ```bash
-# Chiffrer le fichier de secrets
+# Encrypt secrets file
 ansible-vault encrypt ansible/vars/secrets.yml
 
-# Éditer les secrets
+# Edit secrets
 ansible-vault edit ansible/vars/secrets.yml
 
-# Décrypter temporairement
+# Temporarily decrypt
 ansible-vault decrypt ansible/vars/secrets.yml
 ```
 
-## 🛠️ Personnalisation
+## 🛠️ Customization
 
-### Ajouter une nouvelle application
+### Adding a New Application
 
-1. Créer un nouveau chart Helm dans `helm/`
-2. Ajouter la configuration dans `values/values-prod.yaml`
-3. Intégrer le déploiement dans `ansible/playbooks/04-deploy-apps.yml`
+1. Create a new Helm chart in `helm/`
+2. Add configuration in `values/values-prod.yaml`
+3. Integrate deployment in `ansible/playbooks/04-deploy-apps.yml`
 
-### Modifier la configuration Kubernetes
+### Modifying Kubernetes Configuration
 
-1. Ajuster les variables dans `ansible/vars/global.yml`
-2. Modifier le template `ansible/templates/k8s-cluster.yml.j2`
-3. Mettre à jour l'inventaire `ansible/inventory/mycluster/hosts.yaml`
+1. Adjust variables in `ansible/vars/global.yml`
+2. Modify template `ansible/templates/k8s-cluster.yml.j2`
+3. Update inventory `ansible/inventory/mycluster/hosts.yaml`
 
-### Changer le provider cloud
+### Changing Cloud Provider
 
-1. Adapter les tâches dans `ansible/playbooks/01-provision.yml`
-2. Ajouter les modules Ansible spécifiques au provider
-3. Mettre à jour les variables de configuration
+1. Adapt tasks in `ansible/playbooks/01-provision.yml`
+2. Add provider-specific Ansible modules
+3. Update configuration variables
 
-## 🔍 Dépannage
+## 🔍 Troubleshooting
 
-### Vérifier les logs du workflow
+### Check Workflow Logs
 ```bash
-# Via l'interface GitHub Actions
+# Via GitHub Actions interface
 https://github.com/Engelnicolas/NOAH/actions
 
-# Ou localement
+# Or locally
 ansible-playbook ansible/playbooks/05-verify-deployment.yml -i ansible/inventory/mycluster/hosts.yaml
 ```
 
-### Accéder aux applications
+### Access Applications
 ```bash
-# Après déploiement, configurer /etc/hosts ou DNS
+# After deployment, configure /etc/hosts or DNS
 echo "INGRESS_IP keycloak.noah.local" >> /etc/hosts
 echo "INGRESS_IP gitlab.noah.local" >> /etc/hosts
 echo "INGRESS_IP nextcloud.noah.local" >> /etc/hosts
@@ -163,43 +162,43 @@ echo "INGRESS_IP mattermost.noah.local" >> /etc/hosts
 echo "INGRESS_IP grafana.noah.local" >> /etc/hosts
 ```
 
-### Rollback en cas de problème
+### Rollback on Issues
 ```bash
-# Rollback Helm
+# Helm rollback
 helm rollback <release-name> <revision> -n noah
 
-# Ou via Ansible
+# Or via Ansible
 ansible-playbook ansible/playbooks/99-cleanup.yml -i ansible/inventory/mycluster/hosts.yaml
 ```
 
 ## 📊 Monitoring
 
-Le pipeline déploie automatiquement :
-- **Prometheus** : Collecte des métriques
-- **Grafana** : Visualisation des métriques
-- **AlertManager** : Gestion des alertes
+The pipeline automatically deploys:
+- **Prometheus**: Metrics collection
+- **Grafana**: Metrics visualization
+- **AlertManager**: Alert management
 
-Accès : https://grafana.noah.local (admin/mot_de_passe_configuré)
+Access: https://grafana.noah.local (admin/configured_password)
 
-## 🔒 Sécurité
+## 🔒 Security
 
-- Tous les secrets sont chiffrés avec Ansible Vault
-- Communications TLS entre les composants
-- RBAC Kubernetes configuré
-- Ingress avec authentification OAuth2
-- Monitoring de sécurité avec Wazuh
+- All secrets encrypted with Ansible Vault
+- TLS communications between components
+- Kubernetes RBAC configured
+- Ingress with OAuth2 authentication
+- Security monitoring with Wazuh
 
-## 🤝 Contribution
+## 🤝 Contributing
 
-1. Créer une branche pour vos modifications
-2. Tester localement avec `ansible-playbook --check`
-3. Pousser et créer une Pull Request
-4. Le pipeline s'exécute automatiquement sur merge
+1. Create a branch for your changes
+2. Test locally with `ansible-playbook --check`
+3. Push and create a Pull Request
+4. Pipeline runs automatically on merge
 
 ## 📞 Support
 
-En cas de problème :
-1. Consulter les logs GitHub Actions
-2. Vérifier le rapport de déploiement généré
-3. Examiner les logs des pods Kubernetes
-4. Contacter l'équipe NOAH
+In case of issues:
+1. Check GitHub Actions logs
+2. Verify generated deployment report
+3. Examine Kubernetes pod logs
+4. Contact NOAH team

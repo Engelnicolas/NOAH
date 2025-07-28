@@ -77,7 +77,7 @@ spec:
               app.kubernetes.io/name: postgresql
       ports:
         - protocol: TCP
-          port: {{ .Values.postgresql.primary.service.ports.postgresql | default 5432 }}
+          port: {{ .Values.postgresql.port | default 5432 }}
     {{- else if .Values.externalDatabase.host }}
     - to: []
       ports:
@@ -92,7 +92,7 @@ spec:
               app.kubernetes.io/name: redis
       ports:
         - protocol: TCP
-          port: {{ .Values.redis.master.service.ports.redis | default 6379 }}
+          port: {{ .Values.redis.port | default 6379 }}
     {{- else if .Values.externalRedis.host }}
     - to: []
       ports:

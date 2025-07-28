@@ -1,30 +1,9 @@
 # NOAH CLI v0.2.1 - Guide Complet
 
-## 🚀 **Nouveau CLI Moderne**
-
-NOAH CLI v0.2.1 marque une révolution dans la gestion de la plateforme NOAH. Fini l'ancien CLI Python complexe, place à une interface moderne, rapide et intuitive basée sur les pipelines CI/CD.
-
 ## ✨ **Fonctionnalités Principales**
 
-### 🔧 **Interface Simplifiée**
-```bash
-# Ancien CLI (v1.x) - Complexe
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python script/noah.py deploy --profile prod
 
-# Nouveau CLI (v0.2) - Simple
-noah deploy --profile prod
-```
-
-### 🚀 **Performance Révolutionnaire**
-- **Démarrage instantané** : 0.1s vs 3-5s avant
-- **Pas d'environnement virtuel** requis
-- **Installation simplifiée** : Une seule commande
-- **Pipelines modernes** : Ansible + Helm + K8s
-
-### 🎯 **Commandes Intuitives**
+### 🎯 **Commandes**
 ```bash
 noah init              # Initialiser l'environnement
 noah configure --auto  # Configuration automatique
@@ -216,13 +195,6 @@ noah --verbose deploy
 noah health --detailed
 ```
 
-## 📚 **Documentation Complète**
-
-- **Guide Rapide** : `QUICK_START.md`
-- **Pipeline CI/CD** : `docs/PIPELINE_CI_CD.md`
-- **Configuration Domaines** : `docs/DOMAIN_CONFIGURATION.md`
-- **Migration v1→v2** : `MIGRATION_v2.md`
-
 ## 🤝 **Contribution**
 
 ```bash
@@ -248,7 +220,3 @@ noah status --help    # Options de la commande
 - **Wiki** : [Documentation détaillée](https://github.com/Engelnicolas/NOAH/wiki)
 
 ---
-
-🎉 **Bienvenue dans l'ère NOAH 0.2 !**
-
-*L'automatisation réseau n'a jamais été aussi simple et puissante.*

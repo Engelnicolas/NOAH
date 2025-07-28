@@ -19,16 +19,7 @@
 
 **NOAH v0.2** est une plateforme d'automatisation d'infrastructure de nouvelle génération qui utilise des **pipelines CI/CD modernes** pour déployer un écosystème complet de services open-source de niveau entreprise. 
 
-🔥 **Nouveautés v0.2 :**
-- **Pipeline CI/CD GitHub Actions** pour déploiement automatisé
-- **Ansible + Kubespray** pour provision d'infrastructure Kubernetes
-- **Helm Charts** pour gestion applicative avancée
-- **CLI moderne** 50x plus rapide (Bash vs Python)
-- **Architecture cloud-native** avec haute disponibilité
-
 ### 🏗️ Architecture & Composants
-
-**NOAH v0.2** déploie une infrastructure complète via **pipelines CI/CD modernes** :
 
 #### 🔐 Gestion des Identités
 - **Samba4 Active Directory** : Annuaire centralisé avec authentification LDAP
@@ -52,7 +43,6 @@
 - **Ansible + Kubespray** : Déploiement automatisé de Kubernetes v1.28.2
 - **GitHub Actions** : Pipeline CI/CD avec déploiement automatique
 - **Helm 3.13+** : Gestion applicative cloud-native
-- **Calico CNI** : Réseau haute performance avec politiques de sécurité
 
 ---
 
@@ -188,40 +178,6 @@ kubectl get ingress -n noah
 kubectl logs -n noah deployment/keycloak
 kubectl logs -n noah deployment/gitlab
 
-# Logs du pipeline GitHub Actions
-# Disponible dans l'onglet Actions de votre repo
-```
-
----
-
-## 💡 Fonctionnalités principales
-
-### 🚀 Pipeline CI/CD Moderne
-- **GitHub Actions** : Déploiement automatique sur push
-- **Ansible + Kubespray** : Provision Kubernetes haute disponibilité  
-- **Helm Charts** : Gestion applicative cloud-native
-- **Multi-environnements** : Dev, staging, production
-
-### 🔐 Sécurité Intégrée
-- **Authentification centralisée** : Keycloak SSO + SAML/OIDC
-- **Chiffrement** : TLS/SSL automatique avec cert-manager
-- **RBAC Kubernetes** : Contrôles d'accès granulaires
-- **Audit complet** : Logs et traçabilité des opérations
-
-### 📊 Observabilité Avancée
-- **Monitoring** : Prometheus + Grafana avec dashboards
-- **Alerting** : Notifications proactives des incidents
-- **Métriques applicatives** : ServiceMonitor automatiques
-- **Logs centralisés** : Agrégation et analyse des logs
-
-### 🔄 Automatisation Complète
-- **Infrastructure as Code** : Ansible playbooks versionnés
-- **GitOps** : Déploiement déclaratif via Git
-- **Auto-scaling** : HPA et cluster autoscaler
-- **Backup automatique** : Sauvegarde des données critiques
-
----
-
 ## 🔧 Personnalisation
 
 ### Changer les IPs serveurs
@@ -337,16 +293,6 @@ kubectl delete certificate -n noah --all
 
 ---
 
-## 🤝 Contribution
-
-Les contributions sont les bienvenues ! Merci de :
-
-1. **Fork** le projet
-2. **Créer** une branche feature (`git checkout -b feature/amazing-feature`)
-3. **Commit** vos changements (`git commit -m 'Add amazing feature'`)
-4. **Push** sur la branche (`git push origin feature/amazing-feature`)
-5. **Ouvrir** une Pull Request
-
 ## 📜 Licence
 
 Ce projet est sous licence **GPL v3**. Voir [LICENSE](LICENSE) pour plus de détails.
@@ -377,11 +323,3 @@ Merci à la communauté open-source et aux mainteneurs des outils qui rendent NO
 - **� GitHub** pour les pipelines CI/CD
 
 ---
-
-<div align="center">
-
-**🎉 Félicitations ! Votre plateforme NOAH v0.2 est maintenant prête à déployer une infrastructure moderne et sécurisée !**
-
-*Rejoignez la révolution DevSecOps avec NOAH* 🚀
-
-</div>

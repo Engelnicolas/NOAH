@@ -1,22 +1,78 @@
-# 🔐 NOAH Security Guide
+# 🔐 NOAH v2.0 - Guide de Sécurité
 
-## Overview
+## 🛡️ Architecture de Sécurité
 
-This document outlines the security features, best practices, and configuration guidelines for the NOAH (Next Open-source Architecture Hub) platform.
+### Authentification & Autorisation
+- **Keycloak** : Fournisseur d'identité centralisé avec SSO/SAML/OIDC
+- **OAuth2 Proxy** : Proxy d'authentification pour protection des services
+- **RBAC Kubernetes** : Contrôles d'accès granulaires
 
-## 🛡️ Security Architecture
+### Sécurité Réseau
+- **TLS/SSL** : Chiffrement automatique avec cert-manager
+- **Network Policies** : Segmentation réseau native Kubernetes
+- **Ingress Controller** : Terminaison TLS et routage sécurisé
 
-### Authentication & Authorization
-- **Keycloak**: Centralized identity provider with SSO
-- **OAuth2 Proxy**: Authentication proxy for service protection
-- **LDAP/Samba4**: Directory services for user management
+### Sécurité des Données
+- **Ansible Vault** : Chiffrement des secrets et configurations
+- **Secrets Kubernetes** : Gestion sécurisée des credentials
+- **Volumes chiffrés** : Stockage persistant sécurisé
 
-### Network Security
-- **Network Policies**: Kubernetes-native network segmentation
-- **Ingress Controls**: TLS termination and traffic routing
-- **Service Mesh**: Optional Istio integration for advanced security
+## � Comptes par Défaut
 
-## 🔑 Default Credentials
+⚠️ **IMPORTANT** : Changez ces mots de passe après le déploiement !
+
+| Service | Utilisateur | Mot de passe par défaut |
+|---------|-------------|-------------------------|
+| Keycloak | `admin` | `Keycl0ak_Admin_789!Strong` |
+| GitLab | `root` | `GitL@b_Root_Password_012!` |
+| Nextcloud | `admin` | `N3xtcloud_Admin_345!Safe` |
+| Grafana | `admin` | `Gr@fana_Monitoring_678!View` |
+
+## 🔧 Configuration Sécurisée
+
+### Changer les mots de passe
+```bash
+# Décrypter et éditer les secrets
+ansible-vault edit ansible/vars/secrets.yml --vault-password-file ansible/.vault_pass
+
+# Ou via le CLI
+./noah.sh configure --secrets
+```
+
+### Configurer HTTPS
+```bash
+# Les certificats SSL sont automatiquement gérés par cert-manager
+# Pour domaines personnalisés, éditer :
+nano helm/noah-common/values.yaml
+```
+
+### Audit et Logs
+```bash
+# Consulter les logs de sécurité
+kubectl logs -n noah -l app=keycloak
+kubectl logs -n kube-system -l app=audit-policy-controller
+```
+
+## 🚨 Bonnes Pratiques
+
+1. **Mots de passe** : Changez tous les mots de passe par défaut
+2. **Réseau** : Utilisez des Network Policies pour isoler les services
+3. **Accès** : Configurez RBAC Kubernetes approprié
+4. **Monitoring** : Surveillez les logs d'authentification
+5. **Mises à jour** : Maintenez les composants à jour
+
+## 🔍 Vérification de Sécurité
+
+```bash
+# Vérifier la configuration TLS
+./noah.sh test --security
+
+# Audit des permissions
+kubectl auth can-i --list
+
+# État des certificats
+kubectl get certificates -n noah
+```
 
 ⚠️ **Important**: Change all default passwords before production deployment.
 

@@ -302,105 +302,6 @@ kubectl logs -n cert-manager deployment/cert-manager
 kubectl delete certificate -n noah --all
 ```
 
-### 🐍 CLI Python Intelligent
-
-Le nouveau CLI NOAH offre une expérience utilisateur moderne et intuitive :
-
-```bash
-# Interface colorée et informative
-./noah --help                    # Aide complète avec catégorisation
-./noah --list                    # Liste détaillée de tous les scripts
-./noah --version                 # Information de version
-
-# Découverte automatique des scripts
-./noah linter                    # Auto-détection des sous-commandes
-./noah monitoring status         # Exécution intelligente avec validation
-
-# Gestion automatique des privilèges
-./noah deploy                    # Demande confirmation pour sudo si nécessaire
-```
-
-### 📊 Commandes disponibles par catégorie
-
-#### 🏗️ Infrastructure
-```bash
-./noah deploy                    # Déploiement complet (11 charts Helm)
-./noah setup                     # Configuration environnement développement
-./noah tech-requirements         # Vérification prérequis système
-```
-
-#### 📈 Monitoring & Observabilité
-```bash
-./noah monitoring status         # État des services de monitoring
-./noah monitoring deploy         # Déploiement Prometheus/Grafana
-./noah monitoring teardown       # Suppression stack monitoring
-```
-
-#### 🔍 Qualité du code
-```bash
-./noah linter setup             # Configuration environnement linting
-./noah linter lint --all        # Validation YAML/Helm/Python
-./noah linter precommit         # Exécution hooks pre-commit
-./noah linter report --save     # Génération rapport qualité
-```
-
-#### 🔧 Gestion des dépendances
-```bash
-./noah deps-manager --check     # Vérification dépendances système
-./noah deps-manager --install   # Installation packages requis
-./noah deps-manager --update    # Mise à jour dépendances
-```
-
-
-## 🔧 Installation complète
-
-### 📋 Prérequis détaillés
-
-#### Environnement système
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install -y python3 python3-pip python3-venv kubectl helm docker.io
-
-# CentOS/RHEL
-sudo yum install -y python3 python3-pip kubectl helm docker
-
-# Validation
-python3 --version    # >= 3.8
-kubectl version      # Client et serveur
-helm version         # >= 3.0
-```
-
-#### Cluster Kubernetes
-- **Version** : 1.20+ (recommandé 1.24+)
-- **Ressources** : 4 nodes minimum, 8GB RAM par node
-- **StorageClass** : Classe de stockage par défaut configurée
-- **Network Policy** : Support CNI (Calico, Flannel, etc.)
-
-### 🏗️ Installation étape par étape
-
-#### 1. Préparation de l'environnement
-```bash
-# Cloner et configurer
-git clone https://github.com/Engelnicolas/NOAH.git
-cd NOAH
-
-# Activer l'environnement virtuel Python
-source venv/bin/activate
-
-# Vérifier la configuration
-./noah tech-requirements --report
-./noah --list
-```
-
-#### 2. Configuration avancée
-```bash
-# Configuration personnalisée (optionnel)
-cp tests/values/values-minimal.yaml my-custom-values.yaml
-# Éditer my-custom-values.yaml selon vos besoins
-
-# Validation de la configuration
-./noah linter setup
 ---
 
 ## 🎯 Cas d'usage principaux
@@ -429,11 +330,10 @@ cp tests/values/values-minimal.yaml my-custom-values.yaml
 
 ## 📚 Documentation
 
-- **[Guide de démarrage rapide](QUICK_START.md)** : Déploiement en 5 minutes
-- **[Pipeline CI/CD](docs/PIPELINE_CI_CD.md)** : Architecture des pipelines
+- **[Pipeline CI/CD](docs/PIPELINE_CI_CD.md)** : Architecture des pipelines modernes
 - **[CLI v2.0](docs/NOAH_CLI_v2.md)** : Guide complet du nouveau CLI
-- **[Configuration domaine](docs/DOMAIN_CONFIGURATION.md)** : DNS et certificats
-- **[Migration v2.0](MIGRATION_v2.md)** : Guide de migration
+- **[Configuration domaine](docs/DOMAIN_CONFIGURATION.md)** : DNS et certificats SSL
+- **[Sécurité](docs/SECURITY.md)** : Guide de sécurisation et bonnes pratiques
 
 ---
 

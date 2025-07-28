@@ -119,7 +119,7 @@ sudo ./noah linter setup         # Exécution avec privilèges élevés
 #### 🔍 Qualité du code
 ```bash
 ./noah linter setup         # Configuration environnement linting
-./noah linter lint --all    # Validation YAML/Ansible/Helm/Python
+./noah linter lint --all    # Validation YAML/Helm/Python
 ./noah linter precommit     # Exécution hooks pre-commit
 ./noah linter report        # Génération rapport qualité
 ```
@@ -221,7 +221,6 @@ resources:
 ```bash
 # Infrastructure as Code
 - Terraform >= 1.3 (pour le provisionnement d'infrastructure)
-- Ansible >= 2.12 (pour la gestion de configuration)
 
 # Monitoring et observabilité
 - Prometheus >= 2.40 (collecte de métriques)
@@ -577,8 +576,8 @@ kubectl get secret keycloak-admin -o jsonpath='{.data.password}' | base64 -d
 
 #### Policies réseau
 ```bash
-# Appliquer les policies de sécurité
-kubectl apply -f ansible/templates/network-policies.yaml
+# Les policies de sécurité sont configurées dans les charts Helm
+kubectl get networkpolicy -n noah
 
 # Vérifier les policies actives
 kubectl get networkpolicy -n noah

@@ -55,7 +55,6 @@ PYTHON_VERSION ?= 3.12
 ROOT_DIR := $(shell pwd)
 SCRIPT_DIR := $(ROOT_DIR)/script
 HELM_DIR := $(ROOT_DIR)/helm
-ANSIBLE_DIR := $(ROOT_DIR)/ansible
 TEST_DIR := $(ROOT_DIR)/Test
 DOCS_DIR := $(ROOT_DIR)/docs
 
@@ -110,8 +109,8 @@ endef
 .PHONY: all help setup install deps check-deps show-config \
         deploy deploy-dev deploy-staging deploy-prod \
         test test-unit test-integration test-e2e \
-        validate validate-all validate-charts validate-ansible validate-python \
-        lint lint-all lint-charts lint-ansible lint-python lint-shell \
+        validate validate-all validate-charts validate-python \
+        lint lint-all lint-charts lint-python lint-shell \
         monitoring monitoring-up monitoring-down monitoring-status \
         backup backup-create backup-restore backup-list \
         clean clean-all clean-charts clean-cache \
@@ -186,14 +185,12 @@ check-deps: ## Check if required dependencies are installed
 	@command -v python3 >/dev/null 2>&1 || { echo "$(RED)❌ Python 3 not found$(NC)"; exit 1; }
 	@command -v kubectl >/dev/null 2>&1 || { echo "$(RED)❌ kubectl not found$(NC)"; exit 1; }
 	@command -v helm >/dev/null 2>&1 || { echo "$(RED)❌ helm not found$(NC)"; exit 1; }
-	@command -v ansible-playbook >/dev/null 2>&1 || { echo "$(RED)❌ ansible not found$(NC)"; exit 1; }
 	@command -v docker >/dev/null 2>&1 || echo "$(YELLOW)⚠️ Docker not found (optional)$(NC)"
 	@command -v git >/dev/null 2>&1 || { echo "$(RED)❌ Git not found$(NC)"; exit 1; }
 	@echo "$(GREEN)✅ All required dependencies found$(NC)"
 
 install: ## Installation - Install all dependencies
 	$(call print_section,"Installing Dependencies")
-	$(MAKE) -C $(ANSIBLE_DIR) install-deps
 	$(MAKE) -C $(TEST_DIR) install
 	$(MAKE) -C $(HELM_DIR) deps
 	$(call print_success,"All dependencies installed")
@@ -280,7 +277,6 @@ validate: validate-all ## Validate - Run all validation checks
 validate-all: ## Validate - Run comprehensive validation
 	$(call print_section,"Running Comprehensive Validation")
 	$(MAKE) validate-charts
-	$(MAKE) validate-ansible
 	$(MAKE) validate-python
 	$(call print_success,"All validations completed")
 
@@ -288,11 +284,6 @@ validate-charts: ## Validate - Validate helm charts
 	$(call print_section,"Validating helm Charts")
 	$(MAKE) -C $(HELM_DIR) validate
 	$(call print_success,"helm charts validated")
-
-validate-ansible: ## Validate - Validate ansible playbooks
-	$(call print_section,"Validating ansible Playbooks")
-	@cd $(ANSIBLE_DIR) && ansible-playbook --syntax-check main.yml
-	$(call print_success,"ansible playbooks validated")
 
 validate-python: ## Validate - Validate Python scripts
 	$(call print_section,"Validating Python Scripts")
@@ -308,7 +299,6 @@ lint: lint-all ## Lint - Run all linting checks
 lint-all: ## Lint - Run comprehensive linting
 	$(call print_section,"Running Comprehensive Linting")
 	$(MAKE) lint-charts
-	$(MAKE) lint-ansible
 	$(MAKE) lint-python
 	$(MAKE) lint-shell
 	$(call print_success,"All linting completed")
@@ -317,11 +307,6 @@ lint-charts: ## Lint - Lint helm charts
 	$(call print_section,"Linting helm Charts")
 	$(MAKE) -C $(HELM_DIR) lint
 	$(call print_success,"helm charts linted")
-
-lint-ansible: ## Lint - Lint ansible playbooks
-	$(call print_section,"Linting ansible Playbooks")
-	@cd $(ANSIBLE_DIR) && ansible-lint main.yml || true
-	$(call print_success,"ansible playbooks linted")
 
 lint-python: ## Lint - Lint Python scripts
 	$(call print_section,"Linting Python Scripts")
@@ -505,7 +490,6 @@ security-scan: ## Security - Run security scans
 	$(call print_info,"Consider using tools like:")
 	@echo "  - kubesec for Kubernetes security"
 	@echo "  - bandit for Python security"
-	@echo "  - ansible-review for ansible security"
 
 security-audit: ## Security - Run security audit
 	$(call print_section,"Running Security Audit")
@@ -550,7 +534,6 @@ version: ## Show version information
 	@echo "$(YELLOW)Component Versions:$(NC)"
 	@kubectl version --client --short 2>/dev/null || echo "  kubectl: not available"
 	@helm version --short 2>/dev/null || echo "  helm: not available"
-	@ansible --version 2>/dev/null | head -n1 || echo "  ansible: not available"
 	@python3 --version 2>/dev/null || echo "  python3: not available"
 	@echo ""
 
@@ -578,9 +561,8 @@ troubleshoot: ## Debug - Troubleshooting guide
 	@echo "$(YELLOW)Common Issues:$(NC)"
 	@echo "  1. kubectl not found: Install kubectl CLI"
 	@echo "  2. helm not found: Install helm package manager"
-	@echo "  3. ansible not found: Install ansible automation platform"
-	@echo "  4. Permission denied: Check file permissions with 'ls -la'"
-	@echo "  5. Context not set: Set kubectl context with 'kubectl config use-context <context>'"
+	@echo "  3. Permission denied: Check file permissions with 'ls -la'"
+	@echo "  4. Context not set: Set kubectl context with 'kubectl config use-context <context>'"
 	@echo ""
 	@echo "$(YELLOW)Useful Commands:$(NC)"
 	@echo "  make check-deps     # Check all dependencies"

@@ -21,7 +21,7 @@
 
 ### 🏗️ Architecture & Composants
 
-**NOAH** déploie une infrastructure complète composée de 11 charts Helm orchestrés via Ansible :
+**NOAH** déploie une infrastructure complète composée de 11 charts Helm :
 
 #### 🔐 Gestion des Identités
 - **Samba4 Active Directory** : Annuaire centralisé avec authentification LDAP
@@ -135,7 +135,7 @@ Le nouveau CLI NOAH offre une expérience utilisateur moderne et intuitive :
 #### 🔍 Qualité du code
 ```bash
 ./noah linter setup             # Configuration environnement linting
-./noah linter lint --all        # Validation YAML/Ansible/Helm/Python
+./noah linter lint --all        # Validation YAML/Helm/Python
 ./noah linter precommit         # Exécution hooks pre-commit
 ./noah linter report --save     # Génération rapport qualité
 ```
@@ -266,8 +266,7 @@ Merci à la communauté open-source et aux mainteneurs de tous les outils qui re
 
 - **🐍 Python Software Foundation** pour le langage Python
 - **☸️ CNCF** pour Kubernetes, Prometheus, et l'écosystème cloud-native
-- **🔴 Red Hat** pour Ansible et l'automatisation infrastructure
-- **🔑 Keycloak Team** pour la gestion des identités et accès
+- ** Keycloak Team** pour la gestion des identités et accès
 - **☁️ Nextcloud GmbH** pour les outils de collaboration sécurisée
 - **💬 Mattermost** pour la communication d'équipe
 - **📊 Grafana Labs** pour la visualisation et l'observabilité

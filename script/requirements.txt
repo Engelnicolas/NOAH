@@ -164,16 +164,6 @@ docker>=6.1.0,<8.0
 # NOTE: Install separately if needed: pip install docker
 
 # =============================================================================
-# ANSIBLE INTEGRATION
-# =============================================================================
-
-# ansible core (commented out as it's system-dependent)
-ansible-core>=2.14.0,<3.0
-# Used by: Infrastructure automation
-# Features: Playbook execution, configuration management
-# NOTE: Install separately: pip install ansible-core
-
-# =============================================================================
 # HELM INTEGRATION
 # =============================================================================
 

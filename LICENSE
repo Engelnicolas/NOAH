@@ -49,12 +49,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 - **Website**: https://www.terraform.io/
 - **License Text**: https://github.com/hashicorp/terraform/blob/main/LICENSE
 
-#### Ansible
-- **License**: GNU General Public License v3.0
-- **Description**: Configuration management and automation
-- **Website**: https://www.ansible.com/
-- **License Text**: https://github.com/ansible/ansible/blob/devel/COPYING
-
 ### Identity and Access Management
 
 #### Keycloak

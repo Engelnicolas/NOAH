@@ -248,7 +248,6 @@ class DependencyManager:
             "memory-profiler": "memory_profiler",
             "pytest-cov": "pytest_cov",
             "pytest-mock": "pytest_mock",
-            "ansible-core": "ansible",  # ansible-core imports as 'ansible'
             "python-dotenv": "dotenv",  # python-dotenv imports as 'dotenv'
         }
         return mapping.get(package_name.lower(), package_name.replace("-", "_"))

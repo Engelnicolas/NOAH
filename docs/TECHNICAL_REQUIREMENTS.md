@@ -186,7 +186,6 @@ make: ">=4.2"
 ```bash
 # Infrastructure as Code
 terraform: ">=1.3"
-ansible: ">=2.12"
 
 # Monitoring and observability
 prometheus: ">=2.40"

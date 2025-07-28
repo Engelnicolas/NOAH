@@ -1,0 +1,80 @@
+---
+- name: Cleanup NOAH deployment on failure
+  hosts: kube_control_plane[0]
+  become: yes
+  become_user: "{{ ansible_user }}"
+  vars:
+    noah_namespace: "noah"
+    
+  tasks:
+    - name: Get failed pods
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ noah_namespace }}"
+        field_selectors:
+          - status.phase!=Running
+      register: failed_pods
+
+    - name: Display failed pods logs
+      shell: kubectl logs {{ item.metadata.name }} -n {{ noah_namespace }} --tail=50
+      loop: "{{ failed_pods.resources }}"
+      register: pod_logs
+      ignore_errors: yes
+
+    - name: Save failed pods logs
+      copy:
+        content: |
+          Pod: {{ item.item.metadata.name }}
+          Status: {{ item.item.status.phase }}
+          Logs:
+          {{ item.stdout }}
+          ========================================
+        dest: "/tmp/failed-pod-{{ item.item.metadata.name }}.log"
+      loop: "{{ pod_logs.results }}"
+      when: pod_logs is defined
+
+    - name: Rollback Helm releases if requested
+      kubernetes.core.helm:
+        name: "{{ item }}"
+        release_namespace: "{{ noah_namespace }}"
+        state: absent
+      loop:
+        - keycloak
+        - gitlab
+        - nextcloud
+        - mattermost
+        - grafana-noah
+        - prometheus-noah
+        - wazuh
+        - openedr
+        - oauth2-proxy
+        - postgresql
+      when: cleanup_helm_releases | default(false) | bool
+      ignore_errors: yes
+
+    - name: Clean up failed pods
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Pod
+        name: "{{ item.metadata.name }}"
+        namespace: "{{ noah_namespace }}"
+        state: absent
+      loop: "{{ failed_pods.resources }}"
+      when: cleanup_failed_pods | default(true) | bool
+
+    - name: Clean up stuck resources
+      shell: |
+        kubectl delete pods --field-selector=status.phase=Failed -n {{ noah_namespace }}
+        kubectl delete pods --field-selector=status.phase=Unknown -n {{ noah_namespace }}
+      ignore_errors: yes
+
+    - name: Display cleanup summary
+      debug:
+        msg: |
+          Cleanup completed:
+          - Failed pods cleaned: {{ failed_pods.resources | length }}
+          - Logs saved to /tmp/failed-pod-*.log
+          {% if cleanup_helm_releases | default(false) | bool %}
+          - Helm releases removed
+          {% endif %}

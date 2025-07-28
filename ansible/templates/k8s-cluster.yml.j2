@@ -1,0 +1,77 @@
+# Configuration Kubespray pour cluster NOAH
+# Généré automatiquement par Ansible
+
+# Version de Kubernetes
+kube_version: {{ kube_version }}
+
+# Plugin réseau
+kube_network_plugin: {{ kube_network_plugin }}
+kube_pods_subnet: {{ pod_subnet | default('10.233.64.0/18') }}
+kube_service_addresses: {{ service_subnet | default('10.233.0.0/18') }}
+
+# Configuration cluster
+cluster_name: {{ cluster_name }}
+kube_proxy_mode: ipvs
+
+# Configuration DNS
+dns_mode: coredns
+enable_nodelocaldns: true
+nodelocaldns_ip: 169.254.25.10
+
+# Configuration réseau Calico
+calico_mtu: 1440
+calico_cni_name: k8s-pod-network
+calico_felix_premetheusmetrics_enabled: true
+
+# Configuration etcd
+etcd_deployment_type: docker
+etcd_memory_limit: "512M"
+etcd_cpu_limit: "300m"
+
+# Configuration kubelet
+kubelet_max_pods: 110
+kube_reserved: true
+kube_memory_reserved: 256Mi
+kube_cpu_reserved: 100m
+
+# Configuration apiserver
+kube_apiserver_admission_control_config_file: true
+kube_encrypt_secret_data: true
+
+# Configuration ingress
+ingress_nginx_enabled: {{ ingress_enabled | default(true) }}
+ingress_nginx_host_network: true
+ingress_nginx_nodeselector:
+  kubernetes.io/os: "linux"
+
+# Configuration monitoring
+metrics_server_enabled: {{ monitoring_enabled | default(true) }}
+
+# Configuration certificats
+auto_renew_certificates: true
+kubeadm_certificate_key: "{{ ansible_date_time.epoch }}"
+
+# Configuration stockage
+local_volume_provisioner_enabled: true
+local_volume_provisioner_namespace: kube-system
+local_volume_provisioner_nodeselector:
+  kubernetes.io/os: "linux"
+
+# Configuration sécurité
+podsecuritypolicy_enabled: false
+kubernetes_audit: true
+audit_log_enabled: true
+audit_log_maxage: 30
+audit_log_maxbackups: 3
+audit_log_maxsize: 100
+
+# Configuration registry
+registry_enabled: false
+
+# Configuration backup etcd
+etcd_backup_enabled: true
+etcd_backup_retention: "7"
+
+# Configuration runtime
+container_manager: containerd
+containerd_version: "1.7.5"

@@ -1,0 +1,147 @@
+---
+- name: Prepare nodes for Kubernetes installation
+  hosts: all
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install required packages
+      apt:
+        name:
+          - curl
+          - wget
+          - apt-transport-https
+          - ca-certificates
+          - gnupg
+          - lsb-release
+          - python3-pip
+          - python3-netaddr
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Disable swap
+      shell: |
+        swapoff -a
+        sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+
+    - name: Enable kernel modules
+      modprobe:
+        name: "{{ item }}"
+      loop:
+        - overlay
+        - br_netfilter
+
+    - name: Set sysctl parameters
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_set: yes
+        state: present
+        reload: yes
+      loop:
+        - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
+        - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+        - { name: "net.ipv4.ip_forward", value: "1" }
+
+- name: Install Kubernetes via Kubespray
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    kubespray_path: "./kubespray"
+    kubespray_version: "v2.23.1"
+    
+  tasks:
+    - name: Check if Kubespray directory exists
+      stat:
+        path: "{{ kubespray_path }}"
+      register: kubespray_dir
+
+    - name: Clone Kubespray repository
+      git:
+        repo: https://github.com/kubernetes-sigs/kubespray.git
+        dest: "{{ kubespray_path }}"
+        version: "{{ kubespray_version }}"
+        force: yes
+      when: not kubespray_dir.stat.exists
+
+    - name: Install Kubespray requirements
+      pip:
+        requirements: "{{ kubespray_path }}/requirements.txt"
+        state: present
+
+    - name: Copy inventory to Kubespray
+      copy:
+        src: "../inventory/mycluster/"
+        dest: "{{ kubespray_path }}/inventory/mycluster/"
+        mode: '0644'
+
+    - name: Copy custom Kubespray configuration
+      template:
+        src: "../templates/k8s-cluster.yml.j2"
+        dest: "{{ kubespray_path }}/inventory/mycluster/group_vars/k8s_cluster/k8s-cluster.yml"
+      vars:
+        kube_version: "{{ kube_version | default('v1.28.2') }}"
+        kube_network_plugin: "{{ kube_network_plugin | default('calico') }}"
+        cluster_name: "{{ cluster_name | default('noah-cluster') }}"
+
+    - name: Run Kubespray playbook
+      shell: |
+        cd {{ kubespray_path }}
+        ansible-playbook -i inventory/mycluster/hosts.yaml \
+          --become --become-user=root \
+          cluster.yml
+      register: kubespray_result
+      failed_when: kubespray_result.rc != 0
+
+    - name: Display Kubespray installation result
+      debug:
+        msg: "Kubespray installation completed with return code: {{ kubespray_result.rc }}"
+
+- name: Verify Kubernetes installation
+  hosts: kube_control_plane[0]
+  become: yes
+  tasks:
+    - name: Wait for Kubernetes API to be ready
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}:6443/healthz"
+        validate_certs: no
+        client_cert: /etc/kubernetes/pki/apiserver-kubelet-client.crt  
+        client_key: /etc/kubernetes/pki/apiserver-kubelet-client.key
+      register: k8s_health
+      until: k8s_health.status == 200
+      retries: 30
+      delay: 10
+
+    - name: Get cluster info
+      shell: kubectl cluster-info
+      register: cluster_info
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    - name: Display cluster info
+      debug:
+        msg: "{{ cluster_info.stdout_lines }}"
+
+    - name: Get node status
+      shell: kubectl get nodes -o wide
+      register: node_status
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    - name: Display node status
+      debug:
+        msg: "{{ node_status.stdout_lines }}"
+
+    - name: Fetch kubeconfig for local use
+      fetch:
+        src: /etc/kubernetes/admin.conf
+        dest: "../kubeconfig/{{ cluster_name }}-kubeconfig"
+        flat: yes
+      delegate_to: "{{ groups['kube_control_plane'][0] }}"

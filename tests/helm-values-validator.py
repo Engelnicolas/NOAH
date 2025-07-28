@@ -10,7 +10,7 @@ Version: 1.0.0
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import yaml
 
@@ -133,7 +133,7 @@ class HelmValuesValidator:
                 sec_ctx = content["securityContext"]
 
                 # Check for privilege escalation (allow for compatibility profiles)
-                if sec_ctx.get("allowPrivilegeEscalation") == True:
+                if sec_ctx.get("allowPrivilegeEscalation"):
                     # Only flag as warning for minimal/root profiles (not error)
                     if "minimal" in file_path.name or "root" in file_path.name:
                         # This is acceptable for compatibility profiles
@@ -144,19 +144,15 @@ class HelmValuesValidator:
                         )
 
                 # Check for read-only root filesystem in compatible profiles
-                if (
-                    "root" in file_path.name
-                    and sec_ctx.get("readOnlyRootFilesystem") == True
-                ):
+                if "root" in file_path.name and sec_ctx.get("readOnlyRootFilesystem"):
                     issues.append(
                         "Root profile should allow write access to root filesystem"
                     )
 
             # Check for network policies in production profiles
             if "root" in file_path.name:
-                if (
-                    "networkPolicy" in content
-                    and content["networkPolicy"].get("enabled") == True
+                if "networkPolicy" in content and content["networkPolicy"].get(
+                    "enabled"
                 ):
                     issues.append(
                         "Root profile should disable network policies for compatibility"

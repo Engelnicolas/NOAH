@@ -42,39 +42,37 @@ def main():
     """Test principal du CLI NOAH."""
     print("🚀 Tests du CLI NOAH v5.0.0")
     print("=" * 50)
-    
+
     # Changer vers le répertoire NOAH
     noah_dir = Path(__file__).parent
-    
+
     tests = [
         # Tests de base
         (["./noah", "--version"], False),
         (["./noah", "--help"], False),
         (["./noah", "--list"], False),
-        
         # Tests de commandes sans sous-commandes (devraient échouer)
         (["./noah", "linter"], True),
         (["./noah", "monitoring"], True),
-        
         # Tests avec sous-commandes (peuvent nécessiter des privilèges)
         (["./noah", "linter", "help"], False),
         (["./noah", "setup", "--help"], False),
         (["./noah", "deps-manager", "--help"], False),
     ]
-    
+
     passed = 0
     total = len(tests)
-    
+
     for cmd, expect_error in tests:
         if run_command(cmd, expect_error):
             passed += 1
         print()
-    
+
     print("📊 Résultats des tests")
     print("=" * 50)
     print(f"Tests réussis: {passed}/{total}")
-    print(f"Taux de réussite: {(passed/total)*100:.1f}%")
-    
+    print(f"Taux de réussite: {(passed / total) * 100:.1f}%")
+
     if passed == total:
         print("🎉 Tous les tests sont réussis !")
         return 0

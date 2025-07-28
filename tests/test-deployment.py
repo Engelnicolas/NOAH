@@ -7,9 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def test_simple_deployment():
     """Test avec un déploiement nginx simple."""
-    
+
     # Création d'un manifest nginx simple
     nginx_manifest = """
 apiVersion: apps/v1
@@ -62,63 +63,74 @@ spec:
             capture_output=True,
             text=True,
             timeout=30,
-            check=False
+            check=False,
         )
-        
+
         if result.returncode == 0:
             print("✅ Déploiement nginx test réussi")
             print(result.stdout)
-            
+
             # Vérifier le status des pods
             status_result = subprocess.run(
                 ["kubectl", "get", "pods", "-n", "noah", "-l", "app=test-nginx"],
                 capture_output=True,
                 text=True,
                 timeout=10,
-                check=False
+                check=False,
             )
-            
+
             if status_result.returncode == 0:
                 print("📊 Status des pods:")
                 print(status_result.stdout)
-            
+
             return True
         else:
             print("❌ Échec du déploiement nginx test")
             print(f"Erreur: {result.stderr}")
             return False
-            
+
     except Exception as e:
         print(f"❌ Erreur lors du test: {e}")
         return False
+
 
 def cleanup():
     """Nettoyer le déploiement de test."""
     try:
         result = subprocess.run(
-            ["kubectl", "delete", "deployment,service", "-n", "noah", "-l", "app=test-nginx"],
+            [
+                "kubectl",
+                "delete",
+                "deployment,service",
+                "-n",
+                "noah",
+                "-l",
+                "app=test-nginx",
+            ],
             capture_output=True,
             text=True,
             timeout=30,
-            check=False
+            check=False,
         )
-        
+
         if result.returncode == 0:
             print("🧹 Nettoyage terminé")
         else:
             print(f"⚠️  Problème de nettoyage: {result.stderr}")
-            
+
     except Exception as e:
         print(f"❌ Erreur lors du nettoyage: {e}")
 
+
 if __name__ == "__main__":
     print("🧪 Test de déploiement simple avec nginx...")
-    
+
     if test_simple_deployment():
         print("\n✅ Test réussi! Le système de déploiement fonctionne.")
-        
+
         # Attendre un peu puis nettoyer
         import time
+
         print("⏳ Attente de 10 secondes avant nettoyage...")
         time.sleep(10)
         cleanup()

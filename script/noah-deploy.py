@@ -18,7 +18,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-
 # Configuration constants
 DEFAULT_NAMESPACE = "noah"
 DEFAULT_TIMEOUT = "600s"
@@ -35,27 +34,31 @@ TECH_REQUIREMENTS_TIMEOUT = 60  # seconds
 
 def run_dependency_manager(verbose: bool = False) -> bool:
     """Run noah-deps-manager to check and install Python dependencies.
-    
+
     Args:
         verbose: Enable verbose output for debugging
-        
+
     Returns:
         bool: True if dependencies were successfully managed, False otherwise
     """
-    print(f"{Color.CYAN}🔍 Vérification des dépendances Python via noah-deps-manager...{Color.RESET}")
-    
+    print(
+        f"{Color.CYAN}🔍 Vérification des dépendances Python via noah-deps-manager...{Color.RESET}"
+    )
+
     script_path = Path(__file__).parent / "noah-deps-manager"
-    
+
     if not script_path.exists():
-        print(f"{Color.RED}❌ Script noah-deps-manager non trouvé: {script_path}{Color.RESET}")
+        print(
+            f"{Color.RED}❌ Script noah-deps-manager non trouvé: {script_path}{Color.RESET}"
+        )
         return False
-    
+
     try:
         # Use --auto-install mode with graceful handling
         cmd = [sys.executable, str(script_path), "--auto-install", "--graceful"]
         if verbose:
             cmd.append("--verbose")
-            
+
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -63,25 +66,31 @@ def run_dependency_manager(verbose: bool = False) -> bool:
             timeout=DEPENDENCY_MANAGER_TIMEOUT,
             check=False,
         )
-        
+
         if result.returncode == 0:
             print(f"{Color.GREEN}✅ Dépendances vérifiées avec succès{Color.RESET}")
             if verbose and result.stdout:
                 print(f"{Color.BLUE}Output: {result.stdout}{Color.RESET}")
             return True
         else:
-            print(f"{Color.RED}❌ Échec de la vérification des dépendances{Color.RESET}")
+            print(
+                f"{Color.RED}❌ Échec de la vérification des dépendances{Color.RESET}"
+            )
             if result.stderr:
                 print(f"{Color.RED}Erreur: {result.stderr}{Color.RESET}")
             if verbose and result.stdout:
                 print(f"{Color.BLUE}Output: {result.stdout}{Color.RESET}")
             return False
-            
+
     except subprocess.TimeoutExpired:
-        print(f"{Color.RED}❌ Timeout lors de la vérification des dépendances{Color.RESET}")
+        print(
+            f"{Color.RED}❌ Timeout lors de la vérification des dépendances{Color.RESET}"
+        )
         return False
     except Exception as e:
-        print(f"{Color.RED}❌ Erreur lors de l'exécution de noah-deps-manager: {e}{Color.RESET}")
+        print(
+            f"{Color.RED}❌ Erreur lors de l'exécution de noah-deps-manager: {e}{Color.RESET}"
+        )
         return False
 
 
@@ -114,11 +123,11 @@ class Color:
     @classmethod
     def colorize(cls, text: str, color: str) -> str:
         """Colorize text with the given color.
-        
+
         Args:
             text: Text to colorize
             color: Color constant from Color class
-            
+
         Returns:
             str: Colorized text with reset at the end
         """
@@ -127,14 +136,14 @@ class Color:
 
 class NoahDeploymentError(Exception):
     """Custom exception for deployment errors.
-    
+
     This exception is raised when critical deployment errors occur
     that should stop the deployment process.
     """
-    
+
     def __init__(self, message: str, component: str = "", details: str = ""):
         """Initialize the deployment error.
-        
+
         Args:
             message: Main error message
             component: Component where the error occurred (optional)
@@ -147,11 +156,11 @@ class NoahDeploymentError(Exception):
 
 class NoahLogger:
     """Enhanced logging system for NOAH deployment.
-    
+
     This logger provides both console and file logging with colored output
     and different verbosity levels. It automatically creates log directories
     and manages log files with timestamps.
-    
+
     Attributes:
         log_dir: Directory where log files are stored
         verbose: Whether verbose logging is enabled
@@ -161,7 +170,7 @@ class NoahLogger:
 
     def __init__(self, log_dir: str = "logs", verbose: bool = False):
         """Initialize the NOAH logger.
-        
+
         Args:
             log_dir: Directory to store log files (default: "logs")
             verbose: Enable verbose logging (default: False)
@@ -322,11 +331,11 @@ class KubernetesChecker:
 
 class HelmDeployer:
     """Helm chart deployment manager.
-    
+
     This class manages the deployment of Helm charts in a specific order
     across three phases: Priority Infrastructure, Core Services, and
     Monitoring & Security.
-    
+
     Attributes:
         logger: Logger instance for deployment messages
         namespace: Kubernetes namespace for deployments
@@ -341,10 +350,13 @@ class HelmDeployer:
     """
 
     def __init__(
-        self, logger: NoahLogger, namespace: str = DEFAULT_NAMESPACE, timeout: str = DEFAULT_TIMEOUT
+        self,
+        logger: NoahLogger,
+        namespace: str = DEFAULT_NAMESPACE,
+        timeout: str = DEFAULT_TIMEOUT,
     ):
         """Initialize the Helm deployer.
-        
+
         Args:
             logger: Logger instance for output
             namespace: Kubernetes namespace (default: "noah")
@@ -444,7 +456,7 @@ class HelmDeployer:
                 "prometheus-operator/v0.70.0/example/prometheus-operator-crd/"
                 "monitoring.coreos.com_servicemonitors.yaml"
             )
-            
+
             result = subprocess.run(
                 ["kubectl", "apply", "-f", crds_url],
                 capture_output=True,
@@ -456,9 +468,12 @@ class HelmDeployer:
             if result.returncode == 0:
                 self.logger.success("Prometheus CRDs installed successfully")
                 return True
-            
-            self.logger.warning(f"Failed to install Prometheus CRDs from URL: {result.stderr}")
-            
+
+            self.logger.warning(
+                f"Failed to install Prometheus CRDs from URL: {
+                    result.stderr}"
+            )
+
             # Fallback: try to install minimal ServiceMonitor CRD
             return self._install_minimal_servicemonitor_crd()
 
@@ -512,7 +527,7 @@ spec:
             if result.returncode == 0:
                 self.logger.success("Minimal ServiceMonitor CRD installed")
                 return True
-            
+
             self.logger.warning(f"Failed to install minimal CRD: {result.stderr}")
             return False
 
@@ -550,9 +565,12 @@ spec:
                 timeout=300,  # 5 minutes timeout for dependency build
                 check=False,
             )
-            
+
             if dep_result.returncode != 0:
-                self.logger.warning(f"Dependency build failed for {chart_name}: {dep_result.stderr}")
+                self.logger.warning(
+                    f"Dependency build failed for {chart_name}: {
+                        dep_result.stderr}"
+                )
                 # Continue anyway - some charts might not have dependencies
             else:
                 self.logger.debug(f"Dependencies built successfully for {chart_name}")
@@ -644,7 +662,8 @@ spec:
                     self.logger.error(
                         f"Deployment failed for {chart_name} in phase '{phase_name}'"
                     )
-                    # Continue with other charts in the phase rather than stopping completely
+                    # Continue with other charts in the phase rather than stopping
+                    # completely
                     continue
 
             self.logger.info(
@@ -745,14 +764,14 @@ spec:
 
 class NoahDeployer:
     """Main NOAH deployment orchestrator.
-    
+
     This class coordinates the complete NOAH deployment process including:
     - Technical requirements validation
     - Dependencies installation
     - Kubernetes cluster verification
     - Helm charts deployment
     - Deployment status checking
-    
+
     Attributes:
         namespace: Kubernetes namespace for deployment
         timeout: Timeout for deployment operations
@@ -771,7 +790,7 @@ class NoahDeployer:
         priority_only: bool = False,
     ):
         """Initialize the NOAH deployer.
-        
+
         Args:
             namespace: Kubernetes namespace (default: "noah")
             timeout: Deployment timeout (default: "600s")
@@ -869,14 +888,14 @@ class NoahDeployer:
 
 def main():
     """Main entry point for the NOAH deployment script.
-    
+
     This function:
     1. Parses command line arguments
     2. Checks and installs Python dependencies
     3. Handles special modes (list-charts, dry-run)
     4. Validates root privileges
     5. Creates and runs the deployment orchestrator
-    
+
     Exit codes:
         0: Success
         1: Failure or error during deployment
@@ -966,14 +985,20 @@ Chart Deployment Phases:
                 print(f"  {i}. {chart}")
 
         print(
-            f"\n{Color.YELLOW}Total: {sum(len(charts) for charts in charts_by_phase.values())} charts{Color.RESET}"
+            f"\n{
+                Color.YELLOW}Total: {
+                sum(
+                    len(charts) for charts in charts_by_phase.values())} charts{
+                    Color.RESET}"
         )
         print(f"\n{Color.GREEN}Usage examples:{Color.RESET}")
         print(
-            f"  sudo python3 {sys.argv[0]} --priority-only  # Deploy only priority charts"
+            f"  sudo python3 {
+                sys.argv[0]} --priority-only  # Deploy only priority charts"
         )
         print(
-            f"  sudo python3 {sys.argv[0]} --dry-run        # Show what would be deployed"
+            f"  sudo python3 {
+                sys.argv[0]} --dry-run        # Show what would be deployed"
         )
         print(f"  sudo python3 {sys.argv[0]}                  # Deploy all charts")
         sys.exit(0)

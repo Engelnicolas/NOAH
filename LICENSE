@@ -1,9 +1,9 @@
-# N.O.A.H - Next Open-source Architecture Hub
+# N.O.A.H - Network Operations & Automation Hub
 # License and Third-Party Component Attributions
 
 ## Project License
 
-N.O.A.H (Next Open-source Architecture Hub) is licensed under the GNU General Public License v3.0.
+N.O.A.H (Network Operations & Automation Hub) is licensed under the GNU General Public License v3.0.
 
 ```
 GNU GENERAL PUBLIC LICENSE
@@ -43,11 +43,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 - **Website**: https://helm.sh/
 - **License Text**: https://github.com/helm/helm/blob/main/LICENSE
 
-#### Terraform
-- **License**: Mozilla Public License 2.0
-- **Description**: Infrastructure as Code tool
-- **Website**: https://www.terraform.io/
-- **License Text**: https://github.com/hashicorp/terraform/blob/main/LICENSE
+#### Ansible
+- **License**: GNU General Public License v3.0
+- **Description**: Configuration management and automation
+- **Website**: https://www.ansible.com/
+- **License Text**: https://github.com/ansible/ansible/blob/devel/COPYING
 
 ### Identity and Access Management
 
@@ -115,11 +115,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 - **Website**: https://grafana.com/
 - **License Text**: https://github.com/grafana/grafana/blob/main/LICENSE
 
-#### AlertManager
-- **License**: Apache License 2.0
-- **Description**: Handles alerts sent by client applications
-- **Website**: https://prometheus.io/docs/alerting/latest/alertmanager/
-- **License Text**: https://github.com/prometheus/alertmanager/blob/main/LICENSE
 
 ### Network and Security
 
@@ -204,12 +199,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 - **Description**: Kubernetes ingress controller
 - **Website**: https://kubernetes.github.io/ingress-nginx/
 - **License Text**: https://github.com/kubernetes/ingress-nginx/blob/main/LICENSE
-
-#### MetalLB (if used)
-- **License**: Apache License 2.0
-- **Description**: Load balancer for bare metal Kubernetes
-- **Website**: https://metallb.universe.tf/
-- **License Text**: https://github.com/metallb/metallb/blob/main/LICENSE
 
 ### Certificate Management
 

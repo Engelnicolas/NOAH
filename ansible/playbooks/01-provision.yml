@@ -84,7 +84,9 @@
           net0: "virtio,bridge=vmbr0"
         state: present
       loop: "{{ noah_vms }}"
-      when: provision_vms | default(false)    - name: Add hosts to inventory
+      when: provision_vms | default(false)
+      
+    - name: Add hosts to inventory
       add_host:
         name: "{{ item.server.name }}"
         groups: "{{ 'kube_control_plane' if 'master' in item.server.name else 'kube_node' }}"

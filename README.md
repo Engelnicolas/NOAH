@@ -48,45 +48,27 @@
 
 ---
 
-## � Modern Secrets Management with SOPS
+## 🎯 Main Use Cases
 
-NOAH v0.2.1 introduces **SOPS (Mozilla) + Age encryption** for enterprise-grade secrets management:
+### 👤 Developers & DevOps
+- **Learning**: Master DevSecOps and automation pipelines
+- **Sandbox**: Test enterprise tools in a secure environment
+- **Prototyping**: Experiment with cloud-native architectures
 
-### ✨ Key Features
-- **🔒 Value-level encryption**: Only secret values are encrypted, not the entire file
-- **🔍 Git-friendly**: Readable diffs and merge conflicts resolution
-- **🔑 Age encryption**: Modern, simple alternative to GPG
-- **🚀 GitOps-ready**: Native integration with CI/CD pipelines
-- **🔄 Easy rotation**: Simple key and secret rotation workflows
+### 🧑‍💼 SMEs & Startups
+- **Savings**: 60-80% savings vs proprietary SaaS solutions
+- **Control**: Complete data control and GDPR compliance
+- **Scalability**: Infrastructure that grows with your business
 
-### 🚀 Quick SOPS Setup
-```bash
-# Check SOPS status and install if needed
-noah secrets status
+### 🏢 Enterprises
+- **Hybrid**: Hybrid cloud infrastructure with compliance requirements
+- **Integrations**: Custom integrations and connectors
+- **Governance**: Complete audit and operation traceability
 
-# Generate Age encryption keys
-age-keygen -o ~/.config/sops/age/keys.txt
-
-# Edit secrets with automatic encryption
-noah secrets edit
-
-# View decrypted secrets
-noah secrets view
-
-# Validate complete setup
-noah secrets validate
-```
-
-### 📈 Benefits over Traditional Vault
-| Feature | SOPS + Age | Ansible Vault |
-|---------|------------|---------------|
-| **Git diffs** | ✅ Readable | ❌ Binary |
-| **Merge conflicts** | ✅ Resolvable | ❌ Complex |
-| **CI/CD integration** | ✅ Native | ❌ Manual |
-| **Key management** | ✅ Standard (Age) | ❌ Custom passwords |
-| **Partial encryption** | ✅ Values only | ❌ Entire file |
-| **Audit trail** | ✅ Per-value | ❌ File-level |
-
+### 🏛️ Public Sector
+- **Sovereignty**: Complete data and infrastructure control
+- **Compliance**: Respect for sector regulations
+- **Security**: Secure and audited architecture
 ---
 
 ## �🚀 Quick Start (5 minutes)
@@ -303,30 +285,6 @@ nano .sops.yaml
 age-keygen -o ~/.config/sops/age/keys.txt  # Generate new keys
 noah secrets rotate                         # Apply key rotation
 ```
-
----
-
-## 🎯 Main Use Cases
-
-### 👤 Developers & DevOps
-- **Learning**: Master DevSecOps and automation pipelines
-- **Sandbox**: Test enterprise tools in a secure environment
-- **Prototyping**: Experiment with cloud-native architectures
-
-### 🧑‍💼 SMEs & Startups
-- **Savings**: 60-80% savings vs proprietary SaaS solutions
-- **Control**: Complete data control and GDPR compliance
-- **Scalability**: Infrastructure that grows with your business
-
-### 🏢 Enterprises
-- **Hybrid**: Hybrid cloud infrastructure with compliance requirements
-- **Integrations**: Custom integrations and connectors
-- **Governance**: Complete audit and operation traceability
-
-### 🏛️ Public Sector
-- **Sovereignty**: Complete data and infrastructure control
-- **Compliance**: Respect for sector regulations
-- **Security**: Secure and audited architecture
 
 ---
 

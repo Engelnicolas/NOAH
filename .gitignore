@@ -96,6 +96,12 @@ tramp
 vault_pass*
 .ansible_vault_password*
 
+# Ansible secrets and sensitive files
+ansible/vars/secrets.yml
+**/secrets.yml
+secrets.yaml
+**/secrets.yaml
+
 # Ansible temporary files
 .ansible/
 ansible.log

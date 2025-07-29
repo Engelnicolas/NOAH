@@ -1,258 +1,42 @@
-# N.O.A.H - Network Operations & Automation Hub
-# License and Third-Party Component Attributions
+MIT License
 
-## Project License
+Copyright (c) 2025 NOAH Team
 
-N.O.A.H (Network Operations & Automation Hub) is licensed under the GNU General Public License v3.0.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-```
-GNU GENERAL PUBLIC LICENSE
-Version 3, 29 June 2007
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-Copyright (C) 2025 N.O.A.H Team
-Everyone is permitted to copy and distribute verbatim copies
-of this license document, but changing it is not allowed.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+---
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+## Third-Party Components
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-```
+This project incorporates or depends on various open-source components:
 
-## Third-Party Components and Their Licenses
+- **Kubernetes** (Apache 2.0) - Container orchestration
+- **Helm** (Apache 2.0) - Kubernetes package manager
+- **Ansible** (GPL v3.0) - Configuration management
+- **Keycloak** (Apache 2.0) - Identity and access management
+- **PostgreSQL** (PostgreSQL License) - Database system
+- **Redis** (BSD 3-Clause) - In-memory data store
+- **Grafana** (Apache 2.0) - Monitoring and observability
+- **Prometheus** (Apache 2.0) - Monitoring system
 
-### Infrastructure and Orchestration
-
-#### Kubernetes
-- **License**: Apache License 2.0
-- **Description**: Container orchestration platform
-- **Website**: https://kubernetes.io/
-- **License Text**: https://github.com/kubernetes/kubernetes/blob/master/LICENSE
-
-#### Helm
-- **License**: Apache License 2.0
-- **Description**: Kubernetes package manager
-- **Website**: https://helm.sh/
-- **License Text**: https://github.com/helm/helm/blob/main/LICENSE
-
-#### Ansible
-- **License**: GNU General Public License v3.0
-- **Description**: Configuration management and automation
-- **Website**: https://www.ansible.com/
-- **License Text**: https://github.com/ansible/ansible/blob/devel/COPYING
-
-### Identity and Access Management
-
-#### Keycloak
-- **License**: Apache License 2.0
-- **Description**: Open Source Identity and Access Management
-- **Website**: https://www.keycloak.org/
-- **License Text**: https://github.com/keycloak/keycloak/blob/main/LICENSE.txt
-
-#### Samba4
-- **License**: GNU General Public License v3.0
-- **Description**: Active Directory Domain Controller
-- **Website**: https://www.samba.org/
-- **License Text**: https://www.samba.org/samba/docs/GPL.html
-
-#### OAuth2 Proxy
-- **License**: MIT License
-- **Description**: A reverse proxy that provides authentication
-- **Website**: https://oauth2-proxy.github.io/oauth2-proxy/
-- **License Text**: https://github.com/oauth2-proxy/oauth2-proxy/blob/main/LICENSE
-
-### Collaboration Platforms
-
-#### Nextcloud
-- **License**: GNU Affero General Public License v3.0
-- **Description**: Self-hosted cloud storage and collaboration platform
-- **Website**: https://nextcloud.com/
-- **License Text**: https://github.com/nextcloud/server/blob/master/COPYING
-
-#### Mattermost
-- **License**: MIT License (Team Edition) / Commercial License (Enterprise)
-- **Description**: Open-source team collaboration platform
-- **Website**: https://mattermost.com/
-- **License Text**: https://github.com/mattermost/mattermost-server/blob/master/LICENSE.txt
-
-#### GitLab Community Edition
-- **License**: MIT License
-- **Description**: DevOps platform for source code management
-- **Website**: https://about.gitlab.com/
-- **License Text**: https://gitlab.com/gitlab-org/gitlab/-/blob/master/LICENSE
-
-### Security and Monitoring
-
-#### Wazuh
-- **License**: GNU General Public License v2.0
-- **Description**: Security monitoring and SIEM platform
-- **Website**: https://wazuh.com/
-- **License Text**: https://github.com/wazuh/wazuh/blob/master/LICENSE
-
-#### OpenEDR
-- **License**: GNU General Public License v3.0
-- **Description**: Open Endpoint Detection and Response
-- **Website**: https://github.com/ComodoSecurity/openedr
-- **License Text**: https://github.com/ComodoSecurity/openedr/blob/master/LICENSE
-
-#### Prometheus
-- **License**: Apache License 2.0
-- **Description**: Monitoring and alerting toolkit
-- **Website**: https://prometheus.io/
-- **License Text**: https://github.com/prometheus/prometheus/blob/main/LICENSE
-
-#### Grafana
-- **License**: Apache License 2.0
-- **Description**: Analytics and monitoring solution
-- **Website**: https://grafana.com/
-- **License Text**: https://github.com/grafana/grafana/blob/main/LICENSE
-
-
-### Network and Security
-
-#### OpenVPN
-- **License**: GNU General Public License v2.0
-- **Description**: VPN solution
-- **Website**: https://openvpn.net/
-- **License Text**: https://github.com/OpenVPN/openvpn/blob/master/COPYRIGHT.GPL
-
-#### UFW (Uncomplicated Firewall)
-- **License**: GNU General Public License v3.0
-- **Description**: Frontend for iptables firewall
-- **Website**: https://launchpad.net/ufw
-- **License Text**: Part of Ubuntu, under GPL v3.0
-
-### Databases and Storage
-
-#### PostgreSQL
-- **License**: PostgreSQL License (similar to MIT/BSD)
-- **Description**: Advanced open source relational database
-- **Website**: https://www.postgresql.org/
-- **License Text**: https://www.postgresql.org/about/licence/
-
-#### Redis
-- **License**: BSD 3-Clause License (versions < 7.0) / Redis Source Available License (versions ≥ 7.0)
-- **Description**: In-memory data structure store
-- **Website**: https://redis.io/
-- **License Text**: https://github.com/redis/redis/blob/unstable/COPYING
-
-#### Elasticsearch
-- **License**: Elastic License 2.0 / Server Side Public License v1
-- **Description**: Search and analytics engine
-- **Website**: https://www.elastic.co/
-- **License Text**: https://github.com/elastic/elasticsearch/blob/main/LICENSE.txt
-
-### Container Runtime and Images
-
-#### Docker
-- **License**: Apache License 2.0
-- **Description**: Container platform
-- **Website**: https://www.docker.com/
-- **License Text**: https://github.com/docker/docker-ce/blob/master/LICENSE
-
-#### containerd
-- **License**: Apache License 2.0
-- **Description**: Container runtime
-- **Website**: https://containerd.io/
-- **License Text**: https://github.com/containerd/containerd/blob/main/LICENSE
-
-### Operating System Components
-
-#### Ubuntu/Debian
-- **License**: Various open source licenses (primarily GPL, LGPL, BSD, MIT)
-- **Description**: Base operating system components
-- **Website**: https://ubuntu.com/ | https://www.debian.org/
-- **License Information**: https://ubuntu.com/legal/intellectual-property-policy
-
-#### Linux Kernel
-- **License**: GNU General Public License v2.0
-- **Description**: Operating system kernel
-- **Website**: https://www.kernel.org/
-- **License Text**: https://github.com/torvalds/linux/blob/master/COPYING
-
-### Development and CI/CD
-
-#### GitLab CI/CD
-- **License**: MIT License
-- **Description**: Continuous Integration/Continuous Deployment
-- **Website**: https://about.gitlab.com/stages-devops-lifecycle/continuous-integration/
-- **License Text**: https://gitlab.com/gitlab-org/gitlab/-/blob/master/LICENSE
-
-#### GitHub Actions (if used)
-- **License**: MIT License
-- **Description**: Workflow automation
-- **Website**: https://github.com/features/actions
-- **License Text**: Various, depends on specific actions used
-
-### Networking and Load Balancing
-
-#### NGINX Ingress Controller
-- **License**: Apache License 2.0
-- **Description**: Kubernetes ingress controller
-- **Website**: https://kubernetes.github.io/ingress-nginx/
-- **License Text**: https://github.com/kubernetes/ingress-nginx/blob/main/LICENSE
-
-### Certificate Management
-
-#### cert-manager
-- **License**: Apache License 2.0
-- **Description**: Certificate management for Kubernetes
-- **Website**: https://cert-manager.io/
-- **License Text**: https://github.com/cert-manager/cert-manager/blob/master/LICENSE
-
-#### Let's Encrypt
-- **License**: Internet Security Research Group License
-- **Description**: Free SSL/TLS certificates
-- **Website**: https://letsencrypt.org/
-- **License Text**: https://letsencrypt.org/repository/
-
-### Backup and Storage
-
-#### Velero (if used)
-- **License**: Apache License 2.0
-- **Description**: Backup solution for Kubernetes
-- **Website**: https://velero.io/
-- **License Text**: https://github.com/vmware-tanzu/velero/blob/main/LICENSE
-
-#### MinIO (if used)
-- **License**: GNU Affero General Public License v3.0
-- **Description**: High-performance object storage
-- **Website**: https://min.io/
-- **License Text**: https://github.com/minio/minio/blob/master/LICENSE
-
-## License Compatibility
-
-This project combines components under various open source licenses. The primary considerations are:
-
-1. **GPL v3.0**: Our main project license, compatible with most open source licenses
-2. **AGPL v3.0**: Used by Nextcloud, compatible with GPL v3.0
-3. **Apache 2.0**: Widely used, compatible with GPL v3.0
-4. **MIT/BSD**: Permissive licenses, compatible with GPL v3.0
-5. **Elastic License 2.0**: May have restrictions in certain use cases
-
-## Compliance Notes
-
-1. **Source Code Availability**: All GPL/AGPL licensed components require source code availability
-2. **Attribution Requirements**: All licenses require proper attribution (included above)
-3. **Copyleft Requirements**: GPL/AGPL components require derivative works to be licensed under compatible terms
-4. **Commercial Use**: Some components may have different licensing for commercial use
+For detailed license information of all components, please refer to their respective repositories and documentation.
 
 ## Contact
 
-For licensing questions or concerns, please contact: admin@noah.local
-
-## Disclaimer
-
-This license file represents our best effort to document all third-party components and their licenses.
-License terms may change over time. Users should verify current license terms for all components
-before deployment in production environments.
-
-Last Updated: July 3, 2025
+For questions about licensing, please contact: contact@nicolasengel.fr

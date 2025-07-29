@@ -45,6 +45,21 @@ jobs:
       with:
         version: 'v3.13.2'
         
+    - name: Update Helm dependencies
+      run: |
+        echo "Updating Helm chart dependencies..."
+        for chart in helm/*/; do
+          if [ -f "$chart/Chart.yaml" ]; then
+            echo "Updating dependencies for $chart"
+            # Check if chart has dependencies
+            if grep -q "dependencies:" "$chart/Chart.yaml"; then
+              helm dependency update "$chart"
+            else
+              echo "No dependencies found for $chart"
+            fi
+          fi
+        done
+        
     - name: Validate Helm charts
       run: |
         echo "Validating Helm charts..."

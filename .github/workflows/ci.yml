@@ -13,6 +13,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        submodules: recursive
     
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -25,6 +27,16 @@ jobs:
         if [ -f script/requirements.txt ]; then
           pip install -r script/requirements.txt
         fi
+        
+    - name: Verify Ansible configuration
+      run: |
+        echo "Verifying Ansible setup..."
+        ansible --version
+        echo "Checking Ansible configuration..."
+        cd ansible
+        ansible-config dump --only-changed
+        echo "Verifying kubespray submodule..."
+        ls -la kubespray/ | head -5
         
     - name: Test NOAH CLI
       run: |

@@ -9,7 +9,7 @@
       master_nodes: 2
       worker_nodes: 1
       vm_flavor: "m1.large"
-      vm_image: "ubuntu-20.04"
+      vm_image: "ubuntu-24.04"
       network_name: "noah-network"
       security_group: "noah-sg"
       key_name: "noah-keypair"
@@ -73,26 +73,18 @@
   vars_files:
     - ../vars/secrets.yml  # Fichier chiffré avec Ansible Vault
   tasks:
-    - name: Create OpenStack instances
-      openstack.cloud.server:
+    - name: Create VMs
+      community.general.proxmox_kvm:
+        name: "{{ item.name }}"
+        memory: "{{ item.memory | default(8192) }}"
+        cores: "{{ item.cores | default(4) }}"
+        vm_image: "ubuntu-24.04"
+        storage: "local-lvm"
+        net:
+          net0: "virtio,bridge=vmbr0"
         state: present
-        name: "noah-{{ item.type }}-{{ item.id }}"
-        image: "{{ vm_config.vm_image }}"
-        flavor: "{{ vm_config.vm_flavor }}"
-        security_groups: "{{ vm_config.security_group }}"
-        key_name: "{{ vm_config.key_name }}"
-        network: "{{ vm_config.network_name }}"
-        meta:
-          hostname: "noah-{{ item.type }}-{{ item.id }}"
-          group: "{{ item.type }}"
-      loop:
-        - { type: "master", id: 1 }
-        - { type: "master", id: 2 }  
-        - { type: "worker", id: 1 }
-      register: created_servers
-      when: cloud_provider == "openstack"
-
-    - name: Add hosts to inventory
+      loop: "{{ noah_vms }}"
+      when: provision_vms | default(false)    - name: Add hosts to inventory
       add_host:
         name: "{{ item.server.name }}"
         groups: "{{ 'kube_control_plane' if 'master' in item.server.name else 'kube_node' }}"

@@ -49,7 +49,7 @@
 ## 🚀 Quick Start (5 minutes)
 
 ### 🔧 Prerequisites
-- **Servers**: 2+ Ubuntu 20.04+ servers (8GB RAM, 50GB disk)
+- **Servers**: 2+ Ubuntu 24.04 LTS servers (8GB RAM, 50GB disk)
 - **Access**: SSH with passwordless sudo
 - **GitHub**: Repository with Actions enabled
 - **Local**: Git, Ansible 2.16+, kubectl (optional)

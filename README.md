@@ -75,7 +75,7 @@ Copy the values displayed by the script to **GitHub secrets**:
 | Secret | Default Value | Description |
 |--------|---------------|-------------|
 | `SSH_PRIVATE_KEY` | *Displayed by script* | SSH private key for server access |
-| `ANSIBLE_VAULT_PASSWORD` | `N0ah_V4ult_P@ssw0rd_2025!SecureK8s#` | Ansible Vault password |
+| `ANSIBLE_VAULT_PASSWORD` | *Displayed by script* | Ansible Vault password |
 | `MASTER_HOST` | `192.168.1.10` | Master server IP |
 
 #### 3. SSH Key Deployment
@@ -116,10 +116,10 @@ The GitHub Actions pipeline automatically launches and deploys:
 #### Default Accounts
 | Service | Username | Password |
 |---------|----------|----------|
-| Keycloak | `admin` | `Keycl0ak_Admin_789!Strong` |
-| GitLab | `root` | `GitL@b_Root_Password_012!` |
-| Nextcloud | `admin` | `N3xtcloud_Admin_345!Safe` |
-| Grafana | `admin` | `Gr@fana_Monitoring_678!View` |
+| Keycloak | `admin` | `Your_password` |
+| GitLab | `root` | `Your_password` |
+| Nextcloud | `admin` | `Your_password` |
+| Grafana | `admin` | `Your_password` |
 
 ### 🌐 Local DNS Configuration
 
@@ -251,7 +251,7 @@ This project is licensed under **GPL v3**. See [LICENSE](LICENSE) for more detai
 **Nicolas Engel**  
 📧 Email: [contact@nicolasengel.fr](mailto:contact@nicolasengel.fr)  
 🌐 Website: [nicolasengel.fr](https://nicolasengel.fr)  
-💼 LinkedIn: [nicolas-engel-france](https://www.linkedin.com/in/nicolas-engel-france/)
+💼 LinkedIn: [nicolas-engel](https://www.linkedin.com/in/nicolas-engel-france/)
 
 *Expert in cybersecurity, cloud-native infrastructure, and DevSecOps. Passionate about secure and scalable open-source solutions.*
 

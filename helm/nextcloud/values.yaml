@@ -298,6 +298,10 @@ cronjobs:
       memory: 128Mi
 postgresql:
   enabled: true
+  image:
+    registry: docker.io
+    repository: bitnamisecure/postgresql
+    tag: "15.4.0"
   auth:
     postgresPassword: postgres
     username: nextcloud
@@ -316,6 +320,10 @@ postgresql:
         cpu: 1000m
 redis:
   enabled: true
+  image:
+    registry: docker.io
+    repository: bitnamisecure/redis
+    tag: "7.2.3"
   auth:
     enabled: true
     password: nextcloud

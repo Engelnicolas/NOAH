@@ -82,6 +82,10 @@ sessionStorage:
   extraEnv: []
 redis:
   enabled: true
+  image:
+    registry: docker.io
+    repository: bitnamisecure/redis
+    tag: "7.2.3"
   auth:
     enabled: true
     password: oauth2proxy

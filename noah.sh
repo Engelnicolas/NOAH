@@ -59,6 +59,41 @@ check_prerequisites() {
     
     local missing_tools=()
     
+    # Vérification de Python (version la plus récente)
+    step "Vérification de l'installation Python..."
+    if command -v python3 >/dev/null 2>&1; then
+        local python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
+        local python_major=$(echo "$python_version" | cut -d'.' -f1)
+        local python_minor=$(echo "$python_version" | cut -d'.' -f2)
+        
+        if [[ "$python_major" -ge 3 ]] && [[ "$python_minor" -ge 8 ]]; then
+            success "Python $python_version détecté (version compatible)"
+        else
+            error "Python $python_version détecté - Version 3.8+ requise"
+            info "Veuillez mettre à jour Python vers la dernière version"
+            exit 1
+        fi
+    else
+        error "Python 3 n'est pas installé"
+        info "Installation requise: sudo apt update && sudo apt install -y python3 python3-dev"
+        exit 1
+    fi
+    
+    # Vérification de pip
+    step "Vérification de l'installation pip..."
+    if command -v pip3 >/dev/null 2>&1; then
+        local pip_version=$(pip3 --version 2>&1 | cut -d' ' -f2)
+        success "pip $pip_version détecté"
+        
+        # Vérifier si pip est à jour
+        info "Vérification des mises à jour pip..."
+        pip3 install --upgrade pip >/dev/null 2>&1 || warning "Impossible de mettre à jour pip"
+    else
+        error "pip3 n'est pas installé"
+        info "Installation requise: sudo apt install -y python3-pip"
+        exit 1
+    fi
+    
     # Outils essentiels
     command -v git >/dev/null 2>&1 || missing_tools+=("git")
     command -v ansible >/dev/null 2>&1 || missing_tools+=("ansible")

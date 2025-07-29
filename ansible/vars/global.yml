@@ -87,3 +87,30 @@ letsencrypt_email: "admin@noah.local"
 backup_enabled: true
 backup_schedule: "0 2 * * *"  # Tous les jours à 2h
 backup_retention: "30d"
+
+# Configuration infrastructure cloud
+cloud_provider: "baremetal"  # Options: baremetal, proxmox, openstack, aws, gcp, azure
+provision_vms: false  # Set to true if you want to provision VMs automatically
+
+# Configuration Proxmox (if using proxmox as cloud_provider)
+proxmox_api_host: "{{ vault_proxmox_api_host | default('') }}"
+proxmox_api_user: "{{ vault_proxmox_api_user | default('') }}"
+proxmox_api_password: "{{ vault_proxmox_api_password | default('') }}"
+proxmox_api_token_id: "{{ vault_proxmox_api_token_id | default('') }}"
+proxmox_api_token_secret: "{{ vault_proxmox_api_token_secret | default('') }}"
+
+# VM definitions (when provision_vms is true)
+noah_vms: []
+  # Example VM configuration:
+  # - name: "noah-master-01"
+  #   memory: 8192
+  #   cores: 4
+  #   storage: "local-lvm"
+  #   bridge: "vmbr0"
+  #   ip: "192.168.1.10"
+  # - name: "noah-worker-01" 
+  #   memory: 16384
+  #   cores: 8
+  #   storage: "local-lvm"
+  #   bridge: "vmbr0"
+  #   ip: "192.168.1.11"

@@ -1,14 +1,27 @@
 ---
 collections:
+  # Kubernetes management
   - name: community.kubernetes
     version: ">=2.0.0"
   - name: kubernetes.core
     version: ">=2.4.0"
+  
+  # Cloud providers and general utilities
   - name: cloud.common
     version: ">=2.1.0"
   - name: community.general
-    version: ">=7.0.0"
+    version: ">=7.0.0"  # Required for proxmox_kvm, docker, and many other modules
+  
+  # System administration
   - name: ansible.posix
     version: ">=1.5.0"
+  
+  # Cryptography and security
   - name: community.crypto
     version: ">=2.0.0"
+  
+  # Additional useful collections
+  - name: community.docker
+    version: ">=3.4.0"  # For container management
+  - name: community.postgresql
+    version: ">=2.4.0"  # For PostgreSQL management

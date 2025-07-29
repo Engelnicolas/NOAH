@@ -20,7 +20,7 @@ DOMAIN="${DOMAIN:-noah.local}"
 MASTER_IP="${MASTER_IP:-192.168.1.10}"
 WORKER_IP="${WORKER_IP:-192.168.1.12}"
 INGRESS_IP="${INGRESS_IP:-192.168.1.10}"
-VAULT_PASSWORD="${VAULT_PASSWORD:-N0ah_V4ult_P@ssw0rd_2025!SecureK8s#}"
+VAULT_PASSWORD="${VAULT_PASSWORD:-MYPASSWORD}"
 
 echo -e "${BLUE}Configuration avec les paramètres suivants :${NC}"
 echo "  - Domaine: $DOMAIN"

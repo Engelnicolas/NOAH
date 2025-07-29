@@ -1,0 +1,78 @@
+# Inventaire Ansible pour NOAH Cluster
+# Ce fichier utilise les secrets définis dans ../vars/secrets.yml
+
+all:
+  children:
+    kube_control_plane:
+      hosts:
+        master-1:
+          ansible_host: "{{ vault_master_ip | default('192.168.1.10') }}"
+          ip: "{{ vault_master_ip | default('192.168.1.10') }}"
+          access_ip: "{{ vault_master_ip | default('192.168.1.10') }}"
+          ansible_user: "{{ vault_ssh_user | default('ubuntu') }}"
+          ansible_ssh_private_key_file: "{{ vault_ssh_private_key_file | default('~/.ssh/id_rsa') }}"
+          
+    kube_node:
+      hosts:
+        worker-1:
+          ansible_host: "{{ vault_worker1_ip | default('192.168.1.11') }}"
+          ip: "{{ vault_worker1_ip | default('192.168.1.11') }}"
+          access_ip: "{{ vault_worker1_ip | default('192.168.1.11') }}"
+          ansible_user: "{{ vault_ssh_user | default('ubuntu') }}"
+          ansible_ssh_private_key_file: "{{ vault_ssh_private_key_file | default('~/.ssh/id_rsa') }}"
+          
+        worker-2:
+          ansible_host: "{{ vault_worker2_ip | default('192.168.1.12') }}"
+          ip: "{{ vault_worker2_ip | default('192.168.1.12') }}"
+          access_ip: "{{ vault_worker2_ip | default('192.168.1.12') }}"
+          ansible_user: "{{ vault_ssh_user | default('ubuntu') }}"
+          ansible_ssh_private_key_file: "{{ vault_ssh_private_key_file | default('~/.ssh/id_rsa') }}"
+          
+    etcd:
+      children:
+        kube_control_plane: {}
+        
+    k8s_cluster:
+      children:
+        kube_control_plane: {}
+        kube_node: {}
+        
+    calico_rr:
+      hosts: {}
+
+  vars:
+    # Configuration SSH
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_python_interpreter: /usr/bin/python3
+    
+    # Configuration Kubespray
+    cluster_name: "{{ vault_cluster_name | default('noah-cluster') }}"
+    kube_version: v1.28.2
+    kube_network_plugin: calico
+    kube_pods_subnet: 10.233.64.0/18
+    kube_service_addresses: 10.233.0.0/18
+    
+    # Configuration DNS
+    upstream_dns_servers:
+      - 8.8.8.8
+      - 1.1.1.1
+      
+    # Configuration containerd
+    containerd_version: 1.7.8
+    containerd_archive_checksums:
+      amd64: sha256...
+      
+    # Configuration réseau
+    enable_nodelocaldns: true
+    nodelocaldns_ip: 169.254.25.10
+    
+    # Configuration ingress
+    ingress_nginx_enabled: true
+    ingress_nginx_host_network: false
+    
+    # Configuration stockage
+    local_volume_provisioner_enabled: true
+    
+    # Configuration monitoring
+    prometheus_enabled: false  # Sera déployé séparément via Helm
+    grafana_enabled: false     # Sera déployé séparément via Helm

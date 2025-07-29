@@ -6,10 +6,11 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Kubernetes](https://img.shields.io/badge/Platform-Kubernetes-blueviolet.svg)](https://kubernetes.io/)
 [![Version](https://img.shields.io/badge/Version-0.2.1-green.svg)](https://github.com/Engelnicolas/NOAH/releases)
+[![SOPS](https://img.shields.io/badge/Secrets-SOPS%20%2B%20Age-orange.svg)](https://github.com/mozilla/sops)
 [![Maintained](https://img.shields.io/badge/Maintained-Yes-brightgreen.svg)](https://github.com/Engelnicolas/NOAH/commits/main)
 [![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blue.svg)](https://github.com/features/actions)
 
-*Modern infrastructure platform with Ansible/Helm CI/CD pipelines for deploying enterprise-grade open-source solutions*
+*Modern infrastructure platform with Ansible/Helm CI/CD pipelines and secrets management for deploying enterprise-grade open-source solutions*
 
 </div>
 
@@ -43,16 +44,58 @@
 - **Ansible + Kubespray**: Automated Kubernetes v1.28.2 deployment
 - **GitHub Actions**: CI/CD pipeline with automatic deployment
 - **Helm 3.13+**: Cloud-native application management
+- **SOPS + Age**: Modern secrets management with GitOps integration
 
 ---
 
-## 🚀 Quick Start (5 minutes)
+## � Modern Secrets Management with SOPS
+
+NOAH v0.2.1 introduces **SOPS (Mozilla) + Age encryption** for enterprise-grade secrets management:
+
+### ✨ Key Features
+- **🔒 Value-level encryption**: Only secret values are encrypted, not the entire file
+- **🔍 Git-friendly**: Readable diffs and merge conflicts resolution
+- **🔑 Age encryption**: Modern, simple alternative to GPG
+- **🚀 GitOps-ready**: Native integration with CI/CD pipelines
+- **🔄 Easy rotation**: Simple key and secret rotation workflows
+
+### 🚀 Quick SOPS Setup
+```bash
+# Check SOPS status and install if needed
+noah secrets status
+
+# Generate Age encryption keys
+age-keygen -o ~/.config/sops/age/keys.txt
+
+# Edit secrets with automatic encryption
+noah secrets edit
+
+# View decrypted secrets
+noah secrets view
+
+# Validate complete setup
+noah secrets validate
+```
+
+### 📈 Benefits over Traditional Vault
+| Feature | SOPS + Age | Ansible Vault |
+|---------|------------|---------------|
+| **Git diffs** | ✅ Readable | ❌ Binary |
+| **Merge conflicts** | ✅ Resolvable | ❌ Complex |
+| **CI/CD integration** | ✅ Native | ❌ Manual |
+| **Key management** | ✅ Standard (Age) | ❌ Custom passwords |
+| **Partial encryption** | ✅ Values only | ❌ Entire file |
+| **Audit trail** | ✅ Per-value | ❌ File-level |
+
+---
+
+## �🚀 Quick Start (5 minutes)
 
 ### 🔧 Prerequisites
 - **Servers**: 2+ Ubuntu 24.04 LTS servers (8GB RAM, 50GB disk)
 - **Access**: SSH with passwordless sudo
 - **GitHub**: Repository with Actions enabled
-- **Local**: Git, Ansible 2.16+, kubectl (optional)
+- **Local**: Git, Ansible 2.16+, SOPS 3.8+, Age 1.1+, kubectl (optional)
 
 ### ⚡ Express Installation
 
@@ -62,41 +105,59 @@
 git clone https://github.com/Engelnicolas/NOAH.git
 cd NOAH
 
-# Automatic configuration with defaults
-./script/configure-pipeline.sh --auto
+# Initialize NOAH CLI environment
+./noah init
+
+# Automatic configuration with SOPS setup
+./noah configure --auto
 
 # Or interactive mode for customization
-./script/configure-pipeline.sh
+./noah configure
 ```
 
-#### 2. GitHub Actions Configuration
+#### 2. Secrets Management Configuration
+```bash
+# Configure SOPS for secrets management
+noah secrets status     # Check SOPS installation and config
+
+# Generate Age encryption keys (if needed)
+age-keygen -o ~/.config/sops/age/keys.txt
+
+# Edit secrets with SOPS encryption
+noah secrets edit
+
+# Validate secrets configuration
+noah secrets validate
+```
+
+#### 3. GitHub Actions Configuration
 Copy the values displayed by the script to **GitHub secrets**:
 
 | Secret | Default Value | Description |
 |--------|---------------|-------------|
 | `SSH_PRIVATE_KEY` | *Displayed by script* | SSH private key for server access |
-| `ANSIBLE_VAULT_PASSWORD` | *Displayed by script* | Ansible Vault password |
+| `SOPS_AGE_KEY` | *From ~/.config/sops/age/keys.txt* | Age private key for SOPS decryption |
 | `MASTER_HOST` | `192.168.1.10` | Master server IP |
 
-#### 3. SSH Key Deployment
+#### 4. SSH Key Deployment
 ```bash
 # Copy public key to your servers
 ssh-copy-id -i ~/.ssh/noah_pipeline.pub ubuntu@192.168.1.10
 ssh-copy-id -i ~/.ssh/noah_pipeline.pub ubuntu@192.168.1.12
 ```
 
-#### 4. Pipeline Launch
+#### 5. Pipeline Launch
 ```bash
 git add .
-git commit -m "Configure NOAH pipeline with defaults"
-git push origin Ansible
+git commit -m "Configure NOAH pipeline with SOPS secrets"
+git push origin main
 ```
 
 The GitHub Actions pipeline automatically launches and deploys:
 1. **Infrastructure** provisioning
 2. **Kubernetes** installation with Kubespray
 3. **Cluster** configuration (ingress, storage, monitoring)
-4. **Application** deployment via Helm
+4. **Application** deployment via Helm with SOPS-encrypted secrets
 
 ### 🎯 Default Configuration
 
@@ -116,10 +177,12 @@ The GitHub Actions pipeline automatically launches and deploys:
 #### Default Accounts
 | Service | Username | Password |
 |---------|----------|----------|
-| Keycloak | `admin` | `Your_password` |
-| GitLab | `root` | `Your_password` |
-| Nextcloud | `admin` | `Your_password` |
-| Grafana | `admin` | `Your_password` |
+| Keycloak | `admin` | *Generated in secrets* |
+| GitLab | `root` | *Generated in secrets* |
+| Nextcloud | `admin` | *Generated in secrets* |
+| Grafana | `admin` | *Generated in secrets* |
+
+> 🔐 **Note**: All passwords are automatically generated and stored securely with SOPS encryption. Use `noah secrets view` to see the actual values.
 
 ### 🌐 Local DNS Configuration
 
@@ -144,28 +207,42 @@ Add to your `/etc/hosts`:
 
 ## 🛠️ NOAH CLI v0.2.1
 
-### Main Commands
+### Essential Commands
 ```bash
-# Modern and fast CLI
+# Modern CLI
 ./noah --help                    # Complete help
 ./noah --version                 # Version: v0.2.1
 
-# Deployment management
+# Environment setup
 ./noah init                      # Initialize environment
 ./noah configure --auto          # Automatic configuration
-./noah deploy --profile prod     # Production deployment
 ./noah status --all              # Complete system status
 
-# Service management
+# Deployment management
+./noah deploy --profile prod     # Production deployment
+./noah validate                  # Validate configuration
+./noah test                      # Connectivity tests
+```
+
+### SOPS Secrets Management
+```bash
+# Modern secrets management with SOPS
+./noah secrets status            # Complete SOPS diagnostic
+./noah secrets edit              # Edit secrets (auto-encrypted)
+./noah secrets view              # View decrypted secrets
+./noah secrets validate          # Validate SOPS configuration
+./noah secrets generate          # Generate new secure secrets
+./noah secrets rotate            # Rotate existing secrets
+```
+
+### Service Management
+```bash
+# Service lifecycle
 ./noah start                     # Start all services
 ./noah stop                      # Stop all services
 ./noah restart                   # Restart all services
 ./noah logs --service keycloak   # Service logs
-
-# Validation and tests
-./noah validate                  # Validate configuration
-./noah test                      # Connectivity tests
-./noah health                    # System health
+./noah health                    # System health check
 ```
 
 ### Monitoring and Debugging
@@ -201,10 +278,30 @@ nano helm/noah-common/values.yaml
 # For example: domain: noah.mycompany.com
 ```
 
-### Modify Secrets
+### Modify Secrets (SOPS)
 ```bash
-# Decrypt and edit with Ansible Vault
-ansible-vault edit ansible/vars/secrets.yml --vault-password-file ansible/.vault_pass
+# Modern approach with SOPS (recommended)
+noah secrets edit               # Direct SOPS editing
+noah secrets view               # View current secrets
+noah secrets status             # Verify SOPS configuration
+
+# Legacy support (if migrating from Ansible Vault)
+noah secrets validate           # Check encryption status
+```
+
+### Advanced Configuration
+```bash
+# Custom domain configuration
+nano helm/noah-common/values.yaml
+# Change: domain: noah.local to domain: mycompany.com
+
+# SOPS configuration for multiple files
+nano .sops.yaml
+# Add custom encryption rules
+
+# Age key management
+age-keygen -o ~/.config/sops/age/keys.txt  # Generate new keys
+noah secrets rotate                         # Apply key rotation
 ```
 
 ---
@@ -235,8 +332,9 @@ ansible-vault edit ansible/vars/secrets.yml --vault-password-file ansible/.vault
 
 ## 📚 Documentation
 
+- **[Secrets Management](docs/SECRETS_MANAGEMENT.md)**: SOPS integration and security best practices
 - **[CI/CD Pipeline](docs/PIPELINE_CI_CD.md)**: Modern pipeline architecture
-- **[NOAH CLI](docs/NOAH_CLI.md)**: Complete CLI guide
+- **[NOAH CLI](docs/NOAH_CLI.md)**: Complete CLI guide with SOPS commands
 - **[Domain Configuration](docs/DOMAIN_CONFIGURATION.md)**: DNS and SSL certificates
 - **[Security](docs/SECURITY.md)**: Security hardening and best practices
 
@@ -264,6 +362,8 @@ Thanks to the open-source community and maintainers of the tools that make NOAH 
 - **⚙️ Ansible** for infrastructure automation
 - **☸️ CNCF** for Kubernetes, Prometheus, and the cloud-native ecosystem
 - **⎈ Helm** for Kubernetes application management
+- **🔐 Mozilla SOPS** for modern secrets management
+- **🔑 Age** for simple and secure encryption
 - **🔐 Keycloak** for identity and access management
 - **☁️ Nextcloud** for secure collaboration
 - **💬 Mattermost** for team communication

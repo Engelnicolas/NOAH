@@ -1,0 +1,19 @@
+# Configuration SOPS pour NOAH
+# Génération automatique - Tue Jul 29 09:31:49 PM CEST 2025
+
+creation_rules:
+  # Secrets Ansible
+  - path_regex: ansible/vars/secrets\.yml$
+    age: age19eupew2tgf2024zn4j6uwer6e8rakyag4g5mzws2myqkddz8yvfqvzrnha
+  
+  # Secrets Helm
+  - path_regex: helm/.*/secrets\.ya?ml$
+    age: age19eupew2tgf2024zn4j6uwer6e8rakyag4g5mzws2myqkddz8yvfqvzrnha
+  
+  # Manifests secrets
+  - path_regex: manifests/.*-secrets?\.ya?ml$
+    age: age19eupew2tgf2024zn4j6uwer6e8rakyag4g5mzws2myqkddz8yvfqvzrnha
+  
+  # Variables d'environnement
+  - path_regex: \.env\.(encrypted|sops)$
+    age: age19eupew2tgf2024zn4j6uwer6e8rakyag4g5mzws2myqkddz8yvfqvzrnha

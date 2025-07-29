@@ -155,6 +155,10 @@ show_help() {
     echo "  config set        Définir une configuration"
     echo "  config get        Obtenir une configuration"
     echo "  secrets           Gérer les secrets"
+    echo "  secrets generate  Générer de nouveaux secrets"
+    echo "  secrets validate  Valider les secrets"
+    echo "  secrets encrypt   Chiffrer le fichier secrets"
+    echo "  secrets decrypt   Déchiffrer le fichier secrets"
     echo ""
     echo -e "${CYAN}🧪 Développement${NC}"
     echo "  test              Lancer les tests"
@@ -630,6 +634,389 @@ cmd_test() {
     success "Tests terminés"
 }
 
+# Gestion des secrets
+cmd_secrets() {
+    local subcommand="$1"
+    shift
+    
+    case "$subcommand" in
+    generate)
+        cmd_secrets_generate "$@"
+        ;;
+    validate)
+        cmd_secrets_validate "$@"
+        ;;
+    encrypt)
+        cmd_secrets_encrypt "$@"
+        ;;
+    decrypt)
+        cmd_secrets_decrypt "$@"
+        ;;
+    edit)
+        cmd_secrets_edit "$@"
+        ;;
+    view)
+        cmd_secrets_view "$@"
+        ;;
+    rotate)
+        cmd_secrets_rotate "$@"
+        ;;
+    status)
+        cmd_secrets_status "$@"
+        ;;
+    *)
+        cmd_secrets_help
+        ;;
+    esac
+}
+
+cmd_secrets_help() {
+    echo -e "${BOLD}NOAH CLI - Gestion des secrets avec SOPS${NC}"
+    echo ""
+    echo -e "${YELLOW}Commandes de base:${NC}"
+    echo "  secrets generate   Générer de nouveaux secrets sécurisés"
+    echo "  secrets validate   Valider la configuration des secrets"
+    echo "  secrets encrypt    Chiffrer le fichier des secrets avec SOPS"
+    echo "  secrets decrypt    Déchiffrer le fichier des secrets"
+    echo "  secrets edit       Éditer le fichier des secrets chiffrés"
+    echo "  secrets view       Voir le contenu des secrets chiffrés"
+    echo ""
+    echo -e "${YELLOW}Commandes avancées:${NC}"
+    echo "  secrets rotate     Effectuer une rotation des secrets"
+    echo "  secrets status     Vérifier l'état du chiffrement SOPS"
+    echo ""
+    echo -e "${YELLOW}Exemples:${NC}"
+    echo "  noah secrets generate              # Générer tous les secrets"
+    echo "  noah secrets edit                  # Éditer avec SOPS"
+    echo "  noah secrets view                  # Voir les secrets déchiffrés"
+    echo "  noah secrets encrypt               # Chiffrer avec SOPS"
+    echo "  noah secrets rotate                # Rotation des secrets"
+    echo "  noah secrets status                # Vérifier le statut SOPS"
+    echo ""
+    echo -e "${CYAN}Informations SOPS:${NC}"
+    echo "  • Chiffrement: Age encryption"
+    echo "  • Configuration: .sops.yaml"
+    echo "  • Clés: ~/.config/sops/age/keys.txt"
+    echo ""
+}
+
+cmd_secrets_generate() {
+    step "Génération des secrets NOAH..."
+    
+    local secrets_file="ansible/vars/secrets.yml"
+    
+    # Vérifier si SOPS est disponible
+    if ! command -v sops >/dev/null 2>&1; then
+        error "SOPS n'est pas installé"
+        info "Installation: voir docs/SOPS_INTEGRATION.md"
+        exit 1
+    fi
+    
+    # Utiliser le nouveau script SOPS ou générer directement
+    if [[ -f "script/sops-secrets-manager.sh" ]]; then
+        ./script/sops-secrets-manager.sh generate
+        success "Secrets générés avec SOPS"
+    else
+        warning "Script SOPS non trouvé - Génération manuelle requise"
+        info "Utilisez: sops $secrets_file"
+    fi
+}
+
+cmd_secrets_validate() {
+    step "Validation des secrets NOAH..."
+    
+    local secrets_file="ansible/vars/secrets.yml"
+    
+    # Vérifier SOPS
+    if ! command -v sops >/dev/null 2>&1; then
+        error "SOPS n'est pas installé"
+        exit 1
+    fi
+    
+    # Vérifier l'existence du fichier
+    if [[ ! -f "$secrets_file" ]]; then
+        error "Fichier des secrets non trouvé: $secrets_file"
+        info "Créez le fichier avec: noah secrets edit"
+        exit 1
+    fi
+    
+    # Vérifier que le fichier est chiffré avec SOPS
+    if sops --decrypt "$secrets_file" >/dev/null 2>&1; then
+        success "✅ Fichier chiffré avec SOPS"
+        
+        # Vérifier la configuration SOPS
+        if [[ -f ".sops.yaml" ]]; then
+            success "✅ Configuration SOPS trouvée (.sops.yaml)"
+        else
+            warning "⚠️  Configuration SOPS non trouvée (.sops.yaml)"
+        fi
+        
+        # Vérifier les clés Age
+        if [[ -f "$HOME/.config/sops/age/keys.txt" ]]; then
+            success "✅ Clés Age trouvées"
+        else
+            warning "⚠️  Clés Age non trouvées dans ~/.config/sops/age/keys.txt"
+        fi
+        
+        success "Validation SOPS terminée"
+    else
+        error "❌ Le fichier n'est pas chiffré avec SOPS ou les clés sont manquantes"
+        info "Vérifiez: ~/.config/sops/age/keys.txt et .sops.yaml"
+        exit 1
+    fi
+}
+
+cmd_secrets_encrypt() {
+    step "Chiffrement du fichier des secrets avec SOPS..."
+    
+    local secrets_file="ansible/vars/secrets.yml"
+    
+    # Vérifier SOPS
+    if ! command -v sops >/dev/null 2>&1; then
+        error "SOPS n'est pas installé"
+        exit 1
+    fi
+    
+    if [[ ! -f "$secrets_file" ]]; then
+        error "Fichier des secrets non trouvé: $secrets_file"
+        info "Créez le fichier avec: noah secrets edit"
+        exit 1
+    fi
+    
+    # Vérifier si déjà chiffré avec SOPS
+    if sops --decrypt "$secrets_file" >/dev/null 2>&1; then
+        success "Le fichier est déjà chiffré avec SOPS"
+        return 0
+    fi
+    
+    # Vérifier la configuration SOPS
+    if [[ ! -f ".sops.yaml" ]]; then
+        error "Configuration SOPS manquante (.sops.yaml)"
+        info "Exécutez la migration: ./script/deprecated-shell-secrets/migrate-to-sops.sh"
+        exit 1
+    fi
+    
+    # Chiffrer avec SOPS
+    if sops --encrypt --in-place "$secrets_file"; then
+        success "Fichier chiffré avec SOPS"
+        info "Le fichier est maintenant sécurisé et prêt pour Git"
+    else
+        error "Échec du chiffrement SOPS"
+        exit 1
+    fi
+}
+
+cmd_secrets_decrypt() {
+    step "Déchiffrement du fichier des secrets..."
+    
+    local secrets_file="ansible/vars/secrets.yml"
+    
+    # Vérifier SOPS
+    if ! command -v sops >/dev/null 2>&1; then
+        error "SOPS n'est pas installé"
+        exit 1
+    fi
+    
+    if [[ ! -f "$secrets_file" ]]; then
+        error "Fichier des secrets non trouvé: $secrets_file"
+        exit 1
+    fi
+    
+    # Vérifier si chiffré avec SOPS
+    if sops --decrypt "$secrets_file" >/dev/null 2>&1; then
+        # Déchiffrer en place
+        if sops --decrypt --in-place "$secrets_file"; then
+            success "Fichier des secrets déchiffré"
+            warning "⚠️  ATTENTION: Le fichier est maintenant en clair - Ne pas le committer !"
+            info "Pour re-chiffrer: noah secrets encrypt"
+        else
+            error "Échec du déchiffrement"
+            exit 1
+        fi
+    else
+        warning "Le fichier n'est pas chiffré avec SOPS ou les clés sont manquantes"
+        info "Vérifiez les clés Age dans ~/.config/sops/age/keys.txt"
+    fi
+}
+
+cmd_secrets_edit() {
+    step "Édition du fichier des secrets avec SOPS..."
+    
+    local secrets_file="ansible/vars/secrets.yml"
+    
+    # Vérifier SOPS
+    if ! command -v sops >/dev/null 2>&1; then
+        error "SOPS n'est pas installé"
+        exit 1
+    fi
+    
+    # Créer le fichier s'il n'existe pas
+    if [[ ! -f "$secrets_file" ]]; then
+        warning "Fichier des secrets non trouvé - Création d'un nouveau fichier"
+        
+        # Vérifier la configuration SOPS
+        if [[ ! -f ".sops.yaml" ]]; then
+            error "Configuration SOPS manquante (.sops.yaml)"
+            info "Exécutez la migration: ./script/deprecated-shell-secrets/migrate-to-sops.sh"
+            exit 1
+        fi
+        
+        # Créer un fichier template
+        mkdir -p "$(dirname "$secrets_file")"
+        cat > "$secrets_file" << 'EOF'
+# Secrets NOAH - Gestion avec SOPS
+# Ajoutez vos secrets ci-dessous
+
+# Exemples:
+# vault_postgres_password: "changeme"
+# vault_keycloak_admin_password: "changeme"
+EOF
+        info "Fichier template créé: $secrets_file"
+    fi
+    
+    # Éditer avec SOPS
+    if sops "$secrets_file"; then
+        success "Édition terminée"
+        info "Le fichier est automatiquement chiffré avec SOPS"
+    else
+        error "Échec de l'édition SOPS"
+        exit 1
+    fi
+}
+
+cmd_secrets_view() {
+    step "Affichage du fichier des secrets..."
+    
+    local secrets_file="ansible/vars/secrets.yml"
+    
+    # Vérifier SOPS
+    if ! command -v sops >/dev/null 2>&1; then
+        error "SOPS n'est pas installé"
+        exit 1
+    fi
+    
+    if [[ ! -f "$secrets_file" ]]; then
+        error "Fichier des secrets non trouvé: $secrets_file"
+        info "Créez le fichier avec: noah secrets edit"
+        exit 1
+    fi
+    
+    # Afficher avec SOPS
+    if sops --decrypt "$secrets_file"; then
+        success "Affichage terminé"
+    else
+        error "Impossible de déchiffrer le fichier"
+        info "Vérifiez les clés Age dans ~/.config/sops/age/keys.txt"
+        exit 1
+    fi
+}
+
+cmd_secrets_rotate() {
+    step "Rotation des secrets NOAH..."
+    
+    # Utiliser le nouveau script SOPS simplifié
+    if [[ -f "script/sops-secrets-manager.sh" ]]; then
+        ./script/sops-secrets-manager.sh rotate
+        success "Rotation des secrets terminée"
+    else
+        warning "Script SOPS non trouvé - Rotation manuelle"
+        info "Pour rotation manuelle:"
+        info "1. noah secrets edit"
+        info "2. Modifier les valeurs des secrets"
+        info "3. Sauvegarder (SOPS chiffre automatiquement)"
+    fi
+}
+
+cmd_secrets_status() {
+    step "Vérification du statut SOPS..."
+    
+    local secrets_file="ansible/vars/secrets.yml"
+    local status_ok=true
+    
+    echo -e "${CYAN}=== STATUT SOPS NOAH ===${NC}"
+    echo ""
+    
+    # Vérifier SOPS
+    if command -v sops >/dev/null 2>&1; then
+        local sops_version=$(sops --version 2>/dev/null | head -1)
+        success "✅ SOPS installé: $sops_version"
+    else
+        error "❌ SOPS non installé"
+        status_ok=false
+    fi
+    
+    # Vérifier Age
+    if command -v age >/dev/null 2>&1; then
+        local age_version=$(age --version 2>/dev/null)
+        success "✅ Age installé: $age_version"
+    else
+        error "❌ Age non installé"
+        status_ok=false
+    fi
+    
+    # Vérifier la configuration SOPS
+    if [[ -f ".sops.yaml" ]]; then
+        success "✅ Configuration SOPS (.sops.yaml)"
+        local rules_count=$(grep -c "path_regex:" .sops.yaml)
+        info "   → $rules_count règles configurées"
+    else
+        error "❌ Configuration SOPS manquante (.sops.yaml)"
+        status_ok=false
+    fi
+    
+    # Vérifier les clés Age
+    if [[ -f "$HOME/.config/sops/age/keys.txt" ]]; then
+        success "✅ Clés Age disponibles"
+        local key_count=$(grep -c "AGE-SECRET-KEY" "$HOME/.config/sops/age/keys.txt" 2>/dev/null || echo "0")
+        info "   → $key_count clé(s) privée(s)"
+    else
+        error "❌ Clés Age manquantes (~/.config/sops/age/keys.txt)"
+        status_ok=false
+    fi
+    
+    # Vérifier le fichier des secrets
+    if [[ -f "$secrets_file" ]]; then
+        if sops --decrypt "$secrets_file" >/dev/null 2>&1; then
+            success "✅ Fichier secrets chiffré avec SOPS"
+            local secrets_count=$(sops --decrypt "$secrets_file" 2>/dev/null | grep -c "^vault_" || echo "0")
+            info "   → $secrets_count secret(s) détecté(s)"
+        else
+            error "❌ Fichier secrets non chiffré ou inaccessible"
+            status_ok=false
+        fi
+    else
+        warning "⚠️  Fichier secrets non trouvé ($secrets_file)"
+        info "   → Créez-le avec: noah secrets edit"
+    fi
+    
+    # Vérifier Helm-Secrets plugin
+    if command -v helm >/dev/null 2>&1; then
+        if helm plugin list 2>/dev/null | grep -q "secrets"; then
+            success "✅ Plugin Helm-Secrets installé"
+        else
+            warning "⚠️  Plugin Helm-Secrets non installé"
+            info "   → Installation: helm plugin install https://github.com/jkroepke/helm-secrets"
+        fi
+    fi
+    
+    echo ""
+    if [[ "$status_ok" == "true" ]]; then
+        success "🎉 Configuration SOPS complète et fonctionnelle"
+        echo ""
+        echo -e "${YELLOW}Commandes disponibles:${NC}"
+        echo "  noah secrets edit    # Éditer les secrets"
+        echo "  noah secrets view    # Voir les secrets"
+        echo "  noah secrets rotate  # Rotation des secrets"
+    else
+        error "⚠️  Configuration SOPS incomplète"
+        echo ""
+        echo -e "${YELLOW}Actions recommandées:${NC}"
+        echo "  1. Installer les outils manquants"
+        echo "  2. Voir: docs/SOPS_INTEGRATION.md"
+        echo "  3. Ou exécuter: ./script/deprecated-shell-secrets/migrate-to-sops.sh"
+    fi
+}
+
 # Fonction principale
 main() {
     # Gestion des arguments globaux
@@ -734,6 +1121,10 @@ main() {
     test)
         check_prerequisites
         cmd_test "$@"
+        ;;
+    secrets)
+        check_prerequisites
+        cmd_secrets "$@"
         ;;
     health)
         cmd_status --detailed "$@"

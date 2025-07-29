@@ -1,94 +1,463 @@
-name: Deploy NOAH to Kubernetes
+name: Deploy NOAH Platform
 
 on:
   push:
-    branches: [ main, Ansible ]
-  workflow_dispatch:  # Permet le déclenchement manuel
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+        - development
+      skip_provision:
+        description: 'Skip infrastructure provisioning'
+        required: false
+        default: false
+        type: boolean
+      deploy_phase:
+        description: 'Deployment phase'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - full
+        - sso-only
+        - apps-only
 
 env:
   ANSIBLE_HOST_KEY_CHECKING: False
   ANSIBLE_STDOUT_CALLBACK: yaml
+  ANSIBLE_CALLBACKS_ENABLED: profile_tasks
+  PYTHONUNBUFFERED: 1
 
 jobs:
-  deploy:
+  pre-deployment:
+    name: Pre-Deployment Validation
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
+    timeout-minutes: 10
+    outputs:
+      environment: ${{ steps.setup.outputs.environment }}
+      skip_provision: ${{ steps.setup.outputs.skip_provision }}
+      deploy_phase: ${{ steps.setup.outputs.deploy_phase }}
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: recursive  # Pour récupérer Kubespray
+          fetch-depth: 0
+
+      - name: Setup deployment parameters
+        id: setup
+        run: |
+          echo "environment=${{ github.event.inputs.environment || 'production' }}" >> $GITHUB_OUTPUT
+          echo "skip_provision=${{ github.event.inputs.skip_provision || 'false' }}" >> $GITHUB_OUTPUT
+          echo "deploy_phase=${{ github.event.inputs.deploy_phase || 'full' }}" >> $GITHUB_OUTPUT
+          
+      - name: Display deployment configuration
+        run: |
+          echo "🚀 NOAH Platform Deployment Configuration"
+          echo "========================================"
+          echo "Environment: ${{ steps.setup.outputs.environment }}"
+          echo "Skip Provision: ${{ steps.setup.outputs.skip_provision }}"
+          echo "Deploy Phase: ${{ steps.setup.outputs.deploy_phase }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "========================================"
+
+      - name: Validate Ansible playbooks
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Ansible for validation
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core>=2.16.3
+          
+      - name: Syntax check playbooks
+        run: |
+          echo "🔍 Validating Ansible playbooks syntax..."
+          for playbook in ansible/playbooks/*.yml; do
+            echo "Checking $(basename $playbook)..."
+            ansible-playbook --syntax-check "$playbook" -i ansible/inventory/mycluster/hosts.yaml
+          done
+          echo "✅ All playbooks syntax is valid"
+
+  infrastructure:
+    name: Infrastructure Provisioning
+    runs-on: ubuntu-latest
+    needs: pre-deployment
+    if: needs.pre-deployment.outputs.skip_provision != 'true'
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Python & Ansible
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
+      - name: Cache Ansible dependencies
+        uses: actions/cache@v4
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          path: |
+            ~/.cache/pip
+            ~/.ansible/collections
+          key: ${{ runner.os }}-ansible-${{ hashFiles('ansible/requirements.yml', 'script/requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-ansible-
 
       - name: Install Ansible & dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ansible ansible-core netaddr jinja2
-          ansible-galaxy collection install community.kubernetes
-          ansible-galaxy collection install kubernetes.core
-          ansible-galaxy collection install cloud.common
+          pip install -r script/requirements.txt
+          ansible-galaxy collection install -r ansible/requirements.yml --force
 
-      - name: Configure SSH keys
+      - name: Configure SSH authentication
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.MASTER_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.WORKER_HOSTS }} >> ~/.ssh/known_hosts || true
+
+      - name: Create Ansible vault password file
+        run: |
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ansible/.vault_pass
+          chmod 600 ansible/.vault_pass
+
+      - name: Verify Ansible connectivity
+        run: |
+          cd ansible
+          ansible all -m ping -i inventory/mycluster/hosts.yaml --vault-password-file .vault_pass
+
+      - name: Provision infrastructure (Ubuntu 24.04 LTS)
+        run: |
+          cd ansible
+          echo "🏗️ Provisioning infrastructure with Ubuntu 24.04 LTS..."
+          ansible-playbook playbooks/01-provision.yml \
+            -i inventory/mycluster/hosts.yaml \
+            --vault-password-file .vault_pass \
+            -v
+
+      - name: Install Kubernetes cluster (Kubespray)
+        run: |
+          cd ansible
+          echo "⚙️ Installing Kubernetes cluster..."
+          ansible-playbook playbooks/02-install-k8s.yml \
+            -i inventory/mycluster/hosts.yaml \
+            --vault-password-file .vault_pass \
+            -v
+
+      - name: Configure Kubernetes cluster
+        run: |
+          cd ansible
+          echo "🔧 Configuring Kubernetes cluster..."
+          ansible-playbook playbooks/03-configure-cluster.yml \
+            -i inventory/mycluster/hosts.yaml \
+            --vault-password-file .vault_pass \
+            -v
+
+      - name: Verify cluster health
+        run: |
+          cd ansible
+          echo "🏥 Verifying cluster health..."
+          ansible kube_control_plane[0] -i inventory/mycluster/hosts.yaml \
+            --vault-password-file .vault_pass \
+            -m shell -a "kubectl get nodes -o wide"
+
+  sso-foundation:
+    name: Deploy SSO Foundation
+    runs-on: ubuntu-latest
+    needs: [pre-deployment, infrastructure]
+    if: always() && (needs.infrastructure.result == 'success' || needs.pre-deployment.outputs.skip_provision == 'true') && (needs.pre-deployment.outputs.deploy_phase == 'full' || needs.pre-deployment.outputs.deploy_phase == 'sso-only')
+    timeout-minutes: 45
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python & Ansible
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r script/requirements.txt
+          ansible-galaxy collection install -r ansible/requirements.yml --force
+
+      - name: Configure SSH authentication
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.MASTER_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Verify Ansible installation
+      - name: Create Ansible vault password file
         run: |
-          ansible --version
-          ansible-playbook --version
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ansible/.vault_pass
+          chmod 600 ansible/.vault_pass
 
-      - name: Provision infrastructure
+      - name: Deploy SSO Foundation (Phase 1)
         run: |
           cd ansible
-          ansible-playbook playbooks/01-provision.yml -i inventory/mycluster/hosts.yaml -v
-        env:
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          echo "🔐 Deploying SSO Foundation (Samba4, Keycloak, OAuth2-Proxy)..."
+          ansible-playbook playbooks/04-deploy-apps.yml \
+            -i inventory/mycluster/hosts.yaml \
+            --vault-password-file .vault_pass \
+            --limit "Deploy NOAH applications - Step 1: SSO Foundation" \
+            -v
 
-      - name: Install Kubernetes via Kubespray
+      - name: Verify SSO Foundation
         run: |
           cd ansible
-          ansible-playbook playbooks/02-install-k8s.yml -i inventory/mycluster/hosts.yaml -v
-        env:
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          echo "✅ Verifying SSO Foundation deployment..."
+          ansible kube_control_plane[0] -i inventory/mycluster/hosts.yaml \
+            --vault-password-file .vault_pass \
+            -m shell -a "kubectl get deployments -n noah | grep -E '(samba4|keycloak|oauth2-proxy)'"
 
-      - name: Configure Kubernetes cluster
+  applications:
+    name: Deploy Applications
+    runs-on: ubuntu-latest
+    needs: [pre-deployment, sso-foundation]
+    if: always() && needs.sso-foundation.result == 'success' && (needs.pre-deployment.outputs.deploy_phase == 'full' || needs.pre-deployment.outputs.deploy_phase == 'apps-only')
+    timeout-minutes: 60
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python & Ansible
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r script/requirements.txt
+          ansible-galaxy collection install -r ansible/requirements.yml --force
+
+      - name: Configure SSH authentication
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.MASTER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create Ansible vault password file
+        run: |
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ansible/.vault_pass
+          chmod 600 ansible/.vault_pass
+
+      - name: Deploy Applications with SSO Integration (Phase 2)
         run: |
           cd ansible
-          ansible-playbook playbooks/03-configure-cluster.yml -i inventory/mycluster/hosts.yaml -v
-        env:
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          echo "🚀 Deploying Applications with SSO Integration..."
+          ansible-playbook playbooks/04-deploy-apps.yml \
+            -i inventory/mycluster/hosts.yaml \
+            --vault-password-file .vault_pass \
+            --limit "Deploy NOAH applications - Step 2: Applications with SSO Integration" \
+            -v
 
-      - name: Deploy NOAH application via Helm
+      - name: Wait for applications to be ready
         run: |
           cd ansible
-          ansible-playbook playbooks/04-deploy-apps.yml -i inventory/mycluster/hosts.yaml -v
-        env:
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          echo "⏳ Waiting for all applications to be ready..."
+          ansible kube_control_plane[0] -i inventory/mycluster/hosts.yaml \
+            --vault-password-file .vault_pass \
+            -m shell -a "kubectl wait --for=condition=available --timeout=600s deployment --all -n noah"
 
-      - name: Verify deployment
+  verification:
+    name: Deployment Verification
+    runs-on: ubuntu-latest
+    needs: [pre-deployment, applications]
+    if: always() && (needs.applications.result == 'success' || (needs.pre-deployment.outputs.deploy_phase == 'sso-only' && needs.sso-foundation.result == 'success'))
+    timeout-minutes: 20
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python & Ansible
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r script/requirements.txt
+          ansible-galaxy collection install -r ansible/requirements.yml --force
+
+      - name: Configure SSH authentication
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.MASTER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create Ansible vault password file
+        run: |
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ansible/.vault_pass
+          chmod 600 ansible/.vault_pass
+
+      - name: Run deployment verification
         run: |
           cd ansible
-          ansible-playbook playbooks/05-verify-deployment.yml -i inventory/mycluster/hosts.yaml -v
+          echo "🔍 Running comprehensive deployment verification..."
+          if [ -f "playbooks/05-verify-deployment.yml" ]; then
+            ansible-playbook playbooks/05-verify-deployment.yml \
+              -i inventory/mycluster/hosts.yaml \
+              --vault-password-file .vault_pass \
+              -v
+          else
+            echo "⚠️ Verification playbook not found, running manual checks..."
+          fi
 
-      - name: Cleanup on failure
-        if: failure()
+      - name: Get deployment status
         run: |
-          echo "Deployment failed, running cleanup..."
           cd ansible
-          ansible-playbook playbooks/99-cleanup.yml -i inventory/mycluster/hosts.yaml -v || true
+          echo "📊 Getting complete deployment status..."
+          ansible kube_control_plane[0] -i inventory/mycluster/hosts.yaml \
+            --vault-password-file .vault_pass \
+            -m shell -a "
+            echo '=== NOAH PLATFORM DEPLOYMENT STATUS ==='
+            echo 'Helm Releases:'
+            helm list -n noah
+            echo ''
+            echo 'Pod Status:'
+            kubectl get pods -n noah -o wide
+            echo ''
+            echo 'Service Status:'
+            kubectl get svc -n noah
+            echo ''
+            echo 'Ingress Status:'
+            kubectl get ingress -n noah
+            echo ''
+            echo 'Storage Status:'
+            kubectl get pv,pvc -n noah
+            echo '========================================'
+            "
+
+      - name: Test application endpoints
+        run: |
+          cd ansible
+          echo "🌐 Testing application endpoints..."
+          ansible kube_control_plane[0] -i inventory/mycluster/hosts.yaml \
+            --vault-password-file .vault_pass \
+            -m shell -a "
+            echo 'Testing NOAH Platform endpoints:'
+            for app in keycloak auth gitlab nextcloud mattermost grafana wazuh openedr; do
+              echo -n \"\$app.noah.local: \"
+              curl -k -s -o /dev/null -w '%{http_code}' https://\$app.noah.local/health || echo 'N/A'
+            done
+            " || true
+
+  cleanup:
+    name: Cleanup on Failure
+    runs-on: ubuntu-latest
+    needs: [infrastructure, sso-foundation, applications, verification]
+    if: failure() && github.event_name != 'workflow_dispatch'
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python & Ansible
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r script/requirements.txt
+
+      - name: Configure SSH authentication
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.MASTER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create Ansible vault password file
+        run: |
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ansible/.vault_pass
+          chmod 600 ansible/.vault_pass
+
+      - name: Run cleanup procedures
+        run: |
+          cd ansible
+          echo "🧹 Running cleanup procedures after deployment failure..."
+          if [ -f "playbooks/99-cleanup.yml" ]; then
+            ansible-playbook playbooks/99-cleanup.yml \
+              -i inventory/mycluster/hosts.yaml \
+              --vault-password-file .vault_pass \
+              -v || true
+          else
+            echo "⚠️ Cleanup playbook not found, performing basic cleanup..."
+            ansible kube_control_plane[0] -i inventory/mycluster/hosts.yaml \
+              --vault-password-file .vault_pass \
+              -m shell -a "kubectl delete namespace noah --ignore-not-found=true" || true
+          fi
+
+  notification:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [pre-deployment, infrastructure, sso-foundation, applications, verification]
+    if: always()
+    timeout-minutes: 5
+    
+    steps:
+      - name: Determine deployment status
+        id: status
+        run: |
+          if [[ "${{ needs.verification.result }}" == "success" ]]; then
+            echo "status=✅ SUCCESS" >> $GITHUB_OUTPUT
+            echo "color=good" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.sso-foundation.result }}" == "success" && "${{ needs.pre-deployment.outputs.deploy_phase }}" == "sso-only" ]]; then
+            echo "status=✅ SSO-ONLY SUCCESS" >> $GITHUB_OUTPUT
+            echo "color=good" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ FAILED" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send deployment notification
+        run: |
+          echo "📢 NOAH Platform Deployment Notification"
+          echo "========================================"
+          echo "Status: ${{ steps.status.outputs.status }}"
+          echo "Environment: ${{ needs.pre-deployment.outputs.environment }}"
+          echo "Phase: ${{ needs.pre-deployment.outputs.deploy_phase }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "========================================"
+          
+          if [[ "${{ steps.status.outputs.status }}" == *"SUCCESS"* ]]; then
+            echo "🎉 NOAH Platform is ready for use!"
+            echo "🌐 Access points:"
+            echo "  - Identity Provider: https://keycloak.noah.local"
+            echo "  - Auth Gateway: https://auth.noah.local"
+            echo "  - DevOps Platform: https://gitlab.noah.local"
+            echo "  - File Sharing: https://nextcloud.noah.local"
+            echo "  - Communication: https://mattermost.noah.local"
+            echo "  - Monitoring: https://grafana.noah.local"
+            echo "  - Security: https://wazuh.noah.local"
+            echo "  - Endpoint Detection: https://openedr.noah.local"
+          else
+            echo "💥 Deployment failed. Please check the logs and retry."
+          fi

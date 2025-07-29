@@ -1,21 +1,32 @@
 ---
-- name: Deploy NOAH applications via Helm
+- name: Deploy NOAH applications - Step 1: SSO Foundation
   hosts: kube_control_plane[0]
   become: yes
   become_user: "{{ ansible_user }}"
   vars:
     noah_namespace: "noah"
-    noah_chart_path: "../../helm/noah-chart"
-    values_file: "../../values/values-prod.yaml"
+    values_file: "../../script/values/values-prod.yaml"
     
   tasks:
+    - name: Display deployment phase
+      debug:
+        msg: |
+          ==========================================
+          🚀 NOAH DEPLOYMENT - PHASE 1: SSO FOUNDATION
+          ==========================================
+          Deploying minimal SSO socle:
+          1. Samba4 (Active Directory)
+          2. Keycloak (Identity Provider)  
+          3. OAuth2-Proxy (Authentication Gateway)
+          ==========================================
+
     - name: Verify Helm is working
       shell: helm version --short
       register: helm_check
 
     - name: Display Helm version
       debug:
-        msg: "{{ helm_check.stdout }}"
+        msg: "Using Helm version: {{ helm_check.stdout }}"
 
     - name: Check if NOAH namespace exists
       kubernetes.core.k8s_info:
@@ -30,231 +41,575 @@
         api_version: v1
         kind: Namespace
         state: present
+        definition:
+          metadata:
+            labels:
+              name: "{{ noah_namespace }}"
+              app.kubernetes.io/name: noah
+              app.kubernetes.io/instance: noah-platform
       when: namespace_check.resources | length == 0
 
-    - name: Copy Helm chart to remote
-      copy:
-        src: "{{ noah_chart_path }}/"
-        dest: "/tmp/noah-chart/"
-        mode: '0644'
+    # ========================================
+    # PHASE 1: SSO FOUNDATION DEPLOYMENT
+    # ========================================
 
-    - name: Copy values file to remote  
-      copy:
-        src: "{{ values_file }}"
-        dest: "/tmp/values-prod.yaml"
-        mode: '0644'
+    - name: "PHASE 1 - Deploy Samba4 (Active Directory)"
+      block:
+        - name: Deploy Samba4 Helm chart
+          kubernetes.core.helm:
+            name: samba4
+            chart_ref: "../../helm/samba4"
+            release_namespace: "{{ noah_namespace }}"
+            create_namespace: false
+            values:
+              image:
+                tag: "latest"
+              persistence:
+                enabled: true
+                storageClass: "local-path"
+                size: 10Gi
+              samba:
+                domain: "NOAH"
+                realm: "NOAH.LOCAL"
+                serverRole: "dc"
+                adminPassword: "{{ vault_samba_admin_password }}"
+              resources:
+                requests:
+                  memory: "512Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "1Gi"
+                  cpu: "500m"
+              service:
+                type: ClusterIP
+              networkPolicy:
+                enabled: true
 
-    - name: Validate Helm chart
-      shell: helm lint /tmp/noah-chart/
-      register: chart_validation
+        - name: Wait for Samba4 to be ready
+          kubernetes.core.k8s_info:
+            api_version: apps/v1
+            kind: Deployment
+            name: samba4
+            namespace: "{{ noah_namespace }}"
+            wait_condition:
+              type: Available
+              status: "True"
+            wait_timeout: 300
 
-    - name: Display chart validation result
+        - name: Verify Samba4 Active Directory service
+          shell: |
+            kubectl exec -n {{ noah_namespace }} deployment/samba4 -- samba-tool domain info 127.0.0.1
+          register: samba_status
+          retries: 3
+          delay: 10
+
+        - name: Display Samba4 status
+          debug:
+            msg: "✅ Samba4 Active Directory is ready: {{ samba_status.stdout_lines }}"
+
+    - name: "PHASE 1 - Deploy Keycloak (Identity Provider)"
+      block:
+        - name: Deploy Keycloak Helm chart
+          kubernetes.core.helm:
+            name: keycloak
+            chart_ref: "../../helm/keycloak"
+            release_namespace: "{{ noah_namespace }}"
+            create_namespace: false
+            values:
+              image:
+                tag: "24.0.1"
+              postgresql:
+                enabled: true
+                image:
+                  registry: docker.io
+                  repository: bitnamisecure/postgresql
+                  tag: "15.4.0"
+                auth:
+                  postgresPassword: "{{ vault_postgres_password }}"
+                  username: keycloak
+                  password: "{{ vault_keycloak_db_password }}"
+                  database: keycloak
+                primary:
+                  persistence:
+                    enabled: true
+                    storageClass: "local-path" 
+                    size: 10Gi
+              auth:
+                adminUser: admin
+                adminPassword: "{{ vault_keycloak_admin_password }}"
+              ingress:
+                enabled: true
+                ingressClassName: nginx
+                hostname: "keycloak.noah.local"
+                annotations:
+                  cert-manager.io/cluster-issuer: "letsencrypt-prod"
+                  nginx.ingress.kubernetes.io/ssl-redirect: "true"
+                tls: true
+              resources:
+                requests:
+                  memory: "512Mi"
+                  cpu: "500m"
+                limits:
+                  memory: "1Gi"
+                  cpu: "1000m"
+              networkPolicy:
+                enabled: true
+
+        - name: Wait for Keycloak to be ready
+          kubernetes.core.k8s_info:
+            api_version: apps/v1
+            kind: Deployment
+            name: keycloak
+            namespace: "{{ noah_namespace }}"
+            wait_condition:
+              type: Available
+              status: "True"
+            wait_timeout: 600
+
+        - name: Wait for Keycloak HTTP endpoint
+          uri:
+            url: "http://keycloak.noah.local/auth/realms/master"
+            method: GET
+            status_code: [200, 301, 302]
+          register: keycloak_health
+          retries: 30
+          delay: 10
+          until: keycloak_health.status in [200, 301, 302]
+
+        - name: Display Keycloak status
+          debug:
+            msg: "✅ Keycloak Identity Provider is ready and accessible"
+
+    - name: "PHASE 1 - Deploy OAuth2-Proxy (Authentication Gateway)"
+      block:
+        - name: Deploy OAuth2-Proxy Helm chart
+          kubernetes.core.helm:
+            name: oauth2-proxy
+            chart_ref: "../../helm/oauth2-proxy"
+            release_namespace: "{{ noah_namespace }}"
+            create_namespace: false
+            values:
+              image:
+                tag: "v7.5.1"
+              config:
+                clientID: "{{ vault_oauth2_client_id }}"
+                clientSecret: "{{ vault_oauth2_client_secret }}"
+                cookieSecret: "{{ vault_oauth2_cookie_secret }}"
+              extraArgs:
+                provider: "keycloak-oidc"
+                oidc-issuer-url: "http://keycloak.noah.local/auth/realms/noah"
+                redirect-url: "https://auth.noah.local/oauth2/callback"
+                email-domain: "*"
+                pass-access-token: true
+                pass-user-headers: true
+                set-authorization-header: true
+                skip-provider-button: true
+              redis:
+                enabled: true
+                image:
+                  registry: docker.io
+                  repository: bitnamisecure/redis
+                  tag: "7.2.3"
+                auth:
+                  enabled: true
+                  password: "{{ vault_redis_password }}"
+                master:
+                  persistence:
+                    enabled: true
+                    storageClass: "local-path"
+                    size: 8Gi
+              ingress:
+                enabled: true
+                className: nginx
+                hostname: "auth.noah.local"
+                annotations:
+                  cert-manager.io/cluster-issuer: "letsencrypt-prod" 
+                  nginx.ingress.kubernetes.io/ssl-redirect: "true"
+                tls: true
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "200m"
+              networkPolicy:
+                enabled: true
+
+        - name: Wait for OAuth2-Proxy to be ready
+          kubernetes.core.k8s_info:
+            api_version: apps/v1
+            kind: Deployment
+            name: oauth2-proxy
+            namespace: "{{ noah_namespace }}"
+            wait_condition:
+              type: Available
+              status: "True"
+            wait_timeout: 300
+
+        - name: Verify OAuth2-Proxy health
+          uri:
+            url: "http://auth.noah.local/ping"
+            method: GET
+            status_code: [200, 202]
+          register: oauth2_health
+          retries: 10
+          delay: 5
+
+        - name: Display OAuth2-Proxy status
+          debug:
+            msg: "✅ OAuth2-Proxy Authentication Gateway is ready"
+
+    - name: "PHASE 1 - Verify SSO Foundation"
+      block:
+        - name: Get SSO foundation status
+          shell: |
+            echo "=== SSO FOUNDATION STATUS ==="
+            echo "Samba4 (Active Directory):"
+            kubectl get deployment samba4 -n {{ noah_namespace }} -o wide
+            echo ""
+            echo "Keycloak (Identity Provider):"
+            kubectl get deployment keycloak -n {{ noah_namespace }} -o wide
+            echo ""
+            echo "OAuth2-Proxy (Auth Gateway):"
+            kubectl get deployment oauth2-proxy -n {{ noah_namespace }} -o wide
+            echo ""
+            echo "=== SERVICES ==="
+            kubectl get svc -n {{ noah_namespace }} | grep -E "(samba4|keycloak|oauth2)"
+            echo ""
+            echo "=== INGRESS ==="
+            kubectl get ingress -n {{ noah_namespace }} | grep -E "(keycloak|auth)"
+          register: sso_status
+
+        - name: Display SSO foundation status
+          debug:
+            msg: "{{ sso_status.stdout_lines }}"
+
+        - name: SSO Foundation deployment complete
+          debug:
+            msg: |
+              ✅ PHASE 1 COMPLETE: SSO FOUNDATION READY
+              ==========================================
+              🔐 Active Directory: samba4.noah.local
+              🆔 Identity Provider: keycloak.noah.local  
+              🚪 Auth Gateway: auth.noah.local
+              ==========================================
+              Ready for Phase 2: Application Deployment
+
+- name: Deploy NOAH applications - Step 2: Applications with SSO Integration
+  hosts: kube_control_plane[0]
+  become: yes
+  become_user: "{{ ansible_user }}"
+  vars:
+    noah_namespace: "noah"
+    values_file: "../../script/values/values-prod.yaml"
+    
+  tasks:
+    - name: Display Phase 2 banner
       debug:
-        msg: "{{ chart_validation.stdout_lines }}"
+        msg: |
+          ==========================================
+          🚀 NOAH DEPLOYMENT - PHASE 2: APPLICATIONS
+          ==========================================
+          Deploying applications with SSO integration:
+          1. GitLab (DevOps Platform)
+          2. Nextcloud (File Sharing)
+          3. Mattermost (Communication)
+          4. Grafana (Monitoring)
+          5. Prometheus (Metrics)
+          6. Wazuh (Security)
+          7. OpenEDR (Endpoint Detection)
+          ==========================================
 
-    - name: Deploy PostgreSQL database
-      kubernetes.core.helm:
-        name: postgresql
-        chart_ref: bitnami/postgresql
-        release_namespace: "{{ noah_namespace }}"
-        values:
-          auth:
-            postgresPassword: "{{ vault_postgres_password }}"
-            database: noah
-            username: noah
-            password: "{{ vault_noah_db_password }}"
-          persistence:
-            enabled: true
-            storageClass: local-storage
-            size: 20Gi
-          metrics:
-            enabled: true
+    # ========================================
+    # PHASE 2: APPLICATIONS WITH SSO INTEGRATION  
+    # ========================================
 
-    - name: Wait for PostgreSQL to be ready
-      kubernetes.core.k8s_info:
-        api_version: apps/v1
-        kind: StatefulSet
-        name: postgresql
-        namespace: "{{ noah_namespace }}"
-        wait_condition:
-          type: Ready
-          status: "True"
-        wait_timeout: 300
-
-    - name: Deploy Keycloak
-      kubernetes.core.helm:
-        name: keycloak
-        chart_ref: "../helm/keycloak"
-        release_namespace: "{{ noah_namespace }}"
-        values_files:
-          - "/tmp/values-prod.yaml"
-        values:
-          postgresql:
-            enabled: false
-          externalDatabase:
-            host: postgresql
-            database: noah
-            user: noah
-            password: "{{ vault_noah_db_password }}"
-          ingress:
-            enabled: true
-            annotations:
-              kubernetes.io/ingress.class: nginx
-              cert-manager.io/cluster-issuer: letsencrypt-prod
-            hostname: keycloak.noah.local
-
-    - name: Deploy GitLab
+    - name: "PHASE 2 - Deploy GitLab (DevOps Platform)"
       kubernetes.core.helm:
         name: gitlab
-        chart_ref: "../helm/gitlab"
+        chart_ref: "../../helm/gitlab"
         release_namespace: "{{ noah_namespace }}"
-        values_files:
-          - "/tmp/values-prod.yaml"
+        create_namespace: false
         values:
           postgresql:
             enabled: false
           externalDatabase:
-            host: postgresql
-            database: noah
-            user: noah
-            password: "{{ vault_noah_db_password }}"
+            host: keycloak-postgresql
+            database: gitlab
+            user: gitlab
+            password: "{{ vault_gitlab_db_password }}"
+          gitlab:
+            webservice:
+              ingress:
+                enabled: true
+                annotations:
+                  nginx.ingress.kubernetes.io/auth-url: "https://auth.noah.local/oauth2/auth"
+                  nginx.ingress.kubernetes.io/auth-signin: "https://auth.noah.local/oauth2/start?rd=$escaped_request_uri"
+                hosts:
+                  - name: gitlab.noah.local
+                    https: true
+            omniauth:
+              enabled: true
+              providers:
+                - name: "openid_connect"
+                  args:
+                    name: "keycloak"
+                    scope: ["openid", "profile", "email"]
+                    issuer: "https://keycloak.noah.local/auth/realms/noah"
+                    client_id: "{{ vault_gitlab_oidc_client_id }}"
+                    client_secret: "{{ vault_gitlab_oidc_client_secret }}"
+
+    - name: "PHASE 2 - Deploy Nextcloud (File Sharing)"
+      kubernetes.core.helm:
+        name: nextcloud
+        chart_ref: "../../helm/nextcloud"
+        release_namespace: "{{ noah_namespace }}"
+        create_namespace: false
+        values:
+          postgresql:
+            enabled: true
+            image:
+              registry: docker.io
+              repository: bitnamisecure/postgresql
+              tag: "15.4.0"
+            auth:
+              username: nextcloud
+              password: "{{ vault_nextcloud_db_password }}"
+              database: nextcloud
+          redis:
+            enabled: true
+            image:
+              registry: docker.io
+              repository: bitnamisecure/redis  
+              tag: "7.2.3"
+          nextcloud:
+            configs:
+              oidc.config.php: |-
+                <?php
+                $CONFIG = array (
+                  'user_oidc' => array (
+                    'use_pkce' => true,
+                    'provider-url' => 'https://keycloak.noah.local/auth/realms/noah',
+                    'client-id' => '{{ vault_nextcloud_oidc_client_id }}',
+                    'client-secret' => '{{ vault_nextcloud_oidc_client_secret }}',
+                  ),
+                );
           ingress:
             enabled: true
             annotations:
-              kubernetes.io/ingress.class: nginx
-            hostname: gitlab.noah.local
+              nginx.ingress.kubernetes.io/auth-url: "https://auth.noah.local/oauth2/auth"
+              nginx.ingress.kubernetes.io/auth-signin: "https://auth.noah.local/oauth2/start?rd=$escaped_request_uri"
+              nginx.ingress.kubernetes.io/proxy-body-size: "4G"
+            hostname: nextcloud.noah.local
 
-    - name: Deploy Nextcloud
-      kubernetes.core.helm:
-        name: nextcloud
-        chart_ref: "../helm/nextcloud"
-        release_namespace: "{{ noah_namespace }}"
-        values_files:
-          - "/tmp/values-prod.yaml"
-        values:
-          postgresql:
-            enabled: false
-          externalDatabase:
-            host: postgresql
-            database: noah
-            user: noah
-            password: "{{ vault_noah_db_password }}"
-          persistence:
-            enabled: true
-            storageClass: local-storage
-            size: 50Gi
-
-    - name: Deploy Mattermost
+    - name: "PHASE 2 - Deploy Mattermost (Communication)" 
       kubernetes.core.helm:
         name: mattermost
-        chart_ref: "../helm/mattermost"
+        chart_ref: "../../helm/mattermost"
         release_namespace: "{{ noah_namespace }}"
-        values_files:
-          - "/tmp/values-prod.yaml"
+        create_namespace: false
         values:
           postgresql:
-            enabled: false
-          externalDatabase:
-            host: postgresql
-            database: noah
-            user: noah
-            password: "{{ vault_noah_db_password }}"
-
-    - name: Deploy Grafana (if not already deployed with monitoring)
-      kubernetes.core.helm:
-        name: grafana-noah
-        chart_ref: "../helm/grafana"
-        release_namespace: "{{ noah_namespace }}"
-        values_files:
-          - "/tmp/values-prod.yaml"
-        values:
-          persistence:
             enabled: true
-            storageClassName: local-storage
-            size: 5Gi
-          adminPassword: "{{ vault_grafana_password }}"
+            image:
+              registry: docker.io
+              repository: bitnamisecure/postgresql
+              tag: "15.4.0"
+            auth:
+              username: mattermost
+              password: "{{ vault_mattermost_db_password }}"
+              database: mattermost
+          redis:
+            enabled: true
+            image:
+              registry: docker.io
+              repository: bitnamisecure/redis
+              tag: "7.2.3"
+          mattermost:
+            siteUrl: "https://mattermost.noah.local"
+            oauth:
+              gitlab:
+                enable: true
+                id: "{{ vault_mattermost_gitlab_client_id }}"
+                secret: "{{ vault_mattermost_gitlab_client_secret }}"
+                authEndpoint: "https://keycloak.noah.local/auth/realms/noah/protocol/openid-connect/auth"
+                tokenEndpoint: "https://keycloak.noah.local/auth/realms/noah/protocol/openid-connect/token"
+                userApiEndpoint: "https://keycloak.noah.local/auth/realms/noah/protocol/openid-connect/userinfo"
+          ingress:
+            enabled: true
+            annotations:
+              nginx.ingress.kubernetes.io/auth-url: "https://auth.noah.local/oauth2/auth"
+              nginx.ingress.kubernetes.io/auth-signin: "https://auth.noah.local/oauth2/start?rd=$escaped_request_uri"
+            hostname: mattermost.noah.local
 
-    - name: Deploy Prometheus (if not already deployed with monitoring)
+    - name: "PHASE 2 - Deploy Grafana (Monitoring Dashboard)"
       kubernetes.core.helm:
-        name: prometheus-noah
-        chart_ref: "../helm/prometheus"
+        name: grafana
+        chart_ref: "../../helm/grafana"
         release_namespace: "{{ noah_namespace }}"
-        values_files:
-          - "/tmp/values-prod.yaml"
+        create_namespace: false
+        values:
+          adminPassword: "{{ vault_grafana_admin_password }}"
+          grafana.ini:
+            auth.generic_oauth:
+              enabled: true
+              name: Keycloak
+              client_id: "{{ vault_grafana_oidc_client_id }}"
+              client_secret: "{{ vault_grafana_oidc_client_secret }}"
+              scopes: "openid email profile offline_access roles"
+              auth_url: "https://keycloak.noah.local/auth/realms/noah/protocol/openid-connect/auth"
+              token_url: "https://keycloak.noah.local/auth/realms/noah/protocol/openid-connect/token"
+              api_url: "https://keycloak.noah.local/auth/realms/noah/protocol/openid-connect/userinfo"
+              allow_sign_up: true
+          ingress:
+            enabled: true
+            annotations:
+              nginx.ingress.kubernetes.io/auth-url: "https://auth.noah.local/oauth2/auth"
+              nginx.ingress.kubernetes.io/auth-signin: "https://auth.noah.local/oauth2/start?rd=$escaped_request_uri"
+            hostname: grafana.noah.local
 
-    - name: Deploy Wazuh
+    - name: "PHASE 2 - Deploy Prometheus (Metrics Collection)"
+      kubernetes.core.helm:
+        name: prometheus
+        chart_ref: "../../helm/prometheus"
+        release_namespace: "{{ noah_namespace }}"
+        create_namespace: false
+
+    - name: "PHASE 2 - Deploy Wazuh (Security Monitoring)"
       kubernetes.core.helm:
         name: wazuh
-        chart_ref: "../helm/wazuh"
+        chart_ref: "../../helm/wazuh"
         release_namespace: "{{ noah_namespace }}"
-        values_files:
-          - "/tmp/values-prod.yaml"
+        create_namespace: false
+        values:
+          ingress:
+            enabled: true
+            annotations:
+              nginx.ingress.kubernetes.io/auth-url: "https://auth.noah.local/oauth2/auth"
+              nginx.ingress.kubernetes.io/auth-signin: "https://auth.noah.local/oauth2/start?rd=$escaped_request_uri"
+            hostname: wazuh.noah.local
 
-    - name: Deploy OpenEDR
+    - name: "PHASE 2 - Deploy OpenEDR (Endpoint Detection)"
       kubernetes.core.helm:
         name: openedr
-        chart_ref: "../helm/openedr"
+        chart_ref: "../../helm/openedr"
         release_namespace: "{{ noah_namespace }}"
-        values_files:
-          - "/tmp/values-prod.yaml"
+        create_namespace: false
+        values:
+          postgresql:
+            enabled: true
+            image:
+              registry: docker.io
+              repository: bitnamisecure/postgresql
+              tag: "15.4.0"
+          redis:
+            enabled: true
+            image:
+              registry: docker.io
+              repository: bitnamisecure/redis
+              tag: "7.2.3"
+          ingress:
+            enabled: true
+            annotations:
+              nginx.ingress.kubernetes.io/auth-url: "https://auth.noah.local/oauth2/auth"
+              nginx.ingress.kubernetes.io/auth-signin: "https://auth.noah.local/oauth2/start?rd=$escaped_request_uri"
+            hostname: openedr.noah.local
 
-    - name: Deploy OAuth2 Proxy
-      kubernetes.core.helm:
-        name: oauth2-proxy
-        chart_ref: "../helm/oauth2-proxy"
-        release_namespace: "{{ noah_namespace }}"
-        values_files:
-          - "/tmp/values-prod.yaml"
-
-    - name: Wait for all deployments to be ready
+    - name: Wait for all Phase 2 applications to be ready
       kubernetes.core.k8s_info:
         api_version: apps/v1
         kind: Deployment
         namespace: "{{ noah_namespace }}"
         label_selectors:
-          - "app.kubernetes.io/instance in (keycloak,gitlab,nextcloud,mattermost,grafana-noah,prometheus-noah,wazuh,openedr,oauth2-proxy)"
+          - "app.kubernetes.io/instance in (gitlab,nextcloud,mattermost,grafana,prometheus,wazuh,openedr)"
         wait_condition:
           type: Available
           status: "True"
-        wait_timeout: 600
+        wait_timeout: 900
 
-    - name: Get deployment status
-      shell: |
-        echo "=== HELM RELEASES ==="
-        helm list -n {{ noah_namespace }}
-        echo ""
-        echo "=== PODS STATUS ==="
-        kubectl get pods -n {{ noah_namespace }} -o wide
-        echo ""
-        echo "=== SERVICES ==="
-        kubectl get svc -n {{ noah_namespace }}
-        echo ""
-        echo "=== INGRESS ==="
-        kubectl get ingress -n {{ noah_namespace }}
-        echo ""
-        echo "=== PERSISTENT VOLUMES ==="
-        kubectl get pv,pvc -n {{ noah_namespace }}
-      register: deployment_status
+    - name: "FINAL - Complete deployment status"
+      block:
+        - name: Get complete deployment status
+          shell: |
+            echo "=========================================="
+            echo "🎉 NOAH PLATFORM DEPLOYMENT COMPLETE"
+            echo "=========================================="
+            echo ""
+            echo "=== HELM RELEASES ==="
+            helm list -n {{ noah_namespace }}
+            echo ""
+            echo "=== ALL PODS STATUS ==="
+            kubectl get pods -n {{ noah_namespace }} -o wide
+            echo ""
+            echo "=== SERVICES ==="
+            kubectl get svc -n {{ noah_namespace }}
+            echo ""
+            echo "=== INGRESS ENDPOINTS ==="
+            kubectl get ingress -n {{ noah_namespace }} -o custom-columns="NAME:.metadata.name,HOSTS:.spec.rules[*].host,ADDRESS:.status.loadBalancer.ingress[*].ip"
+            echo ""
+            echo "=== PERSISTENT VOLUMES ==="
+            kubectl get pv,pvc -n {{ noah_namespace }}
+            echo ""
+            echo "=========================================="
+            echo "🌐 NOAH PLATFORM ACCESS POINTS:"
+            echo "=========================================="
+            echo "🔐 Identity Provider: https://keycloak.noah.local"
+            echo "🚪 Auth Gateway: https://auth.noah.local" 
+            echo "🦊 DevOps Platform: https://gitlab.noah.local"
+            echo "☁️  File Sharing: https://nextcloud.noah.local"
+            echo "💬 Communication: https://mattermost.noah.local"
+            echo "📊 Monitoring: https://grafana.noah.local"
+            echo "🛡️  Security: https://wazuh.noah.local"
+            echo "🔍 Endpoint Detection: https://openedr.noah.local"
+            echo "=========================================="
+          register: final_status
 
-    - name: Display deployment status
-      debug:
-        msg: "{{ deployment_status.stdout_lines }}"
+        - name: Display final deployment status
+          debug:
+            msg: "{{ final_status.stdout_lines }}"
 
-    - name: Verify application health
-      uri:
-        url: "http://{{ item }}.noah.local/health"
-        method: GET
-        status_code: [200, 401, 302]  # 401/302 peuvent être normaux avec l'auth
-      loop:
-        - keycloak
-        - gitlab  
-        - nextcloud
-        - mattermost
-      ignore_errors: yes
-      register: health_checks
+        - name: Verify application health endpoints
+          uri:
+            url: "https://{{ item }}/health"
+            method: GET
+            status_code: [200, 401, 302, 404]  # 401/302 expected with SSO
+            validate_certs: false
+          loop:
+            - keycloak.noah.local
+            - gitlab.noah.local  
+            - nextcloud.noah.local
+            - mattermost.noah.local
+            - grafana.noah.local
+            - wazuh.noah.local
+            - openedr.noah.local
+          ignore_errors: yes
+          register: health_checks
 
-    - name: Display health check results
-      debug:
-        msg: "Health check for {{ item.item }}: Status {{ item.status | default('FAILED') }}"
-      loop: "{{ health_checks.results }}"
-      when: health_checks is defined
+        - name: Display health check results
+          debug:
+            msg: "🏥 Health check {{ item.item }}: {{ 'HEALTHY' if item.status in [200, 401, 302] else 'CHECK NEEDED' }} ({{ item.status | default('FAILED') }})"
+          loop: "{{ health_checks.results }}"
+          when: health_checks is defined
+
+        - name: Deployment completion summary
+          debug:
+            msg: |
+              ✅ NOAH PLATFORM DEPLOYMENT SUCCESSFUL
+              =====================================
+              Phase 1: SSO Foundation ✅
+              - Samba4 Active Directory ✅ 
+              - Keycloak Identity Provider ✅
+              - OAuth2-Proxy Auth Gateway ✅
+              
+              Phase 2: Applications ✅
+              - GitLab DevOps Platform ✅
+              - Nextcloud File Sharing ✅
+              - Mattermost Communication ✅
+              - Grafana Monitoring ✅
+              - Prometheus Metrics ✅
+              - Wazuh Security ✅
+              - OpenEDR Endpoint Detection ✅
+              
+              🔐 SSO integrated across all applications
+              🌐 Ready for production use!

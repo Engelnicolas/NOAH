@@ -8,8 +8,7 @@ Everyone is permitted to copy and distribute verbatim copies of this license doc
 Preamble
 
 The GNU General Public License is a free, copyleft license for software and other kinds of works.
-
-[Full GPL v3 preamble omitted for brevity; you should include the full text in your LICENSE file. Download the official text here: https://www.gnu.org/licenses/gpl-3.0.txt]
+Full GPL v3 preamble omitted for brevity; you should include the full text in your LICENSE file. Download the official text here: https://www.gnu.org/licenses/gpl-3.0.txt
 
 TERMS AND CONDITIONS
 
@@ -17,27 +16,23 @@ TERMS AND CONDITIONS
 
 “This License” refers to version 3 of the GNU General Public License.
 
-...
-
-[The GPL V3 is available here: https://www.gnu.org/licenses/gpl-3.0.txt]
-
 ---
 
 ## Third-Party Components
 
 This project incorporates or depends on various open-source components:
 
-- **Ansible** (GPL v3.0) - Configuration management
-- **Grafana** (Apache 2.0) - Monitoring and observability
-- **Helm** (Apache 2.0) - Kubernetes package manager
-- **Keycloak** (Apache 2.0) - Identity and access management
-- **Nextcloud** (GPL v3.0) - Collaboration platform
-- **PostgreSQL** (PostgreSQL License) - Database system
-- **Prometheus** (Apache 2.0) - Monitoring system
-- **Kubernetes** (Apache 2.0) - Container orchestration
-- **Redis** (BSD 3-Clause) - In-memory data store
-- **Samba 4** (GPL v3.0) - Domain control system
-- **Wazuh** (GPL v2.0) - SIEM solution
+- Ansible (GPL v3.0) - Configuration management
+- Grafana (Apache 2.0) - Monitoring and observability
+- Helm (Apache 2.0) - Kubernetes package manager
+- Keycloak (Apache 2.0) - Identity and access management
+- **Nextcloud (GPL v3.0) - Collaboration platform
+- PostgreSQL (PostgreSQL License) - Database system
+- Prometheus (Apache 2.0) - Monitoring system
+- Kubernetes (Apache 2.0) - Container orchestration
+- Redis (BSD 3-Clause) - In-memory data store
+- Samba 4 (GPL v3.0) - Domain control system
+- Wazuh (GPL v2.0) - SIEM solution
 
 For detailed license information of all components, please refer to their respective repositories and documentation.
 

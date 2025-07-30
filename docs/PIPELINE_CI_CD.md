@@ -25,7 +25,21 @@ GitHub Actions (Orchestrator)
 2. **Configure GitHub secrets**
    - `SSH_PRIVATE_KEY`: SSH private key to access servers
    - `ANSIBLE_VAULT_PASSWORD`: Password to decrypt Ansible secrets
-   - `MASTER_HOST`: Master server IP for SSH configuration
+   - `MASTER_HOST`: Master server IP/hostname for SSH configuration
+   - `WORKER_HOSTS`: Worker server IPs/hostnames (comma-separated)
+
+   **SSH Key Generation:**
+   ```bash
+   # Generate SSH key pair for deployment
+   ssh-keygen -t ed25519 -C "noah-deployment@yourdomain.com" -f ~/.ssh/noah_deployment
+   
+   # Copy private key content to SSH_PRIVATE_KEY secret
+   cat ~/.ssh/noah_deployment
+   
+   # Deploy public key to your servers
+   ssh-copy-id -i ~/.ssh/noah_deployment.pub user@your-master-server
+   ssh-copy-id -i ~/.ssh/noah_deployment.pub user@your-worker-servers
+   ```
 
 3. **Customize configuration**
    - Modify `ansible/inventory/mycluster/hosts.yaml` with your IPs
@@ -67,7 +81,9 @@ GitHub Actions (Orchestrator)
 ├── script/
 │   ├── setup-pipeline.sh           # Initialization script
 │   ├── configure-pipeline.sh       # Configuration
-│   └── generate-ssh-keys.sh        # SSH key generation
+│   ├── configure-ssh.sh            # Robust SSH configuration for CI/CD
+│   ├── test-dependencies.sh        # Dependency validation
+│   └── sops-secrets-manager.sh     # SOPS secrets management
 └── values/
     └── values-prod.yaml            # Production configuration
 ```

@@ -31,13 +31,18 @@ cd NOAH
 
 ### 2. **GitHub Secrets Configuration**
 ```bash
-# Generate SSH keys for deployment
-./script/generate-ssh-keys.sh
+# Generate SSH keys for deployment (use standard ssh-keygen)
+ssh-keygen -t ed25519 -C "noah-deployment@yourdomain.com" -f ~/.ssh/noah_deployment
 
 # Configure secrets in GitHub Actions:
-# - SSH_PRIVATE_KEY: Displayed private key
-# - ANSIBLE_VAULT_PASSWORD: Vault password
-# - MASTER_HOST: Master server IP
+# - SSH_PRIVATE_KEY: Content of ~/.ssh/noah_deployment (private key)
+# - ANSIBLE_VAULT_PASSWORD: Vault password for encrypted secrets
+# - MASTER_HOST: Master server IP/hostname
+# - WORKER_HOSTS: Worker server IPs/hostnames (comma-separated)
+
+# Deploy public key to your servers:
+ssh-copy-id -i ~/.ssh/noah_deployment.pub user@your-master-server
+ssh-copy-id -i ~/.ssh/noah_deployment.pub user@your-worker-server
 ```
 
 ### 3. **Deployment**

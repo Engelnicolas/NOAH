@@ -97,6 +97,12 @@ if [ -f "script/configure-ssh.sh" ]; then
     echo "✅ SSH configuration script exists"
     if [ -x "script/configure-ssh.sh" ]; then
         echo "✅ SSH configuration script is executable"
+        # Test the script with empty values to ensure it handles them gracefully
+        if SSH_PRIVATE_KEY="" MASTER_HOST="" WORKER_HOSTS="" ./script/configure-ssh.sh &>/dev/null; then
+            echo "✅ SSH script handles empty values gracefully"
+        else
+            echo -e "${YELLOW}⚠️  SSH script may not handle empty values properly${NC}"
+        fi
     else
         echo -e "${YELLOW}⚠️  SSH configuration script is not executable${NC}"
     fi

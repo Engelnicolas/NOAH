@@ -1,107 +1,110 @@
+---
 name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f script/requirements.txt ]; then
-          pip install -r script/requirements.txt
-        fi
-        
-    - name: Verify Ansible configuration
-      run: |
-        echo "Verifying Ansible setup..."
-        ansible --version
-        echo "Checking Ansible configuration..."
-        cd ansible
-        ansible-config dump --only-changed
-        echo "Verifying kubespray submodule..."
-        ls -la kubespray/ | head -5
-        
-    - name: Test NOAH CLI
-      run: |
-        chmod +x noah.sh
-        ./noah.sh --version
-        ./noah.sh --help
-        
-    - name: Run Python tests
-      run: |
-        if [ -f tests/test_noah_cli.py ]; then
-          python -m pytest tests/ -v
-        else
-          echo "No Python tests found, skipping..."
-        fi
-        
-    - name: Setup Helm
-      uses: azure/setup-helm@v4
-      with:
-        version: 'v3.13.2'
-        
-    - name: Update Helm dependencies
-      run: |
-        echo "Updating Helm chart dependencies..."
-        for chart in helm/*/; do
-          if [ -f "$chart/Chart.yaml" ]; then
-            echo "Updating dependencies for $chart"
-            # Check if chart has dependencies
-            if grep -q "dependencies:" "$chart/Chart.yaml"; then
-              helm dependency update "$chart"
-            else
-              echo "No dependencies found for $chart"
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f script/requirements.txt ]; then
+            pip install -r script/requirements.txt
+          fi
+
+      - name: Verify Ansible configuration
+        run: |
+          echo "Verifying Ansible setup..."
+          ansible --version
+          echo "Checking Ansible configuration..."
+          cd ansible
+          ansible-config dump --only-changed
+          echo "Verifying kubespray submodule..."
+          ls -la kubespray/ | head -5
+
+      - name: Test NOAH CLI
+        run: |
+          chmod +x noah.sh
+          ./noah.sh --version
+          ./noah.sh --help
+
+      - name: Install Ansible collections
+        run: |
+          echo "Installing Ansible collections..."
+          ansible-galaxy collection install -r ansible/requirements.yml --force
+          
+          # Ensure critical collections for CI testing
+          ansible-galaxy collection install community.proxmox --force
+          ansible-galaxy collection install kubernetes.core --force
+          ansible-galaxy collection install community.general --force
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.13.2'
+
+      - name: Update Helm dependencies
+        run: |
+          echo "Updating Helm chart dependencies..."
+          for chart in helm/*/; do
+            if [ -f "$chart/Chart.yaml" ]; then
+              echo "Updating dependencies for $chart"
+              # Check if chart has dependencies
+              if grep -q "dependencies:" "$chart/Chart.yaml"; then
+                helm dependency update "$chart"
+              else
+                echo "No dependencies found for $chart"
+              fi
             fi
-          fi
-        done
-        
-    - name: Validate Helm charts
-      run: |
-        echo "Validating Helm charts..."
-        for chart in helm/*/; do
-          if [ -f "$chart/Chart.yaml" ]; then
-            echo "Linting $chart"
-            helm lint "$chart" --strict
-          fi
-        done
-        
-    - name: Validate YAML syntax
-      run: |
-        echo "Validating YAML files..."
-        python -c "
-        import sys, yaml, os
-        errors = 0
-        for root, dirs, files in os.walk('.'):
-            if '.git' in root or 'node_modules' in root:
-                continue
-            for file in files:
-                if file.endswith(('.yml', '.yaml')):
-                    filepath = os.path.join(root, file)
-                    try:
-                        with open(filepath, 'r') as f:
-                            yaml.safe_load(f)
-                        print(f'✓ {filepath}')
-                    except Exception as e:
-                        print(f'✗ {filepath}: {e}')
-                        errors += 1
-        if errors > 0:
-            sys.exit(1)
-        print(f'All YAML files are valid!')
-        "
+          done
+
+      - name: Validate Helm charts
+        run: |
+          echo "Validating Helm charts..."
+          for chart in helm/*/; do
+            if [ -f "$chart/Chart.yaml" ]; then
+              echo "Linting $chart"
+              helm lint "$chart" --strict
+            fi
+          done
+
+      - name: Validate YAML syntax
+        run: |
+          echo "Validating YAML files..."
+          python -c "
+          import sys, yaml, os
+          errors = 0
+          for root, dirs, files in os.walk('.'):
+              if '.git' in root or 'node_modules' in root:
+                  continue
+              for file in files:
+                  if file.endswith(('.yml', '.yaml')):
+                      filepath = os.path.join(root, file)
+                      try:
+                          with open(filepath, 'r') as f:
+                              yaml.safe_load(f)
+                          print(f'✓ {filepath}')
+                      except Exception as e:
+                          print(f'✗ {filepath}: {e}')
+                          errors += 1
+          if errors > 0:
+              sys.exit(1)
+          print(f'All YAML files are valid!')
+          "

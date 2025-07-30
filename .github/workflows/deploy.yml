@@ -121,6 +121,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r script/requirements.txt
           ansible-galaxy collection install -r ansible/requirements.yml --force
+          
+          # Verify critical collections are installed
+          echo "Verifying Ansible collections..."
+          ansible-galaxy collection list community.proxmox || echo "WARNING: community.proxmox not found"
+          ansible-galaxy collection list kubernetes.core || echo "WARNING: kubernetes.core not found"
+
+      - name: Verify Ansible environment
+        run: |
+          chmod +x script/verify-ansible-collections.sh
+          ./script/verify-ansible-collections.sh
 
       - name: Configure SSH authentication
         env:

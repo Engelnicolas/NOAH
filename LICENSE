@@ -1,24 +1,25 @@
-MIT License
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
 
 Copyright (c) 2025 NOAH Team
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Everyone is permitted to copy and distribute verbatim copies of this license document, but changing it is not allowed.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Preamble
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+The GNU General Public License is a free, copyleft license for software and other kinds of works.
+
+[Full GPL v3 preamble omitted for brevity; you should include the full text in your LICENSE file. Download the official text here: https://www.gnu.org/licenses/gpl-3.0.txt]
+
+TERMS AND CONDITIONS
+
+0. Definitions.
+
+“This License” refers to version 3 of the GNU General Public License.
+
+...
+
+[The GPL V3 is available here: https://www.gnu.org/licenses/gpl-3.0.txt]
 
 ---
 
@@ -26,14 +27,17 @@ SOFTWARE.
 
 This project incorporates or depends on various open-source components:
 
-- **Kubernetes** (Apache 2.0) - Container orchestration
-- **Helm** (Apache 2.0) - Kubernetes package manager
 - **Ansible** (GPL v3.0) - Configuration management
-- **Keycloak** (Apache 2.0) - Identity and access management
-- **PostgreSQL** (PostgreSQL License) - Database system
-- **Redis** (BSD 3-Clause) - In-memory data store
 - **Grafana** (Apache 2.0) - Monitoring and observability
+- **Helm** (Apache 2.0) - Kubernetes package manager
+- **Keycloak** (Apache 2.0) - Identity and access management
+- **Nextcloud** (GPL v3.0) - Collaboration platform
+- **PostgreSQL** (PostgreSQL License) - Database system
 - **Prometheus** (Apache 2.0) - Monitoring system
+- **Kubernetes** (Apache 2.0) - Container orchestration
+- **Redis** (BSD 3-Clause) - In-memory data store
+- **Samba 4** (GPL v3.0) - Domain control system
+- **Wazuh** (GPL v2.0) - SIEM solution
 
 For detailed license information of all components, please refer to their respective repositories and documentation.
 

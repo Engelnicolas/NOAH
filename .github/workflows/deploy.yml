@@ -1,8 +1,9 @@
+---
 name: Deploy NOAH Platform
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -11,9 +12,9 @@ on:
         default: 'production'
         type: choice
         options:
-        - production
-        - staging
-        - development
+          - production
+          - staging
+          - development
       skip_provision:
         description: 'Skip infrastructure provisioning'
         required: false
@@ -25,9 +26,9 @@ on:
         default: 'full'
         type: choice
         options:
-        - full
-        - sso-only
-        - apps-only
+          - full
+          - sso-only
+          - apps-only
 
 env:
   ANSIBLE_HOST_KEY_CHECKING: False
@@ -44,7 +45,7 @@ jobs:
       environment: ${{ steps.setup.outputs.environment }}
       skip_provision: ${{ steps.setup.outputs.skip_provision }}
       deploy_phase: ${{ steps.setup.outputs.deploy_phase }}
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,7 +58,7 @@ jobs:
           echo "environment=${{ github.event.inputs.environment || 'production' }}" >> $GITHUB_OUTPUT
           echo "skip_provision=${{ github.event.inputs.skip_provision || 'false' }}" >> $GITHUB_OUTPUT
           echo "deploy_phase=${{ github.event.inputs.deploy_phase || 'full' }}" >> $GITHUB_OUTPUT
-          
+
       - name: Display deployment configuration
         run: |
           echo "🚀 NOAH Platform Deployment Configuration"
@@ -73,12 +74,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      
+
       - name: Install Ansible for validation
         run: |
           python -m pip install --upgrade pip
           pip install ansible-core>=2.16.3
-          
+
       - name: Syntax check playbooks
         run: |
           echo "🔍 Validating Ansible playbooks syntax..."
@@ -94,7 +95,7 @@ jobs:
     needs: pre-deployment
     if: needs.pre-deployment.outputs.skip_provision != 'true'
     timeout-minutes: 30
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -121,7 +122,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r script/requirements.txt
           ansible-galaxy collection install -r ansible/requirements.yml --force
-          
+
           # Verify critical collections are installed
           echo "Verifying Ansible collections..."
           ansible-galaxy collection list community.proxmox || echo "WARNING: community.proxmox not found"
@@ -189,9 +190,14 @@ jobs:
     name: Deploy SSO Foundation
     runs-on: ubuntu-latest
     needs: [pre-deployment, infrastructure]
-    if: always() && (needs.infrastructure.result == 'success' || needs.pre-deployment.outputs.skip_provision == 'true') && (needs.pre-deployment.outputs.deploy_phase == 'full' || needs.pre-deployment.outputs.deploy_phase == 'sso-only')
+    if: >
+      always() &&
+      (needs.infrastructure.result == 'success' ||
+       needs.pre-deployment.outputs.skip_provision == 'true') &&
+      (needs.pre-deployment.outputs.deploy_phase == 'full' ||
+       needs.pre-deployment.outputs.deploy_phase == 'sso-only')
     timeout-minutes: 45
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -242,9 +248,13 @@ jobs:
     name: Deploy Applications
     runs-on: ubuntu-latest
     needs: [pre-deployment, sso-foundation]
-    if: always() && needs.sso-foundation.result == 'success' && (needs.pre-deployment.outputs.deploy_phase == 'full' || needs.pre-deployment.outputs.deploy_phase == 'apps-only')
+    if: >
+      always() &&
+      needs.sso-foundation.result == 'success' &&
+      (needs.pre-deployment.outputs.deploy_phase == 'full' ||
+       needs.pre-deployment.outputs.deploy_phase == 'apps-only')
     timeout-minutes: 60
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -294,10 +304,14 @@ jobs:
   verification:
     name: Deployment Verification
     runs-on: ubuntu-latest
-    needs: [pre-deployment, applications]
-    if: always() && (needs.applications.result == 'success' || (needs.pre-deployment.outputs.deploy_phase == 'sso-only' && needs.sso-foundation.result == 'success'))
+    needs: [pre-deployment, sso-foundation, applications]
+    if: >
+      always() &&
+      (needs.applications.result == 'success' ||
+       (needs.pre-deployment.outputs.deploy_phase == 'sso-only' &&
+        needs.sso-foundation.result == 'success'))
     timeout-minutes: 20
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -384,7 +398,7 @@ jobs:
     needs: [infrastructure, sso-foundation, applications, verification]
     if: failure() && github.event_name != 'workflow_dispatch'
     timeout-minutes: 15
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -434,7 +448,7 @@ jobs:
     needs: [pre-deployment, infrastructure, sso-foundation, applications, verification]
     if: always()
     timeout-minutes: 5
-    
+
     steps:
       - name: Determine deployment status
         id: status
@@ -460,7 +474,7 @@ jobs:
           echo "Branch: ${{ github.ref_name }}"
           echo "Commit: ${{ github.sha }}"
           echo "========================================"
-          
+
           if [[ "${{ steps.status.outputs.status }}" == *"SUCCESS"* ]]; then
             echo "🎉 NOAH Platform is ready for use!"
             echo "🌐 Access points:"

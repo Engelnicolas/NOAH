@@ -42,6 +42,7 @@ image:
 auth:
   adminUser: admin
   adminPassword: ''
+  defaultPassword: 'admin123!'
   existingSecret: ''
   passwordSecretKey: admin-password
 database:

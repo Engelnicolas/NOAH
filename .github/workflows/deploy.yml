@@ -121,12 +121,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r script/requirements.txt
-          ansible-galaxy collection install -r ansible/requirements.yml --force
-
+          
+          # Install collections with verbose output and retries
+          echo "Installing Ansible collections..."
+          ansible-galaxy collection install -r ansible/requirements.yml --force --verbose
+          
+          # Ensure specific critical collections are installed
+          echo "Installing critical collections individually..."
+          ansible-galaxy collection install community.proxmox:>=1.2.0 --force
+          ansible-galaxy collection install kubernetes.core:>=2.4.0 --force
+          ansible-galaxy collection install community.general:>=7.0.0 --force
+          
           # Verify critical collections are installed
           echo "Verifying Ansible collections..."
           ansible-galaxy collection list community.proxmox || echo "WARNING: community.proxmox not found"
           ansible-galaxy collection list kubernetes.core || echo "WARNING: kubernetes.core not found"
+          ansible-galaxy collection list community.general || echo "WARNING: community.general not found"
 
       - name: Verify Ansible environment
         run: |
@@ -211,7 +221,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r script/requirements.txt
-          ansible-galaxy collection install -r ansible/requirements.yml --force
+          
+          # Install collections with verbose output and retries
+          echo "Installing Ansible collections..."
+          ansible-galaxy collection install -r ansible/requirements.yml --force --verbose
+          
+          # Ensure specific critical collections are installed
+          echo "Installing critical collections individually..."
+          ansible-galaxy collection install community.proxmox:>=1.2.0 --force
+          ansible-galaxy collection install kubernetes.core:>=2.4.0 --force
+          ansible-galaxy collection install community.general:>=7.0.0 --force
 
       - name: Configure SSH authentication
         env:
@@ -268,7 +287,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r script/requirements.txt
-          ansible-galaxy collection install -r ansible/requirements.yml --force
+          
+          # Install collections with verbose output and retries
+          echo "Installing Ansible collections..."
+          ansible-galaxy collection install -r ansible/requirements.yml --force --verbose
+          
+          # Ensure specific critical collections are installed
+          echo "Installing critical collections individually..."
+          ansible-galaxy collection install community.proxmox:>=1.2.0 --force
+          ansible-galaxy collection install kubernetes.core:>=2.4.0 --force
+          ansible-galaxy collection install community.general:>=7.0.0 --force
 
       - name: Configure SSH authentication
         env:
@@ -325,7 +353,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r script/requirements.txt
-          ansible-galaxy collection install -r ansible/requirements.yml --force
+          
+          # Install collections with verbose output and retries
+          echo "Installing Ansible collections..."
+          ansible-galaxy collection install -r ansible/requirements.yml --force --verbose
+          
+          # Ensure specific critical collections are installed
+          echo "Installing critical collections individually..."
+          ansible-galaxy collection install community.proxmox:>=1.2.0 --force
+          ansible-galaxy collection install kubernetes.core:>=2.4.0 --force
+          ansible-galaxy collection install community.general:>=7.0.0 --force
 
       - name: Configure SSH authentication
         env:
@@ -412,6 +449,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r script/requirements.txt
+          
+          # Install minimal collections needed for cleanup
+          echo "Installing minimal Ansible collections for cleanup..."
+          ansible-galaxy collection install kubernetes.core:>=2.4.0 --force
+          ansible-galaxy collection install community.general:>=7.0.0 --force
 
       - name: Configure SSH authentication
         env:

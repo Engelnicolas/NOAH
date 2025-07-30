@@ -91,6 +91,19 @@ else
     echo -e "${RED}❌ Inventory file not found${NC}"
 fi
 
+# Test SSH configuration script
+echo -e "\n${YELLOW}Testing SSH configuration script...${NC}"
+if [ -f "script/configure-ssh.sh" ]; then
+    echo "✅ SSH configuration script exists"
+    if [ -x "script/configure-ssh.sh" ]; then
+        echo "✅ SSH configuration script is executable"
+    else
+        echo -e "${YELLOW}⚠️  SSH configuration script is not executable${NC}"
+    fi
+else
+    echo -e "${RED}❌ SSH configuration script not found${NC}"
+fi
+
 echo -e "\n${GREEN}🎉 Test completed!${NC}"
 echo "If you see warnings above, install missing dependencies:"
 echo "  pip install -r script/requirements.txt"

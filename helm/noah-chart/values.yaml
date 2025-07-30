@@ -1,0 +1,83 @@
+# NOAH Platform - Main Chart Values
+# This file contains the default configuration values for the NOAH platform
+
+# Global configuration
+global:
+  # Domain configuration
+  domain: "noah.local"
+  
+  # Storage class for persistent volumes
+  storageClass: "default"
+  
+  # Image pull secrets (if using private registries)
+  imagePullSecrets: []
+  
+  # Common labels applied to all resources
+  labels:
+    app.kubernetes.io/part-of: noah-platform
+    app.kubernetes.io/managed-by: helm
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+
+# Simple placeholder values for core applications
+# Individual charts will be deployed separately via Ansible
+
+# PostgreSQL configuration (for reference)
+postgresql:
+  enabled: false
+  host: "postgresql"
+  port: 5432
+  database: "noah"
+  username: "noah"
+
+# Keycloak configuration (for reference)
+keycloak:
+  enabled: false
+  hostname: "keycloak.noah.local"
+
+# GitLab configuration (for reference)
+gitlab:
+  enabled: false
+  hostname: "gitlab.noah.local"
+
+# Nextcloud configuration (for reference)
+nextcloud:
+  enabled: false
+  hostname: "nextcloud.noah.local"
+
+# Mattermost configuration (for reference)
+mattermost:
+  enabled: false
+  hostname: "mattermost.noah.local"
+
+# Grafana configuration (for reference)
+grafana:
+  enabled: false
+  hostname: "grafana.noah.local"
+
+# Prometheus configuration (for reference)
+prometheus:
+  enabled: false
+  hostname: "prometheus.noah.local"
+
+# Network policies
+networkPolicies:
+  enabled: true
+  
+# Resource quotas
+resourceQuotas:
+  enabled: true
+  
+# Pod security policies
+podSecurityPolicies:
+  enabled: true
+
+# Backup configuration
+backup:
+  enabled: false
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: "30d"       # Keep backups for 30 days

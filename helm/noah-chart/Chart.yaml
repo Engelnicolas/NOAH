@@ -5,41 +5,8 @@ type: application
 version: 1.0.0
 appVersion: "1.0.0"
 
-dependencies:
-  - name: postgresql
-    version: "12.x.x"
-    repository: "https://charts.bitnami.com/bitnami"
-    condition: postgresql.enabled
-    
-  - name: keycloak
-    version: "15.x.x" 
-    repository: "https://charts.bitnami.com/bitnami"
-    condition: keycloak.enabled
-    
-  - name: gitlab
-    version: "7.x.x"
-    repository: "https://charts.gitlab.io/"
-    condition: gitlab.enabled
-    
-  - name: nextcloud
-    version: "4.x.x"
-    repository: "https://nextcloud.github.io/helm/"
-    condition: nextcloud.enabled
-    
-  - name: mattermost-team-edition
-    version: "6.x.x"
-    repository: "https://helm.mattermost.com"
-    condition: mattermost.enabled
-    
-  - name: grafana
-    version: "6.x.x"
-    repository: "https://grafana.github.io/helm-charts"
-    condition: grafana.enabled
-    
-  - name: prometheus
-    version: "23.x.x"
-    repository: "https://prometheus-community.github.io/helm-charts"
-    condition: prometheus.enabled
+# Simplified dependencies for initial deployment
+dependencies: []
 
 maintainers:
   - name: NOAH Team
@@ -48,6 +15,8 @@ maintainers:
 keywords:
   - collaboration
   - security
+  - devops
+  - kubernetes
   - kubernetes
   - gitlab
   - nextcloud

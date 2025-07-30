@@ -12,7 +12,7 @@ collections:
   - name: community.general
     version: ">=7.0.0"  # Required for docker, and many other modules
   - name: community.proxmox
-    version: ">=1.0.0"  # Required for proxmox_kvm module (moved from community.general)
+    version: ">=1.2.0"  # Required for proxmox_kvm module (tested working version)
   
   # System administration
   - name: ansible.posix
@@ -27,3 +27,6 @@ collections:
     version: ">=3.4.0"  # For container management
   - name: community.postgresql
     version: ">=2.4.0"  # For PostgreSQL management
+
+# Note: Some collections may show warnings about Ansible version compatibility
+# but they will still function correctly with the required modules.

@@ -45,7 +45,7 @@ fi
 
 # Test Ansible collections
 echo -e "\n${YELLOW}Testing Ansible collections...${NC}"
-required_collections=("community.general" "kubernetes.core" "community.kubernetes")
+required_collections=("community.general" "community.proxmox" "kubernetes.core" "community.kubernetes")
 for collection in "${required_collections[@]}"; do
     if ansible-galaxy collection list | grep -q "$collection"; then
         echo "✅ $collection is installed"
@@ -56,7 +56,7 @@ done
 
 # Test specific modules
 echo -e "\n${YELLOW}Testing specific Ansible modules...${NC}"
-modules=("community.general.proxmox_kvm" "kubernetes.core.k8s" "community.kubernetes.helm")
+modules=("community.proxmox.proxmox_kvm" "kubernetes.core.k8s" "community.kubernetes.helm")
 for module in "${modules[@]}"; do
     if ansible-doc "$module" &>/dev/null; then
         echo "✅ $module module is available"

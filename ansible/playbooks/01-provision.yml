@@ -72,33 +72,34 @@
   gather_facts: false
   vars_files:
     - ../vars/secrets.yml  # Fichier chiffré avec Ansible Vault
-  when: cloud_provider == "proxmox"
   tasks:
-    - name: Create VMs on Proxmox
-      community.general.proxmox_kvm:
-        api_host: "{{ proxmox_api_host }}"
-        api_user: "{{ proxmox_api_user }}"
-        api_password: "{{ proxmox_api_password }}"
-        api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
-        api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
-        name: "{{ item.name }}"
-        memory: "{{ item.memory | default(8192) }}"
-        cores: "{{ item.cores | default(4) }}"
-        ostype: "l26"  # Linux 2.6/3.x kernel
-        storage: "{{ item.storage | default('local-lvm') }}"
-        net:
-          net0: "virtio,bridge={{ item.bridge | default('vmbr0') }}"
-        state: present
-        timeout: 300
-      loop: "{{ noah_vms }}"
-      when: provision_vms | default(false) and noah_vms is defined
-      register: proxmox_created_vms
-      
-    - name: Add Proxmox VMs to inventory
-      add_host:
-        name: "{{ item.name }}"
-        groups: "{{ 'kube_control_plane' if 'master' in item.name else 'kube_node' }}"
-        ansible_host: "{{ item.ip | default(item.name) }}"
-        private_ip: "{{ item.ip | default(item.name) }}"
-      loop: "{{ noah_vms }}"
-      when: provision_vms | default(false) and noah_vms is defined and proxmox_created_vms is succeeded
+    - block:
+        - name: Create VMs on Proxmox
+          community.proxmox.proxmox_kvm:
+            api_host: "{{ proxmox_api_host }}"
+            api_user: "{{ proxmox_api_user }}"
+            api_password: "{{ proxmox_api_password }}"
+            api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+            api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+            name: "{{ item.name }}"
+            memory: "{{ item.memory | default(8192) }}"
+            cores: "{{ item.cores | default(4) }}"
+            ostype: "l26"  # Linux 2.6/3.x kernel
+            storage: "{{ item.storage | default('local-lvm') }}"
+            net:
+              net0: "virtio,bridge={{ item.bridge | default('vmbr0') }}"
+            state: present
+            timeout: 300
+          loop: "{{ noah_vms }}"
+          when: provision_vms | default(false) and noah_vms is defined
+          register: proxmox_created_vms
+          
+        - name: Add Proxmox VMs to inventory
+          add_host:
+            name: "{{ item.name }}"
+            groups: "{{ 'kube_control_plane' if 'master' in item.name else 'kube_node' }}"
+            ansible_host: "{{ item.ip | default(item.name) }}"
+            private_ip: "{{ item.ip | default(item.name) }}"
+          loop: "{{ noah_vms }}"
+          when: provision_vms | default(false) and noah_vms is defined and proxmox_created_vms is succeeded
+      when: cloud_provider == "proxmox"

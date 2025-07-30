@@ -1,5 +1,5 @@
 ---
-- name: Deploy NOAH applications - Step 1: SSO Foundation
+- name: "Deploy NOAH applications - Step 1: SSO Foundation"
   hosts: kube_control_plane[0]
   become: yes
   become_user: "{{ ansible_user }}"
@@ -296,7 +296,7 @@
               ==========================================
               Ready for Phase 2: Application Deployment
 
-- name: Deploy NOAH applications - Step 2: Applications with SSO Integration
+- name: "Deploy NOAH applications - Step 2: Applications with SSO Integration"
   hosts: kube_control_plane[0]
   become: yes
   become_user: "{{ ansible_user }}"

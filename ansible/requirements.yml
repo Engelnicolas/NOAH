@@ -10,7 +10,9 @@ collections:
   - name: cloud.common
     version: ">=2.1.0"
   - name: community.general
-    version: ">=7.0.0"  # Required for proxmox_kvm, docker, and many other modules
+    version: ">=7.0.0"  # Required for docker, and many other modules
+  - name: community.proxmox
+    version: ">=1.0.0"  # Required for proxmox_kvm module (moved from community.general)
   
   # System administration
   - name: ansible.posix

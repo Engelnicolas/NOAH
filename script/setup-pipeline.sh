@@ -5,7 +5,26 @@
 
 set -e
 
+# Variables
+DRY_RUN=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
 echo "🚀 Initialisation du pipeline CI/CD NOAH"
+if [[ "$DRY_RUN" == "true" ]]; then
+    echo "🧪 MODE DRY-RUN - Aucune modification ne sera effectuée"
+fi
 echo "========================================"
 
 # Vérification des prérequis
@@ -36,31 +55,62 @@ check_requirements() {
 # Installation des collections Ansible
 install_ansible_collections() {
     echo "📦 Installation des collections Ansible..."
-    ansible-galaxy collection install -r ansible/requirements.yml --force
-    echo "✅ Collections Ansible installées"
+    
+    if [[ "$DRY_RUN" == "true" ]]; then
+        echo "🧪 [DRY-RUN] Action qui serait exécutée:"
+        echo "   - ansible-galaxy collection install -r ansible/requirements.yml --force"
+        echo "✅ [DRY-RUN] Collections Ansible seraient installées"
+    else
+        ansible-galaxy collection install -r ansible/requirements.yml --force
+        echo "✅ Collections Ansible installées"
+    fi
 }
 
 # Clonage de Kubespray
 setup_kubespray() {
     echo "⚙️  Configuration de Kubespray..."
     
-    if [ ! -d "ansible/kubespray/.git" ] || [ ! -s "ansible/kubespray/requirements.txt" ]; then
-        echo "📥 Clonage de Kubespray..."
-        rm -rf ansible/kubespray
-        git clone https://github.com/kubernetes-sigs/kubespray.git ansible/kubespray
-        cd ansible/kubespray
-        git checkout v2.23.1
-        cd ../..
-        echo "✅ Kubespray cloné"
+    local kubespray_dir="ansible/kubespray"
+    local requirements_file="$kubespray_dir/requirements.txt"
+    
+    # Test de la condition
+    echo "🔍 Vérification de la condition Kubespray:"
+    echo "   - Répertoire .git existe: $([ -d "$kubespray_dir/.git" ] && echo "✅ OUI" || echo "❌ NON")"
+    echo "   - Fichier requirements.txt existe et non vide: $([ -s "$requirements_file" ] && echo "✅ OUI" || echo "❌ NON")"
+    
+    if [ ! -d "$kubespray_dir/.git" ] || [ ! -s "$requirements_file" ]; then
+        echo "📥 Clonage de Kubespray requis..."
+        
+        if [[ "$DRY_RUN" == "true" ]]; then
+            echo "🧪 [DRY-RUN] Actions qui seraient exécutées:"
+            echo "   - rm -rf $kubespray_dir"
+            echo "   - git clone https://github.com/kubernetes-sigs/kubespray.git $kubespray_dir"
+            echo "   - cd $kubespray_dir && git checkout v2.23.1 && cd ../.."
+            echo "✅ [DRY-RUN] Kubespray serait cloné"
+        else
+            rm -rf "$kubespray_dir"
+            git clone https://github.com/kubernetes-sigs/kubespray.git "$kubespray_dir"
+            cd "$kubespray_dir"
+            git checkout v2.23.1
+            cd ../..
+            echo "✅ Kubespray cloné"
+        fi
     else
-        echo "ℹ️  Kubespray déjà présent"
+        echo "ℹ️  Kubespray déjà présent et valide"
     fi
     
     # Installation des dépendances Kubespray
-    if [ -f "ansible/kubespray/requirements.txt" ]; then
+    if [ -f "$requirements_file" ] || [[ "$DRY_RUN" == "true" ]]; then
         echo "📦 Installation des dépendances Kubespray..."
-        pip3 install -r ansible/kubespray/requirements.txt
-        echo "✅ Dépendances Kubespray installées"
+        
+        if [[ "$DRY_RUN" == "true" ]]; then
+            echo "🧪 [DRY-RUN] Action qui serait exécutée:"
+            echo "   - pip3 install -r $requirements_file"
+            echo "✅ [DRY-RUN] Dépendances Kubespray seraient installées"
+        else
+            pip3 install -r "$requirements_file"
+            echo "✅ Dépendances Kubespray installées"
+        fi
     else
         echo "⚠️  Fichier requirements.txt de Kubespray non trouvé"
     fi
@@ -147,6 +197,10 @@ display_info() {
 
 # Exécution du script
 main() {
+    if [[ "$DRY_RUN" == "true" ]]; then
+        echo "🧪 Mode dry-run activé - seule la logique sera testée"
+    fi
+    
     check_requirements
     create_directories
     install_ansible_collections

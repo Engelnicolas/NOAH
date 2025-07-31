@@ -16,7 +16,6 @@ echo "📦 Checking critical collections..."
 
 # Check if critical collections are installed
 collections=(
-    "community.proxmox"
     "kubernetes.core"
     "community.general"
     "community.kubernetes"
@@ -39,7 +38,6 @@ echo "🔧 Testing critical modules..."
 
 # Test critical modules
 modules=(
-    "community.proxmox.proxmox_kvm"
     "kubernetes.core.k8s"
     "community.kubernetes.helm"
 )

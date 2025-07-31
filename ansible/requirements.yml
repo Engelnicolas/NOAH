@@ -11,8 +11,6 @@ collections:
     version: ">=2.1.0"
   - name: community.general
     version: ">=7.0.0"  # Required for docker, and many other modules
-  - name: community.proxmox
-    version: ">=1.2.0"  # Required for proxmox_kvm module (tested working version)
   
   # System administration
   - name: ansible.posix

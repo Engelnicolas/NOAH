@@ -24,7 +24,7 @@ fi
 
 # Test pip packages
 echo -e "\n${YELLOW}Testing pip packages...${NC}"
-required_packages=("ansible" "proxmoxer" "requests" "kubernetes" "pyyaml")
+required_packages=("ansible" "requests" "kubernetes" "pyyaml")
 for package in "${required_packages[@]}"; do
     if python3 -c "import $package" 2>/dev/null; then
         echo "✅ $package is installed"
@@ -45,7 +45,7 @@ fi
 
 # Test Ansible collections
 echo -e "\n${YELLOW}Testing Ansible collections...${NC}"
-required_collections=("community.general" "community.proxmox" "kubernetes.core" "community.kubernetes")
+required_collections=("community.general" "kubernetes.core" "community.kubernetes")
 for collection in "${required_collections[@]}"; do
     if ansible-galaxy collection list | grep -q "$collection"; then
         echo "✅ $collection is installed"
@@ -56,7 +56,7 @@ done
 
 # Test specific modules
 echo -e "\n${YELLOW}Testing specific Ansible modules...${NC}"
-modules=("community.proxmox.proxmox_kvm" "kubernetes.core.k8s" "community.kubernetes.helm")
+modules=("kubernetes.core.k8s" "community.kubernetes.helm")
 for module in "${modules[@]}"; do
     if ansible-doc "$module" &>/dev/null; then
         echo "✅ $module module is available"

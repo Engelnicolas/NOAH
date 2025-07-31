@@ -8,13 +8,6 @@
     values_file: "../../script/values/values-prod.yaml"
     
   tasks:
-    - name: Install required Ansible collections
-      ansible.builtin.command:
-        cmd: ansible-galaxy collection install kubernetes.core community.general --force
-      delegate_to: localhost
-      run_once: true
-      become: no
-
     - name: Display deployment phase
       debug:
         msg: |

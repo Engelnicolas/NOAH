@@ -7,13 +7,6 @@
     noah_namespace: "noah"
     
   tasks:
-    - name: Install required Ansible collections
-      ansible.builtin.command:
-        cmd: ansible-galaxy collection install kubernetes.core community.general --force
-      delegate_to: localhost
-      run_once: true
-      become: no
-
     - name: Get cluster information
       shell: kubectl cluster-info
       register: cluster_info

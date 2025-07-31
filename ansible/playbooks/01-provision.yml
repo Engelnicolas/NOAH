@@ -2,104 +2,106 @@
 - name: Provision infrastructure for NOAH cluster
   hosts: localhost
   connection: local
-  gather_facts: false
+  gather_facts: true
   vars:
-    cloud_provider: "openstack"  # aws, gcp, openstack, vsphere
+    cloud_provider: "{{ noah_cloud_provider | default('openstack') }}"  # aws, gcp, openstack, vsphere
     vm_config:
-      master_nodes: 2
-      worker_nodes: 1
-      vm_flavor: "m1.large"
-      vm_image: "ubuntu-24.04"
-      network_name: "noah-network"
-      security_group: "noah-sg"
-      key_name: "noah-keypair"
-    
+      master_nodes: "{{ noah_master_nodes | default(1) }}"
+      worker_nodes: "{{ noah_worker_nodes | default(2) }}"
+      vm_flavor: "{{ noah_vm_flavor | default('m1.large') }}"
+      vm_image: "{{ noah_vm_image | default('ubuntu-24.04') }}"
+      network_name: "{{ noah_network_name | default('noah-network') }}"
+      security_group: "{{ noah_security_group | default('noah-sg') }}"
+      key_name: "{{ noah_key_name | default('noah-keypair') }}"
   tasks:
     - name: Display provisioning start message
-      debug:
+      ansible.builtin.debug:
         msg: "Starting infrastructure provisioning for {{ cloud_provider }}"
+
+    - name: Validate configuration
+      ansible.builtin.assert:
+        that:
+          - cloud_provider in ['aws', 'gcp', 'openstack', 'vsphere', 'docker']
+          - vm_config.master_nodes | int > 0
+          - vm_config.worker_nodes | int >= 0
+        fail_msg: "Invalid configuration parameters"
+        success_msg: "Configuration validation passed"
 
     - name: Create network infrastructure
       block:
         - name: Create VPC/Network
-          debug:
+          ansible.builtin.debug:
             msg: "Creating network {{ vm_config.network_name }}"
           # Ici on ajouterait les tâches spécifiques au provider cloud
           
         - name: Create security groups
-          debug:
+          ansible.builtin.debug:
             msg: "Creating security group {{ vm_config.security_group }}"
           # Règles firewall pour K8s (ports 6443, 2379-2380, 10250, 10251, 10252, etc.)
           
         - name: Create SSH key pair
-          debug:
+          ansible.builtin.debug:
             msg: "Creating SSH key pair {{ vm_config.key_name }}"
+      when: cloud_provider != 'docker'
 
     - name: Provision master nodes
-      debug:
+      ansible.builtin.debug:
         msg: "Creating {{ vm_config.master_nodes }} master nodes"
-      loop: "{{ range(1, vm_config.master_nodes + 1) | list }}"
+      loop: "{{ range(1, vm_config.master_nodes | int + 1) | list }}"
+      loop_control:
+        label: "master-{{ item }}"
+      when: cloud_provider != 'docker'
       # Ici on créerait les VMs masters
 
     - name: Provision worker nodes  
-      debug:
+      ansible.builtin.debug:
         msg: "Creating {{ vm_config.worker_nodes }} worker nodes"
-      loop: "{{ range(1, vm_config.worker_nodes + 1) | list }}"
+      loop: "{{ range(1, vm_config.worker_nodes | int + 1) | list }}"
+      loop_control:
+        label: "worker-{{ item }}"
+      when: cloud_provider != 'docker'
       # Ici on créerait les VMs workers
 
+    - name: Handle Docker deployment mode
+      block:
+        - name: Display Docker mode message
+          ansible.builtin.debug:
+            msg: "Using Docker Compose mode - no VM provisioning needed"
+        
+        - name: Check if Docker is available
+          ansible.builtin.command: docker --version
+          register: docker_version
+          changed_when: false
+          failed_when: false
+          
+        - name: Display Docker version
+          ansible.builtin.debug:
+            msg: "Docker version: {{ docker_version.stdout }}"
+          when: docker_version.rc == 0
+          
+        - name: Warn if Docker is not available
+          ansible.builtin.debug:
+            msg: "WARNING: Docker is not installed or not available. Please install Docker to use Docker mode."
+          when: docker_version.rc != 0
+      when: cloud_provider == 'docker'
+
     - name: Configure DNS records
-      debug:
+      ansible.builtin.debug:
         msg: "Configuring DNS records for cluster nodes"
+      when: cloud_provider != 'docker'
         
     - name: Wait for VMs to be ready
-      debug:
+      ansible.builtin.debug:
         msg: "Waiting for all VMs to be accessible via SSH"
+      when: cloud_provider != 'docker'
       # On attendrait que toutes les VMs soient prêtes
 
     - name: Update inventory with actual IPs
-      debug:
+      ansible.builtin.debug:
         msg: "Updating inventory with provisioned VM IPs"
+      when: cloud_provider != 'docker'
       # On mettrait à jour l'inventaire avec les vraies IPs
 
     - name: Validate infrastructure
-      debug:
-        msg: "Infrastructure provisioning completed successfully"
-
-# Proxmox VM provisioning (when using Proxmox as hypervisor)
-- name: Configure Proxmox infrastructure
-  hosts: localhost
-  connection: local  
-  gather_facts: false
-  vars_files:
-    - ../vars/secrets.yml  # Fichier chiffré avec Ansible Vault
-  tasks:
-    - block:
-        - name: Create VMs on Proxmox
-          community.proxmox.proxmox_kvm:
-            api_host: "{{ proxmox_api_host }}"
-            api_user: "{{ proxmox_api_user }}"
-            api_password: "{{ proxmox_api_password }}"
-            api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
-            api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
-            name: "{{ item.name }}"
-            memory: "{{ item.memory | default(8192) }}"
-            cores: "{{ item.cores | default(4) }}"
-            ostype: "l26"  # Linux 2.6/3.x kernel
-            storage: "{{ item.storage | default('local-lvm') }}"
-            net:
-              net0: "virtio,bridge={{ item.bridge | default('vmbr0') }}"
-            state: present
-            timeout: 300
-          loop: "{{ noah_vms }}"
-          when: provision_vms | default(false) and noah_vms is defined
-          register: proxmox_created_vms
-          
-        - name: Add Proxmox VMs to inventory
-          add_host:
-            name: "{{ item.name }}"
-            groups: "{{ 'kube_control_plane' if 'master' in item.name else 'kube_node' }}"
-            ansible_host: "{{ item.ip | default(item.name) }}"
-            private_ip: "{{ item.ip | default(item.name) }}"
-          loop: "{{ noah_vms }}"
-          when: provision_vms | default(false) and noah_vms is defined and proxmox_created_vms is succeeded
-      when: cloud_provider == "proxmox"
+      ansible.builtin.debug:
+        msg: "Infrastructure provisioning completed successfully for {{ cloud_provider }} mode"

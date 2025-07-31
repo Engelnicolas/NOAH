@@ -44,8 +44,9 @@ install_ansible_collections() {
 setup_kubespray() {
     echo "⚙️  Configuration de Kubespray..."
     
-    if [ ! -d "ansible/kubespray" ]; then
+    if [ ! -d "ansible/kubespray/.git" ] || [ ! -s "ansible/kubespray/requirements.txt" ]; then
         echo "📥 Clonage de Kubespray..."
+        rm -rf ansible/kubespray
         git clone https://github.com/kubernetes-sigs/kubespray.git ansible/kubespray
         cd ansible/kubespray
         git checkout v2.23.1
@@ -56,9 +57,13 @@ setup_kubespray() {
     fi
     
     # Installation des dépendances Kubespray
-    echo "📦 Installation des dépendances Kubespray..."
-    pip3 install -r ansible/kubespray/requirements.txt
-    echo "✅ Dépendances Kubespray installées"
+    if [ -f "ansible/kubespray/requirements.txt" ]; then
+        echo "📦 Installation des dépendances Kubespray..."
+        pip3 install -r ansible/kubespray/requirements.txt
+        echo "✅ Dépendances Kubespray installées"
+    else
+        echo "⚠️  Fichier requirements.txt de Kubespray non trouvé"
+    fi
 }
 
 # Configuration des secrets

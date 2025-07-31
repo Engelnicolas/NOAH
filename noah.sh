@@ -16,6 +16,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NOAH_VERSION="0.2.1"
 PIPELINE_MODE="modern"
+INFRASTRUCTURE_TYPE="kubernetes"  # Par défaut: kubernetes, options: kubernetes, docker, standalone
 
 # Fonctions d'affichage
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
@@ -28,9 +29,9 @@ step() { echo -e "${CYAN}[STEP]${NC} $1"; }
 show_banner() {
     echo -e "${CYAN}${BOLD}"
     echo "╔═══════════════════════════════════════════════════════════════╗"
-    echo "║                        🚀 NOAH CLI v${NOAH_VERSION}                        ║"
+    echo "║                 🚀 NOAH CLI v${NOAH_VERSION}                 ║"
     echo "║              Network Operations & Automation Hub              ║"
-    echo "║                   Pipeline CI/CD Moderne                     ║"
+    echo "║                   Pipeline CI/CD Moderne                      ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
@@ -123,6 +124,68 @@ check_prerequisites() {
     fi
 }
 
+# Configuration du type d'infrastructure
+configure_infrastructure_type() {
+    echo -e "${BOLD}Configuration du type d'infrastructure${NC}"
+    echo ""
+    echo "Choisissez le type d'infrastructure cible pour le déploiement NOAH :"
+    echo ""
+    echo -e "${CYAN}1)${NC} Kubernetes Cluster ${GREEN}(recommandé - par défaut)${NC}"
+    echo "   - Déploiement dans un cluster Kubernetes existant"
+    echo "   - Support complet de toutes les fonctionnalités NOAH"
+    echo "   - Haute disponibilité et scalabilité"
+    echo ""
+    echo -e "${CYAN}2)${NC} Docker Compose ${YELLOW}(développement)${NC}"
+    echo "   - Déploiement local avec Docker Compose"
+    echo "   - Idéal pour le développement et les tests"
+    echo "   - Fonctionnalités limitées"
+    echo ""
+    echo -e "${CYAN}3)${NC} Standalone ${YELLOW}(expérimental)${NC}"
+    echo "   - Installation directe sur serveur(s)"
+    echo "   - Sans orchestrateur de conteneurs"
+    echo "   - Configuration manuelle requise"
+    echo ""
+    
+    while true; do
+        echo -n "Votre choix [1-3] (défaut: 1): "
+        read -r choice
+        
+        case ${choice:-1} in
+        1)
+            INFRASTRUCTURE_TYPE="kubernetes"
+            success "Infrastructure sélectionnée: Kubernetes Cluster"
+            break
+            ;;
+        2)
+            INFRASTRUCTURE_TYPE="docker"
+            success "Infrastructure sélectionnée: Docker Compose"
+            warning "Mode développement - Fonctionnalités limitées"
+            break
+            ;;
+        3)
+            INFRASTRUCTURE_TYPE="standalone"
+            success "Infrastructure sélectionnée: Standalone"
+            warning "Mode expérimental - Configuration manuelle requise"
+            break
+            ;;
+        *)
+            error "Choix invalide. Veuillez sélectionner 1, 2 ou 3."
+            ;;
+        esac
+    done
+    
+    # Sauvegarder le choix dans un fichier de configuration
+    echo "INFRASTRUCTURE_TYPE=$INFRASTRUCTURE_TYPE" > "$SCRIPT_DIR/.noah_config"
+    info "Configuration sauvegardée dans .noah_config"
+}
+
+# Charger la configuration si elle existe
+load_infrastructure_config() {
+    if [[ -f "$SCRIPT_DIR/.noah_config" ]]; then
+        source "$SCRIPT_DIR/.noah_config"
+    fi
+}
+
 # Fonction d'aide principale
 show_help() {
     echo -e "${BOLD}NOAH CLI - Network Operations & Automation Hub${NC}"
@@ -154,6 +217,7 @@ show_help() {
     echo "  config list       Lister les configurations"
     echo "  config set        Définir une configuration"
     echo "  config get        Obtenir une configuration"
+    echo "  infrastructure    Configurer le type d'infrastructure"
     echo "  secrets           Gérer les secrets"
     echo "  secrets generate  Générer de nouveaux secrets"
     echo "  secrets validate  Valider les secrets"
@@ -175,6 +239,7 @@ show_help() {
     echo ""
     echo -e "${YELLOW}EXEMPLES:${NC}"
     echo "  noah init                    # Initialiser l'environnement"
+    echo "  noah infrastructure          # Configurer le type d'infrastructure"
     echo "  noah configure --auto        # Configuration automatique"
     echo "  noah deploy --profile prod   # Déploiement en production"
     echo "  noah status --all            # État complet du système"
@@ -189,6 +254,9 @@ show_help() {
 cmd_init() {
     step "Initialisation de l'environnement NOAH..."
     
+    # Charger la configuration existante
+    load_infrastructure_config
+    
     # Vérifier si déjà initialisé
     if [[ -f "ansible/.vault_pass" ]] && [[ -f "ansible/inventory/mycluster/hosts.yaml" ]]; then
         warning "Environnement déjà initialisé"
@@ -198,6 +266,12 @@ cmd_init() {
             info "Initialisation annulée"
             return 0
         fi
+    fi
+    
+    # Configuration du type d'infrastructure si pas encore défini
+    if [[ ! -f "$SCRIPT_DIR/.noah_config" ]]; then
+        configure_infrastructure_type
+        echo ""
     fi
     
     # Lancer le script d'initialisation
@@ -210,6 +284,7 @@ cmd_init() {
     fi
     
     success "Initialisation terminée"
+    info "Infrastructure configurée: $INFRASTRUCTURE_TYPE"
     info "Prochaine étape: noah configure"
 }
 
@@ -263,6 +338,9 @@ cmd_configure() {
 cmd_deploy() {
     step "Déploiement de la plateforme NOAH..."
     
+    # Charger la configuration d'infrastructure
+    load_infrastructure_config
+    
     local profile="prod"
     local dry_run=false
     local skip_provision=false
@@ -300,11 +378,18 @@ cmd_deploy() {
     done
     
     info "Profil de déploiement: $profile"
+    info "Type d'infrastructure: $INFRASTRUCTURE_TYPE"
     
     # Vérifier que la configuration est prête
     if [[ ! -f "ansible/.vault_pass" ]]; then
         error "Environnement non configuré. Lancez d'abord: noah configure"
         exit 1
+    fi
+    
+    # Vérifier que le type d'infrastructure est configuré
+    if [[ -z "$INFRASTRUCTURE_TYPE" ]]; then
+        warning "Type d'infrastructure non défini. Configuration automatique..."
+        configure_infrastructure_type
     fi
     
     # Mode dry-run
@@ -315,12 +400,42 @@ cmd_deploy() {
         local dry_run_flag=""
     fi
     
+    # Déploiement selon le type d'infrastructure
+    case "$INFRASTRUCTURE_TYPE" in
+        kubernetes)
+            deploy_kubernetes "$profile" "$skip_provision" "$dry_run_flag"
+            ;;
+        docker)
+            deploy_docker "$profile" "$dry_run_flag"
+            ;;
+        standalone)
+            deploy_standalone "$profile" "$dry_run_flag"
+            ;;
+        *)
+            error "Type d'infrastructure non supporté: $INFRASTRUCTURE_TYPE"
+            exit 1
+            ;;
+    esac
+    
+    success "Déploiement terminé avec succès"
+    info "Infrastructure: $INFRASTRUCTURE_TYPE"
+    info "Profil: $profile"
+}
+
+# Déploiement spécifique pour Kubernetes
+deploy_kubernetes() {
+    local profile="$1"
+    local skip_provision="$2"
+    local dry_run_flag="$3"
+    
+    step "Déploiement sur cluster Kubernetes..."
+    
     cd ansible || {
         error "Répertoire ansible non trouvé"
         exit 1
     }
     
-    # Étapes de déploiement
+    # Étapes de déploiement Kubernetes
     if [[ "$skip_provision" != "true" ]]; then
         step "1/4 - Provision de l'infrastructure..."
         ansible-playbook playbooks/01-provision.yml -i inventory/mycluster/hosts.yaml $dry_run_flag || {
@@ -348,7 +463,7 @@ cmd_deploy() {
     }
     
     # Vérification post-déploiement
-    if [[ "$dry_run" != "true" ]]; then
+    if [[ "$dry_run_flag" != "--check" ]]; then
         step "Vérification du déploiement..."
         ansible-playbook playbooks/05-verify-deployment.yml -i inventory/mycluster/hosts.yaml || {
             warning "Vérification échouée, mais déploiement peut être OK"
@@ -356,15 +471,122 @@ cmd_deploy() {
     fi
     
     cd ..
-    success "Déploiement terminé!"
     
-    if [[ "$dry_run" != "true" ]]; then
+    if [[ "$dry_run_flag" != "--check" ]]; then
         info "Applications disponibles:"
         info "  • Keycloak: https://keycloak.noah.local"
         info "  • GitLab: https://gitlab.noah.local"
         info "  • Nextcloud: https://nextcloud.noah.local"
         info "  • Mattermost: https://mattermost.noah.local"
         info "  • Grafana: https://grafana.noah.local"
+    fi
+}
+
+# Déploiement spécifique pour Docker Compose
+deploy_docker() {
+    local profile="$1"
+    local dry_run_flag="$2"
+    
+    step "Déploiement avec Docker Compose..."
+    
+    # Vérifier que Docker est installé
+    if ! command -v docker >/dev/null 2>&1; then
+        error "Docker n'est pas installé"
+        info "Installation requise: https://docs.docker.com/get-docker/"
+        exit 1
+    fi
+    
+    if ! command -v docker-compose >/dev/null 2>&1; then
+        error "Docker Compose n'est pas installé"
+        info "Installation requise: https://docs.docker.com/compose/install/"
+        exit 1
+    fi
+    
+    # Créer le fichier docker-compose si nécessaire
+    if [[ ! -f "docker-compose.yml" ]]; then
+        info "Génération du fichier docker-compose.yml..."
+        cat > docker-compose.yml << 'EOF'
+version: '3.8'
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin123
+    command: start-dev
+    
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana-data:/var/lib/grafana
+      
+volumes:
+  grafana-data:
+EOF
+    fi
+    
+    if [[ "$dry_run_flag" != "--check" ]]; then
+        step "Démarrage des services Docker..."
+        docker-compose up -d || {
+            error "Échec du déploiement Docker Compose"
+            exit 1
+        }
+        
+        info "Services disponibles:"
+        info "  • Keycloak: http://localhost:8080"
+        info "  • Grafana: http://localhost:3000"
+    else
+        info "Mode simulation: docker-compose up -d serait exécuté"
+    fi
+}
+
+# Déploiement spécifique pour Standalone
+deploy_standalone() {
+    local profile="$1"
+    local dry_run_flag="$2"
+    
+    step "Déploiement en mode Standalone..."
+    
+    warning "Mode expérimental - Configuration manuelle requise"
+    
+    # Vérifier les prérequis pour standalone
+    if [[ "$dry_run_flag" != "--check" ]]; then
+        info "Configuration standalone nécessite:"
+        info "  1. Serveur(s) avec accès SSH configuré"
+        info "  2. Ansible installé localement"
+        info "  3. Playbooks adaptés pour installation directe"
+        
+        echo -n "Continuer avec le déploiement standalone ? (y/N): "
+        read -r response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            info "Déploiement annulé"
+            return 0
+        fi
+        
+        cd ansible || {
+            error "Répertoire ansible non trouvé"
+            exit 1
+        }
+        
+        # Utiliser des playbooks simplifiés pour standalone
+        step "Installation des composants en mode standalone..."
+        ansible-playbook playbooks/04-deploy-apps.yml -i inventory/mycluster/hosts.yaml $dry_run_flag --tags standalone || {
+            error "Échec du déploiement standalone"
+            exit 1
+        }
+        
+        cd ..
+        
+        info "Déploiement standalone terminé"
+        info "Configuration manuelle requise pour finaliser l'installation"
+    else
+        info "Mode simulation: Déploiement standalone serait configuré"
     fi
 }
 
@@ -1028,6 +1250,7 @@ main() {
     while [[ $# -gt 0 ]]; do
         case $1 in
         -h|--help)
+            load_infrastructure_config
             show_banner
             show_help
             exit 0
@@ -1068,6 +1291,9 @@ main() {
         exec 1>/dev/null
     fi
     
+    # Charger la configuration d'infrastructure
+    load_infrastructure_config
+    
     # Afficher le banner si pas en mode quiet
     if [[ "$quiet" != "true" ]]; then
         show_banner
@@ -1094,6 +1320,9 @@ main() {
     configure)
         check_prerequisites
         cmd_configure "$@"
+        ;;
+    infrastructure)
+        configure_infrastructure_type
         ;;
     deploy)
         check_prerequisites

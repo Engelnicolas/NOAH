@@ -7,6 +7,12 @@
     noah_namespace: "noah"
     
   tasks:
+    - name: Install kubernetes.core collection
+      shell: ansible-galaxy collection install kubernetes.core
+      delegate_to: localhost
+      run_once: true
+      become: no
+
     - name: Get failed pods
       kubernetes.core.k8s_info:
         api_version: v1

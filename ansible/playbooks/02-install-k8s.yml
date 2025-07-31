@@ -30,6 +30,18 @@
         swapoff -a
         sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
 
+    - name: Install community.general collection
+      shell: ansible-galaxy collection install community.general
+      delegate_to: localhost
+      run_once: true
+      become: no
+
+    - name: Install ansible.posix collection
+      shell: ansible-galaxy collection install ansible.posix
+      delegate_to: localhost
+      run_once: true
+      become: no
+
     - name: Enable kernel modules
       community.general.modprobe:
         name: "{{ item }}"

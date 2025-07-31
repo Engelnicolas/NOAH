@@ -8,6 +8,12 @@
     monitoring_namespace: "monitoring"
     
   tasks:
+    - name: Install kubernetes.core collection
+      shell: ansible-galaxy collection install kubernetes.core
+      delegate_to: localhost
+      run_once: true
+      become: no
+
     - name: Create kubeconfig directory
       file:
         path: "/home/{{ ansible_user }}/.kube"

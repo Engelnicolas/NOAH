@@ -4,6 +4,13 @@
   become: yes
   gather_facts: yes
   tasks:
+    - name: Install required Ansible collections
+      ansible.builtin.command:
+        cmd: ansible-galaxy collection install community.general --force
+      delegate_to: localhost
+      run_once: true
+      become: no
+
     - name: Update system packages
       apt:
         update_cache: yes

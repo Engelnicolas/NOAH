@@ -51,7 +51,6 @@ jobs:
           ansible-galaxy collection install -r ansible/requirements.yml --force
           
           # Ensure critical collections for CI testing
-          ansible-galaxy collection install community.proxmox --force
           ansible-galaxy collection install kubernetes.core --force
           ansible-galaxy collection install community.general --force
 

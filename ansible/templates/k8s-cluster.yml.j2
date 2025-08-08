@@ -2,15 +2,15 @@
 # Généré automatiquement par Ansible
 
 # Version de Kubernetes
-kube_version: {{ kube_version }}
+kube_version: {{ kube_version | default('v1.28.2') }}
 
 # Plugin réseau
-kube_network_plugin: {{ kube_network_plugin }}
+kube_network_plugin: {{ kube_network_plugin | default('calico') }}
 kube_pods_subnet: {{ pod_subnet | default('10.233.64.0/18') }}
 kube_service_addresses: {{ service_subnet | default('10.233.0.0/18') }}
 
 # Configuration cluster
-cluster_name: {{ cluster_name }}
+cluster_name: {{ cluster_name | default('noah-cluster') }}
 kube_proxy_mode: ipvs
 
 # Configuration DNS
@@ -49,7 +49,7 @@ metrics_server_enabled: {{ monitoring_enabled | default(true) }}
 
 # Configuration certificats
 auto_renew_certificates: true
-kubeadm_certificate_key: "{{ ansible_date_time.epoch }}"
+kubeadm_certificate_key: "{{ (ansible_date_time.epoch if (ansible_date_time is defined and ansible_date_time.epoch is defined) else lookup('pipe', 'date +%s')) }}"
 
 # Configuration stockage
 local_volume_provisioner_enabled: true

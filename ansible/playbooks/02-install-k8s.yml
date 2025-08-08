@@ -98,10 +98,6 @@
       template:
         src: "../templates/k8s-cluster.yml.j2"
         dest: "{{ kubespray_path }}/inventory/mycluster/group_vars/k8s_cluster/k8s-cluster.yml"
-      vars:
-        kube_version: "{{ kube_version | default('v1.28.2') }}"
-        kube_network_plugin: "{{ kube_network_plugin | default('calico') }}"
-        cluster_name: "{{ cluster_name | default('noah-cluster') }}"
 
     - name: Run Kubespray playbook
       shell: |

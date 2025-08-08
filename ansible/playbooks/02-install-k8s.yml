@@ -1,9 +1,17 @@
 ---
 - name: Prepare nodes for Kubernetes installation
-  hosts: all
-  become: yes
-  gather_facts: yes
+  hosts: "{{ 'localhost' if (ansible_check_mode | default(false)) else 'all' }}"
+  become: "{{ false if (ansible_check_mode | default(false)) else true }}"
+  gather_facts: "{{ false if (ansible_check_mode | default(false)) else true }}"
   tasks:
+    - name: Skip node preparation in check mode
+      ansible.builtin.debug:
+        msg: "Skipping node preparation in --check mode (no remote SSH)"
+      when: ansible_check_mode | default(false)
+
+    - name: End play early in check mode
+      meta: end_play
+      when: ansible_check_mode | default(false)
     - name: Update system packages
       apt:
         update_cache: yes
@@ -113,9 +121,18 @@
         msg: "Kubespray installation completed with return code: {{ kubespray_result.rc }}"
 
 - name: Verify Kubernetes installation
-  hosts: kube_control_plane[0]
-  become: yes
+  hosts: "{{ 'localhost' if (ansible_check_mode | default(false)) else 'kube_control_plane[0]' }}"
+  become: "{{ false if (ansible_check_mode | default(false)) else true }}"
+  gather_facts: "{{ false if (ansible_check_mode | default(false)) else true }}"
   tasks:
+    - name: Skip verification in check mode
+      ansible.builtin.debug:
+        msg: "Skipping verification in --check mode (no remote SSH)"
+      when: ansible_check_mode | default(false)
+
+    - name: End play early in check mode
+      meta: end_play
+      when: ansible_check_mode | default(false)
     - name: Wait for Kubernetes API to be ready
       uri:
         url: "https://{{ ansible_default_ipv4.address }}:6443/healthz"

@@ -862,6 +862,9 @@ cmd_secrets() {
     shift
     
     case "$subcommand" in
+    init)
+        cmd_secrets_init "$@"
+        ;;
     generate)
         cmd_secrets_generate "$@"
         ;;
@@ -896,6 +899,7 @@ cmd_secrets_help() {
     echo -e "${BOLD}NOAH CLI - Gestion des secrets avec SOPS${NC}"
     echo ""
     echo -e "${YELLOW}Commandes de base:${NC}"
+    echo "  secrets init       Initialiser SOPS (.sops.yaml) et le fichier de secrets"
     echo "  secrets generate   Générer de nouveaux secrets sécurisés"
     echo "  secrets validate   Valider la configuration des secrets"
     echo "  secrets encrypt    Chiffrer le fichier des secrets avec SOPS"
@@ -920,6 +924,60 @@ cmd_secrets_help() {
     echo "  • Configuration: .sops.yaml"
     echo "  • Clés: ~/.config/sops/age/keys.txt"
     echo ""
+}
+
+cmd_secrets_init() {
+    step "Initialisation de la configuration SOPS..."
+    local secrets_file="ansible/vars/secrets.yml"
+    local created_any=false
+
+    # Créer .sops.yaml minimal si absent
+    if [[ ! -f ".sops.yaml" ]]; then
+        cat > .sops.yaml << 'EOF'
+# Configuration SOPS minimale pour NOAH
+# Remplacez AGE-PLACEHOLDER-PUBLIC-KEY par votre clé publique Age
+# Générer une paire: age-keygen -o ~/.config/sops/age/keys.txt
+# Clé publique: grep -m1 '^# public key:' ~/.config/sops/age/keys.txt | awk '{print $4}'
+creation_rules:
+  - path_regex: ^ansible/vars/secrets\.yml$
+    age: ["AGE-PLACEHOLDER-PUBLIC-KEY"]
+    encrypted_regex: '^(data|stringData|vault_.*)$'
+EOF
+        success "Fichier .sops.yaml créé"
+        created_any=true
+    else
+        info ".sops.yaml déjà présent"
+    fi
+
+    # Créer un template de secrets si absent
+    if [[ ! -f "$secrets_file" ]]; then
+        mkdir -p "$(dirname "$secrets_file")"
+        cat > "$secrets_file" << 'EOF'
+# Secrets NOAH - Gérés par SOPS (Age)
+# Exemple de clés:
+# vault_postgres_password: "changeme"
+# vault_keycloak_admin_password: "changeme"
+EOF
+        success "Template créé: $secrets_file"
+        created_any=true
+    else
+        info "Fichier de secrets déjà présent: $secrets_file"
+    fi
+
+    if command -v sops >/dev/null 2>&1 && [[ -f "$secrets_file" ]]; then
+        # Chiffrer en place si .sops.yaml contient une clé valide
+        if grep -q "AGE-PLACEHOLDER-PUBLIC-KEY" .sops.yaml; then
+            warning "Remplacez la clé publique Age placeholder dans .sops.yaml avant chiffrement"
+        else
+            if sops --encrypt --in-place "$secrets_file"; then
+                success "Secrets chiffrés avec SOPS"
+            else
+                warning "Impossible de chiffrer automatiquement les secrets"
+            fi
+        fi
+    fi
+
+    $created_any || info "Rien à initialiser"
 }
 
 cmd_secrets_generate() {
@@ -1012,12 +1070,13 @@ cmd_secrets_encrypt() {
     fi
     
     # Vérifier la configuration SOPS
-    if [[ ! -f ".sops.yaml" ]]; then
+    if [[ -f ".sops.yaml" ]]; then
         error "Configuration SOPS manquante (.sops.yaml)"
         info "Exécutez la migration: ./script/deprecated-shell-secrets/migrate-to-sops.sh"
         exit 1
     fi
-    
+        error "❌ Configuration SOPS manquante (.sops.yaml)"
+        info "   → Exécutez: noah secrets init (créera un modèle minimal)"
     # Chiffrer avec SOPS
     if sops --encrypt --in-place "$secrets_file"; then
         success "Fichier chiffré avec SOPS"

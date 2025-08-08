@@ -7,6 +7,8 @@ set -e
 
 # Variables
 DRY_RUN=false
+# Venv dédié Kubespray
+KUBESPRAY_VENV=".venv-kubespray"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -50,6 +52,32 @@ check_requirements() {
     fi
     
     echo "✅ Tous les prérequis sont satisfaits"
+}
+
+# Créer un venv Python dédié pour Kubespray
+create_kubespray_venv() {
+    echo "🐍 Préparation de l'environnement Python dédié Kubespray ($KUBESPRAY_VENV)..."
+    if [[ "$DRY_RUN" == "true" ]]; then
+        echo "🧪 [DRY-RUN] Actions qui seraient exécutées:"
+        echo "   - python3 -m venv $KUBESPRAY_VENV"
+        echo "   - $KUBESPRAY_VENV/bin/pip install --upgrade pip wheel setuptools"
+        return 0
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "❌ Python3 introuvable"
+        exit 1
+    fi
+
+    # Créer le venv s'il n'existe pas
+    if [[ ! -d "$KUBESPRAY_VENV" ]]; then
+        python3 -m venv "$KUBESPRAY_VENV"
+    fi
+
+    # Mettre à jour pip/outils de build dans ce venv
+    "$KUBESPRAY_VENV/bin/pip" install --upgrade pip wheel setuptools >/dev/null 2>&1 || true
+    echo "✅ Environnement Kubespray prêt: $KUBESPRAY_VENV"
+    echo "ℹ️  Pour l'utiliser manuellement: source $KUBESPRAY_VENV/bin/activate"
 }
 
 # Installation des collections Ansible
@@ -99,17 +127,20 @@ setup_kubespray() {
         echo "ℹ️  Kubespray déjà présent et valide"
     fi
     
-    # Installation des dépendances Kubespray
+    # Installation des dépendances Kubespray via un venv dédié
     if [ -f "$requirements_file" ] || [[ "$DRY_RUN" == "true" ]]; then
-        echo "📦 Installation des dépendances Kubespray..."
-        
+        echo "📦 Installation des dépendances Kubespray (environnement isolé)..."
+
+        # Créer/mettre à jour le venv dédié
+        create_kubespray_venv
+
         if [[ "$DRY_RUN" == "true" ]]; then
             echo "🧪 [DRY-RUN] Action qui serait exécutée:"
-            echo "   - pip3 install -r $requirements_file"
-            echo "✅ [DRY-RUN] Dépendances Kubespray seraient installées"
+            echo "   - $KUBESPRAY_VENV/bin/pip install -r $requirements_file"
+            echo "✅ [DRY-RUN] Dépendances Kubespray seraient installées dans $KUBESPRAY_VENV"
         else
-            pip3 install -r "$requirements_file"
-            echo "✅ Dépendances Kubespray installées"
+            "$KUBESPRAY_VENV/bin/pip" install -r "$requirements_file"
+            echo "✅ Dépendances Kubespray installées dans $KUBESPRAY_VENV"
         fi
     else
         echo "⚠️  Fichier requirements.txt de Kubespray non trouvé"
@@ -126,6 +157,25 @@ setup_secrets() {
         echo "    chmod 600 ansible/.vault_pass"
     fi
     
+    # Vérifier/Créer .sops.yaml minimal si absent
+    if [ ! -f ".sops.yaml" ]; then
+        if [[ "$DRY_RUN" == "true" ]]; then
+            echo "🧪 [DRY-RUN] Création d'un .sops.yaml minimal (avec clé Age placeholder)"
+        else
+            cat > .sops.yaml << 'EOF'
+# Configuration SOPS minimale générée automatiquement
+# Remplacez AGE-PLACEHOLDER-PUBLIC-KEY par votre clé publique Age
+# Générer une paire: age-keygen -o ~/.config/sops/age/keys.txt
+# Puis récupérer la clé publique: grep -m1 '^# public key:' ~/.config/sops/age/keys.txt | awk '{print $4}'
+creation_rules:
+  - path_regex: ^ansible/vars/secrets\.yml$
+    age: ["AGE-PLACEHOLDER-PUBLIC-KEY"]
+    encrypted_regex: '^(data|stringData|vault_.*)$'
+EOF
+            echo "✅ Fichier .sops.yaml minimal créé (à personnaliser)"
+        fi
+    fi
+
     if [ -f "ansible/vars/secrets.yml" ]; then
         echo "🔒 Chiffrement du fichier secrets.yml..."
         ansible-vault encrypt ansible/vars/secrets.yml || echo "⚠️  Fichier déjà chiffré ou erreur"

@@ -33,11 +33,67 @@
           ansible.builtin.debug:
             msg: "Creating network {{ vm_config.network_name }}"
           # Ici on ajouterait les tâches spécifiques au provider cloud
+        
+        - name: (OpenStack example) Ensure OpenStack network exists
+          when:
+            - cloud_provider == 'openstack'
+            - (noah_enable_openstack_example | default(false)) | bool
+          block:
+            - name: Ensure network exists
+              openstack.cloud.network:
+                cloud: "{{ noah_openstack_cloud | default(omit) }}"
+                state: present
+                name: "{{ vm_config.network_name }}"
+            - name: Ensure subnet exists
+              openstack.cloud.subnet:
+                cloud: "{{ noah_openstack_cloud | default(omit) }}"
+                state: present
+                name: "{{ vm_config.network_name }}-subnet"
+                network_name: "{{ vm_config.network_name }}"
+                cidr: "{{ noah_openstack_subnet_cidr | default('10.80.0.0/24') }}"
+                enable_dhcp: true
+            - name: Ensure security group exists with basic K8s rules
+              openstack.cloud.security_group:
+                cloud: "{{ noah_openstack_cloud | default(omit) }}"
+                state: present
+                name: "{{ vm_config.security_group }}"
+                description: "NOAH Kubernetes SG"
+            - name: Ensure SG rules for Kubernetes API and nodes
+              openstack.cloud.security_group_rule:
+                cloud: "{{ noah_openstack_cloud | default(omit) }}"
+                security_group: "{{ vm_config.security_group }}"
+                protocol: tcp
+                port_range_min: "{{ item.min }}"
+                port_range_max: "{{ item.max }}"
+                remote_ip_prefix: "{{ noah_openstack_allow_cidr | default('0.0.0.0/0') }}"
+                direction: ingress
+                state: present
+              loop:
+                - { min: 22,   max: 22 }
+                - { min: 80,   max: 80 }
+                - { min: 443,  max: 443 }
+                - { min: 6443, max: 6443 }
+                - { min: 2379, max: 2380 }
+                - { min: 10250, max: 10252 }
+                - { min: 30000, max: 32767 }
+              loop_control:
+                label: "port {{ item.min }}-{{ item.max }}"
+            - name: Ensure keypair exists
+              openstack.cloud.keypair:
+                cloud: "{{ noah_openstack_cloud | default(omit) }}"
+                state: present
+                name: "{{ vm_config.key_name }}"
+                public_key_file: "{{ noah_openstack_public_key | default('~/.ssh/id_rsa.pub') }}"
           
         - name: Create security groups
           ansible.builtin.debug:
             msg: "Creating security group {{ vm_config.security_group }}"
           # Règles firewall pour K8s (ports 6443, 2379-2380, 10250, 10251, 10252, etc.)
+          #
+          # Exemple Proxmox (commenté):
+          # Proxmox ne gère pas des "security groups" de la même manière. Utilisez
+          # des règles de firewall de datacenter/nœud/VM si nécessaire ou configurez-les
+          # hors Ansible. Les VMs peuvent être créées avec community.general.proxmox_kvm.
           
         - name: Create SSH key pair
           ansible.builtin.debug:
@@ -52,6 +108,50 @@
         label: "master-{{ item }}"
       when: cloud_provider != 'docker'
       # Ici on créerait les VMs masters
+      # Exemple OpenStack (activé via noah_enable_openstack_example=true)
+  # Exemple Proxmox (commenté)
+  # - name: Create master VM on Proxmox
+  #   when: cloud_provider == 'proxmox'
+  #   community.general.proxmox_kvm:
+  #     api_user: "{{ proxmox_api_user }}"
+  #     api_token_id: "{{ proxmox_token_id }}"
+  #     api_token_secret: "{{ proxmox_token_secret }}"
+  #     api_host: "{{ proxmox_api_host }}"
+  #     node: "{{ proxmox_node | default('pve') }}"
+  #     vmid: "{{ 700 + item | int }}"
+  #     name: "noah-master-{{ item }}"
+  #     memory: 8192
+  #     cores: 4
+  #     sata:
+  #       sata0: "local-lvm:32"
+  #     net:
+  #       net0: "virtio,bridge={{ proxmox_bridge | default('vmbr0') }}"
+  #     ostype: l26
+  #     scsihw: virtio-scsi-pci
+  #     ide:
+  #       ide2: "local:cloudinit"
+  #     ciuser: "ubuntu"
+  #     sshkeys: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+  #     cipassword: "{{ proxmox_ci_password | default(omit) }}"
+  #     ipconfig:
+  #       ipconfig0: "ip=dhcp"
+      # - name: Create master VM on OpenStack
+      #   when:
+      #     - cloud_provider == 'openstack'
+      #     - (noah_enable_openstack_example | default(false)) | bool
+      #   openstack.cloud.server:
+      #     cloud: "{{ noah_openstack_cloud | default(omit) }}"
+      #     state: present
+      #     name: "noah-master-{{ item }}"
+      #     image: "{{ vm_config.vm_image }}"
+      #     flavor: "{{ vm_config.vm_flavor }}"
+      #     key_name: "{{ vm_config.key_name }}"
+      #     security_groups:
+      #       - "{{ vm_config.security_group }}"
+      #     nics:
+      #       - net-name: "{{ vm_config.network_name }}"
+      #     config_drive: true
+      #     auto_ip: true
 
     - name: Provision worker nodes  
       ansible.builtin.debug:
@@ -61,6 +161,50 @@
         label: "worker-{{ item }}"
       when: cloud_provider != 'docker'
       # Ici on créerait les VMs workers
+  # Exemple OpenStack (activé via noah_enable_openstack_example=true)
+  # Exemple Proxmox (commenté)
+  # - name: Create worker VM on Proxmox
+  #   when: cloud_provider == 'proxmox'
+  #   community.general.proxmox_kvm:
+  #     api_user: "{{ proxmox_api_user }}"
+  #     api_token_id: "{{ proxmox_token_id }}"
+  #     api_token_secret: "{{ proxmox_token_secret }}"
+  #     api_host: "{{ proxmox_api_host }}"
+  #     node: "{{ proxmox_node | default('pve') }}"
+  #     vmid: "{{ 800 + item | int }}"
+  #     name: "noah-worker-{{ item }}"
+  #     memory: 8192
+  #     cores: 4
+  #     sata:
+  #       sata0: "local-lvm:32"
+  #     net:
+  #       net0: "virtio,bridge={{ proxmox_bridge | default('vmbr0') }}"
+  #     ostype: l26
+  #     scsihw: virtio-scsi-pci
+  #     ide:
+  #       ide2: "local:cloudinit"
+  #     ciuser: "ubuntu"
+  #     sshkeys: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+  #     cipassword: "{{ proxmox_ci_password | default(omit) }}"
+  #     ipconfig:
+  #       ipconfig0: "ip=dhcp"
+  # - name: Create worker VM on OpenStack
+  #   when:
+  #     - cloud_provider == 'openstack'
+  #     - (noah_enable_openstack_example | default(false)) | bool
+  #   openstack.cloud.server:
+  #     cloud: "{{ noah_openstack_cloud | default(omit) }}"
+  #     state: present
+  #     name: "noah-worker-{{ item }}"
+  #     image: "{{ vm_config.vm_image }}"
+  #     flavor: "{{ vm_config.vm_flavor }}"
+  #     key_name: "{{ vm_config.key_name }}"
+  #     security_groups:
+  #       - "{{ vm_config.security_group }}"
+  #     nics:
+  #       - net-name: "{{ vm_config.network_name }}"
+  #     config_drive: true
+  #     auto_ip: true
 
     - name: Handle Docker deployment mode
       block:

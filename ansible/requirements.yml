@@ -25,6 +25,8 @@ collections:
     version: ">=3.4.0"  # For container management
   - name: community.postgresql
     version: ">=2.4.0"  # For PostgreSQL management
+  - name: openstack.cloud
+    version: ">=2.0.0"  # For OpenStack example provisioning
 
 # Note: Some collections may show warnings about Ansible version compatibility
 # but they will still function correctly with the required modules.

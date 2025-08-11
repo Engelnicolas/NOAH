@@ -194,7 +194,10 @@ show_help() {
     echo ""
     echo -e "${CYAN}🚀 Déploiement${NC}"
     echo "  init              Initialiser l'environnement de déploiement"
-    echo "  configure         Configurer les paramètres de déploiement"  
+    echo "  init-pipeline     Initialiser uniquement le pipeline CI/CD"
+    echo "  configure         Configurer les paramètres de déploiement"
+    echo "  configure-pipeline Configurer uniquement le pipeline CI/CD"
+    echo "  setup-pipeline    Configuration complète du pipeline (init + configure)"
     echo "  deploy            Déployer la plateforme NOAH complète"
     echo "  status            Vérifier l'état du déploiement"
     echo "  logs              Afficher les logs de déploiement"
@@ -238,17 +241,345 @@ show_help() {
     echo "  --dry-run         Simulation sans exécution"
     echo ""
     echo -e "${YELLOW}EXEMPLES:${NC}"
-    echo "  noah init                    # Initialiser l'environnement"
-    echo "  noah infrastructure          # Configurer le type d'infrastructure"
-    echo "  noah configure --auto        # Configuration automatique"
-    echo "  noah deploy --profile prod   # Déploiement en production"
-    echo "  noah status --all            # État complet du système"
-    echo "  noah backup --schedule daily # Sauvegarde quotidienne"
+    echo "  noah init                     # Initialiser l'environnement"
+    echo "  noah setup-pipeline --auto    # Configuration complète du pipeline" 
+    echo "  noah infrastructure           # Configurer le type d'infrastructure"
+    echo "  noah configure --auto         # Configuration automatique"
+    echo "  noah deploy --profile prod    # Déploiement en production"
+    echo "  noah status --all             # État complet du système"
+    echo "  noah configure-pipeline --dry-run  # Test de configuration pipeline"
     echo ""
     echo -e "${BLUE}Pour plus d'informations sur une commande:${NC}"
     echo "  noah <commande> --help"
     echo ""
 }
+
+# ===================================================================
+# PIPELINE SETUP FUNCTIONS (intégré de script/pipeline-setup.sh)
+# ===================================================================
+
+# Variables de configuration pipeline
+DOMAIN="${DOMAIN:-noah.local}"
+MASTER_IP="${MASTER_IP:-192.168.1.10}"
+WORKER_IP="${WORKER_IP:-192.168.1.12}"
+INGRESS_IP="${INGRESS_IP:-192.168.1.10}"
+VAULT_PASSWORD="${VAULT_PASSWORD:-MYPASSWORD}"
+KUBESPRAY_VENV=".venv-kubespray"
+
+# Vérification des prérequis pipeline
+check_pipeline_requirements() {
+    echo -e "${YELLOW}🔍 Vérification des prérequis...${NC}"
+    
+    local missing_tools=()
+    
+    for tool in python3 pip git ansible ansible-galaxy ssh-keygen; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            missing_tools+=("$tool")
+        fi
+    done
+    
+    if [ ${#missing_tools[@]} -ne 0 ]; then
+        error "Outils manquants: ${missing_tools[*]}"
+        info "Installation requise avant de continuer"
+        exit 1
+    fi
+    
+    success "Tous les prérequis sont satisfaits"
+}
+
+# Configuration interactive
+interactive_pipeline_setup() {
+    if [[ "${AUTO_MODE:-false}" == "true" ]]; then
+        info "Mode automatique activé - utilisation des valeurs par défaut"
+        return
+    fi
+    
+    echo -e "${YELLOW}🔧 Configuration interactive du pipeline${NC}"
+    echo "Appuyez sur Entrée pour garder les valeurs par défaut"
+    echo ""
+    
+    read -p "Domaine principal [$DOMAIN]: " input_domain
+    DOMAIN="${input_domain:-$DOMAIN}"
+    
+    read -p "IP du serveur master [$MASTER_IP]: " input_master
+    MASTER_IP="${input_master:-$MASTER_IP}"
+    
+    read -p "IP du serveur worker [$WORKER_IP]: " input_worker
+    WORKER_IP="${input_worker:-$WORKER_IP}"
+    
+    read -p "IP de l'ingress [$INGRESS_IP]: " input_ingress
+    INGRESS_IP="${input_ingress:-$INGRESS_IP}"
+    
+    echo ""
+    echo -e "${GREEN}Configuration retenue:${NC}"
+    echo "  Domaine: $DOMAIN"
+    echo "  Master: $MASTER_IP"
+    echo "  Worker: $WORKER_IP"
+    echo "  Ingress: $INGRESS_IP"
+    echo ""
+}
+
+# Création du venv Kubespray
+create_kubespray_venv() {
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        echo "🧪 [DRY-RUN] Création du venv Kubespray: $KUBESPRAY_VENV"
+        return
+    fi
+    
+    if [ ! -d "$KUBESPRAY_VENV" ]; then
+        echo -e "${YELLOW}🐍 Création de l'environnement virtuel Kubespray...${NC}"
+        python3 -m venv "$KUBESPRAY_VENV"
+        success "Environnement virtuel créé: $KUBESPRAY_VENV"
+    fi
+    
+    source "$KUBESPRAY_VENV/bin/activate"
+    pip install --upgrade pip wheel
+    echo -e "${GREEN}✅ Environnement virtuel activé${NC}"
+}
+
+# Installation des collections Ansible
+install_ansible_collections() {
+    echo -e "${YELLOW}📦 Installation des collections Ansible...${NC}"
+    
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        echo "🧪 [DRY-RUN] Installation des collections Ansible"
+        echo -e "${GREEN}✅ [DRY-RUN] Collections seraient installées${NC}"
+        return
+    fi
+    
+    ansible-galaxy collection install -r ansible/requirements.yml --force
+    echo -e "${GREEN}✅ Collections Ansible installées${NC}"
+}
+
+# Configuration de Kubespray
+setup_kubespray() {
+    echo -e "${YELLOW}⚙️  Configuration de Kubespray...${NC}"
+    
+    local kubespray_dir="ansible/kubespray"
+    local requirements_file="$kubespray_dir/requirements.txt"
+    
+    if [ ! -d "$kubespray_dir/.git" ] || [ ! -s "$requirements_file" ]; then
+        echo -e "${YELLOW}📥 Clonage de Kubespray...${NC}"
+        
+        if [[ "${DRY_RUN:-false}" == "true" ]]; then
+            echo "🧪 [DRY-RUN] Clonage de Kubespray"
+            echo -e "${GREEN}✅ [DRY-RUN] Kubespray serait cloné${NC}"
+            return
+        fi
+        
+        rm -rf "$kubespray_dir"
+        git clone https://github.com/kubernetes-sigs/kubespray.git "$kubespray_dir"
+        cd "$kubespray_dir"
+        git checkout v2.23.1
+        cd ../..
+        echo -e "${GREEN}✅ Kubespray cloné${NC}"
+    else
+        echo -e "${BLUE}ℹ️  Kubespray déjà présent${NC}"
+    fi
+    
+    # Installation des dépendances Kubespray
+    if [ -f "$requirements_file" ] || [[ "${DRY_RUN:-false}" == "true" ]]; then
+        echo -e "${YELLOW}📦 Installation des dépendances Kubespray...${NC}"
+        
+        create_kubespray_venv
+        
+        if [[ "${DRY_RUN:-false}" == "true" ]]; then
+            echo "🧪 [DRY-RUN] Installation des dépendances Kubespray"
+        else
+            pip install -r "$requirements_file"
+        fi
+        
+        echo -e "${GREEN}✅ Dépendances Kubespray installées${NC}"
+    fi
+}
+
+# Configuration du mot de passe Vault
+setup_vault_password() {
+    echo -e "${YELLOW}🔐 Configuration du mot de passe Ansible Vault...${NC}"
+    
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        echo "🧪 [DRY-RUN] Configuration du mot de passe Vault"
+        echo -e "${GREEN}✅ [DRY-RUN] Mot de passe Vault configuré${NC}"
+        return
+    fi
+    
+    if [ ! -f "ansible/.vault_pass" ]; then
+        echo "$VAULT_PASSWORD" > ansible/.vault_pass
+        chmod 600 ansible/.vault_pass
+        echo -e "${GREEN}✅ Mot de passe Vault configuré${NC}"
+    else
+        echo -e "${BLUE}ℹ️  Mot de passe Vault déjà configuré${NC}"
+    fi
+}
+
+# Génération des clés SSH
+generate_ssh_keys() {
+    echo -e "${YELLOW}🔑 Génération des clés SSH...${NC}"
+    
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        echo "🧪 [DRY-RUN] Génération des clés SSH"
+        echo -e "${GREEN}✅ [DRY-RUN] Clés SSH seraient générées${NC}"
+        return
+    fi
+    
+    if [ ! -f ~/.ssh/noah_pipeline ]; then
+        ssh-keygen -t ed25519 -C "noah-pipeline@github-actions" -f ~/.ssh/noah_pipeline -N ""
+        echo -e "${GREEN}✅ Clés SSH générées${NC}"
+    else
+        echo -e "${BLUE}ℹ️  Clés SSH déjà existantes${NC}"
+    fi
+    
+    echo -e "${RED}⚠️  IMPORTANT: Configurez les secrets GitHub:${NC}"
+    echo ""
+    echo -e "${YELLOW}SSH_PRIVATE_KEY:${NC}"
+    cat ~/.ssh/noah_pipeline
+    echo ""
+    echo -e "${YELLOW}MASTER_HOST:${NC} $MASTER_IP"
+    echo ""
+}
+
+# Mise à jour de l'inventaire
+update_inventory() {
+    echo -e "${YELLOW}📝 Mise à jour de l'inventaire...${NC}"
+    
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        echo "🧪 [DRY-RUN] Mise à jour de l'inventaire"
+        echo -e "${GREEN}✅ [DRY-RUN] Inventaire serait mis à jour${NC}"
+        return
+    fi
+    
+    cat > ansible/inventory/mycluster/hosts.yaml << EOF
+# Inventaire Kubespray pour cluster NOAH - Généré automatiquement
+all:
+  hosts:
+    noah-master-1:
+      ansible_host: $MASTER_IP
+      ip: $MASTER_IP
+      access_ip: $MASTER_IP
+    noah-worker-1:
+      ansible_host: $WORKER_IP
+      ip: $WORKER_IP
+      access_ip: $WORKER_IP
+  children:
+    kube_control_plane:
+      hosts:
+        noah-master-1:
+    kube_node:
+      hosts:
+        noah-master-1:
+        noah-worker-1:
+    etcd:
+      hosts:
+        noah-master-1:
+    k8s_cluster:
+      children:
+        kube_control_plane:
+        kube_node:
+    calico_rr:
+      hosts: {}
+EOF
+    
+    echo -e "${GREEN}✅ Inventaire mis à jour${NC}"
+}
+
+# Mise à jour des domaines
+update_domains() {
+    echo -e "${YELLOW}🌐 Mise à jour des domaines...${NC}"
+    
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        echo "🧪 [DRY-RUN] Mise à jour des domaines"
+        echo -e "${GREEN}✅ [DRY-RUN] Domaines seraient mis à jour${NC}"
+        return
+    fi
+    
+    local config_file="ansible/vars/global.yml"
+    
+    if [ -f "$config_file" ]; then
+        sed -i "s/domain_name:.*/domain_name: \"$DOMAIN\"/" "$config_file"
+        sed -i "s/ingress_ip:.*/ingress_ip: \"$INGRESS_IP\"/" "$config_file"
+        echo -e "${GREEN}✅ Configuration des domaines mise à jour${NC}"
+    else
+        warning "Fichier de configuration non trouvé: $config_file"
+    fi
+}
+
+# Chiffrement des secrets
+encrypt_secrets() {
+    echo -e "${YELLOW}🔐 Chiffrement des secrets...${NC}"
+    
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        echo "🧪 [DRY-RUN] Chiffrement des secrets"
+        echo -e "${GREEN}✅ [DRY-RUN] Secrets seraient chiffrés${NC}"
+        return
+    fi
+    
+    if [ -f "ansible/vars/secrets.yml" ]; then
+        if ! file ansible/vars/secrets.yml | grep -q "Ansible Vault"; then
+            ansible-vault encrypt ansible/vars/secrets.yml --vault-password-file ansible/.vault_pass
+            echo -e "${GREEN}✅ Fichier secrets.yml chiffré${NC}"
+        else
+            echo -e "${BLUE}ℹ️  Fichier secrets.yml déjà chiffré${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  Fichier secrets.yml non trouvé${NC}"
+    fi
+}
+
+# Validation de la configuration pipeline
+validate_pipeline_config() {
+    echo -e "${YELLOW}🔍 Validation de la configuration...${NC}"
+    
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        echo "🧪 [DRY-RUN] Validation de la configuration"
+        echo -e "${GREEN}✅ [DRY-RUN] Validation effectuée${NC}"
+        return
+    fi
+    
+    # Vérifier la syntaxe des playbooks
+    for playbook in ansible/playbooks/*.yml; do
+        if [ -f "$playbook" ]; then
+            echo "  Validation de $(basename "$playbook")..."
+            if ansible-playbook --syntax-check "$playbook" >/dev/null 2>&1; then
+                echo -e "    ${GREEN}✅ $(basename "$playbook")${NC}"
+            else
+                echo -e "    ${RED}❌ $(basename "$playbook")${NC}"
+            fi
+        fi
+    done
+    
+    # Vérifier l'inventaire
+    if [ -f "ansible/inventory/mycluster/hosts.yaml" ]; then
+        echo "  Validation de l'inventaire..."
+        if ansible-inventory --list -i ansible/inventory/mycluster/hosts.yaml >/dev/null 2>&1; then
+            echo -e "    ${GREEN}✅ Inventaire valide${NC}"
+        else
+            echo -e "    ${RED}❌ Erreur dans l'inventaire${NC}"
+        fi
+    fi
+}
+
+# Affichage du résumé
+display_pipeline_summary() {
+    echo ""
+    echo -e "${GREEN}${BOLD}✅ Configuration du pipeline terminée${NC}"
+    echo "==========================================="
+    echo ""
+    echo -e "${YELLOW}Configuration:${NC}"
+    echo "  • Domaine: $DOMAIN"
+    echo "  • Master: $MASTER_IP"
+    echo "  • Worker: $WORKER_IP"
+    echo "  • Ingress: $INGRESS_IP"
+    echo ""
+    echo -e "${YELLOW}Prochaines étapes:${NC}"
+    echo "  1. Configurer les secrets GitHub Actions"
+    echo "  2. Déployer les clés SSH sur les serveurs"
+    echo "  3. Lancer le déploiement avec: noah deploy"
+    echo ""
+}
+
+# ===================================================================
+# COMMANDES PRINCIPALES NOAH
+# ===================================================================
 
 # Initialisation de l'environnement
 cmd_init() {
@@ -274,14 +605,9 @@ cmd_init() {
         echo ""
     fi
     
-    # Lancer le script d'initialisation
-    if [[ -f "script/setup-pipeline.sh" ]]; then
-        info "Lancement du script d'initialisation..."
-        ./script/setup-pipeline.sh
-    else
-        error "Script d'initialisation non trouvé: script/setup-pipeline.sh"
-        exit 1
-    fi
+    # Lancer l'initialisation du pipeline intégrée
+    info "Initialisation du pipeline NOAH..."
+    cmd_init_pipeline "$@"
     
     success "Initialisation terminée"
     info "Infrastructure configurée: $INFRASTRUCTURE_TYPE"
@@ -1298,6 +1624,226 @@ cmd_secrets_status() {
     fi
 }
 
+# ===================================================================
+# COMMANDES PIPELINE SETUP
+# ===================================================================
+
+# Initialisation du pipeline
+cmd_init_pipeline() {
+    step "Initialisation du pipeline NOAH..."
+    
+    local auto_mode=false
+    local dry_run=false
+    
+    # Parser les arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        --auto)
+            auto_mode=true
+            AUTO_MODE=true
+            shift
+            ;;
+        --dry-run)
+            dry_run=true
+            DRY_RUN=true
+            shift
+            ;;
+        --domain=*)
+            DOMAIN="${1#*=}"
+            shift
+            ;;
+        --master=*)
+            MASTER_IP="${1#*=}"
+            shift
+            ;;
+        --worker=*)
+            WORKER_IP="${1#*=}"
+            shift
+            ;;
+        --ingress=*)
+            INGRESS_IP="${1#*=}"
+            shift
+            ;;
+        --help)
+            echo "Usage: noah init-pipeline [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --auto          Mode automatique"
+            echo "  --dry-run       Simulation sans exécution"
+            echo "  --domain=VALUE  Domaine personnalisé"
+            echo "  --master=IP     IP du serveur master"
+            echo "  --worker=IP     IP du serveur worker"
+            echo "  --ingress=IP    IP de l'ingress"
+            echo "  --help          Afficher cette aide"
+            return 0
+            ;;
+        *)
+            warning "Option inconnue: $1"
+            shift
+            ;;
+        esac
+    done
+    
+    check_pipeline_requirements
+    interactive_pipeline_setup
+    install_ansible_collections
+    setup_kubespray
+    validate_pipeline_config
+    display_pipeline_summary
+    
+    success "Initialisation du pipeline terminée"
+}
+
+# Configuration du pipeline
+cmd_configure_pipeline() {
+    step "Configuration du pipeline NOAH..."
+    
+    local auto_mode=false
+    local dry_run=false
+    
+    # Parser les arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        --auto)
+            auto_mode=true
+            AUTO_MODE=true
+            shift
+            ;;
+        --dry-run)
+            dry_run=true
+            DRY_RUN=true
+            shift
+            ;;
+        --domain=*)
+            DOMAIN="${1#*=}"
+            shift
+            ;;
+        --master=*)
+            MASTER_IP="${1#*=}"
+            shift
+            ;;
+        --worker=*)
+            WORKER_IP="${1#*=}"
+            shift
+            ;;
+        --ingress=*)
+            INGRESS_IP="${1#*=}"
+            shift
+            ;;
+        --help)
+            echo "Usage: noah configure-pipeline [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --auto          Mode automatique"
+            echo "  --dry-run       Simulation sans exécution"
+            echo "  --domain=VALUE  Domaine personnalisé"
+            echo "  --master=IP     IP du serveur master"
+            echo "  --worker=IP     IP du serveur worker"
+            echo "  --ingress=IP    IP de l'ingress"
+            echo "  --help          Afficher cette aide"
+            return 0
+            ;;
+        *)
+            warning "Option inconnue: $1"
+            shift
+            ;;
+        esac
+    done
+    
+    check_pipeline_requirements
+    interactive_pipeline_setup
+    setup_vault_password
+    generate_ssh_keys
+    update_inventory
+    update_domains
+    encrypt_secrets
+    validate_pipeline_config
+    display_pipeline_summary
+    
+    success "Configuration du pipeline terminée"
+}
+
+# Configuration complète du pipeline
+cmd_setup_pipeline() {
+    step "Configuration complète du pipeline NOAH..."
+    
+    local auto_mode=false
+    local dry_run=false
+    
+    # Parser les arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        --auto)
+            auto_mode=true
+            AUTO_MODE=true
+            shift
+            ;;
+        --dry-run)
+            dry_run=true
+            DRY_RUN=true
+            shift
+            ;;
+        --domain=*)
+            DOMAIN="${1#*=}"
+            shift
+            ;;
+        --master=*)
+            MASTER_IP="${1#*=}"
+            shift
+            ;;
+        --worker=*)
+            WORKER_IP="${1#*=}"
+            shift
+            ;;
+        --ingress=*)
+            INGRESS_IP="${1#*=}"
+            shift
+            ;;
+        --help)
+            echo "Usage: noah setup-pipeline [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --auto          Mode automatique"
+            echo "  --dry-run       Simulation sans exécution"
+            echo "  --domain=VALUE  Domaine personnalisé"
+            echo "  --master=IP     IP du serveur master"
+            echo "  --worker=IP     IP du serveur worker"
+            echo "  --ingress=IP    IP de l'ingress"
+            echo "  --help          Afficher cette aide"
+            return 0
+            ;;
+        *)
+            warning "Option inconnue: $1"
+            shift
+            ;;
+        esac
+    done
+    
+    # Étape 1: Initialisation
+    info "Étape 1/2: Initialisation du pipeline"
+    check_pipeline_requirements
+    interactive_pipeline_setup
+    install_ansible_collections
+    setup_kubespray
+    
+    # Étape 2: Configuration
+    info "Étape 2/2: Configuration du pipeline"
+    setup_vault_password
+    generate_ssh_keys
+    update_inventory
+    update_domains
+    encrypt_secrets
+    
+    validate_pipeline_config
+    display_pipeline_summary
+    
+    success "Configuration complète du pipeline terminée"
+}
+
+# ===================================================================
+# FONCTION PRINCIPALE
+# ===================================================================
+
 # Fonction principale
 main() {
     # Gestion des arguments globaux
@@ -1376,9 +1922,18 @@ main() {
         check_prerequisites
         cmd_init "$@"
         ;;
+    init-pipeline)
+        cmd_init_pipeline "$@"
+        ;;
     configure)
         check_prerequisites
         cmd_configure "$@"
+        ;;
+    configure-pipeline)
+        cmd_configure_pipeline "$@"
+        ;;
+    setup-pipeline)
+        cmd_setup_pipeline "$@"
         ;;
     infrastructure)
         configure_infrastructure_type
@@ -1427,7 +1982,7 @@ main() {
             info "Accédez manuellement à: https://grafana.noah.local"
         fi
         ;;
-    backup|restore|update|metrics|alerts|config|secrets|lint|debug)
+    backup|restore|update|metrics|alerts|config|lint|debug)
         warning "Commande '$command' pas encore implémentée dans cette version"
         info "Fonctionnalité prévue pour une future version"
         ;;
@@ -1435,8 +1990,9 @@ main() {
         error "Commande inconnue: $command"
         echo ""
         echo "Commandes disponibles:"
-        echo "  init, configure, deploy, status, logs, start, stop, restart"
-        echo "  validate, test, health, dashboard"
+        echo "  init, init-pipeline, configure, configure-pipeline, setup-pipeline"
+        echo "  deploy, status, logs, start, stop, restart"
+        echo "  validate, test, health, dashboard, infrastructure, secrets"
         echo ""
         echo "Utilisez 'noah --help' pour plus d'informations"
         exit 1

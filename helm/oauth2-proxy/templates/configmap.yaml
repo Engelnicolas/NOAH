@@ -1,4 +1,4 @@
-{{- if .Values.oauth2-proxy.enabled }}
+{{- if .Values.oauth2proxy.enabled }}
 ---
 apiVersion: v1
 kind: ConfigMap

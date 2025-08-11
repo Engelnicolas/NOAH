@@ -5,6 +5,10 @@ global:
   scrapeInterval: 30s
   evaluationInterval: 30s
   externalLabels: {}
+
+service:
+  enabled: true
+
 prometheus:
   enabled: true
   replicaCount: 2

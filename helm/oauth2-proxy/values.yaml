@@ -1,3 +1,7 @@
+# Enable/disable oauth2-proxy deployment
+oauth2proxy:
+  enabled: true
+
 # Global configuration
 
 global:

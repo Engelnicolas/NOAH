@@ -1,0 +1,236 @@
+# Default values for noah-common.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# noah-common is a library chart that provides shared templates
+# and helper functions for all NOAH platform components.
+# It doesn't deploy any resources directly but provides reusable templates.
+
+# Common configuration that can be referenced by consuming charts
+common:
+  # Default security context values
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false
+    fsGroupChangePolicy: "Always"
+
+  # Default monitoring configuration
+  serviceMonitor:
+    enabled: false
+    port: "http"
+    interval: "30s"
+    path: "/metrics"
+    scrapeTimeout: "10s"
+    namespace: ""
+    labels: {}
+    relabelings: []
+    metricRelabelings: []
+
+  # Default Prometheus rule configuration
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    labels: {}
+    rules: []
+
+  # Default network policy configuration
+  networkPolicy:
+    enabled: false
+    allowedCIDRs: []
+    allowedNamespaces: []
+    ingress:
+      enabled: true
+    egress:
+      enabled: true
+
+  # Common labels applied to all resources
+  commonLabels: {}
+
+  # Common annotations applied to all resources
+  commonAnnotations: {}
+
+# Default values for image configuration
+image:
+  # Default image pull policy
+  pullPolicy: IfNotPresent
+  # Common image pull secrets
+  pullSecrets: []
+
+# Default resource configuration
+resources:
+  # Default resource limits and requests
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Default node selector
+nodeSelector: {}
+
+# Default tolerations
+tolerations: []
+
+# Default affinity rules
+affinity: {}
+
+# Default pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+# Default container security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+
+# Service account configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Pod disruption budget defaults
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  maxUnavailable: ""
+
+# Horizontal Pod Autoscaler defaults
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Ingress defaults
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+# Service defaults
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: http
+  protocol: TCP
+  annotations: {}
+
+# Persistence defaults
+persistence:
+  enabled: false
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 8Gi
+  annotations: {}
+
+# ConfigMap defaults
+configMap:
+  enabled: false
+  data: {}
+
+# Secret defaults
+secret:
+  enabled: false
+  type: Opaque
+  data: {}
+
+# Environment variables defaults
+env: []
+
+# Volume mounts defaults
+volumeMounts: []
+
+# Additional volumes defaults
+volumes: []
+
+# Init containers defaults
+initContainers: []
+
+# Sidecar containers defaults
+sidecars: []
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod labels
+podLabels: {}
+
+# Lifecycle hooks
+lifecycle: {}
+
+# Health checks
+livenessProbe: {}
+readinessProbe: {}
+startupProbe: {}
+
+# Deployment strategy
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 25%
+    maxSurge: 25%
+
+# Revision history limit
+revisionHistoryLimit: 10
+
+# Pod priority class
+priorityClassName: ""
+
+# Runtime class
+runtimeClassName: ""
+
+# DNS policy
+dnsPolicy: ClusterFirst
+
+# DNS config
+dnsConfig: {}
+
+# Host aliases
+hostAliases: []
+
+# Restart policy
+restartPolicy: Always
+
+# Termination grace period
+terminationGracePeriodSeconds: 30
+
+# Active deadline seconds
+activeDeadlineSeconds: ""
+
+# Enable service links
+enableServiceLinks: true
+
+# Share process namespace
+shareProcessNamespace: false
+
+# Host network
+hostNetwork: false
+
+# Host PID
+hostPID: false
+
+# Host IPC
+hostIPC: false

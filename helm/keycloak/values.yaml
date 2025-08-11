@@ -18,6 +18,10 @@
 # - PostgreSQL database integration
 # - HTTPS/TLS termination and security
 # - LDAP/Active Directory federation
+
+# Enable/disable keycloak deployment
+keycloak:
+  enabled: true
 # - Ingress configuration with load balancing
 # - Persistent storage for themes and configurations
 # - Monitoring and health checks

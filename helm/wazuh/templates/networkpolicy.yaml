@@ -1,5 +1,5 @@
----
 {{- if .Values.networkPolicy.enabled }}
+---
 # Wazuh Network Policy
 apiVersion: {{ include "wazuh.networkPolicy.apiVersion" . }}
 kind: NetworkPolicy

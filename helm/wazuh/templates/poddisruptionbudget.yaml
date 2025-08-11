@@ -1,5 +1,5 @@
----
 {{- if .Values.podDisruptionBudget.manager.enabled }}
+---
 # Wazuh Manager Pod Disruption Budget
 apiVersion: {{ include "wazuh.podDisruptionBudget.apiVersion" . }}
 kind: PodDisruptionBudget

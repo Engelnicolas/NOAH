@@ -1,3 +1,4 @@
+{{- if .Values.samba4.enabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -43,3 +44,4 @@ spec:
         - name: samba-data
           persistentVolumeClaim:
             claimName: samba4-data
+{{- end }}

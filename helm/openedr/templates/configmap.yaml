@@ -1,3 +1,4 @@
+{{- if .Values.openedr.enabled }}
 ---
 # OpenEDR Configuration
 apiVersion: v1
@@ -129,3 +130,4 @@ data:
         "output": "{{ .Values.config.logging.output }}"
       }
     }
+{{- end }}

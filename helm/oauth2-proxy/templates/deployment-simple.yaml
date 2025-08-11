@@ -1,3 +1,4 @@
+{{- if .Values.oauth2-proxy.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -101,3 +102,4 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+{{- end }}

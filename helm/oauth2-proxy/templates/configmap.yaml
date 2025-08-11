@@ -1,3 +1,4 @@
+{{- if .Values.oauth2-proxy.enabled }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -168,3 +169,4 @@ data:
     {{- $content | nindent 4 }}
   {{- end }}
   {{- end }}
+{{- end }}

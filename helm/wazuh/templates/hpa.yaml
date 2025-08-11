@@ -1,5 +1,5 @@
----
 {{- if .Values.autoscaling.manager.enabled }}
+---
 # Wazuh Manager Horizontal Pod Autoscaler
 apiVersion: {{ include "wazuh.hpa.apiVersion" . }}
 kind: HorizontalPodAutoscaler

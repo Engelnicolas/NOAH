@@ -1,5 +1,5 @@
----
 {{- if and .Values.dashboard.enabled .Values.persistence.dashboard.enabled }}
+---
 # Wazuh Dashboard Persistent Volume Claim
 apiVersion: v1
 kind: PersistentVolumeClaim

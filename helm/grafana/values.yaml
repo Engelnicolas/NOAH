@@ -4,6 +4,8 @@
 # Essential configuration only - no extensive documentation
 
 # Global settings
+grafana:
+  enabled: true
 
 global:
   storageClass: ''

@@ -1,5 +1,5 @@
----
 {{- if .Values.autoscaling.enabled }}
+---
 # Mattermost Horizontal Pod Autoscaler
 apiVersion: {{ include "mattermost.hpa.apiVersion" . }}
 kind: HorizontalPodAutoscaler

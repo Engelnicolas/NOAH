@@ -1,5 +1,5 @@
----
 {{- if .Values.metrics.serviceMonitor.enabled }}
+---
 # Mattermost Service Monitor for Prometheus
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor

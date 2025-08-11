@@ -84,21 +84,3 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "100m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: oauth2-proxy-minimal
-  namespace: noah
-  labels:
-    app: oauth2-proxy-minimal
-    component: authentication-proxy
-spec:
-  type: ClusterIP
-  ports:
-    - port: 4180
-      targetPort: http
-      protocol: TCP
-      name: http
-  selector:
-    app: oauth2-proxy-minimal

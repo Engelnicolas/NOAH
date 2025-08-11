@@ -1,6 +1,10 @@
 # NOAH Platform - Main Chart Values
 # This file contains the default configuration values for the NOAH platform
 
+# Enable/disable noah-chart deployment
+noahChart:
+  enabled: true
+
 # Global configuration
 global:
   # Domain configuration
@@ -81,3 +85,42 @@ backup:
   enabled: false
   schedule: "0 2 * * *"  # Daily at 2 AM
   retention: "30d"       # Keep backups for 30 days
+# Service configuration
+service:
+  enabled: true
+  type: ClusterIP
+  port: 80
+
+# Ingress configuration  
+ingress:
+  enabled: false
+  annotations: {}
+  hosts: []
+  tls: []
+
+# Persistence configuration
+persistence:
+  enabled: false
+  size: 10Gi
+  storageClass: ""
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+
+# Service Monitor for Prometheus
+serviceMonitor:
+  enabled: false
+
+# Network Policy
+networkPolicy:
+  enabled: false
+

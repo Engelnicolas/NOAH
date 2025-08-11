@@ -1,3 +1,4 @@
+{{- if .Values.grafana.enabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -101,3 +102,4 @@ spec:
         configMap:
           name: {{ include "noah.fullname" . }}-dashboards
       {{- end }}
+{{- end }}

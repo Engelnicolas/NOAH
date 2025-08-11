@@ -377,3 +377,8 @@ extraVolumes: []
 extraVolumeMounts: []
 initContainers: []
 sidecarContainers: []
+
+# Pod Disruption Budget configuration
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1

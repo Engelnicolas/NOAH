@@ -1,3 +1,7 @@
+# Enable/disable samba4 deployment
+samba4:
+  enabled: true
+
 global:
   imageRegistry: ''
   imagePullSecrets: []

@@ -1,3 +1,4 @@
+{{- if .Values.gitlab.enabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -94,3 +95,4 @@ spec:
         persistentVolumeClaim:
           claimName: {{ include "noah.fullname" . }}-logs
       {{- end }}
+{{- end }}

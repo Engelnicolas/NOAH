@@ -1,3 +1,4 @@
+{{- if .Values.grafana.enabled }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -63,3 +64,4 @@ data:
     [log]
     mode = console
     level = info
+{{- end }}

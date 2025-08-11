@@ -1,5 +1,5 @@
----
 {{- if .Values.podDisruptionBudget.enabled }}
+---
 # Mattermost Pod Disruption Budget
 apiVersion: {{ include "mattermost.podDisruptionBudget.apiVersion" . }}
 kind: PodDisruptionBudget

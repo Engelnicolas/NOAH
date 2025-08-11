@@ -99,14 +99,17 @@ jobs:
               for file in files:
                   if file.endswith(('.yml', '.yaml')):
                       filepath = os.path.join(root, file)
+                      # Skip Helm template files as they contain Go template syntax
+                      if '/templates/' in filepath and '/helm/' in filepath:
+                          print(f'⚡ {filepath} (Helm template - skipped)')
+                          continue
                       try:
                           with open(filepath, 'r') as f:
                               yaml.safe_load(f)
                           print(f'✓ {filepath}')
                       except Exception as e:
                           print(f'✗ {filepath}: {e}')
-                          # Do not count errors for now to avoid false positives with Jinja2
-                          # errors += 1
+                          errors += 1
           
           if errors > 0:
               sys.exit(1)

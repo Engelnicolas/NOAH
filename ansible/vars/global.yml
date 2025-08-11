@@ -89,7 +89,7 @@ backup_schedule: "0 2 * * *"  # Tous les jours à 2h
 backup_retention: "30d"
 
 # Configuration infrastructure cloud
-cloud_provider: "baremetal"  # Options: baremetal, openstack, aws, gcp, azure
+cloud_provider: "baremetal"  # Options: baremetal, aws, gcp, azure
 provision_vms: false  # Set to true if you want to provision VMs automatically
 
 # VM definitions (when provision_vms is true)

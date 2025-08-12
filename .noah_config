@@ -1,0 +1,7 @@
+INFRASTRUCTURE_TYPE=kubernetes
+DEPLOYMENT_PROFILE=prod
+CONFIGURED=true
+CLUSTER_TYPE=baremetal
+CLOUD_PROVIDER=none
+ENVIRONMENT=production
+KUBECONFIG=/root/.kube/config

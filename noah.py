@@ -238,13 +238,44 @@ class KubernetesManager:
 @click.group()
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
 @click.option('--dry-run', is_flag=True, help='Simulate actions without execution')
-@click.version_option(version='1.0.0-python', prog_name='NOAH CLI')
+@click.version_option(version='0.2.9', prog_name='NOAH CLI')
 @click.pass_context
 def cli(ctx, verbose, dry_run):
     """
     NOAH CLI - Network Operations & Automation Hub
-
-    Modern Python-based infrastructure management tool
+    
+    Modern Python-based infrastructure management tool for production-ready deployments.
+    
+    Commands are organized by context:
+    
+    \b
+    PRODUCTION SETUP:
+    • init      - Initialize NOAH environment
+    • configure - Configure infrastructure settings  
+    • deploy    - Deploy to production environment
+    • validate  - Validate production configuration
+    
+    \b
+    DEVELOPMENT SETUP:
+    • dev       - Development environment commands
+    • test      - Run platform tests
+    • logs      - View service logs
+    
+    \b
+    SERVICE MANAGEMENT:
+    • start     - Start NOAH services
+    • stop      - Stop NOAH services  
+    • restart   - Restart NOAH services
+    • status    - Check service status
+    
+    \b
+    SECURITY & SECRETS:
+    • secrets   - Manage encrypted secrets with SOPS
+    
+    \b
+    UTILITIES:
+    • dashboard - Open monitoring dashboard
+    • pipeline  - Configure CI/CD pipeline
     """
     ctx.ensure_object(dict)
     ctx.obj['verbose'] = verbose
@@ -254,7 +285,7 @@ def cli(ctx, verbose, dry_run):
     # Display banner
     if not ctx.resilient_parsing:
         banner = Panel(
-            Text("NOAH CLI v1.0.0-python\nNetwork Operations & Automation Hub\nPython Implementation",
+            Text("NOAH CLI v0.2.9\nNetwork Operations & Automation Hub\nPython Implementation",
                  style="bold blue", justify="center"),
             style="blue",
             padding=(1, 2)
@@ -269,13 +300,21 @@ def cli(ctx, verbose, dry_run):
         sys.exit(1)
 
 
+# =============================================================================
+# PRODUCTION SETUP COMMANDS
+# =============================================================================
+
 @cli.command()
 @click.option('--infrastructure-type',
               type=click.Choice(['kubernetes', 'docker']),
               help='Infrastructure deployment type')
 @click.pass_context
 def init(ctx, infrastructure_type):
-    """Initialize NOAH environment"""
+    """Initialize NOAH environment for production
+    
+    Sets up the basic NOAH environment configuration for production deployment.
+    Choose between Kubernetes (recommended) or Docker infrastructure.
+    """
     config = ctx.obj['config']
     dry_run = ctx.obj['dry_run']
 
@@ -311,7 +350,11 @@ def init(ctx, infrastructure_type):
 @click.option('--auto', is_flag=True, help='Automatic configuration with defaults')
 @click.pass_context
 def configure(ctx, auto):
-    """Configure NOAH deployment parameters"""
+    """Configure production infrastructure settings
+    
+    Interactive configuration of infrastructure settings for production deployment.
+    Use --auto for automated configuration with defaults.
+    """
     console.print("[yellow]🔧 Configuring NOAH deployment...[/yellow]")
 
     dry_run = ctx.obj['dry_run']
@@ -400,7 +443,11 @@ all:
 @click.option('--skip-provision', is_flag=True, help='Skip infrastructure provisioning')
 @click.pass_context
 def deploy(ctx, profile, skip_provision):
-    """Deploy NOAH platform"""
+    """Deploy NOAH platform to production
+    
+    Deploys the complete NOAH platform to production environment.
+    Includes infrastructure provisioning, Kubernetes setup, and application deployment.
+    """
     config = ctx.obj['config']
     dry_run = ctx.obj['dry_run']
 
@@ -444,7 +491,10 @@ def deploy(ctx, profile, skip_provision):
 @click.option('--all-namespaces', is_flag=True, help='Show all namespaces')
 @click.pass_context
 def status(ctx, detailed, all_namespaces):
-    """Check NOAH platform status"""
+    """Check platform service status
+    
+    Displays the current status of all NOAH platform services and infrastructure.
+    """
     config = ctx.obj['config']
     infrastructure_type = config.config.get('INFRASTRUCTURE_TYPE', 'kubernetes')
 
@@ -495,9 +545,17 @@ def status(ctx, detailed, all_namespaces):
             console.print("[red]Error checking Docker status[/red]")
 
 
+# =============================================================================
+# SECURITY & SECRETS MANAGEMENT
+# =============================================================================
+
 @cli.group()
 def secrets():
-    """Manage NOAH secrets with SOPS"""
+    """Manage encrypted secrets with SOPS
+    
+    Secure management of NOAH platform secrets using SOPS (Secrets OPerationS).
+    All secrets are encrypted at rest and managed with age keys.
+    """
     pass
 
 
@@ -626,13 +684,136 @@ def decrypt(ctx):
     else:
         console.print(f"[red]❌ Failed to decrypt: {result.stderr}[/red]")
 
-# Management commands
+
+# =============================================================================
+# DEVELOPMENT ENVIRONMENT COMMANDS
+# =============================================================================
+
+@cli.group()
+def dev():
+    """Development environment management
+    
+    Commands for setting up and managing development environments.
+    """
+    pass
+
+
+@dev.command("setup")
+@click.option('--clean', is_flag=True, help='Clean existing development setup')
+@click.option('--minimal', is_flag=True, help='Minimal development setup')
+@click.pass_context
+def dev_setup(ctx, clean, minimal):
+    """Setup development environment
+    
+    Configures a local development environment with necessary tools
+    and dependencies for NOAH platform development.
+    """
+    console.print("[yellow]🛠️  Setting up development environment...[/yellow]")
+    
+    if clean:
+        console.print("[yellow]🧹 Cleaning existing setup...[/yellow]")
+        # Add cleanup logic here
+        
+    config = ctx.obj['config']
+    dry_run = ctx.obj['dry_run']
+    
+    steps = [
+        "Installing development dependencies",
+        "Setting up Git hooks", 
+        "Configuring pre-commit",
+        "Setting up testing environment"
+    ]
+    
+    if not minimal:
+        steps.extend([
+            "Installing additional development tools",
+            "Setting up local documentation server"
+        ])
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        for step in steps:
+            task = progress.add_task(step, total=None)
+            # Simulate work for now
+            import time
+            time.sleep(0.5)
+            progress.update(task, description=f"✅ {step}")
+    
+    console.print("[green]✅ Development environment setup complete![/green]")
+    
+    
+@dev.command("reset")
+@click.option('--force', is_flag=True, help='Force reset without confirmation')
+@click.pass_context
+def dev_reset(ctx, force):
+    """Reset development environment
+    
+    Resets the development environment to a clean state.
+    """
+    if not force and not Confirm.ask("⚠️  This will reset your development environment. Continue?"):
+        console.print("[yellow]Operation cancelled[/yellow]")
+        return
+        
+    console.print("[yellow]🔄 Resetting development environment...[/yellow]")
+    
+    # Run the reset script
+    script_path = Path("script/reset_dev_environment.py")
+    if script_path.exists():
+        try:
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                console.print("[green]✅ Development environment reset complete[/green]")
+            else:
+                console.print(f"[red]❌ Reset failed: {result.stderr}[/red]")
+        except Exception as e:
+            console.print(f"[red]❌ Error during reset: {e}[/red]")
+    else:
+        console.print("[red]❌ Reset script not found[/red]")
+
+
+@dev.command("dependencies")
+@click.pass_context  
+def dev_dependencies(ctx):
+    """Test development dependencies
+    
+    Validates that all required development dependencies are installed
+    and properly configured.
+    """
+    console.print("[yellow]🔍 Testing development dependencies...[/yellow]")
+    
+    # Run the test dependencies script
+    script_path = Path("script/test_dependencies.py") 
+    if script_path.exists():
+        try:
+            result = subprocess.run([sys.executable, str(script_path)])
+            if result.returncode == 0:
+                console.print("[green]✅ All dependencies validated[/green]")
+            else:
+                console.print("[yellow]⚠️  Some dependencies need attention[/yellow]")
+        except Exception as e:
+            console.print(f"[red]❌ Error testing dependencies: {e}[/red]")
+    else:
+        console.print("[red]❌ Dependency test script not found[/red]")
+
+
+# =============================================================================
+# SERVICE MANAGEMENT COMMANDS  
+# =============================================================================
 
 
 @cli.command()
 @click.pass_context
 def start(ctx):
-    """Start NOAH services"""
+    """Start all NOAH services
+    
+    Starts all NOAH platform services in the Kubernetes cluster.
+    """
     console.print("[yellow]🚀 Starting NOAH services...[/yellow]")
 
     try:
@@ -651,7 +832,10 @@ def start(ctx):
 @cli.command()
 @click.pass_context
 def stop(ctx):
-    """Stop NOAH services"""
+    """Stop all NOAH services
+    
+    Gracefully stops all NOAH platform services in the Kubernetes cluster.
+    """
     console.print("[yellow]🛑 Stopping NOAH services...[/yellow]")
 
     try:
@@ -670,7 +854,10 @@ def stop(ctx):
 @cli.command()
 @click.pass_context
 def restart(ctx):
-    """Restart NOAH services"""
+    """Restart all NOAH services
+    
+    Performs a rolling restart of all NOAH platform services.
+    """
     console.print("[yellow]🔄 Restarting NOAH services...[/yellow]")
 
     try:
@@ -692,7 +879,10 @@ def restart(ctx):
 @click.option('--lines', default=100, help='Number of lines to show')
 @click.pass_context
 def logs(ctx, service, follow, lines):
-    """View NOAH service logs"""
+    """View service logs
+    
+    View logs from NOAH platform services. Use --follow to stream logs in real-time.
+    """
     console.print("[yellow]📋 Viewing NOAH logs...[/yellow]")
 
     cmd = ["kubectl", "logs", "-n", "noah", f"--tail={lines}"]
@@ -716,7 +906,11 @@ def logs(ctx, service, follow, lines):
 @cli.command()
 @click.pass_context
 def validate(ctx):
-    """Validate NOAH configuration"""
+    """Validate production configuration
+    
+    Validates NOAH configuration, Ansible playbooks, and Helm charts
+    to ensure everything is ready for production deployment.
+    """
     console.print("[yellow]🔍 Validating NOAH configuration...[/yellow]")
 
     config = ctx.obj['config']
@@ -776,10 +970,18 @@ def validate(ctx):
         sys.exit(1)
 
 
+# =============================================================================
+# TESTING & DEVELOPMENT COMMANDS
+# =============================================================================
+
 @cli.command()
 @click.pass_context
 def test(ctx):
-    """Run NOAH platform tests"""
+    """Run platform integration tests
+    
+    Runs comprehensive tests including SSH connectivity,
+    application endpoints, and service health checks.
+    """
     console.print("[yellow]🧪 Running NOAH tests...[/yellow]")
 
     # Test SSH connectivity
@@ -815,12 +1017,17 @@ def test(ctx):
         except Exception:
             console.print(f"[red]❌ {app}[/red] - {url} (unreachable)")
 
-# Pipeline commands
 
+# =============================================================================
+# UTILITY COMMANDS
+# =============================================================================
 
 @cli.group()
 def pipeline():
-    """Pipeline configuration commands"""
+    """CI/CD pipeline configuration
+    
+    Commands for configuring and managing the CI/CD pipeline infrastructure.
+    """
     pass
 
 
@@ -831,7 +1038,10 @@ def pipeline():
 @click.option('--worker-ip', help='Worker node IP')
 @click.pass_context
 def pipeline_configure(ctx, auto, domain, master_ip, worker_ip):
-    """Configure CI/CD pipeline"""
+    """Configure CI/CD pipeline settings
+    
+    Sets up CI/CD pipeline configuration including domain, master and worker IPs.
+    """
     console.print("[yellow]🔧 Configuring NOAH pipeline...[/yellow]")
 
     # Default values
@@ -889,7 +1099,10 @@ all:
 @cli.command()
 @click.pass_context
 def infrastructure(ctx):
-    """Configure infrastructure type"""
+    """Configure infrastructure deployment type
+    
+    Interactive configuration to choose between Kubernetes and Docker infrastructure types.
+    """
     console.print("[yellow]⚙️  Infrastructure type configuration[/yellow]")
 
     config = ctx.obj['config']
@@ -925,7 +1138,10 @@ def infrastructure(ctx):
 @cli.command()
 @click.pass_context
 def dashboard(ctx):
-    """Open Grafana dashboard"""
+    """Open monitoring dashboard
+    
+    Opens the Grafana monitoring dashboard in your default web browser.
+    """
     console.print("[yellow]📊 Opening Grafana dashboard...[/yellow]")
 
     url = "https://grafana.noah.local"

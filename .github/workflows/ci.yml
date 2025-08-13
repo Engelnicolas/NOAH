@@ -41,9 +41,8 @@ jobs:
 
       - name: Test NOAH CLI
         run: |
-          chmod +x noah.sh
-          ./noah.sh --version
-          ./noah.sh --help
+          python3 noah.py --version
+          python3 noah.py --help
 
       - name: Install Ansible collections
         run: |

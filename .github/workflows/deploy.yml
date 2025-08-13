@@ -138,8 +138,7 @@ jobs:
 
       - name: Verify Ansible environment
         run: |
-          chmod +x script/verify-ansible-collections.sh
-          ./script/verify-ansible-collections.sh
+          python3 script/verify_ansible_collections.py
 
       - name: Configure SSH authentication
         env:
@@ -147,7 +146,7 @@ jobs:
           WORKER_HOSTS: ${{ secrets.WORKER_HOSTS }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          ./script/configure-ssh.sh
+          python3 script/configure_ssh.py
 
       - name: Create Ansible vault password file
         run: |
@@ -235,7 +234,7 @@ jobs:
           WORKER_HOSTS: ${{ secrets.WORKER_HOSTS }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          ./script/configure-ssh.sh
+          python3 script/configure_ssh.py
 
       - name: Create Ansible vault password file
         run: |
@@ -300,7 +299,7 @@ jobs:
           WORKER_HOSTS: ${{ secrets.WORKER_HOSTS }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          ./script/configure-ssh.sh
+          python3 script/configure_ssh.py
 
       - name: Create Ansible vault password file
         run: |
@@ -365,7 +364,7 @@ jobs:
           WORKER_HOSTS: ${{ secrets.WORKER_HOSTS }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          ./script/configure-ssh.sh
+          python3 script/configure_ssh.py
 
       - name: Create Ansible vault password file
         run: |
@@ -456,7 +455,7 @@ jobs:
           WORKER_HOSTS: ${{ secrets.WORKER_HOSTS }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          ./script/configure-ssh.sh
+          python3 script/configure_ssh.py
 
       - name: Create Ansible vault password file
         run: |

@@ -29,7 +29,7 @@ step() { echo -e "${CYAN}[STEP]${NC} $1"; }
 show_banner() {
     echo -e "${CYAN}${BOLD}"
     echo "╔═══════════════════════════════════════════════════════════════╗"
-    echo "║                 🚀 NOAH CLI v${NOAH_VERSION}                  ║"
+    echo "║                 🚀 NOAH CLI v${NOAH_VERSION}                       ║"
     echo "║              Network Operations & Automation Hub              ║"
     echo "║                   Pipeline CI/CD Moderne                      ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
@@ -741,6 +741,13 @@ deploy_kubernetes() {
     # Étapes de déploiement Kubernetes
     if [[ "$skip_provision" != "true" ]]; then
         step "1/4 - Provision de l'infrastructure..."
+        info "🏗️  Phase de provisioning de l'infrastructure en cours..."
+        info "   → Création du réseau et groupes de sécurité"
+        info "   → Génération des clés SSH"
+        info "   → Provision des nœuds master et worker"
+        info "   → Configuration DNS et vérification connectivité"
+        echo ""
+        
         ansible-playbook playbooks/01-provision.yml -i inventory/mycluster/hosts.yaml $dry_run_flag || {
             error "Échec de la provision d'infrastructure"
             exit 1
@@ -748,18 +755,44 @@ deploy_kubernetes() {
     fi
     
     step "2/4 - Installation de Kubernetes..."
+    info "⚙️  Phase d'installation de Kubernetes en cours..."
+    info "   → Préparation des nœuds (Docker, containerd)"
+    info "   → Clonage et configuration de Kubespray"
+    info "   → Installation du cluster Kubernetes"
+    info "   → Vérification de l'installation"
+    echo ""
+    
     ansible-playbook playbooks/02-install-k8s.yml -i inventory/mycluster/hosts.yaml $dry_run_flag || {
         error "Échec de l'installation Kubernetes"
         exit 1
     }
     
     step "3/4 - Configuration du cluster..."
+    info "🔧 Phase de configuration du cluster Kubernetes en cours..."
+    info "   → Installation et configuration de Helm"
+    info "   → Création des namespaces NOAH"
+    info "   → Configuration du contrôleur d'entrée NGINX"
+    info "   → Installation de la stack de monitoring Prometheus/Grafana"
+    info "   → Configuration des permissions et stockage"
+    
+    echo ""
+    info "📊 Progression détaillée de la configuration du cluster:"
+    
     ansible-playbook playbooks/03-configure-cluster.yml -i inventory/mycluster/hosts.yaml $dry_run_flag || {
         error "Échec de la configuration du cluster"
         exit 1
     }
     
     step "4/4 - Déploiement des applications..."
+    info "🚀 Phase de déploiement des applications NOAH en cours..."
+    info "   → Déploiement de Keycloak (SSO)"
+    info "   → Déploiement de GitLab (DevOps)"
+    info "   → Déploiement de Grafana (Monitoring)"
+    info "   → Déploiement de Nextcloud (Stockage)"
+    info "   → Déploiement de Mattermost (Communication)"
+    info "   → Configuration des ingress et certificats TLS"
+    echo ""
+    
     ansible-playbook playbooks/04-deploy-apps.yml -i inventory/mycluster/hosts.yaml $dry_run_flag || {
         error "Échec du déploiement des applications"
         exit 1

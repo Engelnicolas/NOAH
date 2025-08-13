@@ -1,75 +1,152 @@
 #!/usr/bin/env python3
 """
-NOAH CLI - Python Implementation Preview
+NOAH CLI - Python Implementation
 Network Operations & Automation Hub
 
-This is a preview of how noah.sh could be converted to Python
-while maintaining full functionality and improving maintainability.
+This is the Python implementation of the NOAH CLI,
+converted from the original bash script for better maintainability.
 """
 
 import click
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict
 import yaml
 import json
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
 from rich.text import Text
+from rich.table import Table
+from rich.prompt import Prompt, Confirm
+import shutil
 
 console = Console()
 
+
 class NoahConfig:
     """Configuration management for NOAH platform"""
-    
+
     def __init__(self, config_path: Path = Path(".noah_config")):
         self.config_path = config_path
         self.config = self.load_config()
-    
+        self.script_dir = Path.cwd()
+
     def load_config(self) -> Dict:
         """Load configuration from file or defaults"""
         if self.config_path.exists():
             with open(self.config_path) as f:
                 return dict(line.strip().split('=', 1) for line in f if '=' in line)
         return {"INFRASTRUCTURE_TYPE": "kubernetes"}
-    
+
     def save_config(self):
         """Save configuration to file"""
         with open(self.config_path, 'w') as f:
             for key, value in self.config.items():
                 f.write(f"{key}={value}\n")
 
+    def check_environment(self) -> bool:
+        """Check NOAH environment prerequisites"""
+        required_dirs = ["ansible", ".github/workflows"]
+        required_files = ["ansible/ansible.cfg"]
+
+        for dir_name in required_dirs:
+            if not (self.script_dir / dir_name).exists():
+                console.print(f"[red]❌ Missing directory: {dir_name}[/red]")
+                return False
+
+        for file_name in required_files:
+            if not (self.script_dir / file_name).exists():
+                console.print(f"[red]❌ Missing file: {file_name}[/red]")
+                return False
+
+        return True
+
+
+class PrerequisiteChecker:
+    """Check system prerequisites for NOAH"""
+
+    @staticmethod
+    def check_prerequisites() -> bool:
+        """Check all required tools"""
+        required_tools = {
+            "python3": "Python 3.8+",
+            "pip3": "Python package manager",
+            "git": "Version control",
+            "ansible": "Automation engine",
+        }
+
+        optional_tools = {
+            "helm": "Kubernetes package manager",
+            "kubectl": "Kubernetes CLI",
+            "docker": "Container runtime",
+            "sops": "Secrets management"
+        }
+
+        console.print("[yellow]🔍 Checking prerequisites...[/yellow]")
+
+        missing_required = []
+        missing_optional = []
+
+        # Check required tools
+        for tool, description in required_tools.items():
+            if shutil.which(tool):
+                console.print(f"[green]✅ {tool}[/green] - {description}")
+            else:
+                console.print(f"[red]❌ {tool}[/red] - {description}")
+                missing_required.append(tool)
+
+        # Check optional tools
+        for tool, description in optional_tools.items():
+            if shutil.which(tool):
+                console.print(f"[green]✅ {tool}[/green] - {description}")
+            else:
+                console.print(f"[yellow]⚠️  {tool}[/yellow] - {description} (optional)")
+                missing_optional.append(tool)
+
+        if missing_required:
+            console.print(f"\n[red]❌ Missing required tools: {', '.join(missing_required)}[/red]")
+            console.print("[yellow]Install missing tools before continuing[/yellow]")
+            return False
+
+        if missing_optional:
+            console.print(f"\n[yellow]⚠️  Missing optional tools: {', '.join(missing_optional)}[/yellow]")
+            console.print("[blue]Some features may not be available[/blue]")
+
+        console.print("\n[green]✅ Prerequisites check completed[/green]")
+        return True
+
+
 class AnsibleRunner:
     """Ansible playbook execution wrapper"""
-    
+
     def __init__(self, config: NoahConfig):
         self.config = config
         self.inventory_path = Path("ansible/inventory/mycluster/hosts.yaml")
         self.playbooks_dir = Path("ansible/playbooks")
-    
+
     def run_playbook(self, playbook: str, dry_run: bool = False, verbose: bool = False) -> bool:
         """Execute ansible playbook with progress tracking"""
         playbook_path = self.playbooks_dir / playbook
-        
+
         if not playbook_path.exists():
             console.print(f"[red]❌ Playbook not found: {playbook_path}[/red]")
             return False
-        
+
         cmd = [
             "ansible-playbook",
             str(playbook_path),
             "-i", str(self.inventory_path),
         ]
-        
+
         if dry_run:
             cmd.append("--check")
         if verbose:
             cmd.append("-vv")
-        
+
         console.print(f"[blue]🚀 Executing playbook: {playbook}[/blue]")
-        
+
         try:
             with Progress(
                 SpinnerColumn(),
@@ -77,7 +154,7 @@ class AnsibleRunner:
                 console=console
             ) as progress:
                 task = progress.add_task(f"Running {playbook}...", total=None)
-                
+
                 result = subprocess.run(
                     cmd,
                     cwd=Path.cwd(),
@@ -85,9 +162,9 @@ class AnsibleRunner:
                     text=True,
                     timeout=3600  # 1 hour timeout
                 )
-                
+
                 progress.remove_task(task)
-            
+
             if result.returncode == 0:
                 console.print(f"[green]✅ Playbook {playbook} completed successfully[/green]")
                 if verbose:
@@ -97,7 +174,7 @@ class AnsibleRunner:
                 console.print(f"[red]❌ Playbook {playbook} failed[/red]")
                 console.print(f"[red]Error: {result.stderr}[/red]")
                 return False
-                
+
         except subprocess.TimeoutExpired:
             console.print(f"[red]❌ Playbook {playbook} timed out[/red]")
             return False
@@ -105,9 +182,10 @@ class AnsibleRunner:
             console.print(f"[red]❌ Error running playbook {playbook}: {e}[/red]")
             return False
 
+
 class KubernetesManager:
     """Kubernetes cluster management"""
-    
+
     @staticmethod
     def check_connectivity() -> bool:
         """Check if kubectl can connect to cluster"""
@@ -121,7 +199,7 @@ class KubernetesManager:
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
-    
+
     @staticmethod
     def get_cluster_status() -> Dict:
         """Get comprehensive cluster status"""
@@ -131,7 +209,7 @@ class KubernetesManager:
             "services": [],
             "ingress": []
         }
-        
+
         try:
             # Get nodes
             result = subprocess.run(
@@ -144,44 +222,55 @@ class KubernetesManager:
                     {
                         "name": node["metadata"]["name"],
                         "status": next(
-                            cond["type"] for cond in node["status"]["conditions"]
-                            if cond["status"] == "True" and cond["type"] == "Ready"
-                        ) if "conditions" in node["status"] else "Unknown"
+                            (cond["type"] for cond in node["status"]["conditions"]
+                             if cond["status"] == "True" and cond["type"] == "Ready"),
+                            "Unknown"
+                        )
                     }
                     for node in nodes_data.get("items", [])
                 ]
         except Exception:
             pass
-        
+
         return status
+
 
 @click.group()
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
 @click.option('--dry-run', is_flag=True, help='Simulate actions without execution')
+@click.version_option(version='1.0.0-python', prog_name='NOAH CLI')
 @click.pass_context
 def cli(ctx, verbose, dry_run):
     """
     NOAH CLI - Network Operations & Automation Hub
-    
+
     Modern Python-based infrastructure management tool
     """
     ctx.ensure_object(dict)
     ctx.obj['verbose'] = verbose
     ctx.obj['dry_run'] = dry_run
     ctx.obj['config'] = NoahConfig()
-    
+
     # Display banner
     if not ctx.resilient_parsing:
         banner = Panel(
-            Text("NOAH CLI - Network Operations & Automation Hub\nPython Implementation", 
+            Text("NOAH CLI v1.0.0-python\nNetwork Operations & Automation Hub\nPython Implementation",
                  style="bold blue", justify="center"),
             style="blue",
             padding=(1, 2)
         )
         console.print(banner)
 
+    # Check environment
+    config = ctx.obj['config']
+    if not config.check_environment():
+        console.print("[red]❌ NOAH environment validation failed[/red]")
+        console.print("[yellow]Make sure you're in the NOAH project root directory[/yellow]")
+        sys.exit(1)
+
+
 @cli.command()
-@click.option('--infrastructure-type', 
+@click.option('--infrastructure-type',
               type=click.Choice(['kubernetes', 'docker']),
               help='Infrastructure deployment type')
 @click.pass_context
@@ -189,10 +278,9 @@ def init(ctx, infrastructure_type):
     """Initialize NOAH environment"""
     config = ctx.obj['config']
     dry_run = ctx.obj['dry_run']
-    verbose = ctx.obj['verbose']
-    
+
     console.print("[yellow]🔄 Initializing NOAH environment...[/yellow]")
-    
+
     # Configure infrastructure type
     if infrastructure_type:
         config.config['INFRASTRUCTURE_TYPE'] = infrastructure_type
@@ -203,23 +291,109 @@ def init(ctx, infrastructure_type):
             default='kubernetes'
         )
         config.config['INFRASTRUCTURE_TYPE'] = infrastructure_type
-    
+
     if not dry_run:
         config.save_config()
-    
+
     console.print(f"[green]✅ Infrastructure type set to: {config.config['INFRASTRUCTURE_TYPE']}[/green]")
-    
-    # Initialize Ansible environment
-    ansible_runner = AnsibleRunner(config)
-    
+
     console.print("[blue]📦 Installing Ansible collections...[/blue]")
     if not dry_run:
         subprocess.run([
-            "ansible-galaxy", "collection", "install", 
+            "ansible-galaxy", "collection", "install",
             "-r", "ansible/requirements.yml", "--force"
         ])
-    
+
     console.print("[green]✅ NOAH environment initialized successfully[/green]")
+
+
+@cli.command()
+@click.option('--auto', is_flag=True, help='Automatic configuration with defaults')
+@click.pass_context
+def configure(ctx, auto):
+    """Configure NOAH deployment parameters"""
+    console.print("[yellow]🔧 Configuring NOAH deployment...[/yellow]")
+
+    dry_run = ctx.obj['dry_run']
+
+    # Configuration values
+    config_values = {
+        'domain': 'noah.local',
+        'master_ip': '192.168.1.10',
+        'worker_ip': '192.168.1.12',
+        'ingress_ip': '192.168.1.10'
+    }
+
+    if not auto:
+        console.print("\n[blue]📝 Interactive Configuration[/blue]")
+        console.print("Press Enter to keep default values in brackets")
+
+        config_values['domain'] = Prompt.ask("Domain name", default=config_values['domain'])
+        config_values['master_ip'] = Prompt.ask("Master node IP", default=config_values['master_ip'])
+        config_values['worker_ip'] = Prompt.ask("Worker node IP", default=config_values['worker_ip'])
+        config_values['ingress_ip'] = Prompt.ask("Ingress IP", default=config_values['ingress_ip'])
+
+    console.print("\n[green]📋 Configuration Summary:[/green]")
+    for key, value in config_values.items():
+        console.print(f"  {key}: {value}")
+
+    if not auto and not Confirm.ask("\nApply this configuration?"):
+        console.print("[yellow]Configuration cancelled[/yellow]")
+        return
+
+    # Update inventory file
+    if not dry_run:
+        inventory_content = f"""# NOAH Kubernetes cluster inventory - Generated automatically
+all:
+  hosts:
+    noah-master-1:
+      ansible_host: {config_values['master_ip']}
+      ip: {config_values['master_ip']}
+      access_ip: {config_values['master_ip']}
+    noah-worker-1:
+      ansible_host: {config_values['worker_ip']}
+      ip: {config_values['worker_ip']}
+      access_ip: {config_values['worker_ip']}
+  children:
+    kube_control_plane:
+      hosts:
+        noah-master-1:
+    kube_node:
+      hosts:
+        noah-master-1:
+        noah-worker-1:
+    etcd:
+      hosts:
+        noah-master-1:
+    k8s_cluster:
+      children:
+        kube_control_plane:
+        kube_node:
+    calico_rr:
+      hosts: {{}}
+"""
+
+        inventory_path = Path("ansible/inventory/mycluster/hosts.yaml")
+        inventory_path.parent.mkdir(parents=True, exist_ok=True)
+        inventory_path.write_text(inventory_content)
+        console.print("[green]✅ Inventory updated[/green]")
+
+        # Update global configuration
+        global_config_path = Path("ansible/vars/global.yml")
+        if global_config_path.exists():
+            with open(global_config_path, 'r') as f:
+                global_config = yaml.safe_load(f) or {}
+
+            global_config['domain_name'] = config_values['domain']
+            global_config['ingress_ip'] = config_values['ingress_ip']
+
+            with open(global_config_path, 'w') as f:
+                yaml.dump(global_config, f, default_flow_style=False)
+            console.print("[green]✅ Global configuration updated[/green]")
+
+    console.print("\n[green]✅ Configuration completed successfully[/green]")
+    console.print("[blue]Next step: noah deploy[/blue]")
+
 
 @cli.command()
 @click.option('--profile', default='prod', help='Deployment profile (dev/prod)')
@@ -229,41 +403,41 @@ def deploy(ctx, profile, skip_provision):
     """Deploy NOAH platform"""
     config = ctx.obj['config']
     dry_run = ctx.obj['dry_run']
-    verbose = ctx.obj['verbose']
-    
+
     infrastructure_type = config.config.get('INFRASTRUCTURE_TYPE', 'kubernetes')
-    
-    console.print(f"[yellow]🚀 Deploying NOAH platform...[/yellow]")
+
+    console.print("[yellow]🚀 Deploying NOAH platform...[/yellow]")
     console.print(f"[blue]Infrastructure: {infrastructure_type}[/blue]")
     console.print(f"[blue]Profile: {profile}[/blue]")
-    
+
     ansible_runner = AnsibleRunner(config)
-    
+
     if infrastructure_type == 'kubernetes':
         playbooks = []
-        
+
         if not skip_provision:
             playbooks.append('01-provision.yml')
-        
+
         playbooks.extend([
             '02-install-k8s.yml',
-            '03-configure-cluster.yml', 
+            '03-configure-cluster.yml',
             '04-deploy-apps.yml'
         ])
-        
+
         for i, playbook in enumerate(playbooks, 1):
             console.print(f"[cyan]Step {i}/{len(playbooks)}: {playbook}[/cyan]")
-            
-            if not ansible_runner.run_playbook(playbook, dry_run, verbose):
+
+            if not ansible_runner.run_playbook(playbook, dry_run, False):
                 console.print(f"[red]❌ Deployment failed at step {i}[/red]")
                 sys.exit(1)
-    
+
     elif infrastructure_type == 'docker':
         console.print("[blue]🐳 Deploying with Docker Compose...[/blue]")
         if not dry_run:
             subprocess.run(["docker-compose", "up", "-d"])
-    
+
     console.print("[green]🎉 NOAH platform deployed successfully![/green]")
+
 
 @cli.command()
 @click.option('--detailed', is_flag=True, help='Show detailed status')
@@ -273,32 +447,33 @@ def status(ctx, detailed, all_namespaces):
     """Check NOAH platform status"""
     config = ctx.obj['config']
     infrastructure_type = config.config.get('INFRASTRUCTURE_TYPE', 'kubernetes')
-    
+
     console.print("[yellow]🔍 Checking NOAH platform status...[/yellow]")
-    
+
     if infrastructure_type == 'kubernetes':
         k8s_manager = KubernetesManager()
-        
+
         if not k8s_manager.check_connectivity():
             console.print("[red]❌ Cannot connect to Kubernetes cluster[/red]")
             sys.exit(1)
-        
+
         console.print("[green]✅ Kubernetes cluster connection OK[/green]")
-        
+
         status_data = k8s_manager.get_cluster_status()
-        
+
         # Display nodes
         console.print("\n[bold]Cluster Nodes:[/bold]")
         for node in status_data['nodes']:
             status_icon = "✅" if node['status'] == "Ready" else "❌"
             console.print(f"  {status_icon} {node['name']}: {node['status']}")
-        
+
         if detailed:
             # Show more detailed information
             console.print("\n[bold]NOAH Services:[/bold]")
             try:
+                namespace_arg = "--all-namespaces" if all_namespaces else "-n noah"
                 result = subprocess.run(
-                    ["kubectl", "get", "pods", "-n", "noah", "-o", "wide"],
+                    f"kubectl get pods {namespace_arg} -o wide".split(),
                     capture_output=True, text=True, timeout=30
                 )
                 if result.returncode == 0:
@@ -307,7 +482,7 @@ def status(ctx, detailed, all_namespaces):
                     console.print("[yellow]No NOAH namespace found[/yellow]")
             except Exception:
                 console.print("[red]Error getting pod status[/red]")
-    
+
     elif infrastructure_type == 'docker':
         console.print("[blue]🐳 Checking Docker Compose status...[/blue]")
         try:
@@ -319,10 +494,12 @@ def status(ctx, detailed, all_namespaces):
         except Exception:
             console.print("[red]Error checking Docker status[/red]")
 
+
 @cli.group()
 def secrets():
     """Manage NOAH secrets with SOPS"""
     pass
+
 
 @secrets.command()
 @click.pass_context
@@ -331,12 +508,442 @@ def edit(ctx):
     console.print("[yellow]📝 Opening secrets editor...[/yellow]")
     subprocess.run(["sops", "ansible/vars/secrets.yml"])
 
+
 @secrets.command()
 @click.pass_context
 def view(ctx):
     """View decrypted secrets"""
     console.print("[yellow]👁️  Viewing secrets...[/yellow]")
     subprocess.run(["sops", "--decrypt", "ansible/vars/secrets.yml"])
+
+
+@secrets.command("init")
+@click.pass_context
+def init_sops(ctx):
+    """Initialize SOPS configuration"""
+    console.print("[yellow]🔧 Initializing SOPS configuration...[/yellow]")
+
+    sops_config = Path(".sops.yaml")
+    secrets_file = Path("ansible/vars/secrets.yml")
+
+    if not sops_config.exists():
+        sops_content = """# SOPS configuration for NOAH
+creation_rules:
+  - path_regex: ^ansible/vars/secrets\\.yml$
+    age: ["AGE-PLACEHOLDER-PUBLIC-KEY"]
+    encrypted_regex: '^(data|stringData|vault_.*)$'
+"""
+        sops_config.write_text(sops_content)
+        console.print("[green]✅ Created .sops.yaml[/green]")
+
+    if not secrets_file.exists():
+        secrets_file.parent.mkdir(parents=True, exist_ok=True)
+        secrets_content = """# NOAH Secrets - Managed by SOPS
+vault_postgres_password: "changeme"
+vault_keycloak_admin_password: "changeme"
+"""
+        secrets_file.write_text(secrets_content)
+        console.print("[green]✅ Created secrets template[/green]")
+
+
+@secrets.command("validate")
+@click.pass_context
+def validate_sops(ctx):
+    """Validate SOPS configuration"""
+    console.print("[yellow]🔍 Validating SOPS configuration...[/yellow]")
+
+    # Check SOPS binary
+    if not shutil.which("sops"):
+        console.print("[red]❌ SOPS not installed[/red]")
+        return
+
+    # Check Age
+    if not shutil.which("age"):
+        console.print("[red]❌ Age not installed[/red]")
+        return
+
+    # Check .sops.yaml
+    if not Path(".sops.yaml").exists():
+        console.print("[red]❌ .sops.yaml not found[/red]")
+        return
+
+    # Check secrets file
+    secrets_file = Path("ansible/vars/secrets.yml")
+    if not secrets_file.exists():
+        console.print("[red]❌ secrets.yml not found[/red]")
+        return
+
+    # Try to decrypt
+    try:
+        result = subprocess.run(
+            ["sops", "--decrypt", str(secrets_file)],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            console.print("[green]✅ SOPS configuration valid[/green]")
+        else:
+            console.print("[red]❌ Cannot decrypt secrets file[/red]")
+    except Exception as e:
+        console.print(f"[red]❌ Error validating SOPS: {e}[/red]")
+
+
+@secrets.command()
+@click.pass_context
+def encrypt(ctx):
+    """Encrypt secrets file with SOPS"""
+    console.print("[yellow]🔐 Encrypting secrets file...[/yellow]")
+
+    result = subprocess.run(
+        ["sops", "--encrypt", "--in-place", "ansible/vars/secrets.yml"],
+        capture_output=True, text=True
+    )
+
+    if result.returncode == 0:
+        console.print("[green]✅ Secrets file encrypted[/green]")
+    else:
+        console.print(f"[red]❌ Failed to encrypt: {result.stderr}[/red]")
+
+
+@secrets.command()
+@click.pass_context
+def decrypt(ctx):
+    """Decrypt secrets file"""
+    console.print("[yellow]🔓 Decrypting secrets file...[/yellow]")
+    console.print("[red]⚠️  WARNING: File will be in plaintext![/red]")
+
+    if not Confirm.ask("Continue?"):
+        console.print("[yellow]Operation cancelled[/yellow]")
+        return
+
+    result = subprocess.run(
+        ["sops", "--decrypt", "--in-place", "ansible/vars/secrets.yml"],
+        capture_output=True, text=True
+    )
+
+    if result.returncode == 0:
+        console.print("[green]✅ Secrets file decrypted[/green]")
+        console.print("[red]⚠️  Remember to encrypt before committing![/red]")
+    else:
+        console.print(f"[red]❌ Failed to decrypt: {result.stderr}[/red]")
+
+# Management commands
+
+
+@cli.command()
+@click.pass_context
+def start(ctx):
+    """Start NOAH services"""
+    console.print("[yellow]🚀 Starting NOAH services...[/yellow]")
+
+    try:
+        result = subprocess.run(
+            ["kubectl", "scale", "deployment", "--all", "--replicas=1", "-n", "noah"],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            console.print("[green]✅ Services started successfully[/green]")
+        else:
+            console.print("[red]❌ Failed to start services[/red]")
+    except Exception as e:
+        console.print(f"[red]❌ Error: {e}[/red]")
+
+
+@cli.command()
+@click.pass_context
+def stop(ctx):
+    """Stop NOAH services"""
+    console.print("[yellow]🛑 Stopping NOAH services...[/yellow]")
+
+    try:
+        result = subprocess.run(
+            ["kubectl", "scale", "deployment", "--all", "--replicas=0", "-n", "noah"],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            console.print("[green]✅ Services stopped successfully[/green]")
+        else:
+            console.print("[red]❌ Failed to stop services[/red]")
+    except Exception as e:
+        console.print(f"[red]❌ Error: {e}[/red]")
+
+
+@cli.command()
+@click.pass_context
+def restart(ctx):
+    """Restart NOAH services"""
+    console.print("[yellow]🔄 Restarting NOAH services...[/yellow]")
+
+    try:
+        result = subprocess.run(
+            ["kubectl", "rollout", "restart", "deployment", "--all", "-n", "noah"],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            console.print("[green]✅ Services restarted successfully[/green]")
+        else:
+            console.print("[red]❌ Failed to restart services[/red]")
+    except Exception as e:
+        console.print(f"[red]❌ Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--service', help='Specific service to view logs')
+@click.option('--follow', '-f', is_flag=True, help='Follow log output')
+@click.option('--lines', default=100, help='Number of lines to show')
+@click.pass_context
+def logs(ctx, service, follow, lines):
+    """View NOAH service logs"""
+    console.print("[yellow]📋 Viewing NOAH logs...[/yellow]")
+
+    cmd = ["kubectl", "logs", "-n", "noah", f"--tail={lines}"]
+
+    if follow:
+        cmd.append("-f")
+
+    if service:
+        cmd.extend(["-l", f"app={service}"])
+    else:
+        cmd.extend(["--all-containers=true", "--selector=app.kubernetes.io/instance"])
+
+    try:
+        subprocess.run(cmd)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Log viewing interrupted[/yellow]")
+    except Exception as e:
+        console.print(f"[red]❌ Error viewing logs: {e}[/red]")
+
+
+@cli.command()
+@click.pass_context
+def validate(ctx):
+    """Validate NOAH configuration"""
+    console.print("[yellow]🔍 Validating NOAH configuration...[/yellow]")
+
+    config = ctx.obj['config']
+    errors = 0
+
+    # Check environment
+    if not config.check_environment():
+        errors += 1
+
+    # Check prerequisites
+    if not PrerequisiteChecker.check_prerequisites():
+        errors += 1
+
+    # Validate Ansible playbooks
+    playbooks_dir = Path("ansible/playbooks")
+    if playbooks_dir.exists():
+        console.print("\n[yellow]📝 Validating Ansible playbooks...[/yellow]")
+        for playbook in playbooks_dir.glob("*.yml"):
+            try:
+                result = subprocess.run(
+                    ["ansible-playbook", "--syntax-check", str(playbook)],
+                    capture_output=True, text=True
+                )
+                if result.returncode == 0:
+                    console.print(f"[green]✅ {playbook.name}[/green]")
+                else:
+                    console.print(f"[red]❌ {playbook.name}: {result.stderr}[/red]")
+                    errors += 1
+            except Exception as e:
+                console.print(f"[red]❌ {playbook.name}: {e}[/red]")
+                errors += 1
+
+    # Validate Helm charts
+    helm_dir = Path("helm")
+    if helm_dir.exists() and shutil.which("helm"):
+        console.print("\n[yellow]⎈ Validating Helm charts...[/yellow]")
+        for chart_dir in helm_dir.iterdir():
+            if chart_dir.is_dir() and (chart_dir / "Chart.yaml").exists():
+                try:
+                    result = subprocess.run(
+                        ["helm", "lint", str(chart_dir)],
+                        capture_output=True, text=True
+                    )
+                    if result.returncode == 0:
+                        console.print(f"[green]✅ {chart_dir.name}[/green]")
+                    else:
+                        console.print(f"[red]❌ {chart_dir.name}: {result.stderr}[/red]")
+                        errors += 1
+                except Exception as e:
+                    console.print(f"[red]❌ {chart_dir.name}: {e}[/red]")
+                    errors += 1
+
+    # Summary
+    console.print(f"\n[{'green' if errors == 0 else 'red'}]Validation completed with {errors} errors[/{'green' if errors == 0 else 'red'}]")
+
+    if errors > 0:
+        sys.exit(1)
+
+
+@cli.command()
+@click.pass_context
+def test(ctx):
+    """Run NOAH platform tests"""
+    console.print("[yellow]🧪 Running NOAH tests...[/yellow]")
+
+    # Test SSH connectivity
+    console.print("\n[yellow]🔐 Testing SSH connectivity...[/yellow]")
+    try:
+        result = subprocess.run(
+            ["ansible", "all", "-m", "ping", "-i", "ansible/inventory/mycluster/hosts.yaml"],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0:
+            console.print("[green]✅ SSH connectivity OK[/green]")
+        else:
+            console.print("[red]❌ SSH connectivity failed[/red]")
+    except Exception as e:
+        console.print(f"[red]❌ SSH test error: {e}[/red]")
+
+    # Test application endpoints
+    console.print("\n[yellow]🌐 Testing application endpoints...[/yellow]")
+    apps = ["keycloak", "gitlab", "nextcloud", "mattermost", "grafana"]
+
+    for app in apps:
+        url = f"https://{app}.noah.local"
+        try:
+            result = subprocess.run(
+                ["curl", "-k", "-s", "-o", "/dev/null", "-w", "%{http_code}", url],
+                capture_output=True, text=True, timeout=10
+            )
+
+            if result.stdout in ["200", "302", "401"]:
+                console.print(f"[green]✅ {app}[/green] - {url}")
+            else:
+                console.print(f"[yellow]⚠️  {app}[/yellow] - {url} (HTTP {result.stdout})")
+        except Exception:
+            console.print(f"[red]❌ {app}[/red] - {url} (unreachable)")
+
+# Pipeline commands
+
+
+@cli.group()
+def pipeline():
+    """Pipeline configuration commands"""
+    pass
+
+
+@pipeline.command("setup")
+@click.option('--auto', is_flag=True, help='Automatic configuration')
+@click.option('--domain', help='Domain name')
+@click.option('--master-ip', help='Master node IP')
+@click.option('--worker-ip', help='Worker node IP')
+@click.pass_context
+def pipeline_configure(ctx, auto, domain, master_ip, worker_ip):
+    """Configure CI/CD pipeline"""
+    console.print("[yellow]🔧 Configuring NOAH pipeline...[/yellow]")
+
+    # Default values
+    config_values = {
+        'domain': domain or 'noah.local',
+        'master_ip': master_ip or '192.168.1.10',
+        'worker_ip': worker_ip or '192.168.1.12'
+    }
+
+    if not auto:
+        # Interactive configuration
+        config_values['domain'] = Prompt.ask("Domain name", default=config_values['domain'])
+        config_values['master_ip'] = Prompt.ask("Master IP", default=config_values['master_ip'])
+        config_values['worker_ip'] = Prompt.ask("Worker IP", default=config_values['worker_ip'])
+
+    # Update inventory
+    inventory_content = f"""# NOAH Kubernetes cluster inventory
+all:
+  hosts:
+    noah-master-1:
+      ansible_host: {config_values['master_ip']}
+      ip: {config_values['master_ip']}
+      access_ip: {config_values['master_ip']}
+    noah-worker-1:
+      ansible_host: {config_values['worker_ip']}
+      ip: {config_values['worker_ip']}
+      access_ip: {config_values['worker_ip']}
+  children:
+    kube_control_plane:
+      hosts:
+        noah-master-1:
+    kube_node:
+      hosts:
+        noah-master-1:
+        noah-worker-1:
+    etcd:
+      hosts:
+        noah-master-1:
+    k8s_cluster:
+      children:
+        kube_control_plane:
+        kube_node:
+"""
+
+    inventory_path = Path("ansible/inventory/mycluster/hosts.yaml")
+    inventory_path.parent.mkdir(parents=True, exist_ok=True)
+    inventory_path.write_text(inventory_content)
+
+    console.print("[green]✅ Pipeline configuration updated[/green]")
+    console.print(f"[blue]Domain: {config_values['domain']}[/blue]")
+    console.print(f"[blue]Master: {config_values['master_ip']}[/blue]")
+    console.print(f"[blue]Worker: {config_values['worker_ip']}[/blue]")
+
+
+@cli.command()
+@click.pass_context
+def infrastructure(ctx):
+    """Configure infrastructure type"""
+    console.print("[yellow]⚙️  Infrastructure type configuration[/yellow]")
+
+    config = ctx.obj['config']
+
+    # Show current configuration
+    current = config.config.get('INFRASTRUCTURE_TYPE', 'kubernetes')
+    console.print(f"[blue]Current infrastructure: {current}[/blue]")
+
+    # Infrastructure options
+    table = Table(title="Infrastructure Options")
+    table.add_column("Option", style="cyan")
+    table.add_column("Description", style="white")
+    table.add_column("Status", style="green")
+
+    table.add_row("kubernetes", "Kubernetes cluster deployment", "✅ Recommended")
+    table.add_row("docker", "Docker Compose deployment", "🔧 Development")
+
+    console.print(table)
+
+    # Get user choice
+    choice = Prompt.ask(
+        "Select infrastructure type",
+        choices=["kubernetes", "docker"],
+        default=current
+    )
+
+    config.config['INFRASTRUCTURE_TYPE'] = choice
+    config.save_config()
+
+    console.print(f"[green]✅ Infrastructure type set to: {choice}[/green]")
+
+
+@cli.command()
+@click.pass_context
+def dashboard(ctx):
+    """Open Grafana dashboard"""
+    console.print("[yellow]📊 Opening Grafana dashboard...[/yellow]")
+
+    url = "https://grafana.noah.local"
+
+    # Try different browsers
+    browsers = ['xdg-open', 'open', 'firefox', 'chromium-browser', 'google-chrome']
+
+    for browser in browsers:
+        if shutil.which(browser):
+            try:
+                subprocess.run([browser, url], check=True)
+                console.print(f"[green]✅ Dashboard opened with {browser}[/green]")
+                return
+            except Exception:
+                continue
+
+    console.print(f"[yellow]Please open manually: {url}[/yellow]")
+
 
 if __name__ == '__main__':
     cli()

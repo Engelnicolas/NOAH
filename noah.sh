@@ -686,7 +686,7 @@ cmd_deploy() {
     info "Type d'infrastructure: $INFRASTRUCTURE_TYPE"
     
     # Vérifier que la configuration est prête
-    if [[ ! -f "ansible/.vault_pass" ]]; then
+    if [[ ! -f ".noah_config" ]] || [[ ! -f "ansible/vars/secrets.yml" ]]; then
         error "Environnement non configuré. Lancez d'abord: noah configure"
         exit 1
     fi

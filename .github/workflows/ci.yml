@@ -105,7 +105,16 @@ jobs:
                           continue
                       try:
                           with open(filepath, 'r') as f:
-                              yaml.safe_load(f)
+                              content = f.read()
+                              # Handle multi-document YAML files (separated by ---)
+                              if '---' in content and content.count('---') > 1:
+                                  # Multi-document YAML - use safe_load_all
+                                  docs = list(yaml.safe_load_all(content))
+                                  if not docs or all(doc is None for doc in docs):
+                                      raise yaml.YAMLError('Empty or invalid YAML documents')
+                              else:
+                                  # Single document YAML - use safe_load  
+                                  yaml.safe_load(content)
                           print(f'✓ {filepath}')
                       except Exception as e:
                           print(f'✗ {filepath}: {e}')

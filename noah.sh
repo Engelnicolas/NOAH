@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NOAH_VERSION="0.2.1"
 PIPELINE_MODE="modern"
-INFRASTRUCTURE_TYPE="kubernetes"  # Par défaut: kubernetes, options: kubernetes, docker, standalone
+INFRASTRUCTURE_TYPE="kubernetes"  # Par défaut: kubernetes, options: kubernetes, docker
 
 # Fonctions d'affichage
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
@@ -140,14 +140,9 @@ configure_infrastructure_type() {
     echo "   - Idéal pour le développement et les tests"
     echo "   - Fonctionnalités limitées"
     echo ""
-    echo -e "${CYAN}3)${NC} Standalone ${YELLOW}(expérimental)${NC}"
-    echo "   - Installation directe sur serveur(s)"
-    echo "   - Sans orchestrateur de conteneurs"
-    echo "   - Configuration manuelle requise"
-    echo ""
     
     while true; do
-        echo -n "Votre choix [1-3] (défaut: 1): "
+        echo -n "Votre choix [1-2] (défaut: 1): "
         read -r choice
         
         case ${choice:-1} in
@@ -162,14 +157,8 @@ configure_infrastructure_type() {
             warning "Mode développement - Fonctionnalités limitées"
             break
             ;;
-        3)
-            INFRASTRUCTURE_TYPE="standalone"
-            success "Infrastructure sélectionnée: Standalone"
-            warning "Mode expérimental - Configuration manuelle requise"
-            break
-            ;;
         *)
-            error "Choix invalide. Veuillez sélectionner 1, 2 ou 3."
+            error "Choix invalide. Veuillez sélectionner 1 ou 2."
             ;;
         esac
     done
@@ -734,11 +723,9 @@ cmd_deploy() {
         docker)
             deploy_docker "$profile" "$dry_run_flag"
             ;;
-        standalone)
-            deploy_standalone "$profile" "$dry_run_flag"
-            ;;
         *)
             error "Type d'infrastructure non supporté: $INFRASTRUCTURE_TYPE"
+            error "Types supportés: kubernetes, docker"
             exit 1
             ;;
     esac
@@ -869,50 +856,6 @@ EOF
         info "  • Grafana: http://localhost:3000"
     else
         info "Mode simulation: docker-compose up -d serait exécuté"
-    fi
-}
-
-# Déploiement spécifique pour Standalone
-deploy_standalone() {
-    local profile="$1"
-    local dry_run_flag="$2"
-    
-    step "Déploiement en mode Standalone..."
-    
-    warning "Mode expérimental - Configuration manuelle requise"
-    
-    # Vérifier les prérequis pour standalone
-    if [[ "$dry_run_flag" != "--check" ]]; then
-        info "Configuration standalone nécessite:"
-        info "  1. Serveur(s) avec accès SSH configuré"
-        info "  2. Ansible installé localement"
-        info "  3. Playbooks adaptés pour installation directe"
-        
-        echo -n "Continuer avec le déploiement standalone ? (y/N): "
-        read -r response
-        if [[ ! "$response" =~ ^[Yy]$ ]]; then
-            info "Déploiement annulé"
-            return 0
-        fi
-        
-        cd ansible || {
-            error "Répertoire ansible non trouvé"
-            exit 1
-        }
-        
-        # Utiliser des playbooks simplifiés pour standalone
-        step "Installation des composants en mode standalone..."
-        ansible-playbook playbooks/04-deploy-apps.yml -i inventory/mycluster/hosts.yaml $dry_run_flag --tags standalone || {
-            error "Échec du déploiement standalone"
-            exit 1
-        }
-        
-        cd ..
-        
-        info "Déploiement standalone terminé"
-        info "Configuration manuelle requise pour finaliser l'installation"
-    else
-        info "Mode simulation: Déploiement standalone serait configuré"
     fi
 }
 

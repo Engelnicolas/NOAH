@@ -29,7 +29,7 @@ step() { echo -e "${CYAN}[STEP]${NC} $1"; }
 show_banner() {
     echo -e "${CYAN}${BOLD}"
     echo "╔═══════════════════════════════════════════════════════════════╗"
-    echo "║                 🚀 NOAH CLI v${NOAH_VERSION}                 ║"
+    echo "║                 🚀 NOAH CLI v${NOAH_VERSION}                  ║"
     echo "║              Network Operations & Automation Hub              ║"
     echo "║                   Pipeline CI/CD Moderne                      ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
@@ -382,23 +382,12 @@ setup_kubespray() {
     fi
 }
 
-# Configuration du mot de passe Vault
+# Configuration vault supprimée - utilisation de SOPS désormais
+# Cette fonction a été remplacée par les commandes SOPS intégrées
 setup_vault_password() {
-    echo -e "${YELLOW}🔐 Configuration du mot de passe Ansible Vault...${NC}"
-    
-    if [[ "${DRY_RUN:-false}" == "true" ]]; then
-        echo "🧪 [DRY-RUN] Configuration du mot de passe Vault"
-        echo -e "${GREEN}✅ [DRY-RUN] Mot de passe Vault configuré${NC}"
-        return
-    fi
-    
-    if [ ! -f "ansible/.vault_pass" ]; then
-        echo "$VAULT_PASSWORD" > ansible/.vault_pass
-        chmod 600 ansible/.vault_pass
-        echo -e "${GREEN}✅ Mot de passe Vault configuré${NC}"
-    else
-        echo -e "${BLUE}ℹ️  Mot de passe Vault déjà configuré${NC}"
-    fi
+    warning "Configuration Ansible Vault obsolète - SOPS est utilisé"
+    info "Utilisez: ./noah.sh secrets pour gérer les secrets avec SOPS"
+    return 0
 }
 
 # Génération des clés SSH
@@ -498,16 +487,17 @@ encrypt_secrets() {
     
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
         echo "🧪 [DRY-RUN] Chiffrement des secrets"
-        echo -e "${GREEN}✅ [DRY-RUN] Secrets seraient chiffrés${NC}"
+        echo -e "${GREEN}✅ [DRY-RUN] Secrets seraient chiffrés avec SOPS${NC}"
         return
     fi
     
+    # Vérifier que SOPS est configuré et les secrets chiffrés
     if [ -f "ansible/vars/secrets.yml" ]; then
-        if ! file ansible/vars/secrets.yml | grep -q "Ansible Vault"; then
-            ansible-vault encrypt ansible/vars/secrets.yml --vault-password-file ansible/.vault_pass
-            echo -e "${GREEN}✅ Fichier secrets.yml chiffré${NC}"
+        if sops -d ansible/vars/secrets.yml >/dev/null 2>&1; then
+            echo -e "${BLUE}ℹ️  Fichier secrets.yml déjà chiffré avec SOPS${NC}"
         else
-            echo -e "${BLUE}ℹ️  Fichier secrets.yml déjà chiffré${NC}"
+            warning "Fichier secrets non chiffré avec SOPS"
+            info "Utilisez: ./noah.sh secrets encrypt"
         fi
     else
         echo -e "${YELLOW}⚠️  Fichier secrets.yml non trouvé${NC}"

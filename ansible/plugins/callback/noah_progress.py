@@ -8,13 +8,23 @@ __metaclass__ = type
 import sys
 import time
 from ansible.plugins.callback import CallbackBase
-from ansible.constants import C
 
-try:
-    from ansible.utils.color import colorize, C
-    HAS_COLOR = True
-except ImportError:
-    HAS_COLOR = False
+# Simple color function
+def colorize(msg, color=None):
+    """Simple colorization function"""
+    colors = {
+        'green': '\033[92m',
+        'red': '\033[91m',
+        'yellow': '\033[93m',
+        'blue': '\033[94m',
+        'cyan': '\033[96m',
+        'white': '\033[97m',
+        'reset': '\033[0m'
+    }
+    
+    if color and color in colors:
+        return f"{colors[color]}{msg}{colors['reset']}"
+    return msg
 
 DOCUMENTATION = '''
     callback: noah_progress
@@ -45,9 +55,7 @@ class CallbackModule(CallbackBase):
         return time.strftime("[%H:%M:%S]", time.localtime())
     
     def _colorize(self, text, color):
-        if HAS_COLOR:
-            return colorize(text, color)
-        return text
+        return colorize(text, color)
     
     def v2_playbook_on_start(self, playbook):
         self._display.display("🚀 Démarrage du playbook NOAH: %s" % playbook._file_name)

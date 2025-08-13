@@ -83,6 +83,11 @@ jobs:
             fi
           done
 
+      - name: Lint GitHub Actions workflows
+        run: |
+          echo "Validating GitHub Actions workflows..."
+          .github/workflows/actionlint
+
       - name: Validate YAML syntax
         run: |
           echo "Validating YAML files..."

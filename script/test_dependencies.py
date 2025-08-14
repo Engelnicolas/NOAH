@@ -40,7 +40,7 @@ class DependencyTester:
             return False
 
         # Test required packages
-        required_packages = ["ansible", "requests", "kubernetes", "yaml", "rich", "click"]
+        required_packages = ["ansible", "requests", "kubernetes", "yaml", "rich", "click", "cryptography"]
 
         for package in required_packages:
             try:

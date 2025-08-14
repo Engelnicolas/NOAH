@@ -64,3 +64,4 @@ service_subnet: 10.233.0.0/18
 storage_class: local-storage
 storage_provisioner: kubernetes.io/no-provisioner
 tls_enabled: true
+tls_mode: "letsencrypt"  # Options: "manual", "letsencrypt", "self-signed"

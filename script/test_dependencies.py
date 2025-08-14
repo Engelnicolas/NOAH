@@ -51,6 +51,25 @@ class DependencyTester:
                     f"[yellow]⚠️  {package} not found - install with: pip install -r script/requirements.txt[/yellow]")
                 self.warnings += 1
 
+        # Test system kubernetes package for Ansible
+        try:
+            # Try to import kubernetes using the system Python path
+            result = subprocess.run(
+                ["/usr/bin/python3", "-c", "import kubernetes; print('System kubernetes package available')"],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                console.print("[green]✅ System kubernetes package (python3-kubernetes) is installed[/green]")
+            else:
+                console.print(
+                    "[yellow]⚠️  System kubernetes package not found - install with: sudo apt install python3-kubernetes[/yellow]")
+                console.print("[yellow]   This is required for Ansible kubernetes.core modules[/yellow]")
+                self.warnings += 1
+        except Exception:
+            console.print(
+                "[yellow]⚠️  Could not check system kubernetes package - install with: sudo apt install python3-kubernetes[/yellow]")
+            self.warnings += 1
+
         return True
 
     def test_ansible_installation(self) -> bool:

@@ -14,6 +14,10 @@ requests-toolbelt>=1.0.0
 kubernetes>=28.1.0
 pyyaml>=6.0.1
 
+# Note: For Ansible kubernetes.core modules, also install system package:
+# sudo apt install python3-kubernetes (on Ubuntu/Debian)
+# This is required for kubernetes.core collection to work properly
+
 # Security and encryption
 cryptography>=41.0.0
 bcrypt>=4.0.0

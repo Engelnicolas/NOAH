@@ -3,6 +3,8 @@
   hosts: "{{ 'localhost' if (ansible_check_mode | default(false)) else 'all' }}"
   become: "{{ false if (ansible_check_mode | default(false)) else true }}"
   gather_facts: "{{ false if (ansible_check_mode | default(false)) else true }}"
+  vars_files:
+    - ../vars/global.yml
   tasks:
     - name: Skip node preparation in check mode
       ansible.builtin.debug:
@@ -44,7 +46,7 @@
 
     - name: Add user to docker group
       user:
-        name: "{{ ansible_user }}"
+        name: "{{ ansible_user | default(ansible_env.USER) | default('root') }}"
         groups: docker
         append: yes
 
@@ -76,8 +78,12 @@
   hosts: "{{ 'localhost' if (ansible_check_mode | default(false)) else 'all' }}"
   become: "{{ false if (ansible_check_mode | default(false)) else true }}"
   gather_facts: "{{ false if (ansible_check_mode | default(false)) else true }}"
+  vars_files:
+    - ../vars/global.yml
   vars:
     k3s_version: "{{ kube_version | default('v1.28.2') }}"
+    target_user: "{{ ansible_user | default(ansible_env.USER) | default('root') }}"
+    user_home: "{{ '/root' if (target_user == 'root') else ('/home/' + target_user) }}"
     
   tasks:
     - name: Skip K3s installation in check mode
@@ -108,24 +114,24 @@
 
     - name: Create .kube directory
       file:
-        path: "/home/{{ ansible_user }}/.kube"
+        path: "{{ user_home }}/.kube"
         state: directory
         mode: '0755'
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
 
     - name: Copy kubeconfig for user
       copy:
         src: /etc/rancher/k3s/k3s.yaml
-        dest: "/home/{{ ansible_user }}/.kube/config"
+        dest: "{{ user_home }}/.kube/config"
         mode: '0644'
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
         remote_src: yes
 
     - name: Update kubeconfig server address
       replace:
-        path: "/home/{{ ansible_user }}/.kube/config"
+        path: "{{ user_home }}/.kube/config"
         regexp: 'https://127.0.0.1:6443'
         replace: 'https://127.0.0.1:6443'
 
@@ -133,6 +139,11 @@
   hosts: "{{ 'localhost' if (ansible_check_mode | default(false)) else 'all' }}"
   become: "{{ false if (ansible_check_mode | default(false)) else false }}"
   gather_facts: "{{ false if (ansible_check_mode | default(false)) else true }}"
+  vars_files:
+    - ../vars/global.yml
+  vars:
+    target_user: "{{ ansible_user | default(ansible_env.USER) | default('root') }}"
+    user_home: "{{ '/root' if (target_user == 'root') else ('/home/' + target_user) }}"
   tasks:
     - name: Skip verification in check mode
       ansible.builtin.debug:
@@ -144,19 +155,26 @@
       when: ansible_check_mode | default(false)
 
     - name: Wait for K3s API to be ready
-      uri:
-        url: "https://127.0.0.1:6443/healthz"
-        validate_certs: no
-      register: k3s_health
-      until: k3s_health.status == 200
-      retries: 30
+      wait_for:
+        port: 6443
+        host: 127.0.0.1
+        delay: 10
+        timeout: 300
+
+    - name: Test kubectl access
+      shell: kubectl get nodes
+      register: kubectl_test
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
+      retries: 5
       delay: 10
+      until: kubectl_test.rc == 0
 
     - name: Get cluster info
       shell: kubectl cluster-info
       register: cluster_info
       environment:
-        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+        KUBECONFIG: "{{ user_home }}/.kube/config"
 
     - name: Display cluster info
       debug:
@@ -166,7 +184,7 @@
       shell: kubectl get nodes -o wide
       register: node_status
       environment:
-        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+        KUBECONFIG: "{{ user_home }}/.kube/config"
 
     - name: Display node status
       debug:
@@ -181,7 +199,7 @@
 
     - name: Copy kubeconfig for local use
       copy:
-        src: "/home/{{ ansible_user }}/.kube/config"
-        dest: "../kubeconfig/{{ cluster_name }}-kubeconfig"
+        src: "{{ user_home }}/.kube/config"
+        dest: "../kubeconfig/{{ cluster_name | default('noah-cluster') }}-kubeconfig"
         mode: '0644'
         remote_src: yes

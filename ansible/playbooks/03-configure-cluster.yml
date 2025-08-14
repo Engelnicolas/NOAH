@@ -1,11 +1,15 @@
 ---
 - name: Configure Kubernetes cluster for NOAH
-  hosts: kube_control_plane[0]
+  hosts: all
   become: yes
+  vars_files:
+    - ../vars/global.yml
   vars:
     helm_version: "3.13.2"
     noah_namespace: "noah"
     monitoring_namespace: "monitoring"
+    target_user: "{{ ansible_user | default(ansible_env.USER) | default('root') }}"
+    user_home: "{{ '/root' if (target_user == 'root') else ('/home/' + target_user) }}"
     
   tasks:
     - name: Install kubernetes.core collection
@@ -16,18 +20,18 @@
 
     - name: Create kubeconfig directory
       file:
-        path: "/home/{{ ansible_user }}/.kube"
+        path: "{{ user_home }}/.kube"
         state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
         mode: '0755'
 
-    - name: Copy kubeconfig for user
+    - name: Copy kubeconfig for user (K3s)
       copy:
-        src: /etc/kubernetes/admin.conf
-        dest: "/home/{{ ansible_user }}/.kube/config"
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "{{ user_home }}/.kube/config"
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
         mode: '0600'
         remote_src: yes
 
@@ -53,7 +57,7 @@
     - name: Verify Helm installation
       shell: helm version --short
       register: helm_version_output
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
 
     - name: Display Helm version
       debug:
@@ -69,11 +73,11 @@
         - { name: "prometheus-community", url: "https://prometheus-community.github.io/helm-charts" }
         - { name: "grafana", url: "https://grafana.github.io/helm-charts" }
         - { name: "ingress-nginx", url: "https://kubernetes.github.io/ingress-nginx" }
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
 
     - name: Update Helm repositories
       shell: helm repo update
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
 
     - name: Create namespaces
       kubernetes.core.k8s:
@@ -85,7 +89,9 @@
         - "{{ noah_namespace }}"
         - "{{ monitoring_namespace }}"
         - "ingress-nginx"
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
 
     - name: Create TLS secrets
       kubernetes.core.k8s:
@@ -102,7 +108,7 @@
       vars:
         tls_cert: "{{ vault_tls_cert }}"  # Stocké dans Ansible Vault
         tls_key: "{{ vault_tls_key }}"    # Stocké dans Ansible Vault
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
 
     - name: Install NGINX Ingress Controller
       kubernetes.core.helm:
@@ -119,7 +125,7 @@
             podAnnotations:
               prometheus.io/scrape: "true"
               prometheus.io/port: "10254"
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
 
     - name: Wait for NGINX Ingress to be ready
       kubernetes.core.k8s_info:
@@ -131,7 +137,7 @@
           type: Available
           status: "True"
         wait_timeout: 300
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
 
     - name: Install Prometheus stack for monitoring
       kubernetes.core.helm:
@@ -162,7 +168,7 @@
                 kubernetes.io/ingress.class: nginx
               hosts:
                 - grafana.noah.local
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
 
     - name: Create storage class for local storage
       kubernetes.core.k8s:
@@ -173,7 +179,7 @@
             name: local-storage
           provisioner: kubernetes.io/no-provisioner
           volumeBindingMode: WaitForFirstConsumer
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
 
     - name: Verify cluster configuration
       shell: |
@@ -182,7 +188,7 @@
         kubectl get ingress --all-namespaces
         helm list --all-namespaces
       register: cluster_status
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
 
     - name: Display cluster status
       debug:
@@ -196,7 +202,7 @@
           metadata:
             name: noah-service-account
             namespace: "{{ noah_namespace }}"
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"
 
     - name: Create NOAH cluster role binding
       kubernetes.core.k8s:
@@ -213,4 +219,4 @@
           - kind: ServiceAccount
             name: noah-service-account
             namespace: "{{ noah_namespace }}"
-      become_user: "{{ ansible_user }}"
+      become_user: "{{ target_user }}"

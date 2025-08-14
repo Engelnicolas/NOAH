@@ -441,12 +441,15 @@ all:
 @cli.command()
 @click.option('--profile', default='prod', help='Deployment profile (dev/prod)')
 @click.option('--skip-provision', is_flag=True, help='Skip infrastructure provisioning')
+@click.option('--verbose', is_flag=True, default=True, help='Enable verbose output (default: True)')
 @click.pass_context
-def deploy(ctx, profile, skip_provision):
+def deploy(ctx, profile, skip_provision, verbose):
     """Deploy NOAH platform to production
     
     Deploys the complete NOAH platform to production environment.
     Includes infrastructure provisioning, Kubernetes setup, and application deployment.
+    
+    Verbose output is enabled by default to provide detailed deployment information.
     """
     config = ctx.obj['config']
     dry_run = ctx.obj['dry_run']
@@ -474,7 +477,7 @@ def deploy(ctx, profile, skip_provision):
         for i, playbook in enumerate(playbooks, 1):
             console.print(f"[cyan]Step {i}/{len(playbooks)}: {playbook}[/cyan]")
 
-            if not ansible_runner.run_playbook(playbook, dry_run, False):
+            if not ansible_runner.run_playbook(playbook, dry_run, verbose):
                 console.print(f"[red]❌ Deployment failed at step {i}[/red]")
                 sys.exit(1)
 

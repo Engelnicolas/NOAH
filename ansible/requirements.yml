@@ -18,13 +18,16 @@ collections:
   
   # Cryptography and security
   - name: community.crypto
-    version: ">=2.0.0"
+    version: ">=2.13.0"  # Latest stable version
   
   # Additional useful collections
   - name: community.docker
     version: ">=3.4.0"  # For container management
   - name: community.postgresql
     version: ">=2.4.0"  # For PostgreSQL management
+  - name: community.proxmox
+    version: ">=1.2.0"  # Latest stable version
 
-# Note: Some collections may show warnings about Ansible version compatibility
+# Note: Some collections may show compatibility warnings with newer Ansible versions
 # but they will still function correctly with the required modules.
+# These warnings are informational and do not affect functionality.

@@ -1,109 +1,66 @@
-# Variables globales pour le déploiement NOAH
----
-# Configuration cluster
-cluster_name: "noah-cluster"
-kube_version: "v1.28.2"
-kube_network_plugin: "calico"
-
-# Configuration réseau
-pod_subnet: "10.233.64.0/18"
-service_subnet: "10.233.0.0/18"
-
-# Configuration ingress
-ingress_enabled: true
-ingress_class: "nginx"
-ingress_domain: "noah.local"
-
-# Configuration stockage
-storage_class: "local-storage"
-storage_provisioner: "kubernetes.io/no-provisioner"
-
-# Configuration monitoring
-monitoring_enabled: true
-metrics_retention: "30d"
-
-# Configuration namespaces
-namespaces:
-  - name: "noah"
-    labels:
-      environment: "production"
-  - name: "monitoring"
-    labels:
-      environment: "production"
-
-# Configuration des applications
 applications:
-  postgresql:
-    enabled: true
-    version: "15.4.0"
-    database: "noah"
-    username: "noah"
-    storage_size: "20Gi"
-    
-  keycloak:
-    enabled: true
-    realm: "noah"
-    hostname: "keycloak.noah.local"
-    
   gitlab:
     enabled: true
-    hostname: "gitlab.noah.local"
-    storage_size: "50Gi"
-    
-  nextcloud:
-    enabled: true
-    hostname: "nextcloud.noah.local" 
-    storage_size: "100Gi"
-    
-  mattermost:
-    enabled: true
-    hostname: "mattermost.noah.local"
-    
+    hostname: gitlab.noah.local
+    storage_size: 50Gi
   grafana:
     enabled: true
-    hostname: "grafana.noah.local"
-    storage_size: "10Gi"
-    
-  prometheus:
+    hostname: grafana.noah.local
+    storage_size: 10Gi
+  keycloak:
     enabled: true
-    storage_size: "20Gi"
-    retention: "30d"
-    
-  wazuh:
+    hostname: keycloak.noah.local
+    realm: noah
+  mattermost:
     enabled: true
-    
-  openedr:
+    hostname: mattermost.noah.local
+  nextcloud:
     enabled: true
-    
+    hostname: nextcloud.noah.local
+    storage_size: 100Gi
   oauth2_proxy:
     enabled: true
-
-# Configuration SSL/TLS
-tls_enabled: true
-cert_manager_enabled: true
-letsencrypt_email: "admin@noah.local"
-
-# Configuration backup
+  openedr:
+    enabled: true
+  postgresql:
+    database: noah
+    enabled: true
+    storage_size: 20Gi
+    username: noah
+    version: 15.4.0
+  prometheus:
+    enabled: true
+    retention: 30d
+    storage_size: 20Gi
+  wazuh:
+    enabled: true
 backup_enabled: true
-backup_schedule: "0 2 * * *"  # Tous les jours à 2h
-backup_retention: "30d"
-
-# Configuration infrastructure cloud
-cloud_provider: "baremetal"  # Options: baremetal, aws, gcp, azure
-provision_vms: false  # Set to true if you want to provision VMs automatically
-
-# VM definitions (when provision_vms is true)
+backup_retention: 30d
+backup_schedule: 0 2 * * *
+cert_manager_enabled: true
+cloud_provider: baremetal
+cluster_name: noah-cluster
+domain_name: noah.local
+ingress_class: nginx
+ingress_domain: noah.local
+ingress_enabled: true
+ingress_ip: 127.0.0.1
+kube_network_plugin: calico
+kube_version: v1.28.2
+letsencrypt_email: admin@noah.local
+metrics_retention: 30d
+monitoring_enabled: true
+namespaces:
+- labels:
+    environment: production
+  name: noah
+- labels:
+    environment: production
+  name: monitoring
 noah_vms: []
-  # Example VM configuration:
-  # - name: "noah-master-01"
-  #   memory: 8192
-  #   cores: 4
-  #   storage: "local-lvm"
-  #   bridge: "vmbr0"
-  #   ip: "192.168.1.10"
-  # - name: "noah-worker-01" 
-  #   memory: 16384
-  #   cores: 8
-  #   storage: "local-lvm"
-  #   bridge: "vmbr0"
-  #   ip: "192.168.1.11"
+pod_subnet: 10.233.64.0/18
+provision_vms: false
+service_subnet: 10.233.0.0/18
+storage_class: local-storage
+storage_provisioner: kubernetes.io/no-provisioner
+tls_enabled: true

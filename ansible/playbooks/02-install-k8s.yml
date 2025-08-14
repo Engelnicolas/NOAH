@@ -12,6 +12,7 @@
     - name: End play early in check mode
       meta: end_play
       when: ansible_check_mode | default(false)
+
     - name: Update system packages
       apt:
         update_cache: yes
@@ -30,25 +31,27 @@
           - lsb-release
           - python3-pip
           - python3-netaddr
+          - docker.io
+          - docker-compose
         state: present
       when: ansible_os_family == "Debian"
+
+    - name: Start and enable Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
 
     - name: Disable swap
       shell: |
         swapoff -a
         sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
-
-    - name: Install community.general collection
-      shell: ansible-galaxy collection install community.general
-      delegate_to: localhost
-      run_once: true
-      become: no
-
-    - name: Install ansible.posix collection
-      shell: ansible-galaxy collection install ansible.posix
-      delegate_to: localhost
-      run_once: true
-      become: no
 
     - name: Enable kernel modules
       community.general.modprobe:
@@ -69,78 +72,83 @@
         - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
         - { name: "net.ipv4.ip_forward", value: "1" }
 
-- name: Install Kubernetes via Kubespray
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  vars:
-    kubespray_path: "./kubespray"
-    kubespray_version: "v2.23.1"
-    
-  tasks:
-    - name: Check if Kubespray directory exists
-      stat:
-        path: "{{ kubespray_path }}"
-      register: kubespray_dir
-
-    - name: Clone Kubespray repository
-      git:
-        repo: https://github.com/kubernetes-sigs/kubespray.git
-        dest: "{{ kubespray_path }}"
-        version: "{{ kubespray_version }}"
-        force: yes
-      when: not kubespray_dir.stat.exists
-
-    - name: Install Kubespray requirements
-      pip:
-        requirements: "{{ kubespray_path }}/requirements.txt"
-        state: present
-
-    - name: Copy inventory to Kubespray
-      copy:
-        src: "../inventory/mycluster/"
-        dest: "{{ kubespray_path }}/inventory/mycluster/"
-        mode: '0644'
-
-    - name: Copy custom Kubespray configuration
-      template:
-        src: "../templates/k8s-cluster.yml.j2"
-        dest: "{{ kubespray_path }}/inventory/mycluster/group_vars/k8s_cluster/k8s-cluster.yml"
-
-    - name: Run Kubespray playbook
-      shell: |
-        cd {{ kubespray_path }}
-        ansible-playbook -i inventory/mycluster/hosts.yaml \
-          --become --become-user=root \
-          cluster.yml
-      register: kubespray_result
-      failed_when: kubespray_result.rc != 0
-
-    - name: Display Kubespray installation result
-      debug:
-        msg: "Kubespray installation completed with return code: {{ kubespray_result.rc }}"
-
-- name: Verify Kubernetes installation
-  hosts: "{{ 'localhost' if (ansible_check_mode | default(false)) else 'kube_control_plane[0]' }}"
+- name: Install Kubernetes (K3s for single-node development)
+  hosts: "{{ 'localhost' if (ansible_check_mode | default(false)) else 'all' }}"
   become: "{{ false if (ansible_check_mode | default(false)) else true }}"
   gather_facts: "{{ false if (ansible_check_mode | default(false)) else true }}"
+  vars:
+    k3s_version: "{{ kube_version | default('v1.28.2') }}"
+    
   tasks:
-    - name: Skip verification in check mode
+    - name: Skip K3s installation in check mode
       ansible.builtin.debug:
-        msg: "Skipping verification in --check mode (no remote SSH)"
+        msg: "Skipping K3s installation in --check mode"
       when: ansible_check_mode | default(false)
 
     - name: End play early in check mode
       meta: end_play
       when: ansible_check_mode | default(false)
-    - name: Wait for Kubernetes API to be ready
+
+    - name: Check if K3s is already installed
+      stat:
+        path: /usr/local/bin/k3s
+      register: k3s_installed
+
+    - name: Download and install K3s
+      shell: |
+        curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="{{ k3s_version }}+k3s1" sh -s - --write-kubeconfig-mode 644
+      when: not k3s_installed.stat.exists
+
+    - name: Wait for K3s to be ready
+      wait_for:
+        port: 6443
+        host: 127.0.0.1
+        delay: 10
+        timeout: 300
+
+    - name: Create .kube directory
+      file:
+        path: "/home/{{ ansible_user }}/.kube"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Copy kubeconfig for user
+      copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "/home/{{ ansible_user }}/.kube/config"
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        remote_src: yes
+
+    - name: Update kubeconfig server address
+      replace:
+        path: "/home/{{ ansible_user }}/.kube/config"
+        regexp: 'https://127.0.0.1:6443'
+        replace: 'https://127.0.0.1:6443'
+
+- name: Verify Kubernetes installation
+  hosts: "{{ 'localhost' if (ansible_check_mode | default(false)) else 'all' }}"
+  become: "{{ false if (ansible_check_mode | default(false)) else false }}"
+  gather_facts: "{{ false if (ansible_check_mode | default(false)) else true }}"
+  tasks:
+    - name: Skip verification in check mode
+      ansible.builtin.debug:
+        msg: "Skipping verification in --check mode"
+      when: ansible_check_mode | default(false)
+
+    - name: End play early in check mode
+      meta: end_play
+      when: ansible_check_mode | default(false)
+
+    - name: Wait for K3s API to be ready
       uri:
-        url: "https://{{ ansible_default_ipv4.address }}:6443/healthz"
+        url: "https://127.0.0.1:6443/healthz"
         validate_certs: no
-        client_cert: /etc/kubernetes/pki/apiserver-kubelet-client.crt  
-        client_key: /etc/kubernetes/pki/apiserver-kubelet-client.key
-      register: k8s_health
-      until: k8s_health.status == 200
+      register: k3s_health
+      until: k3s_health.status == 200
       retries: 30
       delay: 10
 
@@ -148,7 +156,7 @@
       shell: kubectl cluster-info
       register: cluster_info
       environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
 
     - name: Display cluster info
       debug:
@@ -158,15 +166,22 @@
       shell: kubectl get nodes -o wide
       register: node_status
       environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
 
     - name: Display node status
       debug:
         msg: "{{ node_status.stdout_lines }}"
 
-    - name: Fetch kubeconfig for local use
-      fetch:
-        src: /etc/kubernetes/admin.conf
+    - name: Create kubeconfig directory locally
+      file:
+        path: "../kubeconfig"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+
+    - name: Copy kubeconfig for local use
+      copy:
+        src: "/home/{{ ansible_user }}/.kube/config"
         dest: "../kubeconfig/{{ cluster_name }}-kubeconfig"
-        flat: yes
-      delegate_to: "{{ groups['kube_control_plane'][0] }}"
+        mode: '0644'
+        remote_src: yes

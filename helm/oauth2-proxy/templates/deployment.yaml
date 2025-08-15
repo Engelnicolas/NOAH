@@ -36,33 +36,56 @@ spec:
               drop:
               - ALL
           args:
-            - "--provider=oidc"
-            - "--oidc-issuer-url=http://keycloak.noah.svc.cluster.local/realms/master"
-            - "--client-id=account"
+            - "--provider={{ .Values.config.provider | default "oidc" }}"
+            {{- if .Values.config.oidcIssuerUrl }}
+            - "--oidc-issuer-url={{ .Values.config.oidcIssuerUrl }}"
+            {{- end }}
+            - "--client-id={{ .Values.config.clientId | default "oauth2-proxy" }}"
             - "--email-domain=*"
-            - "--upstream=static://202"
+            {{- if .Values.config.upstreams }}
+            {{- range .Values.config.upstreams }}
+            - "--upstream={{ . }}"
+            {{- end }}
+            {{- end }}
             - "--http-address=0.0.0.0:4180"
-            - "--metrics-address=0.0.0.0:44180"
-            - "--cookie-name=_oauth2_proxy"
-            - "--cookie-httponly=true"
-            - "--cookie-samesite=lax"
-            - "--skip-provider-button=true"
+            {{- if .Values.config.metricsAddress }}
+            - "--metrics-address={{ .Values.config.metricsAddress }}"
+            {{- end }}
+            - "--cookie-name={{ .Values.config.cookieName | default "_oauth2_proxy" }}"
+            {{- if .Values.config.cookieDomain }}
+            - "--cookie-domain={{ .Values.config.cookieDomain }}"
+            {{- end }}
+            - "--cookie-expire={{ .Values.config.cookieExpire | default "168h" }}"
+            - "--cookie-refresh={{ .Values.config.cookieRefresh | default "1h" }}"
+            - "--cookie-httponly={{ .Values.config.cookieHttpOnly | default true }}"
+            - "--cookie-secure={{ .Values.config.cookieSecure | default true }}"
+            - "--cookie-samesite={{ .Values.config.cookieSameSite | default "lax" }}"
+            {{- if eq .Values.sessionStorage.type "redis" }}
+            - "--session-store-type=redis"
+            - "--redis-connection-url={{ .Values.sessionStorage.redis.connectionUrl }}"
+            {{- end }}
+            - "--scope=openid profile email"
+            - "--skip-auth-regex=^/oauth2/"
+            - "--skip-auth-regex=^/ping$"
+            - "--skip-auth-regex=^/health$"
             - "--pass-authorization-header=true"
             - "--pass-access-token=true"
             - "--pass-user-headers=true"
-            - "--insecure-oidc-allow-unverified-email=true"
-            - "--ssl-insecure-skip-verify=true"
           env:
             - name: OAUTH2_PROXY_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: oauth2-proxy-oauth2
+                  name: {{ include "oauth2-proxy.fullname" . }}-oauth2
                   key: client-secret
             - name: OAUTH2_PROXY_COOKIE_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: oauth2-proxy-cookie
+                  name: {{ include "oauth2-proxy.fullname" . }}-cookie
                   key: cookie-secret
+            {{- if .Values.sessionStorage.redis.password }}
+            - name: OAUTH2_PROXY_REDIS_PASSWORD
+              value: "{{ .Values.sessionStorage.redis.password }}"
+            {{- end }}
           ports:
             - name: http
               containerPort: 4180

@@ -230,21 +230,30 @@
             release_namespace: "{{ noah_namespace }}"
             create_namespace: false
             values:
+              oauth2proxy:
+                enabled: true
               image:
-                tag: "v7.5.1"
+                tag: "v7.6.0"
               config:
-                clientID: "{{ oauth2_proxy.client_id }}"
+                provider: "oidc"
+                oidcIssuerUrl: "http://keycloak:8080/realms/master"
+                clientId: "{{ oauth2_proxy.client_id }}"
                 clientSecret: "{{ oauth2_proxy.client_secret }}"
                 cookieSecret: "{{ oauth2_proxy.cookie_secret }}"
-              extraArgs:
-                provider: "keycloak-oidc"
-                oidc-issuer-url: "http://keycloak.noah.local/auth/realms/noah"
-                redirect-url: "https://auth.noah.local/oauth2/callback"
-                email-domain: "*"
-                pass-access-token: true
-                pass-user-headers: true
-                set-authorization-header: true
-                skip-provider-button: true
+                cookieDomain: ".noah.local"
+                cookieSecure: false
+                cookieHttpOnly: true
+                cookieSameSite: "lax"
+                emailDomains:
+                  - "*"
+                upstreams:
+                  - "static://202"
+                metricsAddress: "0.0.0.0:44180"
+              sessionStorage:
+                type: "redis"
+                redis:
+                  connectionUrl: "redis://oauth2-proxy-redis-master:6379"
+                  password: "{{ oauth2_proxy.redis_password }}"
               redis:
                 enabled: true
                 image:
@@ -262,11 +271,17 @@
               ingress:
                 enabled: true
                 className: nginx
-                hostname: "auth.noah.local"
+                hosts:
+                  - host: "auth.noah.local"
+                    paths:
+                      - path: /
+                        pathType: Prefix
                 annotations:
                   cert-manager.io/cluster-issuer: "letsencrypt-prod" 
-                  nginx.ingress.kubernetes.io/ssl-redirect: "true"
-                tls: true
+                  nginx.ingress.kubernetes.io/ssl-redirect: "false"
+                tls:
+                  enabled: true
+                  secretName: "noah-tls-secret"
               resources:
                 requests:
                   memory: "128Mi"
@@ -274,8 +289,6 @@
                 limits:
                   memory: "256Mi"
                   cpu: "200m"
-              networkPolicy:
-                enabled: true
 
         - name: Wait for OAuth2-Proxy to be ready
           kubernetes.core.k8s_info:

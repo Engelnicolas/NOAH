@@ -626,9 +626,26 @@ def dev_setup(ctx, domain, force):
     # Import and run the dev setup script
     try:
         script_path = Path.cwd() / "script"
-        if str(script_path) not in sys.path:
-            sys.path.append(str(script_path))
-        from setup_dev_environment import DevEnvironmentSetup
+        setup_file = script_path / "setup_dev_environment.py"
+        
+        if not setup_file.exists():
+            console.print(f"[red]❌ Setup script not found: {setup_file}[/red]")
+            sys.exit(1)
+        
+        # Import with better error handling
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "setup_dev_environment", 
+            setup_file
+        )
+        
+        if spec is None or spec.loader is None:
+            console.print("[red]❌ Failed to load setup script[/red]")
+            sys.exit(1)
+            
+        setup_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(setup_module)
+        DevEnvironmentSetup = setup_module.DevEnvironmentSetup
         
         setup = DevEnvironmentSetup(domain=domain)
         
@@ -1015,7 +1032,7 @@ def dev():
 @click.option('--clean', is_flag=True, help='Clean existing development setup')
 @click.option('--minimal', is_flag=True, help='Minimal development setup')
 @click.pass_context
-def dev_setup(ctx, clean, minimal):
+def dev_setup_tools(ctx, clean, minimal):
     """Setup development environment
     
     Configures a local development environment with necessary tools

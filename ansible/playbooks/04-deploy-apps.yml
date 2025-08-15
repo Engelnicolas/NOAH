@@ -4,7 +4,6 @@
   become: true
   vars_files:
     - ../vars/global.yml
-    - ../vars/secrets_decrypted.yml
   vars:
     target_user: "{{ ansible_user | default(ansible_env.USER) | default('root') }}"
     user_home: "{{ '/root' if (target_user == 'root') else ('/home/' + target_user) }}"
@@ -17,6 +16,13 @@
       delegate_to: localhost
       run_once: true
       become: false
+
+    - name: Load SOPS encrypted secrets
+      community.sops.load_vars:
+        file: ../vars/secrets.yml
+        age_keyfile: /root/NOAH/age/keys.txt
+      delegate_to: localhost
+      run_once: true
 
     - name: Display deployment phase
       debug:
@@ -226,7 +232,7 @@
               image:
                 tag: "v7.5.1"
               config:
-                clientID: "{{ vault_oauth2_client_id }}"
+                clientID: "{{ oauth2_proxy.client_id }}"
                 clientSecret: "{{ oauth2_proxy.client_secret }}"
                 cookieSecret: "{{ oauth2_proxy.cookie_secret }}"
               extraArgs:
@@ -242,11 +248,11 @@
                 enabled: true
                 image:
                   registry: docker.io
-                  repository: bitnamisecure/redis
+                  repository: bitnami/redis
                   tag: "7.2.3"
                 auth:
                   enabled: true
-                  password: "{{ vault_redis_password }}"
+                  password: "{{ oauth2_proxy.redis_password }}"
                 master:
                   persistence:
                     enabled: true

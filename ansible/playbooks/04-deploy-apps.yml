@@ -4,19 +4,23 @@
   become: true
   vars_files:
     - ../vars/global.yml
-    - ../vars/secrets.yml
   vars:
     target_user: "{{ ansible_user | default(ansible_env.USER) | default('root') }}"
     user_home: "{{ '/root' if (target_user == 'root') else ('/home/' + target_user) }}"
     noah_namespace: "noah"
     values_file: "../../script/values/values-prod.yaml"
+    # Development passwords (< 100 chars for PostgreSQL compatibility)
+    # TODO: In production, use SOPS with shorter encrypted passwords
+    keycloak_admin_password: "DevKeycloakAdmin2025!"
+    keycloak_db_password: "DevKeycloakDB2025!"
+    postgres_root_password: "DevPostgresRoot2025!"
     
   tasks:
     - name: Install kubernetes.core collection
       shell: ansible-galaxy collection install kubernetes.core
       delegate_to: localhost
       run_once: true
-      become: no
+      become: false
 
     - name: Display deployment phase
       debug:
@@ -45,6 +49,14 @@
         kind: Namespace
         name: "{{ noah_namespace }}"
       register: namespace_check
+
+    - name: Debug password lengths
+      debug:
+        msg: |
+          Using development passwords (safe for PostgreSQL < 100 char limit):
+          - Keycloak admin: {{ keycloak_admin_password | length }} chars
+          - Keycloak DB: {{ keycloak_db_password | length }} chars  
+          - PostgreSQL root: {{ postgres_root_password | length }} chars
 
     - name: Create NOAH namespace if not exists
       kubernetes.core.k8s:
@@ -143,9 +155,9 @@
                   repository: bitnami/postgresql
                   tag: "15.4.0"
                 auth:
-                  postgresPassword: "postgres123"
+                  postgresPassword: "{{ postgres_root_password }}"
                   username: keycloak
-                  password: "keycloak123"
+                  password: "{{ keycloak_db_password }}"
                   database: keycloak
                 primary:
                   persistence:
@@ -154,7 +166,7 @@
                     size: 10Gi
               auth:
                 adminUser: admin
-                adminPassword: "admin123"
+                adminPassword: "{{ keycloak_admin_password }}"
               ingress:
                 enabled: true
                 ingressClassName: nginx

@@ -1,5 +1,5 @@
 # NOAH Platform Configuration
-# Generated: 2025-08-15T04:27:34.388203
+# Generated: 2025-08-15T10:01:54.347184
 # Environment: development
 
 # Infrastructure Configuration
@@ -8,7 +8,7 @@ NOAH_ENV=development
 CLUSTER_NAME=noah-cluster
 
 # Domain and Networking
-NOAH_DOMAIN=noah.local
+NOAH_DOMAIN=noah.nicolasengel.fr
 INGRESS_IP=127.0.0.1
 INGRESS_CLASS=nginx
 
@@ -30,7 +30,7 @@ HELM_VERSION=3.13.2
 CERT_MANAGER_ENABLED=true
 TLS_ENABLED=true
 TLS_MODE=letsencrypt
-LETSENCRYPT_EMAIL=admin@example.com
+LETSENCRYPT_EMAIL=admin@nicolasengel.fr
 
 # Storage Configuration
 STORAGE_CLASS=local-storage
@@ -43,13 +43,13 @@ PROMETHEUS_STORAGE_SIZE=20Gi
 GRAFANA_STORAGE_SIZE=10Gi
 
 # Application Hostnames
-KEYCLOAK_HOSTNAME=keycloak.noah.local
-GRAFANA_HOSTNAME=grafana.noah.local
-GITLAB_HOSTNAME=gitlab.noah.local
-MATTERMOST_HOSTNAME=mattermost.noah.local
-NEXTCLOUD_HOSTNAME=nextcloud.noah.local
-PROMETHEUS_HOSTNAME=prometheus.noah.local
-ALERTMANAGER_HOSTNAME=alertmanager.noah.local
+KEYCLOAK_HOSTNAME=keycloak.noah.nicolasengel.fr
+GRAFANA_HOSTNAME=grafana.noah.nicolasengel.fr
+GITLAB_HOSTNAME=gitlab.noah.nicolasengel.fr
+MATTERMOST_HOSTNAME=mattermost.noah.nicolasengel.fr
+NEXTCLOUD_HOSTNAME=nextcloud.noah.nicolasengel.fr
+PROMETHEUS_HOSTNAME=prometheus.noah.nicolasengel.fr
+ALERTMANAGER_HOSTNAME=alertmanager.noah.nicolasengel.fr
 
 # PostgreSQL Configuration
 POSTGRESQL_VERSION=15.4.0

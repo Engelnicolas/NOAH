@@ -1,22 +1,22 @@
 applications:
   gitlab:
     enabled: true
-    hostname: gitlab.noah.local
+    hostname: gitlab.noah.nicolasengel.fr
     storage_size: 50Gi
   grafana:
     enabled: true
-    hostname: grafana.noah.local
+    hostname: grafana.noah.nicolasengel.fr
     storage_size: 10Gi
   keycloak:
     enabled: true
-    hostname: keycloak.noah.local
+    hostname: keycloak.noah.nicolasengel.fr
     realm: noah
   mattermost:
     enabled: true
-    hostname: mattermost.noah.local
+    hostname: mattermost.noah.nicolasengel.fr
   nextcloud:
     enabled: true
-    hostname: nextcloud.noah.local
+    hostname: nextcloud.noah.nicolasengel.fr
     storage_size: 100Gi
   oauth2_proxy:
     enabled: true
@@ -30,7 +30,7 @@ applications:
     version: 15.4.0
   prometheus:
     enabled: true
-    hostname: prometheus.noah.local
+    hostname: prometheus.noah.nicolasengel.fr
     retention: 30d
     storage_size: 20Gi
   wazuh:
@@ -41,14 +41,14 @@ backup_schedule: 0 2 * * *
 cert_manager_enabled: true
 cloud_provider: baremetal
 cluster_name: noah-cluster
-domain_name: noah.local
+domain_name: noah.nicolasengel.fr
 ingress_class: nginx
 ingress_domain: noah.local
 ingress_enabled: true
 ingress_ip: 127.0.0.1
 kube_network_plugin: calico
 kube_version: v1.28.2
-letsencrypt_email: admin@noah.local
+letsencrypt_email: admin@nicolasengel.fr
 metrics_retention: 30d
 monitoring_enabled: true
 namespaces:

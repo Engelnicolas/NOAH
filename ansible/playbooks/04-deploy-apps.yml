@@ -2,8 +2,12 @@
 - name: "Deploy NOAH applications - Step 1: SSO Foundation"
   hosts: kube_control_plane[0]
   become: yes
-  become_user: "{{ ansible_user }}"
+  vars_files:
+    - ../vars/global.yml
+    - ../vars/secrets.yml
   vars:
+    target_user: "{{ ansible_user | default(ansible_env.USER) | default('root') }}"
+    user_home: "{{ '/root' if (target_user == 'root') else ('/home/' + target_user) }}"
     noah_namespace: "noah"
     values_file: "../../script/values/values-prod.yaml"
     
@@ -29,6 +33,7 @@
     - name: Verify Helm is working
       shell: helm version --short
       register: helm_check
+      become_user: "{{ target_user }}"
 
     - name: Display Helm version
       debug:
@@ -78,7 +83,7 @@
                 domain: "NOAH"
                 realm: "NOAH.LOCAL"
                 serverRole: "dc"
-                adminPassword: "{{ vault_samba_admin_password }}"
+                adminPassword: "{{ samba4_admin_password | default(samba4.admin_password) }}"
               resources:
                 requests:
                   memory: "512Mi"
@@ -131,9 +136,9 @@
                   repository: bitnamisecure/postgresql
                   tag: "15.4.0"
                 auth:
-                  postgresPassword: "{{ vault_postgres_password }}"
+                  postgresPassword: "{{ postgresql.postgres_password }}"
                   username: keycloak
-                  password: "{{ vault_keycloak_db_password }}"
+                  password: "{{ keycloak.db_password }}"
                   database: keycloak
                 primary:
                   persistence:
@@ -142,7 +147,7 @@
                     size: 10Gi
               auth:
                 adminUser: admin
-                adminPassword: "{{ vault_keycloak_admin_password }}"
+                adminPassword: "{{ keycloak.admin_password }}"
               ingress:
                 enabled: true
                 ingressClassName: nginx
@@ -199,8 +204,8 @@
                 tag: "v7.5.1"
               config:
                 clientID: "{{ vault_oauth2_client_id }}"
-                clientSecret: "{{ vault_oauth2_client_secret }}"
-                cookieSecret: "{{ vault_oauth2_cookie_secret }}"
+                clientSecret: "{{ oauth2_proxy.client_secret }}"
+                cookieSecret: "{{ oauth2_proxy.cookie_secret }}"
               extraArgs:
                 provider: "keycloak-oidc"
                 oidc-issuer-url: "http://keycloak.noah.local/auth/realms/noah"

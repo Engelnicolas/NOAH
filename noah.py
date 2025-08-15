@@ -600,6 +600,12 @@ class AnsibleRunner:
         if verbose:
             cmd.append("-vv")
 
+        # Set up environment with SOPS support
+        import os
+        env = os.environ.copy()
+        if 'SOPS_AGE_KEY_FILE' in self.config.config:
+            env['SOPS_AGE_KEY_FILE'] = self.config.config['SOPS_AGE_KEY_FILE']
+
         console.print(f"[blue]🚀 Executing playbook: {playbook}[/blue]")
 
         try:
@@ -613,6 +619,7 @@ class AnsibleRunner:
                 result = subprocess.run(
                     cmd,
                     cwd=Path.cwd(),
+                    env=env,  # Pass environment with SOPS key
                     capture_output=True,
                     text=True,
                     timeout=3600  # 1 hour timeout

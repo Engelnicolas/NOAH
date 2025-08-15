@@ -4,6 +4,7 @@
   become: yes
   vars_files:
     - ../vars/global.yml
+    - ../vars/secrets.yml
   vars:
     helm_version: "3.13.2"
     noah_namespace: "noah"
@@ -214,7 +215,7 @@
                       requests:
                         storage: 10Gi
           grafana:
-            adminPassword: "{{ vault_grafana_password }}"
+            adminPassword: "{{ grafana.admin_password }}"
             persistence:
               enabled: true
               storageClassName: local-storage
@@ -223,8 +224,13 @@
               enabled: true
               annotations:
                 kubernetes.io/ingress.class: nginx
+                cert-manager.io/cluster-issuer: letsencrypt-prod
               hosts:
-                - grafana.noah.local
+                - grafana.{{ domain_name }}
+              tls:
+                - secretName: grafana-tls
+                  hosts:
+                    - grafana.{{ domain_name }}
       become_user: "{{ target_user }}"
 
     - name: Create storage class for local storage

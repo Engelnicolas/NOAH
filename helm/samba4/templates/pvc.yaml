@@ -8,7 +8,9 @@ metadata:
     app: samba4
 spec:
   accessModes:
-    - {{ .Values.persistence.accessMode }}
+    {{- range .Values.persistence.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
   {{- if .Values.global.storageClass }}
   storageClassName: {{ .Values.global.storageClass }}
   {{- end }}

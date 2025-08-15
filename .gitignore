@@ -12,11 +12,13 @@ credentials*
 *api-key*
 
 # Allow Helm template files (these are templates, not actual secrets)
-!Helm/*/templates/*secret*.yaml
-!Helm/*/templates/*secret*.yml
+!helm/*/templates/*secret*.yaml
+!helm/*/templates/*secret*.yml
+!ansible/templates/*secret*.j2
 
-# But ignore actual secret files
-*secret*===========================================================
+# But ignore actual secret files (encrypted or plain)
+*secret*
+secrets*===========================================================
 
 # macOS
 .DS_Store
@@ -95,24 +97,44 @@ tramp
 .vault_pass*
 vault_pass*
 .ansible_vault_password*
+ansible_vault_password*
 
 # Ansible secrets and sensitive files
 ansible/vars/secrets.yml
+ansible/vars/secrets.yaml
 **/secrets.yml
-secrets.yaml
 **/secrets.yaml
+ansible/group_vars/*/vault*
+ansible/host_vars/*/vault*
 
 # Ansible temporary files
 .ansible/
 ansible.log
 *.log
+.ansible-lint*
 
-# Galaxy roles (if using requirements.yml)
+# Galaxy roles and collections
 roles/galaxy/
 collections/
+ansible_collections/
+.galaxy_cache/
 
 # Host key checking
 .known_hosts
+
+# Ansible facts cache
+.ansible_cache/
+ansible_facts.d/
+
+# Ansible inventory with real IPs
+inventory.ini
+hosts.ini
+production.ini
+staging.ini
+inventory/production/
+inventory/staging/
+!inventory/sample/
+!inventory/example/
 
 # =============================================================================
 # Terraform
@@ -154,19 +176,40 @@ override.tf.json
 charts/*.tgz
 requirements.lock
 Chart.lock
+.helmignore
 
 # Helm dependency charts
 charts/*/charts/
+charts/*/tmpcharts/
 
 # Rendered Kubernetes manifests
 rendered/
 output/
 generated/
+manifests/generated/
 
 # Kubeconfig files
 kubeconfig*
 .kube/
 *.kubeconfig
+config
+kubeconfigs/
+
+# Kubernetes secrets (rendered)
+*-secret.yaml
+*-secret.yml
+secret-*.yaml
+secret-*.yml
+
+# Kustomize
+kustomization.yaml.bak
+kustomization.yml.bak
+
+# ArgoCD
+.argocd/
+
+# Operators
+operators/generated/
 
 # =============================================================================
 # Docker and Container Images
@@ -197,29 +240,42 @@ docker-compose.override.yml
 *.jks
 *.keystore
 *.truststore
+*.csr
+*.der
 
-# Development certificates (allow in dev)
+# Development certificates (allow specific dev certs)
 !certs/README.md
 !docs/certs/
+!helm/*/templates/*tls*.yaml
+!ansible/templates/*tls*.j2
 
 # Age encryption keys
 age/keys.txt
+age/*.txt
 *.age
+*.age.pub
 
-# Development environment files
-.env.dev
-.env.local
+# SOPS configuration with real keys
+.sops.yaml
+sops.yaml
 
 # SSH keys
 id_rsa*
 id_ed25519*
 id_ecdsa*
+id_dsa*
 *.pub
 known_hosts
+.ssh/
 
 # GPG keys
 *.gpg
 *.asc
+.gnupg/
+
+# HashiCorp Vault
+.vault-token
+vault.log
 
 # =============================================================================
 # Secrets and Credentials
@@ -227,10 +283,18 @@ known_hosts
 
 # Environment files with secrets
 .env
+.env.*
 .env.local
 .env.*.local
 .env.production
 .env.staging
+.env.development
+.env.test
+
+# NOAH configuration files
+.noah_config
+.noah_config.*
+noah_config*
 
 # Credential files
 credentials*
@@ -238,18 +302,31 @@ credentials*
 *password*
 *passwd*
 *token*
+*tokens*
 *api-key*
-#*secret*
+*apikey*
+*api_key*
+auth.json
+auth.yaml
+auth.yml
 
 # Database credentials
 .pgpass
 .my.cnf
+.psqlrc
 
 # Cloud provider credentials
 .aws/
 .azure/
 .gcp/
 gcloud/
+.terraform.d/
+
+# Service account keys
+*service-account*.json
+*serviceaccount*.json
+*service_account*.json
+*sa-key*.json
 
 # =============================================================================
 # Logs and Temporary Files
@@ -261,6 +338,14 @@ logs/
 log/
 *.out
 *.err
+*.trace
+
+# Application specific logs
+noah.log
+noah-*.log
+ansible.log
+helm.log
+kubectl.log
 
 # Temporary files
 tmp/
@@ -275,7 +360,16 @@ temp/
 *.bak
 *.backup
 *.old
+*.orig
 *~
+
+# Core dumps
+core
+core.*
+*.core
+
+# Process IDs
+*.pid
 
 # =============================================================================
 # Build and Distribution
@@ -306,13 +400,33 @@ obj/
 # Prometheus
 prometheus.yml.bak
 alerts.yml.bak
+prometheus.db
+prometheus/data/
 
 # Grafana
 grafana.db
 grafana.log
+grafana/data/
+*.db-shm
+*.db-wal
 
 # Elasticsearch
 elasticsearch.yml.bak
+elasticsearch/data/
+
+# Loki
+loki/data/
+
+# AlertManager
+alertmanager.yml.bak
+alertmanager/data/
+
+# Jaeger
+jaeger/data/
+
+# Monitoring dashboards with sensitive data
+dashboards/private/
+*-dashboard-private.json
 
 # =============================================================================
 # Backup and Recovery
@@ -395,22 +509,46 @@ ENV/
 # N.O.A.H specific temporary files
 noah-temp/
 .noah/
+.noah-*
 
 # Deployment artifacts
 deployment-artifacts/
 release/
+releases/
 
 # Custom values files with sensitive data
 values-prod.yaml
+values-production.yaml
 values-staging.yaml
 values-dev.yaml
+values-development.yaml
 values.local.yaml
+values.override.yaml
+*-values.yaml
+*-values.yml
 
-# Inventory files with real server IPs
-inventory.ini
-hosts.ini
-production.ini
-staging.ini
+# NOAH configuration backups
+.noah_config.bak
+.noah_config.backup
+.noah_config.*
+
+# Local override files
+local.yaml
+local.yml
+override.yaml
+override.yml
+*.local.*
+
+# Script outputs
+script/output/
+script/logs/
+script/.cache/
+
+# Virtual environments
+venv-*/
+.venv-*/
+noah-venv/
+.noah-venv/
 
 # =============================================================================
 # Documentation Build
@@ -454,6 +592,109 @@ openvpn/
 # Networking
 *.pcap
 *.cap
+
+# =============================================================================
+# Specific configuration files
+# =============================================================================
+
+# SOPS configuration with real keys
+.sops.yaml
+sops.yaml
+
+# NOAH configuration files
+.noah_config
+.noah_config.*
+noah_config*
+
+# Environment files
+.env.development
+.env.production
+.env.staging
+.env.test
+
+# Age encryption
+age/keys.txt
+age/*.txt
+
+# =============================================================================
+# Container and Virtualization
+# =============================================================================
+
+# Docker volumes and data
+docker-data/
+volumes/
+data/
+
+# Vagrant
+.vagrant/
+*.box
+
+# VirtualBox
+*.vdi
+*.vmdk
+*.vbox
+
+# VMware
+*.vmx
+*.nvram
+*.vmsd
+
+# =============================================================================
+# CI/CD and Automation
+# =============================================================================
+
+# GitHub Actions artifacts
+.github/workflows/*.log
+
+# GitLab CI
+.gitlab-ci-local/
+
+# Jenkins
+.jenkins/
+
+# CircleCI
+.circleci/config.local.yml
+
+# Tekton
+tekton/generated/
+
+# =============================================================================
+# Development Tools
+# =============================================================================
+
+# Pre-commit
+.pre-commit-cache/
+
+# Git hooks
+.git/hooks/pre-commit-config.yaml
+
+# Makefile outputs
+.make/
+
+# Taskfile
+.task/
+
+# =============================================================================
+# Language Specific (Extended)
+# =============================================================================
+
+# Go
+go.sum
+vendor/
+*.exe
+
+# Java
+*.class
+*.jar
+*.war
+
+# Ruby
+Gemfile.lock
+.bundle/
+
+# Rust
+Cargo.lock
+target/
 
 # =============================================================================
 # End of .gitignore

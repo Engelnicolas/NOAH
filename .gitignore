@@ -198,6 +198,18 @@ docker-compose.override.yml
 *.keystore
 *.truststore
 
+# Development certificates (allow in dev)
+!certs/README.md
+!docs/certs/
+
+# Age encryption keys
+age/keys.txt
+*.age
+
+# Development environment files
+.env.dev
+.env.local
+
 # SSH keys
 id_rsa*
 id_ed25519*

@@ -10,8 +10,9 @@ converted from the original bash script for better maintainability.
 import click
 import subprocess
 import sys
+import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 import yaml
 import json
 from rich.console import Console
@@ -26,25 +27,168 @@ console = Console()
 
 
 class NoahConfig:
-    """Configuration management for NOAH platform"""
+    """Enhanced configuration management for NOAH platform"""
 
     def __init__(self, config_path: Path = Path(".noah_config")):
         self.config_path = config_path
         self.config = self.load_config()
         self.script_dir = Path.cwd()
+        self.env_profile = self.config.get('NOAH_ENV', 'production')
 
     def load_config(self) -> Dict:
         """Load configuration from file or defaults"""
+        default_config = {
+            "INFRASTRUCTURE_TYPE": "kubernetes",
+            "NOAH_ENV": "production",
+            "NOAH_DOMAIN": "noah.local",
+            "NOAH_DEBUG": "false"
+        }
+        
         if self.config_path.exists():
             with open(self.config_path) as f:
-                return dict(line.strip().split('=', 1) for line in f if '=' in line)
-        return {"INFRASTRUCTURE_TYPE": "kubernetes"}
+                config = {}
+                for line in f:
+                    line = line.strip()
+                    if line and '=' in line and not line.startswith('#'):
+                        key, value = line.split('=', 1)
+                        config[key.strip()] = value.strip()
+                
+                # Merge with defaults
+                default_config.update(config)
+                return default_config
+        
+        return default_config
 
     def save_config(self):
-        """Save configuration to file"""
+        """Save configuration to file with comments and sections"""
         with open(self.config_path, 'w') as f:
-            for key, value in self.config.items():
-                f.write(f"{key}={value}\n")
+            f.write(f"# NOAH Platform Configuration\n")
+            f.write(f"# Generated: {datetime.datetime.now().isoformat()}\n")
+            f.write(f"# Environment: {self.env_profile}\n\n")
+            
+            # Infrastructure settings
+            f.write("# Infrastructure Configuration\n")
+            f.write(f"INFRASTRUCTURE_TYPE={self.config.get('INFRASTRUCTURE_TYPE', 'kubernetes')}\n")
+            f.write(f"NOAH_ENV={self.config.get('NOAH_ENV', 'production')}\n\n")
+            
+            # Domain and networking
+            f.write("# Domain and Networking\n")
+            f.write(f"NOAH_DOMAIN={self.config.get('NOAH_DOMAIN', 'noah.local')}\n\n")
+            
+            # Development settings (only if dev environment)
+            if self.env_profile == 'development':
+                f.write("# Development Settings\n")
+                f.write(f"NOAH_DEBUG={self.config.get('NOAH_DEBUG', 'true')}\n")
+                
+                # SOPS and security paths
+                if 'SOPS_AGE_KEY_FILE' in self.config:
+                    f.write(f"SOPS_AGE_KEY_FILE={self.config['SOPS_AGE_KEY_FILE']}\n")
+                if 'NOAH_TLS_CERT' in self.config:
+                    f.write(f"NOAH_TLS_CERT={self.config['NOAH_TLS_CERT']}\n")
+                if 'NOAH_TLS_KEY' in self.config:
+                    f.write(f"NOAH_TLS_KEY={self.config['NOAH_TLS_KEY']}\n")
+            
+            # Additional settings
+            other_keys = set(self.config.keys()) - {
+                'INFRASTRUCTURE_TYPE', 'NOAH_ENV', 'NOAH_DOMAIN', 'NOAH_DEBUG',
+                'SOPS_AGE_KEY_FILE', 'NOAH_TLS_CERT', 'NOAH_TLS_KEY'
+            }
+            
+            if other_keys:
+                f.write("\n# Additional Settings\n")
+                for key in sorted(other_keys):
+                    f.write(f"{key}={self.config[key]}\n")
+
+    def get_env_vars(self) -> Dict[str, str]:
+        """Get configuration as environment variables"""
+        env_vars = {}
+        
+        # Convert all config to environment variables
+        for key, value in self.config.items():
+            env_vars[key] = value
+        
+        return env_vars
+
+    def write_env_file(self, env_file_path: Optional[Path] = None):
+        """Write environment variables to .env file"""
+        if env_file_path is None:
+            env_file_path = Path(f".env.{self.env_profile}")
+        
+        env_vars = self.get_env_vars()
+        
+        with open(env_file_path, 'w') as f:
+            f.write(f"# NOAH Environment Variables\n")
+            f.write(f"# Environment: {self.env_profile}\n")
+            f.write(f"# Generated: {datetime.datetime.now().isoformat()}\n")
+            f.write(f"# Source this file: source {env_file_path}\n\n")
+            
+            # Group variables by category
+            infrastructure_vars = ['INFRASTRUCTURE_TYPE']
+            domain_vars = ['NOAH_DOMAIN', 'NOAH_ENV']
+            security_vars = ['SOPS_AGE_KEY_FILE', 'NOAH_TLS_CERT', 'NOAH_TLS_KEY']
+            debug_vars = ['NOAH_DEBUG']
+            
+            # Infrastructure
+            f.write("# Infrastructure Configuration\n")
+            for var in infrastructure_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Domain and Environment
+            f.write("\n# Domain and Environment\n")
+            for var in domain_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Security (for development)
+            if self.env_profile == 'development':
+                f.write("\n# Security and Certificates\n")
+                for var in security_vars:
+                    if var in env_vars:
+                        f.write(f"export {var}={env_vars[var]}\n")
+                
+                # Debug settings
+                f.write("\n# Debug Settings\n")
+                for var in debug_vars:
+                    if var in env_vars:
+                        f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Other variables
+            other_vars = set(env_vars.keys()) - set(infrastructure_vars + domain_vars + security_vars + debug_vars)
+            if other_vars:
+                f.write("\n# Additional Variables\n")
+                for var in sorted(other_vars):
+                    f.write(f"export {var}={env_vars[var]}\n")
+
+    def set_development_mode(self, domain: str = "noah.local"):
+        """Configure for development environment"""
+        self.config.update({
+            'NOAH_ENV': 'development',
+            'NOAH_DOMAIN': domain,
+            'NOAH_DEBUG': 'true',
+            'SOPS_AGE_KEY_FILE': str(Path.cwd() / 'age' / 'keys.txt'),
+            'NOAH_TLS_CERT': str(Path.cwd() / 'certs' / 'tls.crt'),
+            'NOAH_TLS_KEY': str(Path.cwd() / 'certs' / 'tls.key')
+        })
+        self.env_profile = 'development'
+
+    def set_production_mode(self, domain: Optional[str] = None):
+        """Configure for production environment"""
+        prod_config = {
+            'NOAH_ENV': 'production',
+            'NOAH_DEBUG': 'false'
+        }
+        
+        if domain:
+            prod_config['NOAH_DOMAIN'] = domain
+            
+        # Remove development-specific settings
+        dev_keys = ['SOPS_AGE_KEY_FILE', 'NOAH_TLS_CERT', 'NOAH_TLS_KEY']
+        for key in dev_keys:
+            self.config.pop(key, None)
+        
+        self.config.update(prod_config)
+        self.env_profile = 'production'
 
     def check_environment(self) -> bool:
         """Check NOAH environment prerequisites"""
@@ -257,7 +401,7 @@ def cli(ctx, verbose, dry_run):
     
     \b
     DEVELOPMENT SETUP:
-    • dev       - Development environment commands
+    • dev-setup - Setup development environment with certificates and SOPS
     • test      - Run platform tests
     • logs      - View service logs
     
@@ -274,6 +418,7 @@ def cli(ctx, verbose, dry_run):
     
     \b
     UTILITIES:
+    • config    - Manage unified configuration (harmonized .noah_config/.env files)
     • dashboard - Open monitoring dashboard
     • pipeline  - Configure CI/CD pipeline
     """
@@ -436,6 +581,131 @@ all:
 
     console.print("\n[green]✅ Configuration completed successfully[/green]")
     console.print("[blue]Next step: noah deploy[/blue]")
+
+
+# =============================================================================
+# DEVELOPMENT ENVIRONMENT COMMANDS
+# =============================================================================
+
+@cli.command('dev-setup')
+@click.option('--domain', default='noah.local', help='Domain name for development')
+@click.option('--force', is_flag=True, help='Force regenerate all certificates and keys')
+@click.pass_context
+def dev_setup(ctx, domain, force):
+    """Setup development environment with Let's Encrypt certificates and SOPS
+    
+    Initializes a complete development environment including:
+    - Let's Encrypt style certificates for local development
+    - Age encryption key generation
+    - SOPS configuration for secrets management
+    - Encrypted secrets file with generated passwords
+    - Unified configuration system (.noah_config + environment files)
+    
+    This command should be run first when setting up NOAH for development.
+    """
+    console.print("[yellow]🔧 Setting up NOAH development environment...[/yellow]")
+    
+    # Import and run the dev setup script
+    try:
+        script_path = Path.cwd() / "script"
+        if str(script_path) not in sys.path:
+            sys.path.append(str(script_path))
+        from setup_dev_environment import DevEnvironmentSetup
+        
+        setup = DevEnvironmentSetup(domain=domain)
+        
+        # Check if already setup and not forcing
+        if not force:
+            age_keys = Path("age/keys.txt")
+            secrets_file = Path("ansible/vars/secrets.yml")
+            
+            if age_keys.exists() and secrets_file.exists():
+                if not click.confirm(
+                    "Development environment appears to be already setup. Continue anyway?",
+                    default=False
+                ):
+                    console.print("Setup cancelled.")
+                    return
+        
+        success = setup.run_setup()
+        
+        if success:
+            # Update NOAH config to development mode
+            config = ctx.obj['config']
+            config.set_development_mode(domain)
+            config.save_config()
+            
+            console.print("\n[green]🎉 Development environment setup completed successfully![/green]")
+            console.print("[yellow]💡 Configuration harmonized:[/yellow]")
+            console.print("   📁 Unified config: [cyan].noah_config[/cyan]")
+            console.print("   📁 Environment file: [cyan].env.development[/cyan]")
+            console.print("\n[yellow]💡 Next steps:[/yellow]")
+            console.print("   1. Source environment: [cyan]source .env.development[/cyan]")
+            console.print("   2. Edit secrets: [cyan]sops ansible/vars/secrets.yml[/cyan]")
+            console.print("   3. Deploy to dev: [cyan]./noah.py deploy --profile dev[/cyan]")
+        else:
+            console.print("[red]❌ Development environment setup failed[/red]")
+            sys.exit(1)
+            
+    except ImportError as e:
+        console.print(f"[red]❌ Failed to import dev setup module: {e}[/red]")
+        console.print("[yellow]Try running: python script/setup_dev_environment.py[/yellow]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]❌ Dev setup failed: {e}[/red]")
+        sys.exit(1)
+
+
+@cli.command('config')
+@click.option('--env', type=click.Choice(['development', 'production', 'staging']), 
+              help='Set environment profile')
+@click.option('--domain', help='Set domain name')
+@click.option('--show', is_flag=True, help='Show current configuration')
+@click.option('--export-env', is_flag=True, help='Export environment variables file')
+@click.pass_context
+def config_cmd(ctx, env, domain, show, export_env):
+    """Manage NOAH configuration
+    
+    Unified configuration management for NOAH platform.
+    Harmonizes .noah_config and environment variables.
+    """
+    config = ctx.obj['config']
+    
+    if show:
+        # Show current configuration
+        console.print("[cyan]📋 Current NOAH Configuration:[/cyan]")
+        
+        table = Table(title="Configuration Settings")
+        table.add_column("Setting", style="cyan")
+        table.add_column("Value", style="green")
+        table.add_column("Environment", style="yellow")
+        
+        for key, value in config.config.items():
+            env_type = "Development" if config.env_profile == 'development' else "Production"
+            table.add_row(key, value, env_type)
+        
+        console.print(table)
+        return
+    
+    # Update configuration
+    if env:
+        if env == 'development':
+            config.set_development_mode(domain or config.config.get('NOAH_DOMAIN', 'noah.local'))
+        elif env == 'production':
+            config.set_production_mode(domain)
+        config.save_config()
+        console.print(f"[green]✅ Environment set to: {env}[/green]")
+    
+    if domain and not env:
+        config.config['NOAH_DOMAIN'] = domain
+        config.save_config()
+        console.print(f"[green]✅ Domain set to: {domain}[/green]")
+    
+    if export_env:
+        env_file = Path(f".env.{config.env_profile}")
+        config.write_env_file(env_file)
+        console.print(f"[green]✅ Environment variables exported to: {env_file}[/green]")
+        console.print(f"[yellow]💡 To use: source {env_file}[/yellow]")
 
 
 @cli.command()

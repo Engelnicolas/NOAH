@@ -60,6 +60,7 @@ database:
   existingSecretPasswordKey: password
   existingSecretUsernameKey: username
 service:
+  enabled: true
   type: ClusterIP
   port: 8080
   httpsPort: 8443
@@ -254,7 +255,7 @@ postgresql:
   enabled: true
   image:
     registry: docker.io
-    repository: bitnamisecure/postgresql
+    repository: bitnami/postgresql
     tag: "15.4.0"
   auth:
     postgresPassword: postgres

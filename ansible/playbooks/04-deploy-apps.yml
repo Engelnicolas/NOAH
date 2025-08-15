@@ -143,9 +143,9 @@
                   repository: bitnami/postgresql
                   tag: "15.4.0"
                 auth:
-                  postgresPassword: "{{ postgresql.postgres_password }}"
+                  postgresPassword: "postgres123"
                   username: keycloak
-                  password: "{{ keycloak.db_password }}"
+                  password: "keycloak123"
                   database: keycloak
                 primary:
                   persistence:
@@ -154,7 +154,7 @@
                     size: 10Gi
               auth:
                 adminUser: admin
-                adminPassword: "{{ keycloak.admin_password }}"
+                adminPassword: "admin123"
               ingress:
                 enabled: true
                 ingressClassName: nginx

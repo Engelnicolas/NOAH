@@ -44,9 +44,9 @@ spec:
             - name: KC_DB_URL_PORT
               value: "{{ .Values.database.port }}"
             - name: KC_DB_URL_DATABASE
-              value: "noah"
+              value: "{{ .Values.database.database }}"
             - name: KC_DB_USERNAME
-              value: "noah"
+              value: "{{ .Values.database.username }}"
             - name: KC_DB_PASSWORD
               valueFrom:
                 secretKeyRef:

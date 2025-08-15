@@ -1,10 +1,9 @@
 ---
 - name: Configure Kubernetes cluster for NOAH
   hosts: all
-  become: yes
+  become: true
   vars_files:
     - ../vars/global.yml
-    - ../vars/secrets.yml
   vars:
     helm_version: "3.13.2"
     noah_namespace: "noah"
@@ -13,11 +12,18 @@
     user_home: "{{ '/root' if (target_user == 'root') else ('/home/' + target_user) }}"
     
   tasks:
+    - name: Load SOPS encrypted secrets
+      community.sops.load_vars:
+        file: ../vars/secrets.yml
+      delegate_to: localhost
+      run_once: true
+      no_log: true
+
     - name: Install kubernetes.core collection
       shell: ansible-galaxy collection install kubernetes.core
       delegate_to: localhost
       run_once: true
-      become: no
+      become: false
 
     - name: Create kubeconfig directory
       file:
@@ -75,10 +81,14 @@
         - { name: "grafana", url: "https://grafana.github.io/helm-charts" }
         - { name: "ingress-nginx", url: "https://kubernetes.github.io/ingress-nginx" }
       become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
 
     - name: Update Helm repositories
       shell: helm repo update
       become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
 
     - name: Create namespaces
       kubernetes.core.k8s:
@@ -99,6 +109,8 @@
         name: jetstack
         repo_url: https://charts.jetstack.io
       become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
       when: cert_manager_enabled | default(true)
 
     - name: Install cert-manager
@@ -115,6 +127,8 @@
           prometheus:
             enabled: true
       become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
       when: cert_manager_enabled | default(true)
 
     - name: Wait for cert-manager to be ready
@@ -128,6 +142,8 @@
           status: "True"
         wait_timeout: 300
       become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
       when: cert_manager_enabled | default(true)
 
     - name: Create Let's Encrypt ClusterIssuer
@@ -148,6 +164,8 @@
                   ingress:
                     class: nginx
       become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
       when: cert_manager_enabled | default(true) and tls_mode | default('letsencrypt') == 'letsencrypt'
 
     - name: Create TLS secrets
@@ -166,6 +184,8 @@
         tls_cert: "{{ vault_tls_cert }}"  # Stocké dans Ansible Vault
         tls_key: "{{ vault_tls_key }}"    # Stocké dans Ansible Vault
       become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
       when: tls_mode | default('manual') == 'manual' and vault_tls_cert is defined and vault_tls_cert != ""
 
     - name: Install NGINX Ingress Controller
@@ -184,6 +204,8 @@
               prometheus.io/scrape: "true"
               prometheus.io/port: "10254"
       become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
 
     - name: Wait for NGINX Ingress to be ready
       kubernetes.core.k8s_info:
@@ -196,6 +218,8 @@
           status: "True"
         wait_timeout: 300
       become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
 
     - name: Install Prometheus stack for monitoring
       kubernetes.core.helm:
@@ -209,7 +233,7 @@
               storageSpec:
                 volumeClaimTemplate:
                   spec:
-                    storageClassName: local-storage
+                    storageClassName: local-path
                     accessModes: ["ReadWriteOnce"]
                     resources:
                       requests:
@@ -218,7 +242,7 @@
             adminPassword: "{{ grafana.admin_password }}"
             persistence:
               enabled: true
-              storageClassName: local-storage
+              storageClassName: local-path
               size: 5Gi
             ingress:
               enabled: true
@@ -232,17 +256,8 @@
                   hosts:
                     - grafana.{{ domain_name }}
       become_user: "{{ target_user }}"
-
-    - name: Create storage class for local storage
-      kubernetes.core.k8s:
-        definition:
-          apiVersion: storage.k8s.io/v1
-          kind: StorageClass
-          metadata:
-            name: local-storage
-          provisioner: kubernetes.io/no-provisioner
-          volumeBindingMode: WaitForFirstConsumer
-      become_user: "{{ target_user }}"
+      environment:
+        KUBECONFIG: "{{ user_home }}/.kube/config"
 
     - name: Verify cluster configuration
       shell: |

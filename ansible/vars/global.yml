@@ -30,6 +30,7 @@ applications:
     version: 15.4.0
   prometheus:
     enabled: true
+    hostname: prometheus.noah.local
     retention: 30d
     storage_size: 20Gi
   wazuh:
@@ -52,10 +53,10 @@ metrics_retention: 30d
 monitoring_enabled: true
 namespaces:
 - labels:
-    environment: production
+    environment: development
   name: noah
 - labels:
-    environment: production
+    environment: development
   name: monitoring
 noah_vms: []
 pod_subnet: 10.233.64.0/18
@@ -64,4 +65,4 @@ service_subnet: 10.233.0.0/18
 storage_class: local-storage
 storage_provisioner: kubernetes.io/no-provisioner
 tls_enabled: true
-tls_mode: "letsencrypt"  # Options: "manual", "letsencrypt", "self-signed"
+tls_mode: letsencrypt

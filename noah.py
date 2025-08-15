@@ -38,10 +38,77 @@ class NoahConfig:
     def load_config(self) -> Dict:
         """Load configuration from file or defaults"""
         default_config = {
+            # Infrastructure settings
             "INFRASTRUCTURE_TYPE": "kubernetes",
             "NOAH_ENV": "development",  # Default to development environment
+            "NOAH_DEBUG": "true",  # Enable debug by default for development
+            
+            # Domain and networking
             "NOAH_DOMAIN": "noah.local",
-            "NOAH_DEBUG": "true"  # Enable debug by default for development
+            "INGRESS_IP": "127.0.0.1",
+            "INGRESS_CLASS": "nginx",
+            
+            # Kubernetes cluster configuration
+            "KUBE_VERSION": "v1.28.2",
+            "KUBE_NETWORK_PLUGIN": "calico",
+            "POD_SUBNET": "10.233.64.0/18",
+            "SERVICE_SUBNET": "10.233.0.0/18",
+            "CLUSTER_NAME": "noah-cluster",
+            
+            # Namespaces
+            "NOAH_NAMESPACE": "noah",
+            "MONITORING_NAMESPACE": "monitoring",
+            
+            # Helm configuration
+            "HELM_VERSION": "3.13.2",
+            
+            # Certificate management
+            "CERT_MANAGER_ENABLED": "true",
+            "TLS_ENABLED": "true",
+            "TLS_MODE": "letsencrypt",  # Options: manual, letsencrypt, self-signed
+            "LETSENCRYPT_EMAIL": "admin@noah.local",
+            
+            # Storage configuration
+            "STORAGE_CLASS": "local-storage",
+            "STORAGE_PROVISIONER": "kubernetes.io/no-provisioner",
+            
+            # Monitoring configuration
+            "MONITORING_ENABLED": "true",
+            "METRICS_RETENTION": "30d",
+            "PROMETHEUS_STORAGE_SIZE": "20Gi",
+            "GRAFANA_STORAGE_SIZE": "10Gi",
+            
+            # Application configuration
+            "POSTGRESQL_VERSION": "15.4.0",
+            "POSTGRESQL_STORAGE_SIZE": "20Gi",
+            "POSTGRESQL_DATABASE": "noah",
+            "POSTGRESQL_USERNAME": "noah",
+            
+            # Backup configuration
+            "BACKUP_ENABLED": "true",
+            "BACKUP_RETENTION": "30d",
+            "BACKUP_SCHEDULE": "0 2 * * *",
+            
+            # Development-specific paths
+            "SOPS_AGE_KEY_FILE": str(Path.cwd() / 'age' / 'keys.txt'),
+            "NOAH_TLS_CERT": str(Path.cwd() / 'certs' / 'tls.crt'),
+            "NOAH_TLS_KEY": str(Path.cwd() / 'certs' / 'tls.key'),
+            
+            # KUBECONFIG path
+            "KUBECONFIG": str(Path.home() / '.kube' / 'config'),
+            
+            # Application hostnames
+            "KEYCLOAK_HOSTNAME": "keycloak.noah.local",
+            "GRAFANA_HOSTNAME": "grafana.noah.local",
+            "GITLAB_HOSTNAME": "gitlab.noah.local",
+            "MATTERMOST_HOSTNAME": "mattermost.noah.local",
+            "NEXTCLOUD_HOSTNAME": "nextcloud.noah.local",
+            "PROMETHEUS_HOSTNAME": "prometheus.noah.local",
+            "ALERTMANAGER_HOSTNAME": "alertmanager.noah.local",
+            
+            # Security settings
+            "KEYCLOAK_REALM": "noah",
+            "OAUTH2_PROXY_ENABLED": "true",
         }
         
         if self.config_path.exists():
@@ -69,11 +136,78 @@ class NoahConfig:
             # Infrastructure settings
             f.write("# Infrastructure Configuration\n")
             f.write(f"INFRASTRUCTURE_TYPE={self.config.get('INFRASTRUCTURE_TYPE', 'kubernetes')}\n")
-            f.write(f"NOAH_ENV={self.config.get('NOAH_ENV', 'production')}\n\n")
+            f.write(f"NOAH_ENV={self.config.get('NOAH_ENV', 'development')}\n")
+            f.write(f"CLUSTER_NAME={self.config.get('CLUSTER_NAME', 'noah-cluster')}\n\n")
             
             # Domain and networking
             f.write("# Domain and Networking\n")
-            f.write(f"NOAH_DOMAIN={self.config.get('NOAH_DOMAIN', 'noah.local')}\n\n")
+            f.write(f"NOAH_DOMAIN={self.config.get('NOAH_DOMAIN', 'noah.local')}\n")
+            f.write(f"INGRESS_IP={self.config.get('INGRESS_IP', '127.0.0.1')}\n")
+            f.write(f"INGRESS_CLASS={self.config.get('INGRESS_CLASS', 'nginx')}\n\n")
+            
+            # Kubernetes configuration
+            f.write("# Kubernetes Configuration\n")
+            f.write(f"KUBE_VERSION={self.config.get('KUBE_VERSION', 'v1.28.2')}\n")
+            f.write(f"KUBE_NETWORK_PLUGIN={self.config.get('KUBE_NETWORK_PLUGIN', 'calico')}\n")
+            f.write(f"POD_SUBNET={self.config.get('POD_SUBNET', '10.233.64.0/18')}\n")
+            f.write(f"SERVICE_SUBNET={self.config.get('SERVICE_SUBNET', '10.233.0.0/18')}\n")
+            f.write(f"KUBECONFIG={self.config.get('KUBECONFIG', str(Path.home() / '.kube' / 'config'))}\n\n")
+            
+            # Namespaces
+            f.write("# Kubernetes Namespaces\n")
+            f.write(f"NOAH_NAMESPACE={self.config.get('NOAH_NAMESPACE', 'noah')}\n")
+            f.write(f"MONITORING_NAMESPACE={self.config.get('MONITORING_NAMESPACE', 'monitoring')}\n\n")
+            
+            # Helm configuration
+            f.write("# Helm Configuration\n")
+            f.write(f"HELM_VERSION={self.config.get('HELM_VERSION', '3.13.2')}\n\n")
+            
+            # Certificate management
+            f.write("# Certificate Management\n")
+            f.write(f"CERT_MANAGER_ENABLED={self.config.get('CERT_MANAGER_ENABLED', 'true')}\n")
+            f.write(f"TLS_ENABLED={self.config.get('TLS_ENABLED', 'true')}\n")
+            f.write(f"TLS_MODE={self.config.get('TLS_MODE', 'letsencrypt')}\n")
+            f.write(f"LETSENCRYPT_EMAIL={self.config.get('LETSENCRYPT_EMAIL', 'admin@noah.local')}\n\n")
+            
+            # Storage configuration
+            f.write("# Storage Configuration\n")
+            f.write(f"STORAGE_CLASS={self.config.get('STORAGE_CLASS', 'local-storage')}\n")
+            f.write(f"STORAGE_PROVISIONER={self.config.get('STORAGE_PROVISIONER', 'kubernetes.io/no-provisioner')}\n\n")
+            
+            # Monitoring configuration
+            f.write("# Monitoring Configuration\n")
+            f.write(f"MONITORING_ENABLED={self.config.get('MONITORING_ENABLED', 'true')}\n")
+            f.write(f"METRICS_RETENTION={self.config.get('METRICS_RETENTION', '30d')}\n")
+            f.write(f"PROMETHEUS_STORAGE_SIZE={self.config.get('PROMETHEUS_STORAGE_SIZE', '20Gi')}\n")
+            f.write(f"GRAFANA_STORAGE_SIZE={self.config.get('GRAFANA_STORAGE_SIZE', '10Gi')}\n\n")
+            
+            # Application hostnames
+            f.write("# Application Hostnames\n")
+            f.write(f"KEYCLOAK_HOSTNAME={self.config.get('KEYCLOAK_HOSTNAME', 'keycloak.noah.local')}\n")
+            f.write(f"GRAFANA_HOSTNAME={self.config.get('GRAFANA_HOSTNAME', 'grafana.noah.local')}\n")
+            f.write(f"GITLAB_HOSTNAME={self.config.get('GITLAB_HOSTNAME', 'gitlab.noah.local')}\n")
+            f.write(f"MATTERMOST_HOSTNAME={self.config.get('MATTERMOST_HOSTNAME', 'mattermost.noah.local')}\n")
+            f.write(f"NEXTCLOUD_HOSTNAME={self.config.get('NEXTCLOUD_HOSTNAME', 'nextcloud.noah.local')}\n")
+            f.write(f"PROMETHEUS_HOSTNAME={self.config.get('PROMETHEUS_HOSTNAME', 'prometheus.noah.local')}\n")
+            f.write(f"ALERTMANAGER_HOSTNAME={self.config.get('ALERTMANAGER_HOSTNAME', 'alertmanager.noah.local')}\n\n")
+            
+            # PostgreSQL configuration
+            f.write("# PostgreSQL Configuration\n")
+            f.write(f"POSTGRESQL_VERSION={self.config.get('POSTGRESQL_VERSION', '15.4.0')}\n")
+            f.write(f"POSTGRESQL_STORAGE_SIZE={self.config.get('POSTGRESQL_STORAGE_SIZE', '20Gi')}\n")
+            f.write(f"POSTGRESQL_DATABASE={self.config.get('POSTGRESQL_DATABASE', 'noah')}\n")
+            f.write(f"POSTGRESQL_USERNAME={self.config.get('POSTGRESQL_USERNAME', 'noah')}\n\n")
+            
+            # Backup configuration
+            f.write("# Backup Configuration\n")
+            f.write(f"BACKUP_ENABLED={self.config.get('BACKUP_ENABLED', 'true')}\n")
+            f.write(f"BACKUP_RETENTION={self.config.get('BACKUP_RETENTION', '30d')}\n")
+            f.write(f"BACKUP_SCHEDULE={self.config.get('BACKUP_SCHEDULE', '0 2 * * *')}\n\n")
+            
+            # Security settings
+            f.write("# Security Settings\n")
+            f.write(f"KEYCLOAK_REALM={self.config.get('KEYCLOAK_REALM', 'noah')}\n")
+            f.write(f"OAUTH2_PROXY_ENABLED={self.config.get('OAUTH2_PROXY_ENABLED', 'true')}\n\n")
             
             # Development settings (only if dev environment)
             if self.env_profile == 'development':
@@ -87,15 +221,23 @@ class NoahConfig:
                     f.write(f"NOAH_TLS_CERT={self.config['NOAH_TLS_CERT']}\n")
                 if 'NOAH_TLS_KEY' in self.config:
                     f.write(f"NOAH_TLS_KEY={self.config['NOAH_TLS_KEY']}\n")
+                f.write("\n")
             
             # Additional settings
             other_keys = set(self.config.keys()) - {
-                'INFRASTRUCTURE_TYPE', 'NOAH_ENV', 'NOAH_DOMAIN', 'NOAH_DEBUG',
-                'SOPS_AGE_KEY_FILE', 'NOAH_TLS_CERT', 'NOAH_TLS_KEY'
+                'INFRASTRUCTURE_TYPE', 'NOAH_ENV', 'CLUSTER_NAME', 'NOAH_DOMAIN', 'INGRESS_IP', 'INGRESS_CLASS',
+                'KUBE_VERSION', 'KUBE_NETWORK_PLUGIN', 'POD_SUBNET', 'SERVICE_SUBNET', 'KUBECONFIG',
+                'NOAH_NAMESPACE', 'MONITORING_NAMESPACE', 'HELM_VERSION', 'CERT_MANAGER_ENABLED', 'TLS_ENABLED',
+                'TLS_MODE', 'LETSENCRYPT_EMAIL', 'STORAGE_CLASS', 'STORAGE_PROVISIONER', 'MONITORING_ENABLED',
+                'METRICS_RETENTION', 'PROMETHEUS_STORAGE_SIZE', 'GRAFANA_STORAGE_SIZE', 'KEYCLOAK_HOSTNAME',
+                'GRAFANA_HOSTNAME', 'GITLAB_HOSTNAME', 'MATTERMOST_HOSTNAME', 'NEXTCLOUD_HOSTNAME',
+                'PROMETHEUS_HOSTNAME', 'ALERTMANAGER_HOSTNAME', 'POSTGRESQL_VERSION', 'POSTGRESQL_STORAGE_SIZE',
+                'POSTGRESQL_DATABASE', 'POSTGRESQL_USERNAME', 'BACKUP_ENABLED', 'BACKUP_RETENTION', 'BACKUP_SCHEDULE',
+                'KEYCLOAK_REALM', 'OAUTH2_PROXY_ENABLED', 'NOAH_DEBUG', 'SOPS_AGE_KEY_FILE', 'NOAH_TLS_CERT', 'NOAH_TLS_KEY'
             }
             
             if other_keys:
-                f.write("\n# Additional Settings\n")
+                f.write("# Additional Settings\n")
                 for key in sorted(other_keys):
                     f.write(f"{key}={self.config[key]}\n")
 
@@ -122,43 +264,204 @@ class NoahConfig:
             f.write(f"# Generated: {datetime.datetime.now().isoformat()}\n")
             f.write(f"# Source this file: source {env_file_path}\n\n")
             
-            # Group variables by category
-            infrastructure_vars = ['INFRASTRUCTURE_TYPE']
-            domain_vars = ['NOAH_DOMAIN', 'NOAH_ENV']
-            security_vars = ['SOPS_AGE_KEY_FILE', 'NOAH_TLS_CERT', 'NOAH_TLS_KEY']
-            debug_vars = ['NOAH_DEBUG']
-            
             # Infrastructure
             f.write("# Infrastructure Configuration\n")
+            infrastructure_vars = ['INFRASTRUCTURE_TYPE', 'NOAH_ENV', 'CLUSTER_NAME']
             for var in infrastructure_vars:
                 if var in env_vars:
                     f.write(f"export {var}={env_vars[var]}\n")
             
-            # Domain and Environment
-            f.write("\n# Domain and Environment\n")
-            for var in domain_vars:
+            # Domain and Networking
+            f.write("\n# Domain and Networking\n")
+            network_vars = ['NOAH_DOMAIN', 'INGRESS_IP', 'INGRESS_CLASS']
+            for var in network_vars:
                 if var in env_vars:
                     f.write(f"export {var}={env_vars[var]}\n")
             
-            # Security (for development)
+            # Kubernetes
+            f.write("\n# Kubernetes Configuration\n")
+            k8s_vars = ['KUBE_VERSION', 'KUBE_NETWORK_PLUGIN', 'POD_SUBNET', 'SERVICE_SUBNET', 'KUBECONFIG']
+            for var in k8s_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Namespaces
+            f.write("\n# Kubernetes Namespaces\n")
+            namespace_vars = ['NOAH_NAMESPACE', 'MONITORING_NAMESPACE']
+            for var in namespace_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Helm
+            f.write("\n# Helm Configuration\n")
+            helm_vars = ['HELM_VERSION']
+            for var in helm_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Certificate management
+            f.write("\n# Certificate Management\n")
+            cert_vars = ['CERT_MANAGER_ENABLED', 'TLS_ENABLED', 'TLS_MODE', 'LETSENCRYPT_EMAIL']
+            for var in cert_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Storage
+            f.write("\n# Storage Configuration\n")
+            storage_vars = ['STORAGE_CLASS', 'STORAGE_PROVISIONER']
+            for var in storage_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Monitoring
+            f.write("\n# Monitoring Configuration\n")
+            monitoring_vars = ['MONITORING_ENABLED', 'METRICS_RETENTION', 'PROMETHEUS_STORAGE_SIZE', 'GRAFANA_STORAGE_SIZE']
+            for var in monitoring_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Application hostnames
+            f.write("\n# Application Hostnames\n")
+            hostname_vars = ['KEYCLOAK_HOSTNAME', 'GRAFANA_HOSTNAME', 'GITLAB_HOSTNAME', 'MATTERMOST_HOSTNAME', 
+                           'NEXTCLOUD_HOSTNAME', 'PROMETHEUS_HOSTNAME', 'ALERTMANAGER_HOSTNAME']
+            for var in hostname_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # PostgreSQL
+            f.write("\n# PostgreSQL Configuration\n")
+            pg_vars = ['POSTGRESQL_VERSION', 'POSTGRESQL_STORAGE_SIZE', 'POSTGRESQL_DATABASE', 'POSTGRESQL_USERNAME']
+            for var in pg_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Backup
+            f.write("\n# Backup Configuration\n")
+            backup_vars = ['BACKUP_ENABLED', 'BACKUP_RETENTION', 'BACKUP_SCHEDULE']
+            for var in backup_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Security
+            f.write("\n# Security Settings\n")
+            security_vars = ['KEYCLOAK_REALM', 'OAUTH2_PROXY_ENABLED']
+            for var in security_vars:
+                if var in env_vars:
+                    f.write(f"export {var}={env_vars[var]}\n")
+            
+            # Development-specific (for development environment only)
             if self.env_profile == 'development':
-                f.write("\n# Security and Certificates\n")
-                for var in security_vars:
-                    if var in env_vars:
-                        f.write(f"export {var}={env_vars[var]}\n")
-                
-                # Debug settings
-                f.write("\n# Debug Settings\n")
-                for var in debug_vars:
+                f.write("\n# Development Settings\n")
+                dev_vars = ['NOAH_DEBUG', 'SOPS_AGE_KEY_FILE', 'NOAH_TLS_CERT', 'NOAH_TLS_KEY']
+                for var in dev_vars:
                     if var in env_vars:
                         f.write(f"export {var}={env_vars[var]}\n")
             
-            # Other variables
-            other_vars = set(env_vars.keys()) - set(infrastructure_vars + domain_vars + security_vars + debug_vars)
+            # Additional variables
+            all_categorized_vars = set([
+                'INFRASTRUCTURE_TYPE', 'NOAH_ENV', 'CLUSTER_NAME', 'NOAH_DOMAIN', 'INGRESS_IP', 'INGRESS_CLASS',
+                'KUBE_VERSION', 'KUBE_NETWORK_PLUGIN', 'POD_SUBNET', 'SERVICE_SUBNET', 'KUBECONFIG',
+                'NOAH_NAMESPACE', 'MONITORING_NAMESPACE', 'HELM_VERSION', 'CERT_MANAGER_ENABLED', 'TLS_ENABLED',
+                'TLS_MODE', 'LETSENCRYPT_EMAIL', 'STORAGE_CLASS', 'STORAGE_PROVISIONER', 'MONITORING_ENABLED',
+                'METRICS_RETENTION', 'PROMETHEUS_STORAGE_SIZE', 'GRAFANA_STORAGE_SIZE', 'KEYCLOAK_HOSTNAME',
+                'GRAFANA_HOSTNAME', 'GITLAB_HOSTNAME', 'MATTERMOST_HOSTNAME', 'NEXTCLOUD_HOSTNAME',
+                'PROMETHEUS_HOSTNAME', 'ALERTMANAGER_HOSTNAME', 'POSTGRESQL_VERSION', 'POSTGRESQL_STORAGE_SIZE',
+                'POSTGRESQL_DATABASE', 'POSTGRESQL_USERNAME', 'BACKUP_ENABLED', 'BACKUP_RETENTION', 'BACKUP_SCHEDULE',
+                'KEYCLOAK_REALM', 'OAUTH2_PROXY_ENABLED', 'NOAH_DEBUG', 'SOPS_AGE_KEY_FILE', 'NOAH_TLS_CERT', 'NOAH_TLS_KEY'
+            ])
+            
+            other_vars = set(env_vars.keys()) - all_categorized_vars
             if other_vars:
                 f.write("\n# Additional Variables\n")
                 for var in sorted(other_vars):
                     f.write(f"export {var}={env_vars[var]}\n")
+
+    def sync_with_ansible_vars(self):
+        """Sync configuration with Ansible global variables"""
+        global_vars_file = Path("ansible/vars/global.yml")
+        if not global_vars_file.exists():
+            return False
+        
+        try:
+            # Read current Ansible vars
+            with open(global_vars_file, 'r') as f:
+                ansible_vars = yaml.safe_load(f) or {}
+            
+            # Update Ansible vars with NOAH config
+            ansible_vars.update({
+                'domain_name': self.config.get('NOAH_DOMAIN', 'noah.local'),
+                'ingress_ip': self.config.get('INGRESS_IP', '127.0.0.1'),
+                'ingress_class': self.config.get('INGRESS_CLASS', 'nginx'),
+                'cluster_name': self.config.get('CLUSTER_NAME', 'noah-cluster'),
+                'kube_version': self.config.get('KUBE_VERSION', 'v1.28.2'),
+                'kube_network_plugin': self.config.get('KUBE_NETWORK_PLUGIN', 'calico'),
+                'pod_subnet': self.config.get('POD_SUBNET', '10.233.64.0/18'),
+                'service_subnet': self.config.get('SERVICE_SUBNET', '10.233.0.0/18'),
+                'storage_class': self.config.get('STORAGE_CLASS', 'local-storage'),
+                'storage_provisioner': self.config.get('STORAGE_PROVISIONER', 'kubernetes.io/no-provisioner'),
+                'cert_manager_enabled': self.config.get('CERT_MANAGER_ENABLED', 'true').lower() == 'true',
+                'tls_enabled': self.config.get('TLS_ENABLED', 'true').lower() == 'true',
+                'tls_mode': self.config.get('TLS_MODE', 'letsencrypt'),
+                'letsencrypt_email': self.config.get('LETSENCRYPT_EMAIL', 'admin@noah.local'),
+                'monitoring_enabled': self.config.get('MONITORING_ENABLED', 'true').lower() == 'true',
+                'metrics_retention': self.config.get('METRICS_RETENTION', '30d'),
+                'backup_enabled': self.config.get('BACKUP_ENABLED', 'true').lower() == 'true',
+                'backup_retention': self.config.get('BACKUP_RETENTION', '30d'),
+                'backup_schedule': self.config.get('BACKUP_SCHEDULE', '0 2 * * *'),
+            })
+            
+            # Update namespace structure
+            ansible_vars['namespaces'] = [
+                {
+                    'name': self.config.get('NOAH_NAMESPACE', 'noah'),
+                    'labels': {'environment': self.env_profile}
+                },
+                {
+                    'name': self.config.get('MONITORING_NAMESPACE', 'monitoring'),
+                    'labels': {'environment': self.env_profile}
+                }
+            ]
+            
+            # Update application hostnames
+            if 'applications' not in ansible_vars:
+                ansible_vars['applications'] = {}
+            
+            apps_hostnames = {
+                'keycloak': self.config.get('KEYCLOAK_HOSTNAME', 'keycloak.noah.local'),
+                'grafana': self.config.get('GRAFANA_HOSTNAME', 'grafana.noah.local'),
+                'gitlab': self.config.get('GITLAB_HOSTNAME', 'gitlab.noah.local'),
+                'mattermost': self.config.get('MATTERMOST_HOSTNAME', 'mattermost.noah.local'),
+                'nextcloud': self.config.get('NEXTCLOUD_HOSTNAME', 'nextcloud.noah.local'),
+                'prometheus': self.config.get('PROMETHEUS_HOSTNAME', 'prometheus.noah.local'),
+            }
+            
+            for app, hostname in apps_hostnames.items():
+                if app not in ansible_vars['applications']:
+                    ansible_vars['applications'][app] = {}
+                ansible_vars['applications'][app]['hostname'] = hostname
+                ansible_vars['applications'][app]['enabled'] = True
+            
+            # Update PostgreSQL configuration
+            if 'postgresql' not in ansible_vars['applications']:
+                ansible_vars['applications']['postgresql'] = {}
+            
+            ansible_vars['applications']['postgresql'].update({
+                'version': self.config.get('POSTGRESQL_VERSION', '15.4.0'),
+                'storage_size': self.config.get('POSTGRESQL_STORAGE_SIZE', '20Gi'),
+                'database': self.config.get('POSTGRESQL_DATABASE', 'noah'),
+                'username': self.config.get('POSTGRESQL_USERNAME', 'noah'),
+                'enabled': True
+            })
+            
+            # Write back to Ansible vars
+            with open(global_vars_file, 'w') as f:
+                yaml.dump(ansible_vars, f, default_flow_style=False, sort_keys=True)
+            
+            return True
+            
+        except Exception as e:
+            console.print(f"[red]❌ Error syncing with Ansible vars: {e}[/red]")
+            return False
 
     def set_development_mode(self, domain: str = "noah.local"):
         """Configure for development environment"""
@@ -168,7 +471,15 @@ class NoahConfig:
             'NOAH_DEBUG': 'true',
             'SOPS_AGE_KEY_FILE': str(Path.cwd() / 'age' / 'keys.txt'),
             'NOAH_TLS_CERT': str(Path.cwd() / 'certs' / 'tls.crt'),
-            'NOAH_TLS_KEY': str(Path.cwd() / 'certs' / 'tls.key')
+            'NOAH_TLS_KEY': str(Path.cwd() / 'certs' / 'tls.key'),
+            # Update all hostnames for development domain
+            'KEYCLOAK_HOSTNAME': f"keycloak.{domain}",
+            'GRAFANA_HOSTNAME': f"grafana.{domain}",
+            'GITLAB_HOSTNAME': f"gitlab.{domain}",
+            'MATTERMOST_HOSTNAME': f"mattermost.{domain}",
+            'NEXTCLOUD_HOSTNAME': f"nextcloud.{domain}",
+            'PROMETHEUS_HOSTNAME': f"prometheus.{domain}",
+            'ALERTMANAGER_HOSTNAME': f"alertmanager.{domain}",
         })
         self.env_profile = 'development'
 
@@ -697,14 +1008,64 @@ def dev_setup(ctx, domain, force):
 @click.option('--domain', help='Set domain name')
 @click.option('--show', is_flag=True, help='Show current configuration')
 @click.option('--export-env', is_flag=True, help='Export environment variables file')
+@click.option('--set', 'set_var', help='Set a configuration variable (format: KEY=VALUE)')
+@click.option('--get', 'get_var', help='Get a configuration variable value')
+@click.option('--list-k8s', is_flag=True, help='List all Kubernetes-related variables')
 @click.pass_context
-def config_cmd(ctx, env, domain, show, export_env):
+def config_cmd(ctx, env, domain, show, export_env, set_var, get_var, list_k8s):
     """Manage NOAH configuration
     
     Unified configuration management for NOAH platform.
     Harmonizes .noah_config and environment variables.
+    
+    Examples:
+        noah config --set GRAFANA_HOSTNAME=grafana.example.com
+        noah config --get KUBECONFIG
+        noah config --list-k8s
+        noah config --export-env
     """
     config = ctx.obj['config']
+    
+    if get_var:
+        # Get specific variable
+        value = config.config.get(get_var, 'Not set')
+        console.print(f"[cyan]{get_var}[/cyan] = [green]{value}[/green]")
+        return
+    
+    if set_var:
+        # Set specific variable
+        if '=' not in set_var:
+            console.print("[red]❌ Invalid format. Use: KEY=VALUE[/red]")
+            return
+        
+        key, value = set_var.split('=', 1)
+        config.config[key.strip()] = value.strip()
+        config.save_config()
+        console.print(f"[green]✅ Set {key} = {value}[/green]")
+        return
+    
+    if list_k8s:
+        # List Kubernetes-related configuration
+        console.print("[cyan]🔧 Kubernetes Configuration Variables:[/cyan]\n")
+        
+        k8s_categories = {
+            "Cluster": ["KUBE_VERSION", "KUBE_NETWORK_PLUGIN", "POD_SUBNET", "SERVICE_SUBNET", "CLUSTER_NAME", "KUBECONFIG"],
+            "Namespaces": ["NOAH_NAMESPACE", "MONITORING_NAMESPACE"],
+            "Certificates": ["CERT_MANAGER_ENABLED", "TLS_ENABLED", "TLS_MODE", "LETSENCRYPT_EMAIL"],
+            "Helm": ["HELM_VERSION"],
+            "Storage": ["STORAGE_CLASS", "STORAGE_PROVISIONER"],
+            "Monitoring": ["MONITORING_ENABLED", "METRICS_RETENTION", "PROMETHEUS_STORAGE_SIZE", "GRAFANA_STORAGE_SIZE"],
+            "Hostnames": ["KEYCLOAK_HOSTNAME", "GRAFANA_HOSTNAME", "GITLAB_HOSTNAME", "MATTERMOST_HOSTNAME", 
+                         "NEXTCLOUD_HOSTNAME", "PROMETHEUS_HOSTNAME", "ALERTMANAGER_HOSTNAME"]
+        }
+        
+        for category, vars_list in k8s_categories.items():
+            console.print(f"[yellow]{category}:[/yellow]")
+            for var in vars_list:
+                value = config.config.get(var, 'Not set')
+                console.print(f"  [cyan]{var}[/cyan] = [green]{value}[/green]")
+            console.print()
+        return
     
     if show:
         # Show current configuration
@@ -733,14 +1094,34 @@ def config_cmd(ctx, env, domain, show, export_env):
     
     if domain and not env:
         config.config['NOAH_DOMAIN'] = domain
+        # Update all hostname variables to use new domain
+        base_domain = domain
+        config.config['KEYCLOAK_HOSTNAME'] = f"keycloak.{base_domain}"
+        config.config['GRAFANA_HOSTNAME'] = f"grafana.{base_domain}"
+        config.config['GITLAB_HOSTNAME'] = f"gitlab.{base_domain}"
+        config.config['MATTERMOST_HOSTNAME'] = f"mattermost.{base_domain}"
+        config.config['NEXTCLOUD_HOSTNAME'] = f"nextcloud.{base_domain}"
+        config.config['PROMETHEUS_HOSTNAME'] = f"prometheus.{base_domain}"
+        config.config['ALERTMANAGER_HOSTNAME'] = f"alertmanager.{base_domain}"
+        
         config.save_config()
         console.print(f"[green]✅ Domain set to: {domain}[/green]")
+        console.print(f"[blue]📡 Updated application hostnames automatically[/blue]")
     
     if export_env:
         env_file = Path(f".env.{config.env_profile}")
         config.write_env_file(env_file)
         console.print(f"[green]✅ Environment variables exported to: {env_file}[/green]")
         console.print(f"[yellow]💡 To use: source {env_file}[/yellow]")
+        
+        # Also update Ansible variables
+        global_vars_file = Path("ansible/vars/global.yml")
+        if global_vars_file.exists():
+            console.print(f"[blue]🔄 Updating Ansible global variables...[/blue]")
+            if config.sync_with_ansible_vars():
+                console.print(f"[green]✅ Ansible variables synchronized[/green]")
+            else:
+                console.print(f"[yellow]⚠️  Failed to sync some Ansible variables[/yellow]")
 
 
 @cli.command()

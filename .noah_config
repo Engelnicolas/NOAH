@@ -1,0 +1,74 @@
+# NOAH Platform Configuration
+# Generated: 2025-08-15T04:27:34.388203
+# Environment: development
+
+# Infrastructure Configuration
+INFRASTRUCTURE_TYPE=kubernetes
+NOAH_ENV=development
+CLUSTER_NAME=noah-cluster
+
+# Domain and Networking
+NOAH_DOMAIN=noah.local
+INGRESS_IP=127.0.0.1
+INGRESS_CLASS=nginx
+
+# Kubernetes Configuration
+KUBE_VERSION=v1.28.2
+KUBE_NETWORK_PLUGIN=calico
+POD_SUBNET=10.233.64.0/18
+SERVICE_SUBNET=10.233.0.0/18
+KUBECONFIG=/root/.kube/config
+
+# Kubernetes Namespaces
+NOAH_NAMESPACE=noah
+MONITORING_NAMESPACE=monitoring
+
+# Helm Configuration
+HELM_VERSION=3.13.2
+
+# Certificate Management
+CERT_MANAGER_ENABLED=true
+TLS_ENABLED=true
+TLS_MODE=letsencrypt
+LETSENCRYPT_EMAIL=admin@example.com
+
+# Storage Configuration
+STORAGE_CLASS=local-storage
+STORAGE_PROVISIONER=kubernetes.io/no-provisioner
+
+# Monitoring Configuration
+MONITORING_ENABLED=true
+METRICS_RETENTION=30d
+PROMETHEUS_STORAGE_SIZE=20Gi
+GRAFANA_STORAGE_SIZE=10Gi
+
+# Application Hostnames
+KEYCLOAK_HOSTNAME=keycloak.noah.local
+GRAFANA_HOSTNAME=grafana.noah.local
+GITLAB_HOSTNAME=gitlab.noah.local
+MATTERMOST_HOSTNAME=mattermost.noah.local
+NEXTCLOUD_HOSTNAME=nextcloud.noah.local
+PROMETHEUS_HOSTNAME=prometheus.noah.local
+ALERTMANAGER_HOSTNAME=alertmanager.noah.local
+
+# PostgreSQL Configuration
+POSTGRESQL_VERSION=15.4.0
+POSTGRESQL_STORAGE_SIZE=20Gi
+POSTGRESQL_DATABASE=noah
+POSTGRESQL_USERNAME=noah
+
+# Backup Configuration
+BACKUP_ENABLED=true
+BACKUP_RETENTION=30d
+BACKUP_SCHEDULE=0 2 * * *
+
+# Security Settings
+KEYCLOAK_REALM=noah
+OAUTH2_PROXY_ENABLED=true
+
+# Development Settings
+NOAH_DEBUG=true
+SOPS_AGE_KEY_FILE=/root/NOAH/age/keys.txt
+NOAH_TLS_CERT=/root/NOAH/certs/tls.crt
+NOAH_TLS_KEY=/root/NOAH/certs/tls.key
+

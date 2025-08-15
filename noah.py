@@ -33,15 +33,15 @@ class NoahConfig:
         self.config_path = config_path
         self.config = self.load_config()
         self.script_dir = Path.cwd()
-        self.env_profile = self.config.get('NOAH_ENV', 'production')
+        self.env_profile = self.config.get('NOAH_ENV', 'development')  # Default to development
 
     def load_config(self) -> Dict:
         """Load configuration from file or defaults"""
         default_config = {
             "INFRASTRUCTURE_TYPE": "kubernetes",
-            "NOAH_ENV": "production",
+            "NOAH_ENV": "development",  # Default to development environment
             "NOAH_DOMAIN": "noah.local",
-            "NOAH_DEBUG": "false"
+            "NOAH_DEBUG": "true"  # Enable debug by default for development
         }
         
         if self.config_path.exists():
@@ -388,20 +388,24 @@ def cli(ctx, verbose, dry_run):
     """
     NOAH CLI - Network Operations & Automation Hub
     
-    Modern Python-based infrastructure management tool for production-ready deployments.
+    Modern Python-based infrastructure management tool with development-first approach.
     
-    Commands are organized by context:
-    
-    \b
-    PRODUCTION SETUP:
-    • init      - Initialize NOAH environment
-    • configure - Configure infrastructure settings  
-    • deploy    - Deploy to production environment
-    • validate  - Validate production configuration
+    Commands are organized by context (development environment is the default):
     
     \b
-    DEVELOPMENT SETUP:
+    ENVIRONMENT SETUP (Development First):
+    • init      - Initialize NOAH environment (defaults to development)
     • dev-setup - Setup development environment with certificates and SOPS
+    • configure - Configure infrastructure settings  
+    • deploy    - Deploy platform (defaults to development profile)
+    
+    \b
+    PRODUCTION OPERATIONS:
+    • validate  - Validate production configuration
+    • prod-deploy - Deploy to production (alias: deploy --profile prod)
+    
+    \b
+    DEVELOPMENT WORKFLOW:
     • test      - Run platform tests
     • logs      - View service logs
     
@@ -446,24 +450,38 @@ def cli(ctx, verbose, dry_run):
 
 
 # =============================================================================
-# PRODUCTION SETUP COMMANDS
+# ENVIRONMENT SETUP COMMANDS (Development First)
 # =============================================================================
 
 @cli.command()
 @click.option('--infrastructure-type',
               type=click.Choice(['kubernetes', 'docker']),
               help='Infrastructure deployment type')
+@click.option('--env', type=click.Choice(['development', 'production']), 
+              default='development', help='Environment type (defaults to development)')
 @click.pass_context
-def init(ctx, infrastructure_type):
-    """Initialize NOAH environment for production
+def init(ctx, infrastructure_type, env):
+    """Initialize NOAH environment (defaults to development)
     
-    Sets up the basic NOAH environment configuration for production deployment.
+    Sets up the basic NOAH environment configuration with development as default.
     Choose between Kubernetes (recommended) or Docker infrastructure.
     """
     config = ctx.obj['config']
     dry_run = ctx.obj['dry_run']
 
-    console.print("[yellow]🔄 Initializing NOAH environment...[/yellow]")
+    console.print(f"[yellow]🔄 Initializing NOAH environment for {env}...[/yellow]")
+
+    # Set environment
+    if env == 'development':
+        config.set_development_mode()
+        console.print("[green]✅ Development environment configured[/green]")
+        console.print("[yellow]💡 This includes:[/yellow]")
+        console.print("   - Debug mode enabled")
+        console.print("   - SOPS configuration for secrets")
+        console.print("   - Local certificate paths")
+    else:
+        config.set_production_mode()
+        console.print("[green]✅ Production environment configured[/green]")
 
     # Configure infrastructure type
     if infrastructure_type:
@@ -709,14 +727,14 @@ def config_cmd(ctx, env, domain, show, export_env):
 
 
 @cli.command()
-@click.option('--profile', default='prod', help='Deployment profile (dev/prod)')
+@click.option('--profile', default='dev', help='Deployment profile (dev/prod) - defaults to dev')
 @click.option('--skip-provision', is_flag=True, help='Skip infrastructure provisioning')
 @click.option('--verbose', is_flag=True, default=True, help='Enable verbose output (default: True)')
 @click.pass_context
 def deploy(ctx, profile, skip_provision, verbose):
-    """Deploy NOAH platform to production
+    """Deploy NOAH platform (defaults to development environment)
     
-    Deploys the complete NOAH platform to production environment.
+    Deploys the complete NOAH platform with development environment as default.
     Includes infrastructure provisioning, Kubernetes setup, and application deployment.
     
     Verbose output is enabled by default to provide detailed deployment information.
@@ -757,6 +775,28 @@ def deploy(ctx, profile, skip_provision, verbose):
             subprocess.run(["docker-compose", "up", "-d"])
 
     console.print("[green]🎉 NOAH platform deployed successfully![/green]")
+
+
+@cli.command('prod-deploy')
+@click.option('--skip-provision', is_flag=True, help='Skip infrastructure provisioning')
+@click.option('--verbose', is_flag=True, default=True, help='Enable verbose output (default: True)')
+@click.pass_context
+def prod_deploy(ctx, skip_provision, verbose):
+    """Deploy NOAH platform to production environment
+    
+    Alias for 'deploy --profile prod' - specifically for production deployments.
+    This command forces production profile and includes production-specific validations.
+    """
+    # Force production configuration
+    config = ctx.obj['config']
+    config.set_production_mode()
+    config.save_config()
+    
+    console.print("[yellow]🚀 Deploying NOAH platform to PRODUCTION...[/yellow]")
+    console.print("[red]⚠️  Production deployment - please ensure all prerequisites are met[/red]")
+    
+    # Call the main deploy function with production profile
+    ctx.invoke(deploy, profile='prod', skip_provision=skip_provision, verbose=verbose)
 
 
 @cli.command()

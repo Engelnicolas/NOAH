@@ -447,10 +447,12 @@ export NOAH_TLS_KEY={self.cert_dir}/tls.key
             f"[bold]Certificates:[/bold] {self.cert_dir}/\n"
             f"[bold]Age Keys:[/bold] {self.age_dir}/\n"
             f"[bold]Encrypted Secrets:[/bold] {self.ansible_vars_dir}/secrets.yml\n\n"
+            "[bold cyan]NOAH configured for development by default![/bold cyan]\n\n"
             "[bold cyan]Next Steps:[/bold cyan]\n"
-            "1. Source environment: [cyan]source .env.dev[/cyan]\n"
+            "1. Source environment: [cyan]source .env.development[/cyan]\n"
             "2. Edit secrets: [cyan]sops ansible/vars/secrets.yml[/cyan]\n"
-            "3. Run deployment: [cyan]./noah.py deploy --env dev[/cyan]",
+            "3. Deploy (dev default): [cyan]./noah.py deploy[/cyan]\n"
+            "4. Or deploy explicitly: [cyan]./noah.py deploy --profile dev[/cyan]",
             title="🚀 NOAH Dev Environment Ready"
         ))
     

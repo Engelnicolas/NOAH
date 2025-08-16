@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class NoahOAuth2Manager:
     """OAuth2 configuration and management for NOAH"""
     
-    def __init__(self, namespace: str = "noah-namespace", keycloak_service: str = None):
+    def __init__(self, namespace: str = "noah-namespace", keycloak_service: Optional[str] = None):
         self.namespace = namespace
         self.keycloak_service = keycloak_service or f"noah-keycloak"
         self.keycloak_url = f"http://{self.keycloak_service}:8080"
@@ -68,7 +68,7 @@ class NoahOAuth2Manager:
             'client-secret': client_secret
         }
     
-    def create_or_update_k8s_secret(self, secrets_data: Dict[str, str], secret_name: str = None) -> bool:
+    def create_or_update_k8s_secret(self, secrets_data: Dict[str, str], secret_name: Optional[str] = None) -> bool:
         """Create or update Kubernetes secret"""
         if not secret_name:
             secret_name = "oauth2-proxy-secrets"
@@ -233,14 +233,15 @@ class NoahOAuth2Manager:
             logger.error(f"Error creating client: {e}")
             return False
     
-    def setup_keycloak_complete(self, client_secret: str = None) -> bool:
+    def setup_keycloak_complete(self, client_secret: Optional[str] = None) -> bool:
         """Complete Keycloak setup with realm and client"""
         if not client_secret:
             # Try to get existing client secret
-            client_secret = self.get_secret_value("oauth2-proxy-secrets", "client-secret")
-            if not client_secret:
+            retrieved_secret = self.get_secret_value("oauth2-proxy-secrets", "client-secret")
+            if not retrieved_secret:
                 logger.error("No client secret provided and none found in Kubernetes")
                 return False
+            client_secret = retrieved_secret
         
         # Setup port forward
         pf_process = self.setup_port_forward()

@@ -55,6 +55,10 @@ class NoahCLI:
             logger.error("Failed to initialize managers")
             return 1
         
+        # Type assertions for Pylance - we know these are not None after successful init
+        assert self.helm_manager is not None
+        assert self.oauth2_manager is not None
+        
         try:
             # Step 1: Generate OAuth2 secrets
             logger.info("Step 1: Generating OAuth2 secrets...")
@@ -91,11 +95,12 @@ class NoahCLI:
     
     def cmd_status(self, args):
         """Get deployment status"""
-        self.init_managers(args.namespace)
-        
-        if not self.helm_manager:
-            logger.error("Failed to initialize Helm manager")
+        if not self.init_managers(args.namespace):
+            logger.error("Failed to initialize managers")
             return 1
+        
+        # Type assertion for Pylance
+        assert self.helm_manager is not None
         
         logger.info("Getting NOAH platform status...")
         status = self.helm_manager.get_deployment_status()
@@ -117,11 +122,12 @@ class NoahCLI:
     
     def cmd_secrets(self, args):
         """Manage OAuth2 secrets"""
-        self.init_managers(args.namespace)
-        
-        if not self.oauth2_manager:
-            logger.error("Failed to initialize OAuth2 manager")
+        if not self.init_managers(args.namespace):
+            logger.error("Failed to initialize managers")
             return 1
+        
+        # Type assertion for Pylance
+        assert self.oauth2_manager is not None
         
         if args.regenerate:
             logger.info("Regenerating OAuth2 secrets...")
@@ -145,11 +151,12 @@ class NoahCLI:
     
     def cmd_keycloak(self, args):
         """Manage Keycloak configuration"""
-        self.init_managers(args.namespace)
-        
-        if not self.oauth2_manager:
-            logger.error("Failed to initialize OAuth2 manager")
+        if not self.init_managers(args.namespace):
+            logger.error("Failed to initialize managers")
             return 1
+        
+        # Type assertion for Pylance
+        assert self.oauth2_manager is not None
         
         if self.oauth2_manager.setup_keycloak_complete():
             logger.info("✅ Keycloak setup completed")

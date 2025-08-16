@@ -38,8 +38,115 @@ postgresql:
   database: "noah"
   username: "noah"
 
-# Keycloak configuration (for reference)
+# Keycloak configuration
 keycloak:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: quay.io/keycloak/keycloak
+    tag: "22.0"
+    pullPolicy: IfNotPresent
+  
+  port: 8080
+  
+  args:
+    - start-dev
+    - --http-enabled=true
+    - --http-host=0.0.0.0
+    - --http-port=8080
+    - --hostname-strict=false
+    - --hostname-strict-https=false
+  
+  env:
+    KEYCLOAK_ADMIN: admin
+    KEYCLOAK_ADMIN_PASSWORD: admin
+    KC_PROXY: edge
+    KC_HOSTNAME_STRICT: "false"
+    KC_HOSTNAME_STRICT_HTTPS: "false"
+    KC_HTTP_ENABLED: "true"
+  
+  service:
+    type: ClusterIP
+    port: 8080
+  
+  readinessProbe:
+    path: /
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+  
+  livenessProbe:
+    path: /
+    initialDelaySeconds: 120
+    periodSeconds: 30
+    timeoutSeconds: 5
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  
+  realmConfig:
+    realm: noah
+    enabled: true
+    sslRequired: none
+    displayName: "NOAH Realm"
+    registrationAllowed: true
+    loginWithEmailAllowed: true
+    duplicateEmailsAllowed: false
+
+# OAuth2 Proxy configuration
+oauth2proxy:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: quay.io/oauth2-proxy/oauth2-proxy
+    tag: "v7.5.0"
+    pullPolicy: IfNotPresent
+  
+  port: 4180
+  
+  # OAuth2 Provider settings
+  provider: oidc
+  clientId: oauth2-proxy
+  emailDomain: "*"
+  
+  # OIDC settings
+  oidc:
+    issuerUrl: http://noah-noah-chart-keycloak.noah-namespace.svc.cluster.local:8080/realms/noah
+  
+  # Upstream application
+  upstream: http://noah-app-service:5000/
+  
+  # Security settings
+  cookieSecure: false
+  skipProviderButton: true
+  insecureOidc: true
+  sslInsecure: true
+  skipOidcDiscovery: false
+  
+  # URLs
+  redirectUrl: http://localhost:4180/oauth2/callback
+  
+  service:
+    type: ClusterIP
+    port: 4180
+  
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 64Mi
+
+# Keycloak configuration (for reference)
+keycloak_legacy:
   enabled: false
   hostname: "keycloak.noah.local"
 

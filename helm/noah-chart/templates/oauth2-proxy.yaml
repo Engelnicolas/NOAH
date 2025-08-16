@@ -1,0 +1,5 @@
+{{- if .Values.oauth2proxy.enabled }}
+{{ include "noah-common.oauth2.deployment" . }}
+---
+{{ include "noah-common.oauth2.service" . }}
+{{- end }}

@@ -1,0 +1,7 @@
+{{- if .Values.keycloak.enabled }}
+{{ include "noah-common.keycloak.deployment" . }}
+---
+{{ include "noah-common.keycloak.service" . }}
+---
+{{ include "noah-common.keycloak.configmap" . }}
+{{- end }}

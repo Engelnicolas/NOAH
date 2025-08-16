@@ -29,6 +29,21 @@ Create a default fully qualified app name.
 {{- end }}
 
 {{/*
+noah-common aliases for compatibility
+*/}}
+{{- define "noah-common.name" -}}
+{{- include "noah.name" . }}
+{{- end }}
+
+{{- define "noah-common.fullname" -}}
+{{- include "noah.fullname" . }}
+{{- end }}
+
+{{- define "noah-common.labels" -}}
+{{- include "noah.labels" . }}
+{{- end }}
+
+{{/*
 Create chart name and version as used by the chart label.
 */}}
 {{- define "noah.chart" -}}

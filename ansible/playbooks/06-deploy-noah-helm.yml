@@ -1,0 +1,93 @@
+---
+# NOAH Helm Deployment Ansible Role
+# This role integrates the Python Helm manager with Ansible workflows
+
+- name: "NOAH Helm Deployment"
+  hosts: kube_control_plane[0]
+  become: true
+  vars:
+    noah_namespace: "noah-namespace"
+    noah_chart_path: "helm/noah-chart"
+    noah_python_scripts_path: "/root/NOAH/script"
+    
+  tasks:
+    - name: Install Python dependencies for NOAH scripts
+      pip:
+        requirements: "{{ noah_python_scripts_path }}/requirements.txt"
+        state: present
+      delegate_to: localhost
+      run_once: true
+    
+    - name: Install additional Python packages for NOAH management
+      pip:
+        name:
+          - requests
+          - pyyaml
+        state: present
+      delegate_to: localhost
+      run_once: true
+    
+    - name: Generate OAuth2 secrets using Python module
+      script: "{{ noah_python_scripts_path }}/noah_oauth2_manager.py --action generate-secrets --namespace {{ noah_namespace }}"
+      register: oauth2_secrets_result
+      delegate_to: localhost
+      run_once: true
+    
+    - name: Display OAuth2 secrets generation result
+      debug:
+        var: oauth2_secrets_result.stdout_lines
+    
+    - name: Deploy NOAH using Helm via Python module
+      script: "{{ noah_python_scripts_path }}/noah_helm_manager.py --action deploy --namespace {{ noah_namespace }} --chart-path {{ noah_chart_path }}"
+      register: helm_deploy_result
+      delegate_to: localhost
+      run_once: true
+    
+    - name: Display Helm deployment result
+      debug:
+        var: helm_deploy_result.stdout_lines
+    
+    - name: Wait for Keycloak to be ready
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ noah_namespace }}"
+        label_selectors:
+          - "app.kubernetes.io/name=keycloak"
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+      delegate_to: localhost
+      run_once: true
+    
+    - name: Setup Keycloak realm and OAuth2 client
+      script: "{{ noah_python_scripts_path }}/noah_oauth2_manager.py --action setup-keycloak --namespace {{ noah_namespace }}"
+      register: keycloak_setup_result
+      delegate_to: localhost
+      run_once: true
+    
+    - name: Display Keycloak setup result
+      debug:
+        var: keycloak_setup_result.stdout_lines
+    
+    - name: Verify deployment status
+      script: "{{ noah_python_scripts_path }}/noah_helm_manager.py --action verify --namespace {{ noah_namespace }}"
+      register: verify_result
+      delegate_to: localhost
+      run_once: true
+    
+    - name: Display verification result
+      debug:
+        var: verify_result.stdout_lines
+    
+    - name: Get final deployment status
+      script: "{{ noah_python_scripts_path }}/noah_helm_manager.py --action status --namespace {{ noah_namespace }}"
+      register: status_result
+      delegate_to: localhost
+      run_once: true
+    
+    - name: Display final status
+      debug:
+        msg: "NOAH deployment completed. Check logs above for details."

@@ -6,7 +6,7 @@
     cluster_name: "{{ cluster_name | default('noah-cluster') }}"
     
   tasks:
-    - name: Ensure required tools are installed
+    - name: Ensure required system packages are installed
       package:
         name: "{{ item }}"
         state: present
@@ -15,8 +15,40 @@
         - helm
         - age
         - sops
+        - python3
+        - python3-pip
+        - python3-venv
       become: yes
       when: ansible_os_family == "Debian"
+
+    - name: Check if virtual environment exists
+      stat:
+        path: ./.venv
+      register: venv_exists
+
+    - name: Create Python virtual environment
+      command: python3 -m venv .venv
+      when: not venv_exists.stat.exists
+
+    - name: Install Python dependencies from Scripts/requirements.txt
+      pip:
+        requirements: ./Scripts/requirements.txt
+        virtualenv: ./.venv
+        virtualenv_command: python3 -m venv
+      vars:
+        ansible_python_interpreter: ./.venv/bin/python
+
+    - name: Verify NOAH CLI functionality
+      shell: |
+        export PYTHONPATH=$(pwd):$PYTHONPATH
+        ./.venv/bin/python noah.py --help
+      register: noah_cli_test
+      failed_when: noah_cli_test.rc != 0
+
+    - name: Display NOAH CLI verification result
+      debug:
+        msg: "NOAH CLI is functional and ready for deployment"
+      when: noah_cli_test.rc == 0
 
     - name: Create cluster namespaces
       kubernetes.core.k8s:
@@ -104,7 +136,11 @@
     - name: Display cluster creation summary
       debug:
         msg:
-          - "Cluster {{ cluster_name }} initialized"
+          - "Cluster {{ cluster_name }} initialized successfully"
+          - "Python virtual environment: ./.venv created"
+          - "NOAH dependencies installed from Scripts/requirements.txt"
+          - "NOAH CLI verified and functional"
           - "Age public key: {{ age_public_key.stdout }}"
           - "Namespaces created: identity, cilium-system"
           - "CA certificate generated"
+          - "Cluster ready for NOAH service deployment"

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: authentik
+description: A Helm chart for Authentik - Identity Provider for SSO with Samba 4 integration
+type: application
+version: 0.1.0
+appVersion: "2023.10.5"
+dependencies:
+  - name: postgresql
+    version: "13.2.24"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.6.1"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

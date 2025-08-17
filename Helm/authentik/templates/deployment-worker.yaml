@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "authentik.fullname" . }}-worker
+  labels:
+    {{- include "authentik.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "authentik.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "authentik.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+      - name: worker
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - worker
+        env:
+        - name: AUTHENTIK_REDIS__HOST
+          value: "{{ include "authentik.redis.host" . }}"
+        - name: AUTHENTIK_REDIS__PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "authentik.fullname" . }}-secret
+              key: redis-password
+        - name: AUTHENTIK_POSTGRESQL__HOST
+          value: "{{ include "authentik.postgresql.host" . }}"
+        - name: AUTHENTIK_POSTGRESQL__NAME
+          value: "{{ .Values.postgresql.auth.database }}"
+        - name: AUTHENTIK_POSTGRESQL__USER
+          value: "{{ .Values.postgresql.auth.username }}"
+        - name: AUTHENTIK_POSTGRESQL__PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "authentik.fullname" . }}-secret
+              key: postgresql-password
+        - name: AUTHENTIK_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "authentik.fullname" . }}-secret
+              key: secret-key
+        - name: AUTHENTIK_ERROR_REPORTING__ENABLED
+          value: "{{ .Values.authentik.errorReporting.enabled }}"
+        - name: AUTHENTIK_LOG_LEVEL
+          value: "{{ .Values.authentik.logLevel }}"
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

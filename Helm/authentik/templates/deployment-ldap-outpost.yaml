@@ -1,0 +1,59 @@
+{{- if .Values.authentik.outposts.ldap.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "authentik.fullname" . }}-ldap-outpost
+  labels:
+    {{- include "authentik.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ldap-outpost
+spec:
+  replicas: {{ .Values.authentik.outposts.ldap.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "authentik.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ldap-outpost
+  template:
+    metadata:
+      labels:
+        {{- include "authentik.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ldap-outpost
+    spec:
+      containers:
+      - name: ldap-outpost
+        image: ghcr.io/goauthentik/ldap:2023.10.5
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        - name: AUTHENTIK_HOST
+          value: "http://{{ include "authentik.fullname" . }}-server:{{ .Values.service.port }}"
+        - name: AUTHENTIK_INSECURE
+          value: "false"
+        - name: AUTHENTIK_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "authentik.fullname" . }}-secret
+              key: outpost-token
+        ports:
+        - name: ldap
+          containerPort: 3389
+          protocol: TCP
+        - name: ldaps
+          containerPort: 6636
+          protocol: TCP
+        livenessProbe:
+          tcpSocket:
+            port: ldap
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: ldap
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+{{- end }}

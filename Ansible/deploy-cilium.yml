@@ -1,0 +1,120 @@
+---
+- name: Deploy Cilium CNI with SSO Integration
+  hosts: localhost
+  gather_facts: no
+  vars:
+    namespace: "{{ namespace | default('kube-system') }}"
+    
+  tasks:
+    - name: Add Cilium Helm repository
+      kubernetes.core.helm_repository:
+        name: cilium
+        repo_url: https://helm.cilium.io/
+
+    - name: Generate Cilium secrets with SOPS
+      shell: |
+        cat > /tmp/cilium-secrets.yaml << EOF
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: cilium-secrets
+          namespace: {{ namespace }}
+        type: Opaque
+        stringData:
+          identity-allocation-psk: "{{ lookup('password', '/dev/null chars=hexdigits length=64') }}"
+          hubble-relay-client-cert: "placeholder-cert"
+          hubble-relay-client-key: "placeholder-key"
+        EOF
+        
+        sops --encrypt --age $(grep "public key:" ./Age/keys.txt | cut -d' ' -f4) \
+          /tmp/cilium-secrets.yaml > ./Helm/cilium/secrets/cilium-secrets.enc.yaml
+        
+        rm /tmp/cilium-secrets.yaml
+      args:
+        creates: ./Helm/cilium/secrets/cilium-secrets.enc.yaml
+
+    - name: Apply encrypted Cilium secrets
+      shell: |
+        export SOPS_AGE_KEY_FILE=./Age/keys.txt
+        sops --decrypt ./Helm/cilium/secrets/cilium-secrets.enc.yaml | \
+        kubectl apply -f - -n {{ namespace }}
+      environment:
+        SOPS_AGE_KEY_FILE: ./Age/keys.txt
+
+    - name: Create Cilium SSO configuration
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: cilium-sso-config
+            namespace: "{{ namespace }}"
+          data:
+            oidc-config.yaml: |
+              issuer: https://authentik.identity.svc.cluster.local/application/o/cilium/
+              client_id: cilium
+              usernameClaim: preferred_username
+              groupsClaim: groups
+              requiredClaims:
+                - name: groups
+                  value: cilium-admins
+
+    - name: Deploy Cilium with Helm
+      kubernetes.core.helm:
+        name: cilium
+        chart_ref: cilium/cilium
+        release_namespace: "{{ namespace }}"
+        create_namespace: true
+        values:
+          hubble:
+            enabled: true
+            relay:
+              enabled: true
+            ui:
+              enabled: true
+              ingress:
+                enabled: true
+                className: nginx
+                hosts:
+                  - hubble.noah.local
+          authentication:
+            mode: required
+            oidc:
+              enabled: true
+              configMapName: cilium-sso-config
+          operator:
+            replicas: 1
+          ipam:
+            mode: kubernetes
+          kubeProxyReplacement: strict
+          k8sServiceHost: kubernetes.default.svc.cluster.local
+          k8sServicePort: 443
+
+    - name: Wait for Cilium deployment
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: DaemonSet
+        name: cilium
+        namespace: "{{ namespace }}"
+        wait: true
+        wait_condition:
+          type: Progressing
+          status: "True"
+        wait_timeout: 600
+      register: cilium_deployment
+
+    - name: Verify Cilium status
+      shell: |
+        kubectl -n {{ namespace }} exec ds/cilium -- cilium status
+      register: cilium_status
+      retries: 5
+      delay: 30
+      until: cilium_status.rc == 0
+
+    - name: Display Cilium deployment status
+      debug:
+        msg:
+          - "Cilium deployed to namespace: {{ namespace }}"
+          - "Hubble UI: https://hubble.noah.local"
+          - "SSO Integration: Enabled with Authentik"
+          - "Status: {{ cilium_status.stdout }}"

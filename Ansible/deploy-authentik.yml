@@ -1,0 +1,107 @@
+---
+- name: Deploy Authentik SSO
+  hosts: localhost
+  gather_facts: no
+  vars:
+    namespace: "{{ namespace | default('identity') }}"
+    
+  tasks:
+    - name: Create PostgreSQL PersistentVolumeClaim
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: authentik-postgresql
+            namespace: "{{ namespace }}"
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 5Gi
+
+    - name: Create Redis PersistentVolumeClaim
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: authentik-redis
+            namespace: "{{ namespace }}"
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
+
+    - name: Generate Authentik secrets with SOPS
+      shell: |
+        cat > /tmp/authentik-secrets.yaml << EOF
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: authentik-secrets
+          namespace: {{ namespace }}
+        type: Opaque
+        stringData:
+          AUTHENTIK_SECRET_KEY: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=50') }}"
+          AUTHENTIK_BOOTSTRAP_PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
+          AUTHENTIK_BOOTSTRAP_TOKEN: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=50') }}"
+          AUTHENTIK_POSTGRESQL__PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
+          AUTHENTIK_REDIS__PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
+        EOF
+        
+        sops --encrypt --age $(grep "public key:" ./Age/keys.txt | cut -d' ' -f4) \
+          /tmp/authentik-secrets.yaml > ./Helm/authentik/secrets/authentik-secrets.enc.yaml
+        
+        rm /tmp/authentik-secrets.yaml
+      args:
+        creates: ./Helm/authentik/secrets/authentik-secrets.enc.yaml
+
+    - name: Apply encrypted Authentik secrets
+      shell: |
+        export SOPS_AGE_KEY_FILE=./Age/keys.txt
+        sops --decrypt ./Helm/authentik/secrets/authentik-secrets.enc.yaml | \
+        kubectl apply -f - -n {{ namespace }}
+      environment:
+        SOPS_AGE_KEY_FILE: ./Age/keys.txt
+
+    - name: Create Authentik LDAP Source for Samba4
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: authentik-ldap-config
+            namespace: "{{ namespace }}"
+          data:
+            ldap-source.yaml: |
+              server_uri: ldap://samba4.{{ namespace }}.svc.cluster.local
+              bind_cn: CN=Administrator,CN=Users,DC=noah,DC=local
+              base_dn: DC=noah,DC=local
+              sync_users: true
+              sync_groups: true
+              sync_parent_group: "noah-users"
+
+    - name: Wait for Authentik deployment
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: authentik-server
+        namespace: "{{ namespace }}"
+        wait: true
+        wait_condition:
+          type: Progressing
+          status: "True"
+        wait_timeout: 600
+      register: authentik_deployment
+
+    - name: Display Authentik deployment status
+      debug:
+        msg:
+          - "Authentik deployed to namespace: {{ namespace }}"
+          - "Access URL: https://authentik.{{ namespace }}.svc.cluster.local"
+          - "Bootstrap user: akadmin"
+          - "Deployment ready: {{ authentik_deployment.resources[0].status.conditions[-1].status }}"

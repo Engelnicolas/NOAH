@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "samba4.fullname" . }}
+  labels:
+    {{- include "samba4.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "samba4.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "samba4.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        - name: SAMBA_DOMAIN
+          value: {{ .Values.domain.name }}
+        - name: SAMBA_REALM
+          value: {{ .Values.domain.realm }}
+        - name: SAMBA_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: samba4-secrets
+              key: SAMBA_ADMIN_PASSWORD
+        - name: SAMBA_DNS_FORWARDER
+          value: {{ .Values.domain.dnsForwarder }}
+        - name: SAMBA_NETBIOS_NAME
+          value: {{ .Values.domain.netbiosName }}
+        ports:
+        - name: ldap
+          containerPort: 389
+          protocol: TCP
+        - name: ldaps
+          containerPort: 636
+          protocol: TCP
+        - name: kerberos
+          containerPort: 88
+          protocol: TCP
+        - name: kerberos-udp
+          containerPort: 88
+          protocol: UDP
+        - name: kpasswd
+          containerPort: 464
+          protocol: TCP
+        - name: smb
+          containerPort: 445
+          protocol: TCP
+        - name: netbios
+          containerPort: 139
+          protocol: TCP
+        volumeMounts:
+        - name: samba-data
+          mountPath: /var/lib/samba
+        - name: samba-config
+          mountPath: /etc/samba
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+      volumes:
+      - name: samba-data
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.existingClaim }}
+      - name: samba-config
+        configMap:
+          name: samba4-config

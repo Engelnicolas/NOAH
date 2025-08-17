@@ -1,0 +1,97 @@
+---
+- name: Deploy Samba4 Active Directory
+  hosts: localhost
+  gather_facts: no
+  vars:
+    namespace: "{{ namespace | default('identity') }}"
+    
+  tasks:
+    - name: Create Samba4 PersistentVolumeClaim
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: samba4-data
+            namespace: "{{ namespace }}"
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 10Gi
+
+    - name: Generate Samba4 secrets with SOPS
+      shell: |
+        cat > /tmp/samba4-secrets.yaml << EOF
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: samba4-secrets
+          namespace: {{ namespace }}
+        type: Opaque
+        stringData:
+          SAMBA_ADMIN_PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
+          SAMBA_DOMAIN: "NOAH.LOCAL"
+          SAMBA_REALM: "NOAH.LOCAL"
+        EOF
+        
+        sops --encrypt --age $(grep "public key:" ./Age/keys.txt | cut -d' ' -f4) \
+          /tmp/samba4-secrets.yaml > ./Helm/samba4/secrets/samba4-secrets.enc.yaml
+        
+        rm /tmp/samba4-secrets.yaml
+      args:
+        creates: ./Helm/samba4/secrets/samba4-secrets.enc.yaml
+
+    - name: Apply encrypted Samba4 secrets
+      shell: |
+        export SOPS_AGE_KEY_FILE=./Age/keys.txt
+        sops --decrypt ./Helm/samba4/secrets/samba4-secrets.enc.yaml | \
+        kubectl apply -f - -n {{ namespace }}
+      environment:
+        SOPS_AGE_KEY_FILE: ./Age/keys.txt
+
+    - name: Create Samba4 ConfigMap
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: samba4-config
+            namespace: "{{ namespace }}"
+          data:
+            smb.conf: |
+              [global]
+                workgroup = NOAH
+                realm = NOAH.LOCAL
+                netbios name = DC1
+                server role = active directory domain controller
+                dns forwarder = 8.8.8.8
+                
+              [netlogon]
+                path = /var/lib/samba/sysvol/noah.local/scripts
+                read only = No
+                
+              [sysvol]
+                path = /var/lib/samba/sysvol
+                read only = No
+
+    - name: Wait for Samba4 deployment
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: samba4
+        namespace: "{{ namespace }}"
+        wait: true
+        wait_condition:
+          type: Progressing
+          status: "True"
+        wait_timeout: 300
+      register: samba4_deployment
+
+    - name: Display Samba4 deployment status
+      debug:
+        msg:
+          - "Samba4 deployed to namespace: {{ namespace }}"
+          - "Domain: NOAH.LOCAL"
+          - "Deployment ready: {{ samba4_deployment.resources[0].status.conditions[-1].status }}"

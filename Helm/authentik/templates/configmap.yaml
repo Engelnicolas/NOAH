@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "authentik.fullname" . }}-config
+  labels:
+    {{- include "authentik.labels" . | nindent 4 }}
+data:
+  ldap-config.yaml: |
+    {{- if .Values.authentik.ldap.enabled }}
+    ldap_sources:
+      - name: "Samba 4 AD"
+        server_uri: {{ .Values.authentik.ldap.serverUri | quote }}
+        bind_cn: {{ .Values.authentik.ldap.bindDn | quote }}
+        base_dn: {{ .Values.authentik.ldap.baseDn | quote }}
+        start_tls: {{ .Values.authentik.ldap.startTls }}
+        object_uniqueness_field: "objectSid"
+        user_object_filter: "(objectClass=user)"
+        group_object_filter: "(objectClass=group)"
+        user_group_membership_field: "memberOf"
+        group_membership_field: "member"
+        sync_users: true
+        sync_groups: true
+        sync_parent_group: ""
+    {{- end }}

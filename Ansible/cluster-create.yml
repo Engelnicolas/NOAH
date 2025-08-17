@@ -1,0 +1,110 @@
+---
+- name: Create NOAH Kubernetes Cluster
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    cluster_name: "{{ cluster_name | default('noah-cluster') }}"
+    
+  tasks:
+    - name: Ensure required tools are installed
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - kubectl
+        - helm
+        - age
+        - sops
+      become: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Create cluster namespaces
+      kubernetes.core.k8s:
+        name: "{{ item }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+      loop:
+        - identity
+        - cilium-system
+
+    - name: Initialize Age encryption
+      shell: |
+        if [ ! -f ./Age/keys.txt ]; then
+          mkdir -p ./Age
+          age-keygen > ./Age/keys.txt
+          chmod 600 ./Age/keys.txt
+        fi
+      args:
+        creates: ./Age/keys.txt
+
+    - name: Extract Age public key
+      shell: grep "public key:" ./Age/keys.txt | cut -d' ' -f4
+      register: age_public_key
+      changed_when: false
+
+    - name: Create SOPS configuration
+      copy:
+        content: |
+          creation_rules:
+            - path_regex: .*\.enc\.yaml$
+              age: {{ age_public_key.stdout }}
+            - path_regex: .*\.enc\.json$
+              age: {{ age_public_key.stdout }}
+        dest: .sops.yaml
+        mode: '0644'
+
+    - name: Generate self-signed CA certificate
+      block:
+        - name: Create certificate directory
+          file:
+            path: ./certs
+            state: directory
+            mode: '0755'
+
+        - name: Generate CA private key
+          openssl_privatekey:
+            path: ./certs/ca-key.pem
+            size: 4096
+
+        - name: Generate CA certificate
+          openssl_csr:
+            path: ./certs/ca.csr
+            privatekey_path: ./certs/ca-key.pem
+            common_name: "NOAH CA"
+            organization_name: "NOAH"
+            basic_constraints:
+              - CA:TRUE
+              - pathlen:0
+            basic_constraints_critical: yes
+            key_usage:
+              - keyCertSign
+              - cRLSign
+            key_usage_critical: yes
+
+        - name: Self-sign CA certificate
+          openssl_certificate:
+            path: ./certs/ca-cert.pem
+            privatekey_path: ./certs/ca-key.pem
+            csr_path: ./certs/ca.csr
+            provider: selfsigned
+            selfsigned_not_after: "+3650d"
+
+    - name: Create ConfigMap for CA certificate
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: noah-ca-bundle
+            namespace: identity
+          data:
+            ca-bundle.crt: "{{ lookup('file', './certs/ca-cert.pem') }}"
+
+    - name: Display cluster creation summary
+      debug:
+        msg:
+          - "Cluster {{ cluster_name }} initialized"
+          - "Age public key: {{ age_public_key.stdout }}"
+          - "Namespaces created: identity, cilium-system"
+          - "CA certificate generated"

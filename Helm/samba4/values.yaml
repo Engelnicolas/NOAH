@@ -1,0 +1,48 @@
+replicaCount: 1
+
+image:
+  repository: nowsci/samba-domain
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  ports:
+    ldap: 389
+    ldaps: 636
+    kerberos: 88
+    kpasswd: 464
+    smb: 445
+    netbios: 139
+
+persistence:
+  enabled: true
+  existingClaim: samba4-data
+  size: 10Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+domain:
+  name: NOAH.LOCAL
+  realm: NOAH.LOCAL
+  adminPassword: "" # Will be set from secrets
+  dnsForwarder: "8.8.8.8"
+  netbiosName: DC1
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+securityContext:
+  capabilities:
+    add:
+      - SYS_ADMIN
+      - NET_ADMIN

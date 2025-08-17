@@ -1,0 +1,94 @@
+---
+- name: Destroy NOAH Kubernetes Cluster
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    cluster_name: "{{ cluster_name | default('noah-cluster') }}"
+    namespaces:
+      - identity
+      - cilium-system
+    
+  tasks:
+    - name: Check if kubectl is available
+      command: which kubectl
+      register: kubectl_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Delete Helm releases
+      shell: |
+        helm list --all-namespaces -o json | \
+        jq -r '.[] | "\(.name) \(.namespace)"' | \
+        while read name namespace; do
+          echo "Uninstalling $name from $namespace"
+          helm uninstall $name -n $namespace || true
+        done
+      when: kubectl_check.rc == 0
+      ignore_errors: yes
+
+    - name: Delete NOAH namespaces
+      kubernetes.core.k8s:
+        name: "{{ item }}"
+        api_version: v1
+        kind: Namespace
+        state: absent
+        wait: true
+        wait_timeout: 300
+      loop: "{{ namespaces }}"
+      ignore_errors: yes
+      when: kubectl_check.rc == 0
+
+    - name: Delete SOPS secrets
+      shell: |
+        kubectl get secrets --all-namespaces -o json | \
+        jq -r '.items[] | select(.metadata.name | contains("sops")) | 
+        "\(.metadata.namespace) \(.metadata.name)"' | \
+        while read ns name; do
+          echo "Deleting secret $name from namespace $ns"
+          kubectl delete secret $name -n $ns || true
+        done
+      when: kubectl_check.rc == 0
+      ignore_errors: yes
+
+    - name: Delete PersistentVolumeClaims
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: PersistentVolumeClaim
+        namespace: "{{ item }}"
+        state: absent
+        wait: true
+      loop: "{{ namespaces }}"
+      ignore_errors: yes
+      when: kubectl_check.rc == 0
+
+    - name: Clean up Age keys (optional - requires confirmation)
+      block:
+        - name: Confirm Age key deletion
+          pause:
+            prompt: "Do you want to delete Age encryption keys? (yes/no)"
+          register: delete_age_keys
+
+        - name: Delete Age keys
+          file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - ./Age/keys.txt
+            - .sops.yaml
+          when: delete_age_keys.user_input | lower == 'yes'
+
+    - name: Clean up generated certificates
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - ./certs/
+      ignore_errors: yes
+
+    - name: Display cleanup summary
+      debug:
+        msg:
+          - "Cluster {{ cluster_name }} cleanup completed"
+          - "Namespaces deleted: {{ namespaces | join(', ') }}"
+          - "All Helm releases uninstalled"
+          - "SOPS secrets removed"

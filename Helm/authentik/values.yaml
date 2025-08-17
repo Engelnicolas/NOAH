@@ -1,0 +1,91 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/goauthentik/server
+  tag: "2023.10.5"
+  pullPolicy: IfNotPresent
+
+worker:
+  replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 9000
+  annotations: {}
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+  hosts:
+    - host: authentik.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: authentik-tls
+      hosts:
+        - authentik.example.com
+
+authentik:
+  secretKey: "" # Will be auto-generated if not set
+  errorReporting:
+    enabled: false
+  logLevel: info
+  email:
+    host: smtp.example.com
+    port: 587
+    username: ""
+    password: ""
+    useTls: true
+    useSSL: false
+    from: authentik@example.com
+  
+  # Samba 4 LDAP Integration
+  ldap:
+    enabled: true
+    baseDn: "dc=example,dc=com"
+    bindDn: "cn=Administrator,cn=Users,dc=example,dc=com"
+    bindPassword: ""
+    serverUri: "ldap://samba-dc.default.svc.cluster.local"
+    startTls: false
+    
+  outposts:
+    ldap:
+      enabled: true
+      replicaCount: 1
+
+postgresql:
+  enabled: true
+  auth:
+    username: authentik
+    password: authentik
+    database: authentik
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: authentik
+  master:
+    persistence:
+      enabled: true
+      size: 2Gi
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

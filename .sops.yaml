@@ -1,5 +1,5 @@
 creation_rules:
-- age: age1p95d287mcnpknwqrfvktmr6xr0j5k7v6rkzgdcyyfhaj6n47a32szux7mj
-  path_regex: .*\.enc\.yaml$
-- age: age1p95d287mcnpknwqrfvktmr6xr0j5k7v6rkzgdcyyfhaj6n47a32szux7mj
-  path_regex: .*\.enc\.json$
+  - path_regex: .*\.enc\.yaml$
+    age: age1p95d287mcnpknwqrfvktmr6xr0j5k7v6rkzgdcyyfhaj6n47a32szux7mj
+  - path_regex: .*\.enc\.json$
+    age: age1p95d287mcnpknwqrfvktmr6xr0j5k7v6rkzgdcyyfhaj6n47a32szux7mj

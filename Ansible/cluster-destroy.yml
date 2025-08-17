@@ -1,6 +1,6 @@
 ---
 - name: Destroy NOAH Kubernetes Cluster
-  hosts: localhost
+  hosts: local
   gather_facts: yes
   vars:
     cluster_name: "{{ cluster_name | default('noah-cluster') }}"
@@ -82,7 +82,7 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - ./certs/
+        - ./Certificates/
       ignore_errors: yes
 
     - name: Display cleanup summary

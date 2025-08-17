@@ -8,8 +8,8 @@ from typing import Dict, Any, Optional
 class AnsibleRunner:
     def __init__(self, config_loader):
         self.config = config_loader
-        self.playbook_dir = Path(self.config.get('ANSIBLE_PLAYBOOK_DIR', './Ansible'))
-        self.inventory = self.config.get('ANSIBLE_INVENTORY', './Ansible/inventory')
+        self.playbook_dir = Path(self.config.get('ANSIBLE_PLAYBOOK_DIR', './Ansible')).resolve()
+        self.ansible_dir = Path('./Ansible').resolve()
     
     def run_playbook(self, playbook_name: str, extra_vars: Optional[Dict] = None):
         """Execute an Ansible playbook"""
@@ -18,12 +18,15 @@ class AnsibleRunner:
         if not playbook_path.exists():
             raise Exception(f"Playbook not found: {playbook_path}")
         
-        # Build ansible-playbook command
+        # Build ansible-playbook command - use config file in Ansible directory
+        # Use relative path from Ansible directory
         cmd = [
             'ansible-playbook',
-            str(playbook_path),
-            '-i', self.inventory
+            playbook_name  # Just the filename since we'll run from Ansible dir
         ]
+        
+        # Set working directory to Ansible folder to use ansible.cfg
+        cwd = self.ansible_dir
         
         # Add extra variables
         if extra_vars:
@@ -36,7 +39,7 @@ class AnsibleRunner:
         env['SOPS_AGE_KEY_FILE'] = str(self.config.get('AGE_KEY_FILE', './Age/keys.txt'))
         
         print(f"Running playbook: {playbook_name}")
-        result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+        result = subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=cwd)
         
         if result.returncode == 0:
             print(f"Playbook {playbook_name} executed successfully")

@@ -1,0 +1,35 @@
+# NOAH Development Dependencies
+# Additional packages for development environment
+# Updated: August 2025 with latest stable versions
+
+# Testing and coverage
+pytest-cov>=6.0.0
+coverage>=7.6.0
+
+# Code formatting and pre-commit hooks
+pre-commit>=4.0.0
+isort>=5.13.2
+
+# Documentation
+sphinx>=8.1.0
+sphinx-rtd-theme>=3.0.0
+sphinx-click>=6.0.0
+
+# Type checking
+types-PyYAML>=6.0.12
+types-requests>=2.32.4
+
+# Debugging and profiling
+ipdb>=0.13.13
+memory-profiler>=0.61.0
+
+# Security scanning
+bandit>=1.7.10
+safety>=3.2.8
+
+# Performance testing
+locust>=2.32.0
+
+# Additional development utilities
+jupyter>=1.1.1
+notebook>=7.2.2

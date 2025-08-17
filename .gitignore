@@ -1,0 +1,79 @@
+# ---- Python ----
+__pycache__/
+*.*.pyc
+.pytest_cache/
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+develop-eggs/
+.installed.cfg
+*.manifest
+*.spec
+*.log
+pip-wheel-metadata/
+*.sqlite3
+*.db
+.venv/
+env/
+venv/
+ENV/
+.env
+.envrc
+
+# ---- Ansible ----
+*.retry
+*.log
+.secret*
+vault_pass.txt
+# Molecule test artifacts
+.molecule/
+.cache/
+*.tar.gz
+
+# ---- Kubernetes ----
+# Local Kubernetes configs
+.kube/
+*.kubeconfig
+*.kubeconfig.*
+kubeconfig
+*.crt
+*.key
+*.pem
+
+# ---- Helm ----
+charts/*.tgz
+helmfile.lock
+tmpcharts/
+.chartcache/
+*.release.yaml
+.values.local.yaml
+.values.override.yaml
+
+# ---- SOPS ----
+# Ignore decrypted secrets
+*.dec.yaml
+*.dec.json
+*.dec.env
+secrets.*.yaml
+secrets.*.json
+secrets.*.env
+
+# ---- age ----
+# Age key files
+*.agekey
+Age/
+
+# ---- General OS / Editor ----
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.bak
+*.tmp

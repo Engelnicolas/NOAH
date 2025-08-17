@@ -182,3 +182,164 @@ class SecretManager:
             return yaml.safe_load(result.stdout)
         else:
             raise Exception(f"Failed to decrypt secret: {result.stderr}")
+    
+    def generate_tls_certificates(self, domain: str):
+        """Generate self-signed TLS certificates for a domain"""
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        import datetime
+        
+        certs_dir = Path("Certificates")
+        certs_dir.mkdir(exist_ok=True)
+        
+        # Generate private key
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
+        
+        # Generate CA certificate
+        ca_name = x509.Name([
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "CA"),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, "San Francisco"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "NOAH Infrastructure"),
+            x509.NameAttribute(NameOID.COMMON_NAME, f"NOAH CA for {domain}"),
+        ])
+        
+        ca_cert = x509.CertificateBuilder().subject_name(
+            ca_name
+        ).issuer_name(
+            ca_name
+        ).public_key(
+            private_key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before(
+            datetime.datetime.now(datetime.timezone.utc)
+        ).not_valid_after(
+            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+        ).add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName(domain),
+                x509.DNSName(f"*.{domain}"),
+            ]),
+            critical=False,
+        ).add_extension(
+            x509.BasicConstraints(ca=True, path_length=None),
+            critical=True,
+        ).sign(private_key, hashes.SHA256())
+        
+        # Write CA certificate and key
+        ca_cert_path = certs_dir / "ca.crt"
+        ca_key_path = certs_dir / "ca.key"
+        
+        with open(ca_cert_path, "wb") as f:
+            f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
+        
+        with open(ca_key_path, "wb") as f:
+            f.write(private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+        
+        # Generate wildcard certificate
+        wildcard_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
+        
+        wildcard_name = x509.Name([
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "CA"),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, "San Francisco"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "NOAH Infrastructure"),
+            x509.NameAttribute(NameOID.COMMON_NAME, f"*.{domain}"),
+        ])
+        
+        wildcard_cert = x509.CertificateBuilder().subject_name(
+            wildcard_name
+        ).issuer_name(
+            ca_name
+        ).public_key(
+            wildcard_key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before(
+            datetime.datetime.now(datetime.timezone.utc)
+        ).not_valid_after(
+            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+        ).add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName(domain),
+                x509.DNSName(f"*.{domain}"),
+            ]),
+            critical=False,
+        ).sign(private_key, hashes.SHA256())
+        
+        # Write wildcard certificate and key
+        wildcard_cert_path = certs_dir / f"*.{domain}.crt"
+        wildcard_key_path = certs_dir / f"*.{domain}.key"
+        
+        with open(wildcard_cert_path, "wb") as f:
+            f.write(wildcard_cert.public_bytes(serialization.Encoding.PEM))
+        
+        with open(wildcard_key_path, "wb") as f:
+            f.write(wildcard_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+        
+        print(f"✓ TLS certificates generated for {domain}")
+        print(f"  - CA Certificate: {ca_cert_path}")
+        print(f"  - CA Key: {ca_key_path}")
+        print(f"  - Wildcard Certificate: {wildcard_cert_path}")
+        print(f"  - Wildcard Key: {wildcard_key_path}")
+    
+    def list_certificates(self):
+        """List existing TLS certificates"""
+        certs_dir = Path("Certificates")
+        if not certs_dir.exists():
+            print("No certificates directory found")
+            return
+        
+        cert_files = list(certs_dir.glob("*.crt"))
+        if not cert_files:
+            print("No certificates found")
+            return
+        
+        print("Found certificates:")
+        for cert_file in cert_files:
+            print(f"  - {cert_file.name}")
+    
+    def cleanup_local_secrets(self):
+        """Clean up local secrets and certificates"""
+        print("Cleaning up local secrets and certificates...")
+        
+        # Remove Age keys
+        age_dir = Path("Age")
+        if age_dir.exists():
+            for file in age_dir.iterdir():
+                file.unlink()
+            age_dir.rmdir()
+            print("  - Removed Age keys")
+        
+        # Remove certificates
+        certs_dir = Path("Certificates")
+        if certs_dir.exists():
+            for file in certs_dir.iterdir():
+                file.unlink()
+            certs_dir.rmdir()
+            print("  - Removed TLS certificates")
+        
+        # Remove SOPS config
+        sops_config = Path(".sops.yaml")
+        if sops_config.exists():
+            sops_config.unlink()
+            print("  - Removed SOPS configuration")
+        
+        print("Local secrets cleanup complete")

@@ -24,8 +24,8 @@ from Scripts.ansible_runner import AnsibleRunner
 from Scripts.config_loader import ConfigLoader
 
 VERSION = "0.0.1"
-# Load default domain from environment, fallback to noah-infra.org
-DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.org')
+# Load default domain from environment, fallback to noah-infra.com
+DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
 
 def get_security_config(domain=DEFAULT_DOMAIN):
     """Get security configuration for Helm and Ansible"""

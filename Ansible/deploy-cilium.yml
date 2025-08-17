@@ -1,6 +1,6 @@
 ---
 - name: Deploy Cilium CNI with SSO Integration
-  hosts: localhost
+  hosts: local
   gather_facts: no
   vars:
     namespace: "{{ namespace | default('kube-system') }}"

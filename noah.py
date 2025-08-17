@@ -12,6 +12,11 @@ import yaml
 import subprocess
 import shutil
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from Scripts.cluster_manager import ClusterManager
 from Scripts.secret_manager import SecretManager
 from Scripts.helm_deployer import HelmDeployer
@@ -19,7 +24,8 @@ from Scripts.ansible_runner import AnsibleRunner
 from Scripts.config_loader import ConfigLoader
 
 VERSION = "0.0.1"
-DEFAULT_DOMAIN = "noah-infra.dev"
+# Load default domain from environment, fallback to noah-infra.org
+DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.org')
 
 def get_security_config(domain=DEFAULT_DOMAIN):
     """Get security configuration for Helm and Ansible"""

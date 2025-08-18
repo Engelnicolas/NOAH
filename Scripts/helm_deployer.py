@@ -1,11 +1,6 @@
 """Helm chart deployment module"""
 
 import subprocess
-import yaml
-import json
-"""Helm chart deployment module"""
-
-import subprocess
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -16,7 +11,6 @@ try:
     import yaml  # type: ignore
 except ImportError:
     pass
-from typing import Dict, Any, Optional
 
 class HelmDeployer:
     def __init__(self, config_loader):

@@ -5,10 +5,16 @@ import subprocess
 import json
 import secrets
 import string
-import yaml
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import base64
+
+# Optional imports with graceful fallbacks
+yaml: Optional[Any] = None
+try:
+    import yaml  # type: ignore
+except ImportError:
+    pass
 
 class SecretManager:
     def __init__(self, config_loader):
@@ -71,6 +77,9 @@ class SecretManager:
             ]
         }
         
+        if yaml is None:
+            raise Exception("PyYAML is required for SOPS configuration. Install with: pip install PyYAML")
+        
         with open(self.sops_config, 'w') as f:
             yaml.dump(sops_config, f)
         
@@ -107,6 +116,10 @@ class SecretManager:
         
         # Write encrypted file directly
         encrypted_file = secrets_dir / f"{service}-secrets.enc.yaml"
+        
+        if yaml is None:
+            raise Exception("PyYAML is required for secret generation. Install with: pip install PyYAML")
+        
         with open(encrypted_file, 'w') as f:
             yaml.dump(k8s_secret, f)
         
@@ -179,120 +192,63 @@ class SecretManager:
         )
         
         if result.returncode == 0:
+            if yaml is None:
+                raise Exception("PyYAML is required for secret decryption. Install with: pip install PyYAML")
             return yaml.safe_load(result.stdout)
         else:
             raise Exception(f"Failed to decrypt secret: {result.stderr}")
     
     def generate_tls_certificates(self, domain: str):
-        """Generate self-signed TLS certificates for a domain"""
-        from cryptography import x509
-        from cryptography.x509.oid import NameOID
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import rsa
-        import datetime
-        
+        """Generate self-signed TLS certificates for a domain using openssl"""
         certs_dir = Path("Certificates")
         certs_dir.mkdir(exist_ok=True)
         
-        # Generate private key
-        private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,
-        )
-        
-        # Generate CA certificate
-        ca_name = x509.Name([
-            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "CA"),
-            x509.NameAttribute(NameOID.LOCALITY_NAME, "San Francisco"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "NOAH Infrastructure"),
-            x509.NameAttribute(NameOID.COMMON_NAME, f"NOAH CA for {domain}"),
-        ])
-        
-        ca_cert = x509.CertificateBuilder().subject_name(
-            ca_name
-        ).issuer_name(
-            ca_name
-        ).public_key(
-            private_key.public_key()
-        ).serial_number(
-            x509.random_serial_number()
-        ).not_valid_before(
-            datetime.datetime.now(datetime.timezone.utc)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
-        ).add_extension(
-            x509.SubjectAlternativeName([
-                x509.DNSName(domain),
-                x509.DNSName(f"*.{domain}"),
-            ]),
-            critical=False,
-        ).add_extension(
-            x509.BasicConstraints(ca=True, path_length=None),
-            critical=True,
-        ).sign(private_key, hashes.SHA256())
-        
-        # Write CA certificate and key
         ca_cert_path = certs_dir / "ca.crt"
         ca_key_path = certs_dir / "ca.key"
-        
-        with open(ca_cert_path, "wb") as f:
-            f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
-        
-        with open(ca_key_path, "wb") as f:
-            f.write(private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            ))
-        
-        # Generate wildcard certificate
-        wildcard_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,
-        )
-        
-        wildcard_name = x509.Name([
-            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "CA"),
-            x509.NameAttribute(NameOID.LOCALITY_NAME, "San Francisco"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "NOAH Infrastructure"),
-            x509.NameAttribute(NameOID.COMMON_NAME, f"*.{domain}"),
-        ])
-        
-        wildcard_cert = x509.CertificateBuilder().subject_name(
-            wildcard_name
-        ).issuer_name(
-            ca_name
-        ).public_key(
-            wildcard_key.public_key()
-        ).serial_number(
-            x509.random_serial_number()
-        ).not_valid_before(
-            datetime.datetime.now(datetime.timezone.utc)
-        ).not_valid_after(
-            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
-        ).add_extension(
-            x509.SubjectAlternativeName([
-                x509.DNSName(domain),
-                x509.DNSName(f"*.{domain}"),
-            ]),
-            critical=False,
-        ).sign(private_key, hashes.SHA256())
-        
-        # Write wildcard certificate and key
         wildcard_cert_path = certs_dir / f"*.{domain}.crt"
         wildcard_key_path = certs_dir / f"*.{domain}.key"
         
-        with open(wildcard_cert_path, "wb") as f:
-            f.write(wildcard_cert.public_bytes(serialization.Encoding.PEM))
+        # Check if openssl is available
+        try:
+            subprocess.run(['openssl', 'version'], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            raise Exception("OpenSSL is required for TLS certificate generation. Please install OpenSSL.")
         
-        with open(wildcard_key_path, "wb") as f:
-            f.write(wildcard_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            ))
+        # Generate CA private key
+        subprocess.run([
+            'openssl', 'genrsa', '-out', str(ca_key_path), '2048'
+        ], check=True, capture_output=True)
+        
+        # Generate CA certificate
+        subprocess.run([
+            'openssl', 'req', '-new', '-x509', '-key', str(ca_key_path),
+            '-out', str(ca_cert_path), '-days', '3650', '-subj',
+            f'/C=FR/ST=FR/L=LYON/O=NOAH Infrastructure/CN=NOAH CA for {domain}'
+        ], check=True, capture_output=True)
+        
+        # Generate wildcard private key
+        subprocess.run([
+            'openssl', 'genrsa', '-out', str(wildcard_key_path), '2048'
+        ], check=True, capture_output=True)
+        
+        # Generate wildcard certificate signing request
+        csr_path = certs_dir / f"*.{domain}.csr"
+        subprocess.run([
+            'openssl', 'req', '-new', '-key', str(wildcard_key_path),
+            '-out', str(csr_path), '-subj',
+            f'/C=FR/ST=FR/L=LYON/O=NOAH Infrastructure/CN=*.{domain}'
+        ], check=True, capture_output=True)
+        
+        # Generate wildcard certificate signed by CA
+        subprocess.run([
+            'openssl', 'x509', '-req', '-in', str(csr_path),
+            '-CA', str(ca_cert_path), '-CAkey', str(ca_key_path),
+            '-CAcreateserial', '-out', str(wildcard_cert_path),
+            '-days', '365', '-extensions', 'v3_req'
+        ], check=True, capture_output=True)
+        
+        # Clean up CSR
+        csr_path.unlink(missing_ok=True)
         
         print(f"✓ TLS certificates generated for {domain}")
         print(f"  - CA Certificate: {ca_cert_path}")

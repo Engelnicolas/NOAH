@@ -4,9 +4,23 @@ import subprocess
 import json
 import time
 from typing import Dict, Any, Optional
-import yaml
-from kubernetes import client, config
-from kubernetes.client.rest import ApiException
+
+# Optional imports with graceful fallbacks
+yaml: Optional[Any] = None
+client: Optional[Any] = None
+config: Optional[Any] = None
+ApiException: Optional[Any] = None
+
+try:
+    import yaml  # type: ignore
+except ImportError:
+    pass
+
+try:
+    from kubernetes import client, config  # type: ignore
+    from kubernetes.client.rest import ApiException  # type: ignore
+except ImportError:
+    pass
 
 class ClusterManager:
     def __init__(self, config_loader):
@@ -18,6 +32,10 @@ class ClusterManager:
     
     def _initialize_kubernetes(self):
         """Initialize Kubernetes clients"""
+        if client is None or config is None:
+            print(f"Warning: Could not initialize Kubernetes client: kubernetes library not available")
+            return
+        
         try:
             config.load_kubeconfig()
             self.k8s_client = client.ApiClient()
@@ -28,7 +46,7 @@ class ClusterManager:
     
     def create_namespace(self, namespace: str) -> bool:
         """Create a Kubernetes namespace"""
-        if self.core_v1 is None:
+        if self.core_v1 is None or client is None:
             print(f"⚠️  Warning: No Kubernetes cluster connected. Cannot create namespace {namespace}")
             print(f"💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
             return False
@@ -39,8 +57,9 @@ class ClusterManager:
             )
             self.core_v1.create_namespace(body)
             return True
-        except ApiException as e:
-            if e.status == 409:  # Already exists
+        except Exception as e:
+            # Handle both ApiException and general exceptions
+            if hasattr(e, 'status') and getattr(e, 'status', None) == 409:  # Already exists
                 return True
             print(f"Error creating namespace: {e}")
             return False
@@ -55,7 +74,7 @@ class ClusterManager:
         try:
             self.core_v1.delete_namespace(name=namespace)
             return True
-        except ApiException as e:
+        except Exception as e:
             print(f"Error deleting namespace: {e}")
             return False
     
@@ -76,7 +95,7 @@ class ClusterManager:
                 if deployment.status.ready_replicas == deployment.spec.replicas:
                     return True
                 time.sleep(5)
-            except ApiException:
+            except Exception:
                 time.sleep(5)
         return False
     
@@ -102,7 +121,7 @@ class ClusterManager:
                     node_port = service.spec.ports[0].node_port
                     return f"{node_ip}:{node_port}"
             return service.spec.cluster_ip
-        except ApiException as e:
+        except Exception as e:
             print(f"Error getting service endpoint: {e}")
             return None
     
@@ -127,5 +146,5 @@ class ClusterManager:
                     total = dep.spec.replicas or 0
                     status = "✓" if ready == total else "✗"
                     print(f"  {status} {dep.metadata.name}: {ready}/{total} replicas ready")
-            except ApiException as e:
+            except Exception as e:
                 print(f"  Error reading namespace: {e}")

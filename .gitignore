@@ -89,3 +89,7 @@ Thumbs.db
 .sops.yaml
 Helm/samba4/secrets/samba4-secrets.temp.yaml
 Helm/samba4/secrets/samba4-secrets.enc.yaml
+Certificates/ca.srl
+Helm/authentik/secrets/authentik-secrets.enc.yaml
+Helm/cilium/secrets/cilium-secrets.enc.yaml
+Helm/samba4/secrets/.temp-values.yaml

@@ -77,9 +77,11 @@ class SecretManager:
         print(f"SOPS configuration written to {self.sops_config}")
     
     def generate_password(self, length: int = 24) -> str:
-        """Generate a secure random password"""
+        """Generate a secure random password (max 24 characters)"""
+        # Ensure we never exceed 24 characters
+        max_length = min(length, 24)
         alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-        return ''.join(secrets.choice(alphabet) for _ in range(length))
+        return ''.join(secrets.choice(alphabet) for _ in range(max_length))
     
     def generate_service_secrets(self, service: str, namespace: str):
         """Generate encrypted secrets for a service"""
@@ -121,42 +123,44 @@ class SecretManager:
             raise Exception(f"Failed to encrypt secrets: {result.stderr}")
     
     def _generate_service_specific_secrets(self, service: str) -> Dict[str, str]:
-        """Generate service-specific secrets"""
+        """Generate service-specific secrets (all ≤ 24 characters)"""
         if service == 'samba4':
             return {
-                'admin_password': self.generate_password(),
-                'domain_admin_password': self.generate_password(),
-                'kerberos_password': self.generate_password()
+                'admin_password': self.generate_password(24),
+                'domain_admin_password': self.generate_password(24),
+                'kerberos_password': self.generate_password(24)
             }
         elif service == 'authentik':
             return {
-                'secret_key': secrets.token_urlsafe(50),
-                'bootstrap_password': self.generate_password(),
-                'bootstrap_token': secrets.token_urlsafe(50),
-                'postgresql_password': self.generate_password(),
-                'redis_password': self.generate_password()
+                'secret_key': self.generate_password(24),  # Changed from token_urlsafe(50)
+                'bootstrap_password': self.generate_password(24),
+                'bootstrap_token': self.generate_password(24),  # Changed from token_urlsafe(50)
+                'postgresql_password': self.generate_password(24),
+                'redis_password': self.generate_password(24)
             }
         elif service == 'cilium':
             return {
                 'hubble_relay_client_cert': self._generate_self_signed_cert(),
                 'hubble_relay_client_key': self._generate_private_key(),
-                'identity_allocation_psk': secrets.token_hex(32)
+                'identity_allocation_psk': self.generate_password(24)  # Changed from token_hex(32)
             }
         else:
             return {
-                'default_password': self.generate_password(),
-                'api_key': secrets.token_urlsafe(50)
+                'default_password': self.generate_password(24),
+                'api_key': self.generate_password(24)  # Changed from token_urlsafe(50)
             }
     
     def _generate_self_signed_cert(self) -> str:
-        """Generate a self-signed certificate"""
-        # This is a placeholder - implement proper certificate generation
-        return base64.b64encode(b"CERTIFICATE_PLACEHOLDER").decode()
+        """Generate a self-signed certificate (≤24 chars for demo)"""
+        # For demo purposes, generate a short placeholder
+        # In production, this would be a proper certificate
+        return self.generate_password(24)
     
     def _generate_private_key(self) -> str:
-        """Generate a private key"""
-        # This is a placeholder - implement proper key generation
-        return base64.b64encode(b"PRIVATE_KEY_PLACEHOLDER").decode()
+        """Generate a private key (≤24 chars for demo)"""
+        # For demo purposes, generate a short placeholder  
+        # In production, this would be a proper private key
+        return self.generate_password(24)
     
     def rotate_passwords(self, service: str):
         """Rotate passwords for a service"""

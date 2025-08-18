@@ -28,6 +28,11 @@ class ClusterManager:
     
     def create_namespace(self, namespace: str) -> bool:
         """Create a Kubernetes namespace"""
+        if self.core_v1 is None:
+            print(f"⚠️  Warning: No Kubernetes cluster connected. Cannot create namespace {namespace}")
+            print(f"💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
+            return False
+        
         try:
             body = client.V1Namespace(
                 metadata=client.V1ObjectMeta(name=namespace)
@@ -42,6 +47,11 @@ class ClusterManager:
     
     def delete_namespace(self, namespace: str) -> bool:
         """Delete a Kubernetes namespace"""
+        if self.core_v1 is None:
+            print(f"⚠️  Warning: No Kubernetes cluster connected. Cannot delete namespace {namespace}")
+            print(f"💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
+            return False
+        
         try:
             self.core_v1.delete_namespace(name=namespace)
             return True
@@ -51,6 +61,11 @@ class ClusterManager:
     
     def wait_for_deployment(self, deployment_name: str, namespace: str, timeout: int = 300):
         """Wait for a deployment to be ready"""
+        if self.apps_v1 is None:
+            print(f"⚠️  Warning: No Kubernetes cluster connected. Skipping deployment wait for {deployment_name}")
+            print(f"💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
+            return True  # Skip the wait if no cluster is available
+        
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
@@ -67,6 +82,11 @@ class ClusterManager:
     
     def get_service_endpoint(self, service_name: str, namespace: str) -> Optional[str]:
         """Get the endpoint for a service"""
+        if self.core_v1 is None:
+            print(f"⚠️  Warning: No Kubernetes cluster connected. Cannot get endpoint for {service_name}")
+            print(f"💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
+            return None
+        
         try:
             service = self.core_v1.read_namespaced_service(
                 name=service_name,
@@ -88,6 +108,15 @@ class ClusterManager:
     
     def show_status(self):
         """Display status of all NOAH components"""
+        if self.apps_v1 is None:
+            print("⚠️  Warning: No Kubernetes cluster connected. Cannot show deployment status")
+            print("💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
+            print("\n📋 Available commands without cluster:")
+            print("  • python noah.py cluster create --name <cluster-name>")
+            print("  • python noah.py setup doctor  (check environment)")
+            print("  • python noah.py secrets generate --service <service>")
+            return
+        
         namespaces = ['identity', 'kube-system']
         for ns in namespaces:
             print(f"\nNamespace: {ns}")

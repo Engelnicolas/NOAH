@@ -35,6 +35,8 @@ ENV/
 *.log
 .secret*
 vault_pass.txt
+Helm/*/secrets/
+
 # Molecule test artifacts
 .molecule/
 .cache/
@@ -58,15 +60,16 @@ tmpcharts/
 *.release.yaml
 .values.local.yaml
 .values.override.yaml
+*/.temp-*
 
 # ---- SOPS ----
 # Ignore decrypted secrets
 *.dec.yaml
 *.dec.json
 *.dec.env
-secrets.*.yaml
-secrets.*.json
-secrets.*.env
+Helm/samba4/secrets/*.yaml
+Helm/samba4/secrets/*.json
+Helm/samba4/secrets/*.env
 .sops.yaml
 
 # ---- age ----

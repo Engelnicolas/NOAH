@@ -103,23 +103,19 @@ class SecretManager:
             'stringData': service_secrets
         }
         
-        # Write unencrypted file temporarily
-        temp_file = secrets_dir / f"{service}-secrets.temp.yaml"
-        with open(temp_file, 'w') as f:
+        # Write encrypted file directly
+        encrypted_file = secrets_dir / f"{service}-secrets.enc.yaml"
+        with open(encrypted_file, 'w') as f:
             yaml.dump(k8s_secret, f)
         
-        # Encrypt with SOPS
-        encrypted_file = secrets_dir / f"{service}-secrets.enc.yaml"
+        # Encrypt with SOPS in-place
         result = subprocess.run(
-            ['sops', '--encrypt', '--age', self._get_public_key(), 
-             str(temp_file)],
+            ['sops', '--encrypt', '--in-place', str(encrypted_file)],
             capture_output=True,
             text=True
         )
         
         if result.returncode == 0:
-            encrypted_file.write_text(result.stdout)
-            temp_file.unlink()  # Remove temporary file
             print(f"Encrypted secrets saved to {encrypted_file}")
         else:
             raise Exception(f"Failed to encrypt secrets: {result.stderr}")

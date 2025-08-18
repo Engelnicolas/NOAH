@@ -1,8 +1,8 @@
 """Helm chart deployment module"""
 
 import subprocess
-import json
 import yaml
+import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -44,10 +44,13 @@ class HelmDeployer:
             temp_values.write_text(yaml.dump(decrypted))
             cmd.extend(['--values', str(temp_values)])
         
-        # Add custom values
+        # Add custom values via temporary values file
         if values:
-            for key, value in values.items():
-                cmd.extend(['--set', f'{key}={value}'])
+            temp_custom_values = chart_path / 'secrets' / '.temp-custom-values.yaml'
+            temp_custom_values.parent.mkdir(exist_ok=True)
+            with open(temp_custom_values, 'w') as f:
+                yaml.dump(values, f)
+            cmd.extend(['--values', str(temp_custom_values)])
         
         print(f"Deploying {chart_name} to namespace {namespace}")
         result = subprocess.run(cmd, capture_output=True, text=True)

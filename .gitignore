@@ -83,3 +83,6 @@ Thumbs.db
 .vscode/
 *.bak
 *.tmp
+.sops.yaml
+Helm/samba4/secrets/samba4-secrets.temp.yaml
+Helm/samba4/secrets/samba4-secrets.enc.yaml

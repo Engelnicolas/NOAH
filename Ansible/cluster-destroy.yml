@@ -1,12 +1,16 @@
 ---
-- name: Destroy NOAH Kubernetes Cluster
+- name: Efficiently Destroy NOAH Kubernetes Cluster
   hosts: local
   gather_facts: yes
   vars:
-    cluster_name: "{{ cluster_name | default('noah-cluster') }}"
-    namespaces:
-      - identity
-      - cilium-system
+    default_cluster_name: "noah-cluster"
+    k3s_data_dir: "/var/lib/rancher/k3s"
+    k3s_config_dir: "/etc/rancher/k3s"
+    namespaces_to_preserve:
+      - kube-system
+      - kube-public
+      - kube-node-lease
+      - default
     
   tasks:
     - name: Check if kubectl is available
@@ -15,51 +19,121 @@
       ignore_errors: yes
       changed_when: false
 
-    - name: Delete Helm releases
+    - name: Check if K3s is running
+      command: systemctl is-active k3s
+      register: k3s_status
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Fast cleanup - Delete all Helm releases in parallel
       shell: |
         helm list --all-namespaces -o json | \
         jq -r '.[] | "\(.name) \(.namespace)"' | \
-        while read name namespace; do
-          echo "Uninstalling $name from $namespace"
-          helm uninstall $name -n $namespace || true
-        done
+        xargs -n2 -P10 sh -c 'echo "Uninstalling $0 from $1"; helm uninstall $0 -n $1 --timeout=60s || true' --
       when: kubectl_check.rc == 0
       ignore_errors: yes
+      async: 300
+      poll: 0
+      register: helm_cleanup
 
-    - name: Delete NOAH namespaces
-      kubernetes.core.k8s:
-        name: "{{ item }}"
-        api_version: v1
-        kind: Namespace
-        state: absent
-        wait: true
-        wait_timeout: 300
-      loop: "{{ namespaces }}"
-      ignore_errors: yes
-      when: kubectl_check.rc == 0
-
-    - name: Delete SOPS secrets
+    - name: Fast cleanup - Delete all non-system namespaces
       shell: |
-        kubectl get secrets --all-namespaces -o json | \
-        jq -r '.items[] | select(.metadata.name | contains("sops")) | 
-        "\(.metadata.namespace) \(.metadata.name)"' | \
-        while read ns name; do
-          echo "Deleting secret $name from namespace $ns"
-          kubectl delete secret $name -n $ns || true
-        done
+        kubectl get namespaces -o json | \
+        jq -r '.items[] | select(.metadata.name | test("^(kube-system|kube-public|kube-node-lease|default)$") | not) | .metadata.name' | \
+        xargs -r -n1 -P5 kubectl delete namespace --timeout=60s --force --grace-period=0 || true
+      when: kubectl_check.rc == 0
+      ignore_errors: yes
+      async: 180
+      poll: 0
+      register: namespace_cleanup
+
+    - name: Force delete all pods in non-system namespaces
+      shell: |
+        kubectl get pods --all-namespaces --field-selector metadata.namespace!=kube-system,metadata.namespace!=kube-public,metadata.namespace!=kube-node-lease,metadata.namespace!=default -o json | \
+        jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | \
+        xargs -n2 -P10 sh -c 'kubectl delete pod $1 -n $0 --force --grace-period=0 || true' --
       when: kubectl_check.rc == 0
       ignore_errors: yes
 
-    - name: Delete PersistentVolumeClaims
-      kubernetes.core.k8s:
-        api_version: v1
-        kind: PersistentVolumeClaim
-        namespace: "{{ item }}"
-        state: absent
-        wait: true
-      loop: "{{ namespaces }}"
-      ignore_errors: yes
+    - name: Wait for parallel cleanups to complete
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      register: cleanup_results
+      until: cleanup_results.finished
+      retries: 60
+      delay: 5
+      loop:
+        - "{{ helm_cleanup }}"
+        - "{{ namespace_cleanup }}"
       when: kubectl_check.rc == 0
+      ignore_errors: yes
+
+    - name: Stop K3s service
+      systemd:
+        name: k3s
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+      when: k3s_status.rc == 0
+
+    - name: Kill any remaining K3s processes
+      shell: |
+        pkill -f k3s || true
+        pkill -f containerd-shim || true
+        sleep 5
+        pkill -9 -f k3s || true
+      ignore_errors: yes
+
+    - name: Unmount K3s filesystems
+      shell: |
+        umount $(mount | grep '/var/lib/rancher/k3s' | awk '{print $3}') 2>/dev/null || true
+        umount $(mount | grep '/run/k3s' | awk '{print $3}') 2>/dev/null || true
+      ignore_errors: yes
+
+    - name: Remove K3s data directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ k3s_data_dir }}"
+        - "{{ k3s_config_dir }}"
+        - "/run/k3s"
+        - "/var/lib/cni"
+        - "/var/log/containers"
+        - "/var/log/pods"
+        - "/opt/cni"
+      ignore_errors: yes
+
+    - name: Remove network interfaces created by K3s
+      shell: |
+        ip link delete cni0 2>/dev/null || true
+        ip link delete flannel.1 2>/dev/null || true
+        ip link delete kube-bridge 2>/dev/null || true
+        for iface in $(ip link show | grep veth | awk '{print $2}' | cut -d@ -f1); do
+          ip link delete $iface 2>/dev/null || true
+        done
+      ignore_errors: yes
+
+    - name: Clean iptables rules
+      shell: |
+        iptables -t nat -F || true
+        iptables -t mangle -F || true
+        iptables -F || true
+        iptables -X || true
+      ignore_errors: yes
+
+    - name: Remove K3s binary (optional)
+      block:
+        - name: Confirm K3s binary deletion
+          pause:
+            prompt: "Do you want to remove the K3s binary? (yes/no)"
+          register: delete_k3s_binary
+
+        - name: Remove K3s binary
+          file:
+            path: /usr/local/bin/k3s
+            state: absent
+          when: delete_k3s_binary.user_input | lower == 'yes'
 
     - name: Clean up Age keys (optional - requires confirmation)
       block:
@@ -82,13 +156,29 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - ./Certificates/
+        - ./Ansible/Certificates/
       ignore_errors: yes
 
-    - name: Display cleanup summary
+    - name: Verify cluster destruction
+      shell: |
+        systemctl is-active k3s 2>/dev/null && echo "WARNING: K3s service still running" || echo "K3s service stopped"
+        pgrep -f k3s >/dev/null && echo "WARNING: K3s processes still running" || echo "K3s processes terminated"
+        kubectl cluster-info 2>/dev/null && echo "WARNING: Cluster still accessible" || echo "Cluster inaccessible - successfully destroyed"
+      register: verify_destruction
+      ignore_errors: yes
+
+    - name: Display comprehensive cleanup summary
       debug:
         msg:
-          - "Cluster {{ cluster_name }} cleanup completed"
-          - "Namespaces deleted: {{ namespaces | join(', ') }}"
-          - "All Helm releases uninstalled"
-          - "SOPS secrets removed"
+          - "=== NOAH CLUSTER DESTRUCTION COMPLETE ==="
+          - "Cluster: {{ cluster_name | default(default_cluster_name) }}"
+          - "Helm releases: Uninstalled in parallel"
+          - "Namespaces: Force deleted (excluding system namespaces)"
+          - "K3s service: Stopped and disabled"
+          - "K3s processes: Terminated"
+          - "Data directories: Removed"
+          - "Network interfaces: Cleaned up"
+          - "Iptables rules: Flushed"
+          - "Verification results:"
+          - "{{ verify_destruction.stdout_lines }}"
+          - "=== DESTRUCTION SUMMARY END ==="

@@ -37,6 +37,20 @@ resources:
     cpu: 500m
     memory: 512Mi
 
+# Health check configuration
+healthcheck:
+  livenessProbe:
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+
 nodeSelector: {}
 tolerations: []
 affinity: {}

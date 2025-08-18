@@ -3,7 +3,19 @@
 import subprocess
 import yaml
 import json
+"""Helm chart deployment module"""
+
+import subprocess
+import json
 from pathlib import Path
+from typing import Dict, Any, Optional
+
+# Optional imports with graceful fallbacks
+yaml: Optional[Any] = None
+try:
+    import yaml  # type: ignore
+except ImportError:
+    pass
 from typing import Dict, Any, Optional
 
 class HelmDeployer:
@@ -19,16 +31,19 @@ class HelmDeployer:
         if not chart_path.exists():
             raise Exception(f"Chart not found: {chart_path}")
         
-        # Build helm install command
+        # Build helm install command  
         cmd = [
             'helm', 'upgrade', '--install',
             chart_name,
             str(chart_path),
             '--namespace', namespace,
             '--create-namespace',
-            '--timeout', self.timeout,
-            '--wait'
+            '--timeout', self.timeout
         ]
+        
+        # Add --wait flag for smaller charts, but not for complex ones like samba4
+        if chart_name not in ['samba4']:
+            cmd.append('--wait')
         
         # Add values file if exists
         values_file = chart_path / 'values.yaml'
@@ -41,6 +56,8 @@ class HelmDeployer:
             # Decrypt and apply secrets
             decrypted = self._decrypt_helm_secrets(encrypted_values)
             temp_values = chart_path / 'secrets' / '.temp-values.yaml'
+            if yaml is None:
+                raise Exception("PyYAML is required for Helm deployments. Install with: pip install PyYAML")
             temp_values.write_text(yaml.dump(decrypted))
             cmd.extend(['--values', str(temp_values)])
         
@@ -48,6 +65,8 @@ class HelmDeployer:
         if values:
             temp_custom_values = chart_path / 'secrets' / '.temp-custom-values.yaml'
             temp_custom_values.parent.mkdir(exist_ok=True)
+            if yaml is None:
+                raise Exception("PyYAML is required for Helm deployments. Install with: pip install PyYAML")
             with open(temp_custom_values, 'w') as f:
                 yaml.dump(values, f)
             cmd.extend(['--values', str(temp_custom_values)])

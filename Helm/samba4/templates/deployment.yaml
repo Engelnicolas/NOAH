@@ -6,6 +6,8 @@ metadata:
     {{- include "samba4.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "samba4.selectorLabels" . | nindent 6 }}
@@ -14,6 +16,23 @@ spec:
       labels:
         {{- include "samba4.selectorLabels" . | nindent 8 }}
     spec:
+      initContainers:
+      - name: init-samba
+        image: busybox:1.35
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Initializing Samba4 data directory..."
+          mkdir -p /var/lib/samba/sysvol
+          mkdir -p /var/lib/samba/private
+          mkdir -p /etc/samba/tls
+          chown -R 1000:1000 /var/lib/samba
+          echo "Initialization complete"
+        volumeMounts:
+        - name: samba-data
+          mountPath: /var/lib/samba
+        securityContext:
+          runAsUser: 0
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -54,6 +73,21 @@ spec:
         - name: netbios
           containerPort: 139
           protocol: TCP
+        livenessProbe:
+          tcpSocket:
+            port: 389
+          initialDelaySeconds: 120
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 5
+        readinessProbe:
+          tcpSocket:
+            port: 389
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
         volumeMounts:
         - name: samba-data
           mountPath: /var/lib/samba

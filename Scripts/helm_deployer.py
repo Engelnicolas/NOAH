@@ -16,7 +16,7 @@ class HelmDeployer:
     def __init__(self, config_loader):
         self.config = config_loader
         self.chart_dir = Path(self.config.get('HELM_CHART_DIR', './Helm'))
-        self.timeout = self.config.get('HELM_TIMEOUT', '900s')  # Increased to 15 minutes
+        self.timeout = self.config.get('HELM_TIMEOUT', '600s')  # 10 minutes - reduced from 15
     
     def deploy_chart(self, chart_name: str, namespace: str, values: Optional[Dict] = None):
         """Deploy a Helm chart"""
@@ -25,6 +25,14 @@ class HelmDeployer:
         if not chart_path.exists():
             raise Exception(f"Chart not found: {chart_path}")
         
+        # Chart-specific timeout overrides
+        chart_timeouts = {
+            'cilium': '600s',      # 10 minutes - CNI deployment
+            'authentik': '720s',   # 12 minutes - DB + App initialization 
+            'samba4': '900s',      # 15 minutes - AD domain setup is complex
+        }
+        timeout = chart_timeouts.get(chart_name, self.timeout)
+        
         # Build helm install command  
         cmd = [
             'helm', 'upgrade', '--install',
@@ -32,7 +40,7 @@ class HelmDeployer:
             str(chart_path),
             '--namespace', namespace,
             '--create-namespace',
-            '--timeout', self.timeout
+            '--timeout', timeout
         ]
         
         # Add --wait flag for smaller charts, but not for complex ones like samba4 and authentik

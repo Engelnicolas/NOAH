@@ -1,0 +1,143 @@
+# NOAH Cilium CNI Configuration
+# Cilium networking configuration with SSO integration
+
+# Global configuration
+nameOverride: ""
+fullnameOverride: ""
+
+# Cilium configuration
+cilium:
+  # Basic Cilium settings
+  operator:
+    replicas: 1
+    
+  # IPAM configuration
+  ipam:
+    mode: kubernetes
+    
+  # Kube-proxy replacement
+  kubeProxyReplacement: strict
+  
+  # Kubernetes service configuration
+  k8sServiceHost: kubernetes.default.svc.cluster.local
+  k8sServicePort: 443
+  
+  # Hubble observability
+  hubble:
+    enabled: true
+    relay:
+      enabled: true
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          cpu: 1000m
+          memory: 1024Mi
+    ui:
+      enabled: true
+      replicas: 1
+      backend:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 1000m
+            memory: 1024Mi
+      frontend:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 1000m
+            memory: 1024Mi
+      ingress:
+        enabled: true
+        className: nginx
+        annotations:
+          nginx.ingress.kubernetes.io/auth-url: "https://auth.noah-infra.com/outpost.goauthentik.io/auth/nginx"
+          nginx.ingress.kubernetes.io/auth-signin: "https://auth.noah-infra.com/outpost.goauthentik.io/start?rd=$escaped_request_uri"
+          nginx.ingress.kubernetes.io/auth-response-headers: "Set-Cookie,X-authentik-username,X-authentik-groups,X-authentik-email,X-authentik-name,X-authentik-uid"
+          nginx.ingress.kubernetes.io/auth-snippet: |
+            proxy_set_header X-Forwarded-Proto https;
+        hosts:
+          - host: hubble.noah-infra.com
+            paths:
+              - path: /
+                pathType: Prefix
+        tls:
+          - secretName: hubble-tls
+            hosts:
+              - hubble.noah-infra.com
+  
+  # Authentication configuration
+  authentication:
+    mode: required
+    oidc:
+      enabled: true
+      configMapName: cilium-sso-config
+      
+  # Security configuration
+  encryption:
+    enabled: true
+    type: wireguard
+    
+  # Monitoring and metrics
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      trustCRDsExist: true
+      
+  # Resource limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 4000m
+      memory: 4Gi
+
+# SSO Configuration
+sso:
+  enabled: true
+  provider: authentik
+  config:
+    issuer: "https://auth.noah-infra.com/application/o/cilium/"
+    clientId: cilium
+    usernameClaim: preferred_username
+    groupsClaim: groups
+    requiredClaims:
+      - name: groups
+        value: cilium-admins
+
+# TLS Configuration
+tls:
+  enabled: true
+  secretName: cilium-tls
+  
+# Service configuration
+service:
+  type: ClusterIP
+  
+# Ingress configuration for additional services
+ingress:
+  enabled: false
+
+# Node selector and tolerations
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Additional configuration
+config:
+  # Enable L7 proxy for application-aware filtering
+  l7Proxy: true
+  
+  # Enable bandwidth manager
+  bandwidthManager: true
+  
+  # Enable local redirect policy
+  localRedirectPolicy: true

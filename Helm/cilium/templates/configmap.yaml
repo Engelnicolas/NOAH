@@ -1,4 +1,3 @@
-{{- if .Values.sso.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -8,15 +7,10 @@ metadata:
     {{- include "cilium.labels" . | nindent 4 }}
 data:
   oidc-config.yaml: |
-    issuer: {{ .Values.sso.config.issuer | quote }}
-    client_id: {{ .Values.sso.config.clientId | quote }}
-    usernameClaim: {{ .Values.sso.config.usernameClaim | quote }}
-    groupsClaim: {{ .Values.sso.config.groupsClaim | quote }}
-    {{- if .Values.sso.config.requiredClaims }}
+    issuer: "https://auth.noah-infra.com/application/o/cilium/"
+    client_id: cilium
+    usernameClaim: preferred_username
+    groupsClaim: groups
     requiredClaims:
-      {{- range .Values.sso.config.requiredClaims }}
-      - name: {{ .name | quote }}
-        value: {{ .value | quote }}
-      {{- end }}
-    {{- end }}
-{{- end }}
+      - name: groups
+        value: cilium-admins

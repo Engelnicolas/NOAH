@@ -1,17 +1,18 @@
 apiVersion: v2
-name: cilium
-description: A Helm chart for Cilium CNI with SSO integration for NOAH infrastructure
+name: noah-cilium
+description: NOAH wrapper for Cilium CNI with SSO integration and security enhancements
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "1.14.5"
 
 dependencies:
   - name: cilium
     version: "1.14.5"
     repository: "https://helm.cilium.io/"
+    condition: cilium.enabled
 
 maintainers:
-  - name: NOAH Team
+  - name: NOAH Infrastructure Team
     email: admin@noah-infra.com
 
 keywords:
@@ -20,12 +21,16 @@ keywords:
   - kubernetes
   - security
   - sso
+  - noah
 
-home: https://cilium.io/
+home: https://noah-infra.com/
 sources:
   - https://github.com/cilium/cilium
+  - https://helm.cilium.io/
 
 annotations:
   category: Networking
   noah.infra.com/component: "networking"
   noah.infra.com/sso-enabled: "true"
+  noah.infra.com/encryption: "sops"
+  noah.infra.com/managed-by: "noah-cli"

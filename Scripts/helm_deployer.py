@@ -74,6 +74,9 @@ class HelmDeployer:
             temp_values = chart_path / 'secrets' / '.temp-values.yaml'
             if temp_values.exists():
                 temp_values.unlink()
+            
+            # Synchronize secrets after deployment to ensure consistency
+            self._synchronize_secrets_post_deployment(chart_name, namespace)
             return True
         else:
             print(f"Failed to deploy {chart_name}: {result.stderr}")
@@ -91,25 +94,123 @@ class HelmDeployer:
             
             # Transform secret data to Helm values format
             if 'authentik' in str(secret_file):
+                # Create coordinated values that ensure all components use the same passwords
+                postgresql_password = string_data.get('postgresql_password', '')
+                redis_password = string_data.get('redis_password', '')
+                secret_key = string_data.get('secret_key', '')
+                
+                print(f"[DEBUG] Using coordinated passwords: PostgreSQL={postgresql_password[:8]}..., Redis={redis_password[:8]}...")
+                
                 return {
                     'authentik': {
-                        'secretKey': string_data.get('secret_key', ''),
+                        'secretKey': secret_key,
                     },
                     'postgresql': {
                         'auth': {
-                            'password': string_data.get('postgresql_password', '')
-                        }
+                            'username': 'authentik',
+                            'database': 'authentik',
+                            'password': postgresql_password
+                        },
+                        'enabled': True
                     },
                     'redis': {
                         'auth': {
-                            'password': string_data.get('redis_password', '')
-                        }
+                            'enabled': True,
+                            'password': redis_password
+                        },
+                        'enabled': True
+                    }
+                }
+            elif 'samba4' in str(secret_file):
+                return {
+                    'samba4': {
+                        'adminPassword': string_data.get('admin_password', ''),
+                        'domainAdminPassword': string_data.get('domain_admin_password', ''),
+                        'kerberosPassword': string_data.get('kerberos_password', '')
                     }
                 }
             # Add more transformations for other charts as needed
             
         return decrypted
     
+    def _synchronize_secrets_post_deployment(self, chart_name: str, namespace: str):
+        """Synchronize secrets after deployment to ensure all components use the same passwords"""
+        if chart_name == 'authentik':
+            try:
+                import subprocess
+                import time
+                
+                # Wait a moment for the deployment to stabilize
+                time.sleep(5)
+                
+                # Get the passwords from the main secret source
+                chart_path = self.chart_dir / chart_name
+                encrypted_values = chart_path / 'secrets' / f'{chart_name}-secrets.enc.yaml'
+                
+                if encrypted_values.exists():
+                    decrypted = self._decrypt_helm_secrets(encrypted_values)
+                    
+                    # Extract the coordinated passwords
+                    postgresql_password = decrypted.get('postgresql', {}).get('auth', {}).get('password', '')
+                    redis_password = decrypted.get('redis', {}).get('auth', {}).get('password', '')
+                    
+                    if postgresql_password and redis_password:
+                        print(f"[INFO] Synchronizing passwords for {chart_name} components...")
+                        
+                        # Update the authentik-secret to match what PostgreSQL and Redis actually use
+                        self._update_authentik_secret_if_needed(namespace, postgresql_password, redis_password)
+                        
+                        print(f"[INFO] Password synchronization completed for {chart_name}")
+                    
+            except Exception as e:
+                print(f"[WARNING] Failed to synchronize secrets for {chart_name}: {e}")
+    
+    def _update_authentik_secret_if_needed(self, namespace: str, postgresql_password: str, redis_password: str):
+        """Update authentik-secret if there's a password mismatch"""
+        try:
+            import subprocess
+            import base64
+            
+            # Check current authentik-secret passwords
+            result = subprocess.run([
+                'kubectl', 'get', 'secret', 'authentik-secret', '-n', namespace, 
+                '-o', 'jsonpath={.data.postgresql-password}'
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                current_pg_password = base64.b64decode(result.stdout).decode('utf-8')
+                
+                # Check if passwords match
+                if current_pg_password != postgresql_password:
+                    print(f"[INFO] Updating authentik-secret with coordinated PostgreSQL password")
+                    
+                    # Update the secret with the correct passwords
+                    pg_b64 = base64.b64encode(postgresql_password.encode()).decode()
+                    redis_b64 = base64.b64encode(redis_password.encode()).decode()
+                    
+                    patch_data = f'{{"data":{{"postgresql-password":"{pg_b64}","redis-password":"{redis_b64}"}}}}'
+                    
+                    subprocess.run([
+                        'kubectl', 'patch', 'secret', 'authentik-secret', '-n', namespace, 
+                        '-p', patch_data
+                    ], check=True)
+                    
+                    # Restart deployments to pick up new secrets
+                    subprocess.run([
+                        'kubectl', 'rollout', 'restart', 
+                        'deployment/authentik-server', 
+                        'deployment/authentik-worker', 
+                        'deployment/authentik-ldap-outpost', 
+                        '-n', namespace
+                    ], check=True)
+                    
+                    print(f"[INFO] Authentik deployments restarted with synchronized passwords")
+                else:
+                    print(f"[INFO] Authentik secret passwords are already synchronized")
+                    
+        except Exception as e:
+            print(f"[WARNING] Failed to update authentik secret: {e}")
+
     def uninstall_chart(self, chart_name: str, namespace: str):
         """Uninstall a Helm chart"""
         cmd = ['helm', 'uninstall', chart_name, '--namespace', namespace]

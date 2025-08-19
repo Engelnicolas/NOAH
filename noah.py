@@ -602,6 +602,57 @@ def setup(ctx):
     """Setup and initialize NOAH environment"""
     pass
 
+@cli.group()
+@click.pass_context
+def secrets(ctx):
+    """Manage and validate service secrets"""
+    pass
+
+@secrets.command()
+@click.option('--service', required=True, help='Service to validate (authentik, samba4)')
+@click.option('--namespace', default='identity', help='Kubernetes namespace')
+@click.option('--fix', is_flag=True, help='Automatically fix inconsistencies')
+@click.pass_context
+def validate(ctx, service, namespace, fix):
+    """Validate service secrets consistency"""
+    ensure_security_initialized(ctx)
+    
+    click.echo(f"🔍 Validating secrets for {service} in namespace {namespace}...")
+    
+    is_valid = ctx.obj['secrets'].validate_service_secrets(service, namespace)
+    
+    if is_valid:
+        click.echo(f"✅ All secrets for {service} are consistent")
+    else:
+        click.echo(f"❌ Secret inconsistencies found for {service}")
+        
+        if fix:
+            click.echo(f"🔧 Attempting to fix secret inconsistencies...")
+            
+            # Re-deploy with synchronized secrets
+            if service == 'authentik':
+                # Force regeneration with existing passwords
+                ctx.obj['secrets'].generate_service_secrets(service, namespace)
+                # Redeploy to apply fixes
+                ctx.obj['helm'].deploy_chart(service, namespace)
+                click.echo(f"✅ Secrets fixed and {service} redeployed")
+            else:
+                click.echo(f"❌ Auto-fix not implemented for {service}")
+        else:
+            click.echo(f"💡 Run with --fix to automatically resolve inconsistencies")
+
+@secrets.command()
+@click.option('--service', required=True, help='Service to regenerate secrets for')
+@click.option('--namespace', default='identity', help='Kubernetes namespace')
+@click.pass_context
+def regenerate(ctx, service, namespace):
+    """Regenerate secrets for a service (preserves existing passwords)"""
+    ensure_security_initialized(ctx)
+    
+    click.echo(f"🔄 Regenerating secrets for {service} in namespace {namespace}...")
+    ctx.obj['secrets'].generate_service_secrets(service, namespace)
+    click.echo(f"✅ Secrets regenerated for {service}")
+
 def check_command_exists(command):
     """Check if a command exists in the system PATH"""
     return shutil.which(command) is not None

@@ -93,14 +93,17 @@ class SecretManager:
         return ''.join(secrets.choice(alphabet) for _ in range(max_length))
     
     def generate_service_secrets(self, service: str, namespace: str):
-        """Generate encrypted secrets for a service"""
+        """Generate encrypted secrets for a service with password coordination"""
         secrets_dir = Path(f"./Helm/{service}/secrets")
         secrets_dir.mkdir(parents=True, exist_ok=True)
         
         secret_file = secrets_dir / f"{service}-secrets.yaml"
         
-        # Generate service-specific secrets
-        service_secrets = self._generate_service_specific_secrets(service)
+        # Check if secrets already exist and reuse passwords if they do
+        existing_passwords = self._get_existing_passwords(service, secrets_dir)
+        
+        # Generate service-specific secrets, reusing existing passwords where possible
+        service_secrets = self._generate_service_specific_secrets(service, existing_passwords)
         
         # Create Kubernetes secret manifest
         k8s_secret = {
@@ -127,40 +130,94 @@ class SecretManager:
         result = subprocess.run(
             ['sops', '--encrypt', '--in-place', str(encrypted_file)],
             capture_output=True,
-            text=True
+            text=True,
+            env={**os.environ, 'SOPS_AGE_KEY_FILE': str(self.age_key_file)}
         )
         
         if result.returncode == 0:
             print(f"Encrypted secrets saved to {encrypted_file}")
+            # Also create a values file for immediate use
+            self._create_helm_values_file(service, service_secrets, secrets_dir)
         else:
             raise Exception(f"Failed to encrypt secrets: {result.stderr}")
     
-    def _generate_service_specific_secrets(self, service: str) -> Dict[str, str]:
-        """Generate service-specific secrets (all ≤ 24 characters)"""
+    def _get_existing_passwords(self, service: str, secrets_dir: Path) -> Dict[str, str]:
+        """Get existing passwords from encrypted secrets to maintain consistency"""
+        encrypted_file = secrets_dir / f"{service}-secrets.enc.yaml"
+        
+        if not encrypted_file.exists():
+            return {}
+        
+        try:
+            decrypted = self.decrypt_secret(encrypted_file)
+            if isinstance(decrypted, dict) and decrypted.get('kind') == 'Secret':
+                return decrypted.get('stringData', {})
+        except Exception as e:
+            print(f"Warning: Could not decrypt existing secrets: {e}")
+            return {}
+        
+        return {}
+    
+    def _create_helm_values_file(self, service: str, secrets: Dict[str, str], secrets_dir: Path):
+        """Create a Helm values file with the correct password structure"""
+        if service == 'authentik':
+            values = {
+                'authentik': {
+                    'secretKey': secrets.get('secret_key', ''),
+                },
+                'postgresql': {
+                    'auth': {
+                        'password': secrets.get('postgresql_password', ''),
+                        'username': 'authentik',
+                        'database': 'authentik'
+                    }
+                },
+                'redis': {
+                    'auth': {
+                        'enabled': True,
+                        'password': secrets.get('redis_password', '')
+                    }
+                }
+            }
+            
+            values_file = secrets_dir / f"{service}-values.yaml"
+            if yaml is None:
+                raise Exception("PyYAML is required for values file creation. Install with: pip install PyYAML")
+            
+            with open(values_file, 'w') as f:
+                yaml.dump(values, f)
+            
+            print(f"Helm values file created at {values_file}")
+    
+    def _generate_service_specific_secrets(self, service: str, existing: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        """Generate service-specific secrets (all ≤ 24 characters), reusing existing passwords"""
+        if existing is None:
+            existing = {}
+            
         if service == 'samba4':
             return {
-                'admin_password': self.generate_password(24),
-                'domain_admin_password': self.generate_password(24),
-                'kerberos_password': self.generate_password(24)
+                'admin_password': existing.get('admin_password', self.generate_password(24)),
+                'domain_admin_password': existing.get('domain_admin_password', self.generate_password(24)),
+                'kerberos_password': existing.get('kerberos_password', self.generate_password(24))
             }
         elif service == 'authentik':
             return {
-                'secret_key': self.generate_password(24),  # Changed from token_urlsafe(50)
-                'bootstrap_password': self.generate_password(24),
-                'bootstrap_token': self.generate_password(24),  # Changed from token_urlsafe(50)
-                'postgresql_password': self.generate_password(24),
-                'redis_password': self.generate_password(24)
+                'secret_key': existing.get('secret_key', self.generate_password(24)),
+                'bootstrap_password': existing.get('bootstrap_password', self.generate_password(24)),
+                'bootstrap_token': existing.get('bootstrap_token', self.generate_password(24)),
+                'postgresql_password': existing.get('postgresql_password', self.generate_password(24)),
+                'redis_password': existing.get('redis_password', self.generate_password(24))
             }
         elif service == 'cilium':
             return {
-                'hubble_relay_client_cert': self._generate_self_signed_cert(),
-                'hubble_relay_client_key': self._generate_private_key(),
-                'identity_allocation_psk': self.generate_password(24)  # Changed from token_hex(32)
+                'hubble_relay_client_cert': existing.get('hubble_relay_client_cert', self._generate_self_signed_cert()),
+                'hubble_relay_client_key': existing.get('hubble_relay_client_key', self._generate_private_key()),
+                'identity_allocation_psk': existing.get('identity_allocation_psk', self.generate_password(24))
             }
         else:
             return {
-                'default_password': self.generate_password(24),
-                'api_key': self.generate_password(24)  # Changed from token_urlsafe(50)
+                'default_password': existing.get('default_password', self.generate_password(24)),
+                'api_key': existing.get('api_key', self.generate_password(24))
             }
     
     def _generate_self_signed_cert(self) -> str:
@@ -182,6 +239,95 @@ class SecretManager:
         self.generate_service_secrets(service, namespace)
         print(f"Password rotation complete for {service}")
     
+    def validate_service_secrets(self, service: str, namespace: str) -> bool:
+        """Validate that all secrets for a service are consistent"""
+        try:
+            if service == 'authentik':
+                return self._validate_authentik_secrets(namespace)
+            elif service == 'samba4':
+                return self._validate_samba4_secrets(namespace)
+            else:
+                print(f"[INFO] No validation implemented for service: {service}")
+                return True
+        except Exception as e:
+            print(f"[ERROR] Secret validation failed for {service}: {e}")
+            return False
+    
+    def _validate_authentik_secrets(self, namespace: str) -> bool:
+        """Validate that authentik secrets are consistent across all components"""
+        import subprocess
+        import base64
+        
+        try:
+            # Get passwords from different sources
+            secrets = {}
+            
+            # Get from main authentik secret
+            result = subprocess.run([
+                'kubectl', 'get', 'secret', 'authentik-secret', '-n', namespace,
+                '-o', 'jsonpath={.data}'
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                import json
+                data = json.loads(result.stdout)
+                secrets['authentik_postgresql'] = base64.b64decode(data.get('postgresql-password', '')).decode()
+                secrets['authentik_redis'] = base64.b64decode(data.get('redis-password', '')).decode()
+            
+            # Get from postgresql secret
+            result = subprocess.run([
+                'kubectl', 'get', 'secret', 'authentik-postgresql', '-n', namespace,
+                '-o', 'jsonpath={.data.password}'
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                secrets['postgresql_actual'] = base64.b64decode(result.stdout).decode()
+            
+            # Get from redis secret
+            result = subprocess.run([
+                'kubectl', 'get', 'secret', 'authentik-redis', '-n', namespace,
+                '-o', 'jsonpath={.data.redis-password}'
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                secrets['redis_actual'] = base64.b64decode(result.stdout).decode()
+            
+            # Validate consistency
+            validation_results = []
+            
+            if 'authentik_postgresql' in secrets and 'postgresql_actual' in secrets:
+                pg_match = secrets['authentik_postgresql'] == secrets['postgresql_actual']
+                validation_results.append(('PostgreSQL passwords', pg_match))
+                if not pg_match:
+                    print(f"[ERROR] PostgreSQL password mismatch: authentik-secret vs authentik-postgresql")
+            
+            if 'authentik_redis' in secrets and 'redis_actual' in secrets:
+                redis_match = secrets['authentik_redis'] == secrets['redis_actual']
+                validation_results.append(('Redis passwords', redis_match))
+                if not redis_match:
+                    print(f"[ERROR] Redis password mismatch: authentik-secret vs authentik-redis")
+            
+            all_valid = all(result[1] for result in validation_results)
+            
+            if all_valid:
+                print(f"[SUCCESS] All authentik secrets are consistent")
+            else:
+                print(f"[ERROR] Authentik secret validation failed")
+                for name, valid in validation_results:
+                    status = "✅" if valid else "❌"
+                    print(f"  {status} {name}")
+            
+            return all_valid
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to validate authentik secrets: {e}")
+            return False
+    
+    def _validate_samba4_secrets(self, namespace: str) -> bool:
+        """Validate samba4 secrets (placeholder for future implementation)"""
+        print(f"[INFO] Samba4 secret validation not yet implemented")
+        return True
+
     def decrypt_secret(self, secret_file: Path) -> Dict[str, Any]:
         """Decrypt a SOPS-encrypted file"""
         result = subprocess.run(

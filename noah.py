@@ -4,15 +4,15 @@ NOAH - Network Operations & Automation Hub
 Main CLI for deploying and managing Kubernetes-based information systems
 """
 
-import click
+import click  # type: ignore
 import sys
 import os
 import json
-import yaml
+import yaml  # type: ignore
 import subprocess
 import shutil
 from pathlib import Path
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 
 # Load environment variables from .env file
 load_dotenv()
@@ -26,6 +26,36 @@ from Scripts.config_loader import ConfigLoader
 VERSION = "0.0.1"
 # Load default domain from environment, fallback to noah-infra.com
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
+
+def check_repository_root():
+    """Check if the current directory is the root of the NOAH repository"""
+    current_dir = Path.cwd()
+    
+    # Check for key repository files/directories that should exist in the root
+    required_items = [
+        'Scripts',
+        'Helm', 
+        'Ansible',
+        'noah.py'
+    ]
+    
+    missing_items = []
+    for item in required_items:
+        if not (current_dir / item).exists():
+            missing_items.append(item)
+    
+    if missing_items:
+        click.echo(f"❌ Error: NOAH must be run from the repository root directory!", err=True)
+        click.echo(f"", err=True)
+        click.echo(f"Current directory: {current_dir}", err=True)
+        click.echo(f"Missing required items: {', '.join(missing_items)}", err=True)
+        click.echo(f"", err=True)
+        click.echo(f"💡 Please change to the NOAH repository root directory and try again:", err=True)
+        click.echo(f"   cd /path/to/noah-repository", err=True)
+        click.echo(f"   python noah.py <command>", err=True)
+        sys.exit(1)
+    
+    return True
 
 def get_security_config(domain=DEFAULT_DOMAIN):
     """Get security configuration for Helm and Ansible"""
@@ -252,11 +282,14 @@ def ensure_security_initialized(ctx):
 @click.group()
 @click.version_option(version=VERSION, prog_name="NOAH")
 @click.pass_context
-def cli(ctx):
+def cli(ctx: click.Context) -> None:
     """NOAH - Network Operations & Automation Hub
     
     Automates deployment of open source information systems on Kubernetes
     """
+    # Check if running from repository root before initializing
+    check_repository_root()
+    
     ctx.ensure_object(dict)
     ctx.obj['config'] = ConfigLoader()
     ctx.obj['cluster'] = ClusterManager(ctx.obj['config'])
@@ -264,7 +297,7 @@ def cli(ctx):
     ctx.obj['helm'] = HelmDeployer(ctx.obj['config'])
     ctx.obj['ansible'] = AnsibleRunner(ctx.obj['config'])
 
-@cli.group()
+@cli.group()  # type: ignore
 @click.pass_context
 def cluster(ctx):
     """Manage Kubernetes cluster lifecycle"""
@@ -344,54 +377,7 @@ def destroy(ctx, name, force, keep_secrets):
         click.echo("[VERBOSE] Cleaning up local secrets and certificates...")
         ctx.obj['secrets'].cleanup_local_secrets()
 
-@cli.group()
-@click.pass_context
-def secrets(ctx):
-    """Manage secrets with SOPS and Age"""
-    pass
-
-@secrets.command()
-@click.pass_context
-def init(ctx):
-    """Initialize Age keys and SOPS configuration"""
-    click.echo("[VERBOSE] Starting secret management initialization...")
-    click.echo("Initializing secret management...")
-    
-    # Create Age directory if it doesn't exist
-    age_dir = Path("Age")
-    age_dir.mkdir(exist_ok=True)
-    
-    click.echo("[VERBOSE] Initializing Age keys...")
-    ctx.obj['secrets'].initialize_age()
-    click.echo("[VERBOSE] Configuring SOPS...")
-    ctx.obj['secrets'].configure_sops()
-
-@secrets.command()
-@click.option('--service', required=True, help='Service name')
-@click.option('--namespace', default='default', help='Kubernetes namespace')
-@click.pass_context
-def generate(ctx, service, namespace):
-    """Generate encrypted secrets for a service"""
-    # Ensure security is initialized
-    ensure_security_initialized(ctx)
-    
-    click.echo(f"[VERBOSE] Starting secret generation process...")
-    click.echo(f"[VERBOSE] Service: {service}")
-    click.echo(f"[VERBOSE] Namespace: {namespace}")
-    click.echo(f"Generating secrets for {service} in namespace {namespace}")
-    ctx.obj['secrets'].generate_service_secrets(service, namespace)
-
-@secrets.command()
-@click.option('--service', required=True, help='Service name')
-@click.pass_context
-def rotate(ctx, service):
-    """Rotate passwords for a service"""
-    click.echo(f"[VERBOSE] Starting password rotation process...")
-    click.echo(f"[VERBOSE] Service: {service}")
-    click.echo(f"Rotating passwords for {service}")
-    ctx.obj['secrets'].rotate_passwords(service)
-
-@cli.group()
+@cli.group()  # type: ignore
 @click.pass_context
 def certificates(ctx):
     """Manage TLS certificates"""
@@ -401,7 +387,7 @@ def certificates(ctx):
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for TLS certificates')
 @click.option('--force', is_flag=True, help='Force regeneration of existing certificates')
 @click.pass_context
-def generate(ctx, domain, force):
+def generate_certs(ctx, domain, force):
     """Generate self-signed TLS certificates"""
     certs_dir = Path("Certificates")
     
@@ -428,7 +414,7 @@ def deploy_manager(ctx, namespace):
     click.echo(f"[VERBOSE] Deploying cert-manager to namespace {namespace}")
     ctx.obj['helm'].deploy_chart('cert-manager', namespace)
 
-@cli.group()
+@cli.group()  # type: ignore
 @click.pass_context
 def deploy(ctx):
     """Deploy services to Kubernetes"""
@@ -596,17 +582,58 @@ def all(ctx, domain, config_file):
     click.echo("[VERBOSE] All components successfully deployed!")
     click.echo(f"[VERBOSE] Services available at: https://*.{domain}")
 
-@cli.group()
+@cli.group()  # type: ignore
 @click.pass_context
 def setup(ctx):
     """Setup and initialize NOAH environment"""
     pass
 
-@cli.group()
+@cli.group()  # type: ignore
 @click.pass_context
 def secrets(ctx):
     """Manage and validate service secrets"""
     pass
+
+@secrets.command()
+@click.pass_context
+def init(ctx):
+    """Initialize Age keys and SOPS configuration"""
+    click.echo("[VERBOSE] Starting secret management initialization...")
+    click.echo("Initializing secret management...")
+    
+    # Create Age directory if it doesn't exist
+    age_dir = Path("Age")
+    age_dir.mkdir(exist_ok=True)
+    
+    click.echo("[VERBOSE] Initializing Age keys...")
+    ctx.obj['secrets'].initialize_age()
+    click.echo("[VERBOSE] Configuring SOPS...")
+    ctx.obj['secrets'].configure_sops()
+
+@secrets.command()
+@click.option('--service', required=True, help='Service name')
+@click.option('--namespace', default='default', help='Kubernetes namespace')
+@click.pass_context
+def generate(ctx, service, namespace):
+    """Generate encrypted secrets for a service"""
+    # Ensure security is initialized
+    ensure_security_initialized(ctx)
+    
+    click.echo(f"[VERBOSE] Starting secret generation process...")
+    click.echo(f"[VERBOSE] Service: {service}")
+    click.echo(f"[VERBOSE] Namespace: {namespace}")
+    click.echo(f"Generating secrets for {service} in namespace {namespace}")
+    ctx.obj['secrets'].generate_service_secrets(service, namespace)
+
+@secrets.command()
+@click.option('--service', required=True, help='Service name')
+@click.pass_context
+def rotate(ctx, service):
+    """Rotate passwords for a service"""
+    click.echo(f"[VERBOSE] Starting password rotation process...")
+    click.echo(f"[VERBOSE] Service: {service}")
+    click.echo(f"Rotating passwords for {service}")
+    ctx.obj['secrets'].rotate_passwords(service)
 
 @secrets.command()
 @click.option('--service', required=True, help='Service to validate (authentik, samba4)')
@@ -667,6 +694,169 @@ def print_status(message, status="INFO"):
     }
     reset = "\033[0m"
     click.echo(f"{colors.get(status, '')}{message}{reset}")
+
+def update_sops_version():
+    """Update SOPS to the latest version"""
+    import requests  # type: ignore
+    import tarfile
+    import tempfile
+    import stat
+    import platform
+    
+    try:
+        print_status("[INFO] Checking current SOPS version...", "INFO")
+        
+        # Get current version
+        current_version = None
+        if check_command_exists('sops'):
+            try:
+                result = subprocess.run(['sops', '--version'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    # Extract version from output like "sops 3.8.1 (latest)"
+                    for line in result.stdout.split('\n'):
+                        if 'sops' in line.lower():
+                            parts = line.split()
+                            for part in parts:
+                                if part.replace('.', '').replace('-', '').isdigit() or '.' in part:
+                                    current_version = part
+                                    break
+                            break
+            except Exception:
+                pass
+        
+        if current_version:
+            print_status(f"[INFO] Current SOPS version: {current_version}", "INFO")
+        else:
+            print_status("[INFO] SOPS not found or version not detected", "INFO")
+        
+        # Get latest version from GitHub API
+        print_status("[INFO] Fetching latest SOPS version...", "INFO")
+        response = requests.get("https://api.github.com/repos/getsops/sops/releases/latest", timeout=10)
+        response.raise_for_status()
+        
+        latest_release = response.json()
+        latest_version = latest_release['tag_name'].lstrip('v')
+        
+        print_status(f"[INFO] Latest SOPS version: {latest_version}", "INFO")
+        
+        # Check if update is needed
+        def version_compare(v1, v2):
+            """Compare two version strings"""
+            try:
+                v1_parts = [int(x) for x in v1.split('.')]
+                v2_parts = [int(x) for x in v2.split('.')]
+                
+                # Pad shorter version with zeros
+                max_len = max(len(v1_parts), len(v2_parts))
+                v1_parts += [0] * (max_len - len(v1_parts))
+                v2_parts += [0] * (max_len - len(v2_parts))
+                
+                for i in range(max_len):
+                    if v1_parts[i] < v2_parts[i]:
+                        return -1
+                    elif v1_parts[i] > v2_parts[i]:
+                        return 1
+                return 0
+            except (ValueError, AttributeError):
+                return -1  # Assume update needed if comparison fails
+        
+        if current_version and version_compare(current_version.strip(), latest_version) >= 0:
+            print_status("[SUCCESS] SOPS is already up to date", "SUCCESS")
+            return True
+        
+        print_status(f"[INFO] Updating SOPS from {current_version or 'not installed'} to {latest_version}...", "INFO")
+        
+        # Determine architecture and OS
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        
+        # Map architecture names
+        arch_map = {
+            'x86_64': 'amd64',
+            'amd64': 'amd64',
+            'arm64': 'arm64',
+            'aarch64': 'arm64',
+            'armv7l': 'arm',
+        }
+        
+        arch = arch_map.get(machine, 'amd64')
+        
+        # Find the appropriate download URL
+        download_url = None
+        binary_name = f"sops-v{latest_version}.{system}.{arch}"
+        
+        for asset in latest_release['assets']:
+            if asset['name'] == binary_name:
+                download_url = asset['browser_download_url']
+                break
+        
+        if not download_url:
+            print_status(f"[ERROR] No binary found for {system}-{arch}", "ERROR")
+            return False
+        
+        # Download and install
+        print_status(f"[INFO] Downloading SOPS {latest_version}...", "INFO")
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_file = Path(temp_dir) / "sops"
+            
+            # Download binary
+            response = requests.get(download_url, timeout=30)
+            response.raise_for_status()
+            
+            temp_file.write_bytes(response.content)
+            
+            # Make executable
+            temp_file.chmod(temp_file.stat().st_mode | stat.S_IEXEC)
+            
+            # Install to /usr/local/bin or ~/.local/bin
+            install_paths = ["/usr/local/bin/sops", f"{Path.home()}/.local/bin/sops"]
+            installed = False
+            
+            for install_path in install_paths:
+                try:
+                    install_dir = Path(install_path).parent
+                    install_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Copy binary
+                    shutil.copy2(temp_file, install_path)
+                    Path(install_path).chmod(Path(install_path).stat().st_mode | stat.S_IEXEC)
+                    
+                    print_status(f"[SUCCESS] SOPS {latest_version} installed to {install_path}", "SUCCESS")
+                    installed = True
+                    break
+                    
+                except PermissionError:
+                    continue
+                except Exception as e:
+                    print_status(f"[WARNING] Failed to install to {install_path}: {e}", "WARNING")
+                    continue
+            
+            if not installed:
+                print_status("[ERROR] Failed to install SOPS - no writable location found", "ERROR")
+                print_status("[INFO] Try running with sudo or ensure ~/.local/bin is in PATH", "INFO")
+                return False
+        
+        # Verify installation
+        if check_command_exists('sops'):
+            try:
+                result = subprocess.run(['sops', '--version'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    print_status("[SUCCESS] SOPS update completed successfully", "SUCCESS")
+                    return True
+            except Exception:
+                pass
+        
+        print_status("[WARNING] SOPS installed but not found in PATH", "WARNING")
+        print_status("[INFO] You may need to restart your shell or update PATH", "INFO")
+        return True
+        
+    except requests.RequestException as e:
+        print_status(f"[ERROR] Network error updating SOPS: {e}", "ERROR")
+        return False
+    except Exception as e:
+        print_status(f"[ERROR] Failed to update SOPS: {e}", "ERROR")
+        return False
 
 @setup.command()
 @click.option('--skip-deps', is_flag=True, help='Skip external dependency checks')
@@ -731,6 +921,18 @@ def initialize(ctx, skip_deps, skip_tests):
             else:
                 print_status(f"[WARNING] {cmd} not found ({desc})", "WARNING")
                 missing_deps.append(cmd)
+        
+        # Check and update SOPS
+        print_status("[INFO] Checking SOPS version...", "INFO")
+        if check_command_exists('sops'):
+            update_sops_version()
+        else:
+            print_status("[WARNING] SOPS not found - attempting to install latest version...", "WARNING")
+            if update_sops_version():
+                print_status("[SUCCESS] SOPS installed successfully", "SUCCESS")
+            else:
+                print_status("[ERROR] Failed to install SOPS", "ERROR")
+                missing_deps.append('sops')
         
         if missing_deps:
             print_status("[WARNING] Missing external dependencies:", "WARNING")
@@ -805,6 +1007,21 @@ def initialize(ctx, skip_deps, skip_tests):
     print_status("[SUCCESS] Setup completed successfully!", "SUCCESS")
 
 @setup.command()
+def update_sops():
+    """Update SOPS to the latest version"""
+    click.echo("🔄 SOPS Version Update")
+    click.echo("=" * 25)
+    click.echo("")
+    
+    if update_sops_version():
+        click.echo("")
+        print_status("SOPS update completed successfully!", "SUCCESS")
+    else:
+        click.echo("")
+        print_status("SOPS update failed - check messages above", "ERROR")
+        sys.exit(1)
+
+@setup.command()
 @click.pass_context
 def doctor(ctx):
     """Diagnose NOAH environment and dependencies"""
@@ -847,6 +1064,40 @@ def doctor(ctx):
             print_status(f"✗ {cmd} missing", "WARNING")
             issues.append(f"Missing {cmd}")
     
+    # Check SOPS version specifically
+    if check_command_exists('sops'):
+        try:
+            result = subprocess.run(['sops', '--version'], capture_output=True, text=True)
+            if result.returncode == 0:
+                # Extract version from output
+                version = "unknown"
+                for line in result.stdout.split('\n'):
+                    if 'sops' in line.lower():
+                        parts = line.split()
+                        for part in parts:
+                            if part.replace('.', '').replace('-', '').isdigit() or '.' in part:
+                                version = part
+                                break
+                        break
+                print_status(f"✓ SOPS version {version}", "SUCCESS")
+                # Check if version is recent (3.8+)
+                try:
+                    major, minor = map(int, version.split('.')[:2])
+                    if major < 3 or (major == 3 and minor < 8):
+                        print_status("⚠ SOPS version is outdated (consider updating)", "WARNING")
+                        issues.append("SOPS version outdated")
+                except:
+                    pass
+            else:
+                print_status("✗ SOPS version check failed", "WARNING")
+                issues.append("SOPS version check failed")
+        except Exception:
+            print_status("✗ SOPS available but version check failed", "WARNING")
+            issues.append("SOPS version check failed")
+    else:
+        print_status("✗ SOPS missing", "ERROR")
+        issues.append("Missing SOPS")
+    
     # Check NOAH files
     noah_files = ['noah.py', 'Scripts/', 'Helm/', 'Ansible/']
     for file_path in noah_files:
@@ -875,7 +1126,7 @@ def doctor(ctx):
         click.echo("")
         click.echo("Run 'python noah.py setup initialize' to fix most issues automatically.")
 
-@cli.group()
+@cli.group()  # type: ignore
 @click.pass_context
 def test(ctx):
     """Test deployed services"""
@@ -898,7 +1149,7 @@ def sso(ctx):
         click.echo("[VERBOSE] SSO test failed - check logs for details")
         sys.exit(1)
 
-@cli.command()
+@cli.command()  # type: ignore
 @click.pass_context
 def status(ctx):
     """Show status of all deployed services"""
@@ -908,4 +1159,4 @@ def status(ctx):
     ctx.obj['cluster'].show_status()
 
 if __name__ == '__main__':
-    cli()
+    cli()  # type: ignore

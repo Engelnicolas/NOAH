@@ -1,7 +1,7 @@
 ---
 - name: Efficiently Destroy NOAH Kubernetes Cluster
-  hosts: local
-  gather_facts: yes
+  hosts: localhost
+  gather_facts: true
   vars:
     default_cluster_name: "noah-cluster"
     k3s_data_dir: "/var/lib/rancher/k3s"
@@ -14,49 +14,49 @@
     
   tasks:
     - name: Check if kubectl is available
-      command: which kubectl
+      ansible.builtin.command: which kubectl
       register: kubectl_check
-      ignore_errors: yes
+      ignore_errors: true
       changed_when: false
 
     - name: Check if K3s is running
-      command: systemctl is-active k3s
+      ansible.builtin.command: systemctl is-active k3s
       register: k3s_status
-      ignore_errors: yes
+      ignore_errors: true
       changed_when: false
 
     - name: Fast cleanup - Delete all Helm releases in parallel
-      shell: |
+      ansible.builtin.shell: |
         helm list --all-namespaces -o json | \
         jq -r '.[] | "\(.name) \(.namespace)"' | \
         xargs -n2 -P10 sh -c 'echo "Uninstalling $0 from $1"; helm uninstall $0 -n $1 --timeout=60s || true' --
       when: kubectl_check.rc == 0
-      ignore_errors: yes
+      ignore_errors: true
       async: 300
       poll: 0
       register: helm_cleanup
 
     - name: Fast cleanup - Delete all non-system namespaces
-      shell: |
+      ansible.builtin.shell: |
         kubectl get namespaces -o json | \
         jq -r '.items[] | select(.metadata.name | test("^(kube-system|kube-public|kube-node-lease|default)$") | not) | .metadata.name' | \
         xargs -r -n1 -P5 kubectl delete namespace --timeout=60s --force --grace-period=0 || true
       when: kubectl_check.rc == 0
-      ignore_errors: yes
+      ignore_errors: true
       async: 180
       poll: 0
       register: namespace_cleanup
 
     - name: Force delete all pods in non-system namespaces
-      shell: |
+      ansible.builtin.shell: |
         kubectl get pods --all-namespaces --field-selector metadata.namespace!=kube-system,metadata.namespace!=kube-public,metadata.namespace!=kube-node-lease,metadata.namespace!=default -o json | \
         jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | \
         xargs -n2 -P10 sh -c 'kubectl delete pod $1 -n $0 --force --grace-period=0 || true' --
       when: kubectl_check.rc == 0
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Wait for parallel cleanups to complete
-      async_status:
+      ansible.builtin.async_status:
         jid: "{{ item.ansible_job_id }}"
       register: cleanup_results
       until: cleanup_results.finished
@@ -66,32 +66,32 @@
         - "{{ helm_cleanup }}"
         - "{{ namespace_cleanup }}"
       when: kubectl_check.rc == 0
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Stop K3s service
-      systemd:
+      ansible.builtin.systemd:
         name: k3s
         state: stopped
-        enabled: no
-      ignore_errors: yes
+        enabled: false
+      ignore_errors: true
       when: k3s_status.rc == 0
 
     - name: Kill any remaining K3s processes
-      shell: |
+      ansible.builtin.shell: |
         pkill -f k3s || true
         pkill -f containerd-shim || true
         sleep 5
         pkill -9 -f k3s || true
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Unmount K3s filesystems
-      shell: |
+      ansible.builtin.shell: |
         umount $(mount | grep '/var/lib/rancher/k3s' | awk '{print $3}') 2>/dev/null || true
         umount $(mount | grep '/run/k3s' | awk '{print $3}') 2>/dev/null || true
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Remove K3s data directories
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: absent
       loop:
@@ -102,35 +102,35 @@
         - "/var/log/containers"
         - "/var/log/pods"
         - "/opt/cni"
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Remove network interfaces created by K3s
-      shell: |
+      ansible.builtin.shell: |
         ip link delete cni0 2>/dev/null || true
         ip link delete flannel.1 2>/dev/null || true
         ip link delete kube-bridge 2>/dev/null || true
         for iface in $(ip link show | grep veth | awk '{print $2}' | cut -d@ -f1); do
           ip link delete $iface 2>/dev/null || true
         done
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Clean iptables rules
-      shell: |
+      ansible.builtin.shell: |
         iptables -t nat -F || true
         iptables -t mangle -F || true
         iptables -F || true
         iptables -X || true
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Remove K3s binary (optional)
       block:
         - name: Confirm K3s binary deletion
-          pause:
+          ansible.builtin.pause:
             prompt: "Do you want to remove the K3s binary? (yes/no)"
           register: delete_k3s_binary
 
         - name: Remove K3s binary
-          file:
+          ansible.builtin.file:
             path: /usr/local/bin/k3s
             state: absent
           when: delete_k3s_binary.user_input | lower == 'yes'
@@ -138,12 +138,12 @@
     - name: Clean up Age keys (optional - requires confirmation)
       block:
         - name: Confirm Age key deletion
-          pause:
+          ansible.builtin.pause:
             prompt: "Do you want to delete Age encryption keys? (yes/no)"
           register: delete_age_keys
 
         - name: Delete Age keys
-          file:
+          ansible.builtin.file:
             path: "{{ item }}"
             state: absent
           loop:
@@ -152,23 +152,23 @@
           when: delete_age_keys.user_input | lower == 'yes'
 
     - name: Clean up generated certificates
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: absent
       loop:
         - ./Ansible/Certificates/
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Verify cluster destruction
-      shell: |
+      ansible.builtin.shell: |
         systemctl is-active k3s 2>/dev/null && echo "WARNING: K3s service still running" || echo "K3s service stopped"
         pgrep -f k3s >/dev/null && echo "WARNING: K3s processes still running" || echo "K3s processes terminated"
         kubectl cluster-info 2>/dev/null && echo "WARNING: Cluster still accessible" || echo "Cluster inaccessible - successfully destroyed"
       register: verify_destruction
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Display comprehensive cleanup summary
-      debug:
+      ansible.builtin.debug:
         msg:
           - "=== NOAH CLUSTER DESTRUCTION COMPLETE ==="
           - "Cluster: {{ cluster_name | default(default_cluster_name) }}"

@@ -1,0 +1,22 @@
+{{- if .Values.sso.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cilium.ssoConfigName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cilium.labels" . | nindent 4 }}
+data:
+  oidc-config.yaml: |
+    issuer: {{ .Values.sso.config.issuer | quote }}
+    client_id: {{ .Values.sso.config.clientId | quote }}
+    usernameClaim: {{ .Values.sso.config.usernameClaim | quote }}
+    groupsClaim: {{ .Values.sso.config.groupsClaim | quote }}
+    {{- if .Values.sso.config.requiredClaims }}
+    requiredClaims:
+      {{- range .Values.sso.config.requiredClaims }}
+      - name: {{ .name | quote }}
+        value: {{ .value | quote }}
+      {{- end }}
+    {{- end }}
+{{- end }}

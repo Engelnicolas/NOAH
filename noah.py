@@ -124,7 +124,13 @@ def get_helm_values_for_service(service, namespace, domain=DEFAULT_DOMAIN):
             },
             'ingress': {
                 'enabled': True,
-                'hosts': [f"auth.{domain}"],
+                'hosts': [{
+                    'host': f"auth.{domain}",
+                    'paths': [{
+                        'path': '/',
+                        'pathType': 'Prefix'
+                    }]
+                }],
                 'tls': [{
                     'secretName': 'authentik-tls',
                     'hosts': [f"auth.{domain}"]

@@ -20,14 +20,14 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
   hosts:
-    - host: authentik.example.com
+    - host: authentik.noah-infra.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: authentik-tls
       hosts:
-        - authentik.example.com
+        - authentik.noah-infra.com
 
 authentik:
   secretKey: "" # Will be auto-generated if not set
@@ -35,21 +35,21 @@ authentik:
     enabled: false
   logLevel: info
   email:
-    host: smtp.example.com
+    host: smtp.noah-infra.com
     port: 587
     username: ""
     password: ""
     useTls: true
     useSSL: false
-    from: authentik@example.com
+    from: authentik@noah-infra.com
   
   # Samba 4 LDAP Integration
   ldap:
     enabled: true
-    baseDn: "dc=example,dc=com"
-    bindDn: "cn=Administrator,cn=Users,dc=example,dc=com"
+    baseDn: "dc=noah-infra,dc=com"
+    bindDn: "cn=Administrator,cn=Users,dc=noah-infra,dc=com"
     bindPassword: ""
-    serverUri: "ldap://samba-dc.default.svc.cluster.local"
+    serverUri: "ldap://samba4.identity.svc.cluster.local"
     startTls: false
     
   outposts:

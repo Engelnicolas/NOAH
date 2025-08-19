@@ -35,8 +35,8 @@ class HelmDeployer:
             '--timeout', self.timeout
         ]
         
-        # Add --wait flag for smaller charts, but not for complex ones like samba4
-        if chart_name not in ['samba4']:
+        # Add --wait flag for smaller charts, but not for complex ones like samba4 and authentik
+        if chart_name not in ['samba4', 'authentik']:
             cmd.append('--wait')
         
         # Add values file if exists
@@ -80,10 +80,35 @@ class HelmDeployer:
             return False
     
     def _decrypt_helm_secrets(self, secret_file: Path) -> Dict:
-        """Decrypt Helm secrets using SOPS"""
+        """Decrypt Helm secrets using SOPS and transform to values format"""
         from Scripts.secret_manager import SecretManager
         sm = SecretManager(self.config)
-        return sm.decrypt_secret(secret_file)
+        decrypted = sm.decrypt_secret(secret_file)
+        
+        # Check if this is a Kubernetes Secret resource and transform to values
+        if isinstance(decrypted, dict) and decrypted.get('kind') == 'Secret':
+            string_data = decrypted.get('stringData', {})
+            
+            # Transform secret data to Helm values format
+            if 'authentik' in str(secret_file):
+                return {
+                    'authentik': {
+                        'secretKey': string_data.get('secret_key', ''),
+                    },
+                    'postgresql': {
+                        'auth': {
+                            'password': string_data.get('postgresql_password', '')
+                        }
+                    },
+                    'redis': {
+                        'auth': {
+                            'password': string_data.get('redis_password', '')
+                        }
+                    }
+                }
+            # Add more transformations for other charts as needed
+            
+        return decrypted
     
     def uninstall_chart(self, chart_name: str, namespace: str):
         """Uninstall a Helm chart"""

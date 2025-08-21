@@ -247,7 +247,7 @@ def ensure_security_initialized(ctx):
     sops_config = Path(".sops.yaml")
     
     # Check if Age keys exist
-    if not age_dir.exists() or not any(age_dir.glob("*.key")):
+    if not age_dir.exists() or not (any(age_dir.glob("*.key")) or (age_dir / "keys.txt").exists()):
         click.echo("[VERBOSE] No Age keys found. Auto-generating SOPS/Age keys...")
         click.echo("Initializing security infrastructure...")
         
@@ -1230,7 +1230,7 @@ def doctor(ctx):
     
     # Check Age keys
     age_dir = Path("Age")
-    if age_dir.exists() and any(age_dir.glob("*.key")):
+    if age_dir.exists() and (any(age_dir.glob("*.key")) or (age_dir / "keys.txt").exists()):
         print_status("✓ Age keys configured", "SUCCESS")
     else:
         print_status("⚠ Age keys not initialized", "WARNING")

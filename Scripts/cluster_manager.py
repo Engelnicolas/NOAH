@@ -37,7 +37,16 @@ class ClusterManager:
             return
         
         try:
-            config.load_kubeconfig()
+            # Try different methods for loading kubeconfig
+            try:
+                config.load_kube_config()
+            except AttributeError:
+                # Fallback for older versions
+                config.load_kubeconfig()
+            except Exception:
+                # If no kubeconfig available, try in-cluster config
+                config.load_incluster_config()
+            
             self.k8s_client = client.ApiClient()
             self.apps_v1 = client.AppsV1Api()
             self.core_v1 = client.CoreV1Api()

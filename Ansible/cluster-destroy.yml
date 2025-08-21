@@ -148,7 +148,7 @@
         umount $(mount | grep '/run/k3s' | awk '{print $3}') 2>/dev/null || true
       ignore_errors: true
 
-    - name: Remove K3s data directories
+    - name: Remove K3s data directories (preserve service files and binary)
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
@@ -161,16 +161,9 @@
         - "/opt/cni"
       ignore_errors: true
 
-    - name: Remove K3s binary and systemd service
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - "/usr/local/bin/k3s"
-        - "/etc/systemd/system/k3s.service"
-        - "/etc/systemd/system/k3s-agent.service"
-      ignore_errors: true
-      become: yes
+    # Note: Keeping K3s service files to avoid need for reinstallation
+    # - Service files will be reused on cluster recreation
+    # - Only data directories are removed for clean state
 
     - name: Reload systemd daemon
       ansible.builtin.systemd:
@@ -215,6 +208,7 @@
         
         echo "=== DESTRUCTION VALIDATION COMPLETED ==="
         echo "Cluster destruction completed successfully"
+        echo "K3s binary and service files preserved for reuse"
         echo "System is ready for fresh cluster creation"
       ignore_errors: true
 
@@ -225,7 +219,8 @@
           - "✓ All Helm releases uninstalled"
           - "✓ All NOAH pods and secrets removed"  
           - "✓ All non-system namespaces deleted"
-          - "✓ K3s service stopped and data removed"
+          - "✓ K3s service stopped and cluster data removed"
+          - "✓ K3s binary and service files preserved for reuse"
           - "✓ System validated and ready for redeployment"
           - ""
           - "Next step: Run 'python noah.py cluster create' to create a fresh cluster"

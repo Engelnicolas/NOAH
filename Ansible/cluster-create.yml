@@ -4,6 +4,7 @@
   gather_facts: yes
   vars:
     cluster_name: "noah-cluster"
+    verbose_mode: true  # Enable verbose output by default
     
   tasks:
     - name: "PREREQUISITE: Validate cluster is clean before creation"
@@ -214,3 +215,159 @@
           - "Namespaces created: identity, cilium-system"
           - "CA certificate generated"
           - "Cluster ready for NOAH service deployment"
+
+    - name: "FINAL VALIDATION: Run NOAH setup doctor for comprehensive prerequisite check"
+      ansible.builtin.shell: |
+        echo ""
+        echo "=============================================="
+        echo "    NOAH CLUSTER CREATION VALIDATION TEST    "
+        echo "=============================================="
+        echo ""
+        echo "[VALIDATION] Running comprehensive NOAH environment check..."
+        echo ""
+        
+        # Set the environment for NOAH CLI
+        export PYTHONPATH=$(pwd):$PYTHONPATH
+        
+        # Run noah.py setup doctor and capture output
+        if ./.venv/bin/python noah.py setup doctor; then
+          echo ""
+          echo "✅ NOAH setup doctor validation PASSED"
+          doctor_status="PASS"
+        else
+          echo ""
+          echo "❌ NOAH setup doctor validation FAILED"
+          doctor_status="FAIL"
+        fi
+        
+        echo ""
+        echo "[VALIDATION] Additional cluster-specific checks..."
+        
+        # Check Age keys specifically
+        if [ -f "./Age/keys.txt" ]; then
+          echo "✅ Age encryption keys: PRESENT"
+          age_status="PASS"
+        else
+          echo "❌ Age encryption keys: MISSING"
+          age_status="FAIL"
+        fi
+        
+        # Check SOPS configuration
+        if [ -f "./.sops.yaml" ]; then
+          echo "✅ SOPS configuration: PRESENT"
+          sops_status="PASS"
+        else
+          echo "❌ SOPS configuration: MISSING"
+          sops_status="FAIL"
+        fi
+        
+        # Check TLS certificates
+        if [ -f "./Certificates/ca.crt" ] && [ -f "./Certificates/ca.key" ]; then
+          echo "✅ TLS certificates: PRESENT"
+          certs_status="PASS"
+        else
+          echo "❌ TLS certificates: MISSING"
+          certs_status="FAIL"
+        fi
+        
+        # Check virtual environment
+        if [ -d "./.venv" ] && [ -f "./.venv/bin/python" ]; then
+          echo "✅ Python virtual environment: PRESENT"
+          venv_status="PASS"
+        else
+          echo "❌ Python virtual environment: MISSING"
+          venv_status="FAIL"
+        fi
+        
+        # Check NOAH CLI functionality
+        if ./.venv/bin/python noah.py --help >/dev/null 2>&1; then
+          echo "✅ NOAH CLI functionality: WORKING"
+          cli_status="PASS"
+        else
+          echo "❌ NOAH CLI functionality: BROKEN"
+          cli_status="FAIL"
+        fi
+        
+        # Check essential external tools
+        tools_status="PASS"
+        for tool in kubectl helm ansible age sops; do
+          if command -v $tool >/dev/null 2>&1; then
+            echo "✅ $tool: AVAILABLE"
+          else
+            echo "❌ $tool: MISSING"
+            tools_status="FAIL"
+          fi
+        done
+        
+        # Check Python dependencies
+        echo ""
+        echo "[VALIDATION] Checking critical Python dependencies..."
+        deps_status="PASS"
+        critical_deps="click kubernetes ansible PyYAML python-dotenv requests"
+        for dep in $critical_deps; do
+          if ./.venv/bin/python -c "import $dep" >/dev/null 2>&1; then
+            echo "✅ Python $dep: INSTALLED"
+          else
+            echo "❌ Python $dep: MISSING"
+            deps_status="FAIL"
+          fi
+        done
+        
+        echo ""
+        echo "=============================================="
+        echo "           VALIDATION SUMMARY"
+        echo "=============================================="
+        
+        # Count failures
+        failures=0
+        if [ "$doctor_status" = "FAIL" ]; then failures=$((failures + 1)); fi
+        if [ "$age_status" = "FAIL" ]; then failures=$((failures + 1)); fi
+        if [ "$sops_status" = "FAIL" ]; then failures=$((failures + 1)); fi
+        if [ "$certs_status" = "FAIL" ]; then failures=$((failures + 1)); fi
+        if [ "$venv_status" = "FAIL" ]; then failures=$((failures + 1)); fi
+        if [ "$cli_status" = "FAIL" ]; then failures=$((failures + 1)); fi
+        if [ "$tools_status" = "FAIL" ]; then failures=$((failures + 1)); fi
+        if [ "$deps_status" = "FAIL" ]; then failures=$((failures + 1)); fi
+        
+        echo "Component Status Summary:"
+        echo "├── NOAH Setup Doctor: $doctor_status"
+        echo "├── Age Encryption Keys: $age_status"
+        echo "├── SOPS Configuration: $sops_status" 
+        echo "├── TLS Certificates: $certs_status"
+        echo "├── Virtual Environment: $venv_status"
+        echo "├── NOAH CLI: $cli_status"
+        echo "├── External Tools: $tools_status"
+        echo "└── Python Dependencies: $deps_status"
+        echo ""
+        
+        if [ $failures -eq 0 ]; then
+          echo "🎉 SUCCESS: All validation checks passed!"
+          echo "✅ NOAH cluster is ready for service deployment"
+          echo ""
+          echo "Next steps:"
+          echo "1. Deploy services: python noah.py deploy all --domain {{ domain | default('noah-infra.com') }}"
+          echo "2. Or deploy individually:"
+          echo "   - python noah.py deploy samba4 --domain {{ domain | default('noah-infra.com') }}"
+          echo "   - python noah.py deploy authentik --domain {{ domain | default('noah-infra.com') }}"
+          echo "   - python noah.py deploy cilium --domain {{ domain | default('noah-infra.com') }}"
+          echo "3. Test deployment: python noah.py test sso"
+          echo "4. Check status: python noah.py status"
+          echo ""
+          exit 0
+        else
+          echo "❌ FAILURE: $failures validation check(s) failed"
+          echo "⚠️  Cluster creation incomplete - manual intervention required"
+          echo ""
+          echo "Troubleshooting steps:"
+          echo "1. Review failed components above"
+          echo "2. Run: python noah.py setup initialize"
+          echo "3. Check dependencies: python noah.py setup doctor"
+          echo "4. Verify file permissions in Age/ and Certificates/ directories"
+          echo "5. Ensure virtual environment is properly activated"
+          echo ""
+          exit 1
+        fi
+      args:
+        chdir: /root/New
+      register: comprehensive_validation
+      failed_when: comprehensive_validation.rc != 0

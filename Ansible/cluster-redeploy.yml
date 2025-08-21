@@ -42,7 +42,7 @@
             
             - name: Wait for cluster cleanup completion
               ansible.builtin.pause:
-                seconds: 10
+                seconds: 300
                 prompt: "Waiting for cluster cleanup to complete..."
             
             - name: Verify cluster is completely clean

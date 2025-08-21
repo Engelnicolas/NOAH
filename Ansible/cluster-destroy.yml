@@ -6,6 +6,7 @@
     default_cluster_name: "noah-cluster"
     k3s_data_dir: "/var/lib/rancher/k3s"
     k3s_config_dir: "/etc/rancher/k3s"
+    verbose_mode: true  # Enable verbose output by default
     system_namespaces:
       - kube-system
       - kube-public
@@ -24,6 +25,16 @@
       register: k3s_status
       ignore_errors: true
       changed_when: false
+
+    - name: Display initial cluster state (verbose mode)
+      ansible.builtin.debug:
+        msg:
+          - "[VERBOSE] Starting NOAH cluster destruction process"
+          - "[VERBOSE] kubectl available: {{ kubectl_check.rc == 0 }}"
+          - "[VERBOSE] K3s service active: {{ k3s_status.rc == 0 }}"
+          - "[VERBOSE] Target cluster: {{ cluster_name | default(default_cluster_name) }}"
+          - "[VERBOSE] Verbose mode: {{ verbose_mode }}"
+      when: verbose_mode | default(true)
 
     - name: "PREREQUISITE: Delete all Helm releases (including NOAH components)"
       ansible.builtin.shell: |
@@ -134,18 +145,45 @@
       ignore_errors: true
       when: k3s_status.rc == 0
 
+    - name: Display K3s service stop result (verbose mode)
+      ansible.builtin.debug:
+        msg: "[VERBOSE] K3s service stop attempted for active service"
+      when: verbose_mode | default(true) and k3s_status.rc == 0
+
     - name: Kill any remaining K3s processes
       ansible.builtin.shell: |
-        pkill -f k3s || true
-        pkill -f containerd-shim || true
-        sleep 5
-        pkill -9 -f k3s || true
+        echo "[VERBOSE] Checking for K3s processes to terminate..."
+        k3s_pids=$(pgrep -f k3s || true)
+        if [ -n "$k3s_pids" ]; then
+          echo "[VERBOSE] Found K3s processes: $k3s_pids"
+          echo "[VERBOSE] Sending TERM signal to K3s processes..."
+          pkill -f k3s || true
+          echo "[VERBOSE] Sending TERM signal to containerd-shim processes..."
+          pkill -f containerd-shim || true
+          echo "[VERBOSE] Waiting 5 seconds for graceful shutdown..."
+          sleep 5
+          echo "[VERBOSE] Sending KILL signal to any remaining K3s processes..."
+          pkill -9 -f k3s || true
+          echo "[VERBOSE] K3s process cleanup completed"
+        else
+          echo "[VERBOSE] No K3s processes found to terminate"
+        fi
       ignore_errors: true
 
     - name: Unmount K3s filesystems
       ansible.builtin.shell: |
-        umount $(mount | grep '/var/lib/rancher/k3s' | awk '{print $3}') 2>/dev/null || true
-        umount $(mount | grep '/run/k3s' | awk '{print $3}') 2>/dev/null || true
+        echo "[VERBOSE] Checking for K3s filesystem mounts..."
+        k3s_mounts=$(mount | grep -E '/var/lib/rancher/k3s|/run/k3s' || true)
+        if [ -n "$k3s_mounts" ]; then
+          echo "[VERBOSE] Found K3s mounts to unmount:"
+          echo "$k3s_mounts"
+          echo "[VERBOSE] Unmounting K3s filesystems..."
+          umount $(mount | grep '/var/lib/rancher/k3s' | awk '{print $3}') 2>/dev/null || true
+          umount $(mount | grep '/run/k3s' | awk '{print $3}') 2>/dev/null || true
+          echo "[VERBOSE] K3s filesystem unmount completed"
+        else
+          echo "[VERBOSE] No K3s filesystem mounts found"
+        fi
       ignore_errors: true
 
     - name: Remove K3s data directories (preserve service files and binary)
@@ -160,6 +198,22 @@
         - "/var/lib/cni"
         - "/opt/cni"
       ignore_errors: true
+
+    - name: Display data directory cleanup status (verbose mode)
+      ansible.builtin.debug:
+        msg:
+          - "[VERBOSE] K3s data directory cleanup completed"
+          - "[VERBOSE] Removed directories:"
+          - "  - {{ k3s_data_dir }}"
+          - "  - {{ k3s_config_dir }}"
+          - "  - /run/k3s"
+          - "  - /var/lib/kubelet"
+          - "  - /var/lib/cni"
+          - "  - /opt/cni"
+          - "[VERBOSE] Preserved files:"
+          - "  - /usr/local/bin/k3s (binary)"
+          - "  - /etc/systemd/system/k3s*.service (service files)"
+      when: verbose_mode | default(true)
 
     # Note: Keeping K3s service files to avoid need for reinstallation
     # - Service files will be reused on cluster recreation
@@ -211,6 +265,148 @@
         echo "K3s binary and service files preserved for reuse"
         echo "System is ready for fresh cluster creation"
       ignore_errors: true
+
+    - name: "COMPREHENSIVE CLUSTER VALIDATION: Verify no K3s cluster exists"
+      ansible.builtin.shell: |
+        echo ""
+        echo "=============================================="
+        echo "  COMPREHENSIVE K3S CLUSTER VALIDATION TEST  "
+        echo "=============================================="
+        echo ""
+        
+        validation_errors=0
+        
+        echo "[VERBOSE] Testing K3s service status..."
+        if systemctl is-active k3s >/dev/null 2>&1; then
+          echo "❌ FAIL: K3s service is still running"
+          systemctl status k3s --no-pager -l || true
+          validation_errors=$((validation_errors + 1))
+        else
+          echo "✅ PASS: K3s service is stopped"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing K3s process cleanup..."
+        k3s_processes=$(pgrep -f k3s 2>/dev/null || true)
+        if [ -n "$k3s_processes" ]; then
+          echo "❌ FAIL: K3s processes still running:"
+          echo "$k3s_processes" | while read pid; do
+            ps -p $pid -o pid,ppid,cmd --no-headers 2>/dev/null || true
+          done
+          validation_errors=$((validation_errors + 1))
+        else
+          echo "✅ PASS: No K3s processes running"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing kubectl cluster connectivity..."
+        if timeout 5s kubectl cluster-info >/dev/null 2>&1; then
+          echo "❌ FAIL: kubectl can still connect to a cluster"
+          kubectl cluster-info 2>/dev/null || true
+          validation_errors=$((validation_errors + 1))
+        else
+          echo "✅ PASS: kubectl cannot connect to any cluster"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing Kubernetes API accessibility..."
+        if timeout 3s curl -k https://127.0.0.1:6443/api >/dev/null 2>&1; then
+          echo "❌ FAIL: Kubernetes API is still accessible on localhost:6443"
+          validation_errors=$((validation_errors + 1))
+        else
+          echo "✅ PASS: Kubernetes API is not accessible"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing data directory cleanup..."
+        for dir in "{{ k3s_data_dir }}" "{{ k3s_config_dir }}" "/run/k3s" "/var/lib/kubelet" "/var/lib/cni"; do
+          if [ -d "$dir" ]; then
+            echo "❌ FAIL: Directory still exists: $dir"
+            echo "  Contents: $(ls -la "$dir" 2>/dev/null | head -5)" 
+            validation_errors=$((validation_errors + 1))
+          else
+            echo "✅ PASS: Directory removed: $dir"
+          fi
+        done
+        
+        echo ""
+        echo "[VERBOSE] Testing Helm releases cleanup..."
+        if command -v helm >/dev/null 2>&1; then
+          remaining_releases=$(helm list --all-namespaces -o json 2>/dev/null | jq '. | length' 2>/dev/null || echo "0")
+          if [ "$remaining_releases" -gt 0 ]; then
+            echo "❌ FAIL: $remaining_releases Helm releases still exist:"
+            helm list --all-namespaces 2>/dev/null || true
+            validation_errors=$((validation_errors + 1))
+          else
+            echo "✅ PASS: All Helm releases removed"
+          fi
+        else
+          echo "⚠️  SKIP: Helm not available for validation"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing container runtime cleanup..."
+        if command -v crictl >/dev/null 2>&1; then
+          running_containers=$(crictl ps -q 2>/dev/null | wc -l)
+          if [ "$running_containers" -gt 0 ]; then
+            echo "❌ FAIL: $running_containers containers still running:"
+            crictl ps 2>/dev/null || true
+            validation_errors=$((validation_errors + 1))
+          else
+            echo "✅ PASS: No containers running"
+          fi
+        else
+          echo "⚠️  SKIP: crictl not available for container validation"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing network interface cleanup..."
+        k3s_interfaces=$(ip link show 2>/dev/null | grep -E "(cni0|flannel|veth)" | wc -l)
+        if [ "$k3s_interfaces" -gt 0 ]; then
+          echo "⚠️  WARNING: K3s network interfaces may still exist:"
+          ip link show 2>/dev/null | grep -E "(cni0|flannel|veth)" || true
+          echo "  This is usually not critical and will be cleaned up on reboot"
+        else
+          echo "✅ PASS: No K3s network interfaces detected"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing file system mounts..."
+        k3s_mounts=$(mount | grep -E "(k3s|kubelet)" | wc -l)
+        if [ "$k3s_mounts" -gt 0 ]; then
+          echo "❌ FAIL: K3s file system mounts still exist:"
+          mount | grep -E "(k3s|kubelet)" || true
+          validation_errors=$((validation_errors + 1))
+        else
+          echo "✅ PASS: No K3s file system mounts"
+        fi
+        
+        echo ""
+        echo "=============================================="
+        echo "           VALIDATION SUMMARY"
+        echo "=============================================="
+        
+        if [ $validation_errors -eq 0 ]; then
+          echo "🎉 SUCCESS: K3s cluster completely destroyed"
+          echo "✅ All validation tests passed"
+          echo "✅ System is clean and ready for fresh deployment"
+          echo ""
+          echo "Next step: python noah.py cluster create --name <cluster-name>"
+          exit 0
+        else
+          echo "❌ FAILURE: $validation_errors validation errors found"
+          echo "⚠️  Manual intervention may be required"
+          echo ""
+          echo "Troubleshooting steps:"
+          echo "1. Check running processes: ps aux | grep k3s"
+          echo "2. Check system services: systemctl list-units | grep k3s"
+          echo "3. Check mount points: mount | grep k3s"
+          echo "4. Reboot system if necessary to clear all resources"
+          echo ""
+          exit 1
+        fi
+      register: comprehensive_validation
+      failed_when: comprehensive_validation.rc != 0
 
     - name: Display destruction summary
       debug:

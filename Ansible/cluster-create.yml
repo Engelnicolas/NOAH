@@ -7,6 +7,45 @@
     verbose_mode: true  # Enable verbose output by default
     
   tasks:
+    - name: "LOAD CONFIGURATION: Read environment variables from .env file"
+      ansible.builtin.shell: |
+        # Load .env file and export variables
+        if [ -f "/root/NOAH/.env" ]; then
+          export $(grep -v '^#' /root/NOAH/.env | xargs)
+          echo "NOAH_ROOT_DIR=${NOAH_ROOT_DIR:-/root/NOAH}"
+          echo "NOAH_SCRIPTS_DIR=${NOAH_SCRIPTS_DIR:-./Scripts}"
+          echo "NOAH_CERTIFICATES_DIR=${NOAH_CERTIFICATES_DIR:-./Certificates}"
+          echo "NOAH_AGE_DIR=${NOAH_AGE_DIR:-./Age}"
+          echo "NOAH_VENV_DIR=${NOAH_VENV_DIR:-./.venv}"
+          echo "SOPS_CONFIG_FILE=${SOPS_CONFIG_FILE:-.sops.yaml}"
+        else
+          echo "ERROR: .env file not found at /root/NOAH/.env"
+          exit 1
+        fi
+      register: env_vars
+      changed_when: false
+      
+    - name: "LOAD CONFIGURATION: Set environment variables as Ansible facts"
+      ansible.builtin.set_fact:
+        noah_root_dir: "{{ env_vars.stdout_lines | select('match', '^NOAH_ROOT_DIR=') | first | regex_replace('^NOAH_ROOT_DIR=', '') }}"
+        noah_scripts_dir: "{{ env_vars.stdout_lines | select('match', '^NOAH_SCRIPTS_DIR=') | first | regex_replace('^NOAH_SCRIPTS_DIR=', '') }}"
+        noah_certificates_dir: "{{ env_vars.stdout_lines | select('match', '^NOAH_CERTIFICATES_DIR=') | first | regex_replace('^NOAH_CERTIFICATES_DIR=', '') }}"
+        noah_age_dir: "{{ env_vars.stdout_lines | select('match', '^NOAH_AGE_DIR=') | first | regex_replace('^NOAH_AGE_DIR=', '') }}"
+        noah_venv_dir: "{{ env_vars.stdout_lines | select('match', '^NOAH_VENV_DIR=') | first | regex_replace('^NOAH_VENV_DIR=', '') }}"
+        sops_config_file: "{{ env_vars.stdout_lines | select('match', '^SOPS_CONFIG_FILE=') | first | regex_replace('^SOPS_CONFIG_FILE=', '') }}"
+
+    - name: "CONFIGURATION: Display loaded paths"
+      ansible.builtin.debug:
+        msg: |
+          === NOAH PATH CONFIGURATION ===
+          Root Directory: {{ noah_root_dir }}
+          Scripts Directory: {{ noah_scripts_dir }}
+          Certificates Directory: {{ noah_certificates_dir }}
+          Age Directory: {{ noah_age_dir }}
+          Virtual Environment: {{ noah_venv_dir }}
+          SOPS Config File: {{ sops_config_file }}
+          ===============================
+
     - name: "PREREQUISITE: Validate cluster is clean before creation"
       ansible.builtin.shell: |
         echo "=== VALIDATING CLEAN CLUSTER STATE ==="
@@ -93,31 +132,31 @@
 
     - name: Check if virtual environment exists
       stat:
-        path: /root/New/.venv
+        path: "{{ noah_root_dir }}/{{ noah_venv_dir }}"
       register: venv_exists
 
     - name: Create Python virtual environment
-      command: python3 -m venv .venv
+      command: python3 -m venv {{ noah_venv_dir }}
       args:
-        chdir: /root/New
+        chdir: "{{ noah_root_dir }}"
       when: not venv_exists.stat.exists
 
     - name: Install Python dependencies from Scripts/requirements.txt
       shell: |
-        ./.venv/bin/python -m pip install --upgrade pip
-        ./.venv/bin/python -m pip install packaging
-        ./.venv/bin/python -m pip install -r ./Scripts/requirements.txt
+        {{ noah_venv_dir }}/bin/python -m pip install --upgrade pip
+        {{ noah_venv_dir }}/bin/python -m pip install packaging
+        {{ noah_venv_dir }}/bin/python -m pip install -r {{ noah_scripts_dir }}/requirements.txt
       args:
-        chdir: /root/New
-        creates: ./.venv/lib/python*/site-packages/click
+        chdir: "{{ noah_root_dir }}"
+        creates: "{{ noah_root_dir }}/{{ noah_venv_dir }}/lib/python*/site-packages/click"
       register: pip_install_result
 
     - name: Verify NOAH CLI functionality
       shell: |
         export PYTHONPATH=$(pwd):$PYTHONPATH
-        ./.venv/bin/python noah.py --help
+        {{ noah_venv_dir }}/bin/python noah.py --help
       args:
-        chdir: /root/New
+        chdir: "{{ noah_root_dir }}"
       register: noah_cli_test
       failed_when: noah_cli_test.rc != 0
 
@@ -139,19 +178,19 @@
 
     - name: Initialize Age encryption
       shell: |
-        if [ ! -f ./Age/keys.txt ]; then
-          mkdir -p ./Age
-          age-keygen > ./Age/keys.txt
-          chmod 600 ./Age/keys.txt
+        if [ ! -f {{ noah_age_dir }}/keys.txt ]; then
+          mkdir -p {{ noah_age_dir }}
+          age-keygen > {{ noah_age_dir }}/keys.txt
+          chmod 600 {{ noah_age_dir }}/keys.txt
         fi
       args:
-        chdir: /root/New
-        creates: /root/New/Age/keys.txt
+        chdir: "{{ noah_root_dir }}"
+        creates: "{{ noah_root_dir }}/{{ noah_age_dir }}/keys.txt"
 
     - name: Extract Age public key
-      shell: grep "public key:" ./Age/keys.txt | cut -d' ' -f4
+      shell: grep "public key:" {{ noah_age_dir }}/keys.txt | cut -d' ' -f4
       args:
-        chdir: /root/New
+        chdir: "{{ noah_root_dir }}"
       register: age_public_key
       changed_when: false
 
@@ -163,57 +202,95 @@
               age: {{ age_public_key.stdout }}
             - path_regex: .*\.enc\.json$
               age: {{ age_public_key.stdout }}
-        dest: /root/New/.sops.yaml
+        dest: "{{ noah_root_dir }}/{{ sops_config_file }}"
         mode: '0644'
 
     - name: Generate self-signed CA certificate
       block:
         - name: Create certificate directory
           file:
-            path: ./Certificates
+            path: "{{ noah_root_dir }}/{{ noah_certificates_dir }}"
             state: directory
             mode: '0755'
 
         - name: Generate CA private key with OpenSSL command
           shell: |
-            if [ ! -f ./Certificates/ca.key ]; then
-              openssl genrsa -out ./Certificates/ca.key 4096
-              chmod 600 ./Certificates/ca.key
+            if [ ! -f {{ noah_certificates_dir }}/ca.key ]; then
+              openssl genrsa -out {{ noah_certificates_dir }}/ca.key 4096
+              chmod 600 {{ noah_certificates_dir }}/ca.key
             fi
           args:
-            creates: ./Certificates/ca.key
+            chdir: "{{ noah_root_dir }}"
+            creates: "{{ noah_root_dir }}/{{ noah_certificates_dir }}/ca.key"
 
         - name: Generate self-signed CA certificate with OpenSSL command
           shell: |
-            if [ ! -f ./Certificates/ca.crt ]; then
-              openssl req -new -x509 -key ./Certificates/ca.key -sha256 -subj "/C=US/ST=CA/O=NOAH/CN=NOAH CA" -days 3650 -out ./Certificates/ca.crt
-              chmod 644 ./Certificates/ca.crt
+            if [ ! -f {{ noah_certificates_dir }}/ca.crt ]; then
+              openssl req -new -x509 -key {{ noah_certificates_dir }}/ca.key -sha256 -subj "/C=US/ST=CA/O=NOAH/CN=NOAH CA" -days 3650 -out {{ noah_certificates_dir }}/ca.crt
+              chmod 644 {{ noah_certificates_dir }}/ca.crt
             fi
           args:
-            creates: ./Certificates/ca.crt
+            chdir: "{{ noah_root_dir }}"
+            creates: "{{ noah_root_dir }}/{{ noah_certificates_dir }}/ca.crt"
 
-    - name: Create ConfigMap for CA certificate
-      kubernetes.core.k8s:
-        definition:
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: noah-ca-bundle
-            namespace: identity
-          data:
-            ca-bundle.crt: "{{ lookup('file', './Certificates/ca-cert.pem') }}"
-      when: false  # Skip in test mode
+    - name: Install K3s Kubernetes cluster
+      block:
+        - name: Download and install K3s
+          shell: |
+            curl -sfL https://get.k3s.io | sh -s - \
+              --write-kubeconfig-mode 644 \
+              --disable traefik \
+              --disable servicelb \
+              --disable local-storage \
+              --cluster-init
+          environment:
+            INSTALL_K3S_EXEC: "server"
+          become: yes
+          
+        - name: Wait for K3s to be ready
+          shell: |
+            timeout=300
+            start_time=$(date +%s)
+            
+            while true; do
+              current_time=$(date +%s)
+              elapsed=$((current_time - start_time))
+              
+              if [ $elapsed -gt $timeout ]; then
+                echo "ERROR: K3s startup timeout after ${timeout}s"
+                exit 1
+              fi
+              
+              if kubectl get nodes >/dev/null 2>&1; then
+                echo "✓ K3s is ready"
+                break
+              fi
+              
+              echo "Waiting for K3s to start... (${elapsed}s elapsed)"
+              sleep 5
+            done
+          register: k3s_ready
+          
+        - name: Create cluster namespaces
+          kubernetes.core.k8s:
+            name: "{{ item }}"
+            api_version: v1
+            kind: Namespace
+            state: present
+          loop:
+            - identity
+            - cilium-system
 
     - name: Display cluster creation summary
       debug:
         msg:
           - "Cluster {{ cluster_name }} initialized successfully"
-          - "Python virtual environment: ./.venv created"
-          - "NOAH dependencies installed from Scripts/requirements.txt"
+          - "Python virtual environment: {{ noah_venv_dir }} created"
+          - "NOAH dependencies installed from {{ noah_scripts_dir }}/requirements.txt"
           - "NOAH CLI verified and functional"
           - "Age public key: {{ age_public_key.stdout }}"
           - "Namespaces created: identity, cilium-system"
-          - "CA certificate generated"
+          - "CA certificate generated in {{ noah_certificates_dir }}"
           - "Cluster ready for NOAH service deployment"
 
     - name: "FINAL VALIDATION: Run NOAH setup doctor for comprehensive prerequisite check"
@@ -229,8 +306,15 @@
         # Set the environment for NOAH CLI
         export PYTHONPATH=$(pwd):$PYTHONPATH
         
+        # Load environment variables
+        export $(grep -v '^#' .env | xargs)
+        NOAH_VENV_DIR=${NOAH_VENV_DIR:-./.venv}
+        NOAH_AGE_DIR=${NOAH_AGE_DIR:-./Age}
+        NOAH_CERTIFICATES_DIR=${NOAH_CERTIFICATES_DIR:-./Certificates}
+        SOPS_CONFIG_FILE=${SOPS_CONFIG_FILE:-.sops.yaml}
+        
         # Run noah.py setup doctor and capture output
-        if ./.venv/bin/python noah.py setup doctor; then
+        if ${NOAH_VENV_DIR}/bin/python noah.py setup doctor; then
           echo ""
           echo "✅ NOAH setup doctor validation PASSED"
           doctor_status="PASS"
@@ -244,7 +328,7 @@
         echo "[VALIDATION] Additional cluster-specific checks..."
         
         # Check Age keys specifically
-        if [ -f "./Age/keys.txt" ]; then
+        if [ -f "${NOAH_AGE_DIR}/keys.txt" ]; then
           echo "✅ Age encryption keys: PRESENT"
           age_status="PASS"
         else
@@ -253,7 +337,7 @@
         fi
         
         # Check SOPS configuration
-        if [ -f "./.sops.yaml" ]; then
+        if [ -f "${SOPS_CONFIG_FILE}" ]; then
           echo "✅ SOPS configuration: PRESENT"
           sops_status="PASS"
         else
@@ -262,7 +346,7 @@
         fi
         
         # Check TLS certificates
-        if [ -f "./Certificates/ca.crt" ] && [ -f "./Certificates/ca.key" ]; then
+        if [ -f "${NOAH_CERTIFICATES_DIR}/ca.crt" ] && [ -f "${NOAH_CERTIFICATES_DIR}/ca.key" ]; then
           echo "✅ TLS certificates: PRESENT"
           certs_status="PASS"
         else
@@ -271,7 +355,7 @@
         fi
         
         # Check virtual environment
-        if [ -d "./.venv" ] && [ -f "./.venv/bin/python" ]; then
+        if [ -d "${NOAH_VENV_DIR}" ] && [ -f "${NOAH_VENV_DIR}/bin/python" ]; then
           echo "✅ Python virtual environment: PRESENT"
           venv_status="PASS"
         else
@@ -280,7 +364,7 @@
         fi
         
         # Check NOAH CLI functionality
-        if ./.venv/bin/python noah.py --help >/dev/null 2>&1; then
+        if ${NOAH_VENV_DIR}/bin/python noah.py --help >/dev/null 2>&1; then
           echo "✅ NOAH CLI functionality: WORKING"
           cli_status="PASS"
         else
@@ -305,7 +389,7 @@
         deps_status="PASS"
         critical_deps="click kubernetes ansible PyYAML python-dotenv requests"
         for dep in $critical_deps; do
-          if ./.venv/bin/python -c "import $dep" >/dev/null 2>&1; then
+          if ${NOAH_VENV_DIR}/bin/python -c "import $dep" >/dev/null 2>&1; then
             echo "✅ Python $dep: INSTALLED"
           else
             echo "❌ Python $dep: MISSING"
@@ -362,12 +446,12 @@
           echo "1. Review failed components above"
           echo "2. Run: python noah.py setup initialize"
           echo "3. Check dependencies: python noah.py setup doctor"
-          echo "4. Verify file permissions in Age/ and Certificates/ directories"
+          echo "4. Verify file permissions in ${NOAH_AGE_DIR}/ and ${NOAH_CERTIFICATES_DIR}/ directories"
           echo "5. Ensure virtual environment is properly activated"
           echo ""
           exit 1
         fi
       args:
-        chdir: /root/New
+        chdir: "{{ noah_root_dir }}"
       register: comprehensive_validation
       failed_when: comprehensive_validation.rc != 0

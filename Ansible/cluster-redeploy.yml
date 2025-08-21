@@ -7,6 +7,25 @@
     domain: "{{ domain | default('noah-infra.com') }}"
     
   tasks:
+    - name: "LOAD CONFIGURATION: Read environment variables from .env file"
+      ansible.builtin.shell: |
+        # Load .env file and export variables
+        if [ -f "/root/NOAH/.env" ]; then
+          export $(grep -v '^#' /root/NOAH/.env | xargs)
+          echo "NOAH_ROOT_DIR=${NOAH_ROOT_DIR:-/root/NOAH}"
+          echo "ANSIBLE_PLAYBOOK_DIR=${ANSIBLE_PLAYBOOK_DIR:-./Ansible}"
+        else
+          echo "ERROR: .env file not found at /root/NOAH/.env"
+          exit 1
+        fi
+      register: env_vars
+      changed_when: false
+      
+    - name: "LOAD CONFIGURATION: Set environment variables as Ansible facts"
+      ansible.builtin.set_fact:
+        noah_root_dir: "{{ env_vars.stdout_lines | select('match', '^NOAH_ROOT_DIR=') | first | regex_replace('^NOAH_ROOT_DIR=', '') }}"
+        ansible_playbook_dir: "{{ env_vars.stdout_lines | select('match', '^ANSIBLE_PLAYBOOK_DIR=') | first | regex_replace('^ANSIBLE_PLAYBOOK_DIR=', '') }}"
+
     - name: "Execute complete redeploy process"
       block:
         - name: "PHASE 1: Pre-deployment validation"
@@ -33,7 +52,7 @@
         - name: "PHASE 2: Clean existing cluster"
           block:
             - name: Run cluster destruction playbook
-              ansible.builtin.include: cluster-destroy.yml
+              ansible.builtin.include: "{{ ansible_playbook_dir }}/cluster-destroy.yml"
               vars:
                 cluster_name: "{{ cluster_name }}"
                 cleanup_secrets: true
@@ -78,7 +97,7 @@
         - name: "PHASE 3: Create new cluster"
           block:
             - name: Run cluster creation playbook
-              ansible.builtin.include: cluster-create.yml
+              ansible.builtin.include: "{{ ansible_playbook_dir }}/cluster-create.yml"
               vars:
                 cluster_name: "{{ cluster_name }}"
                 domain: "{{ domain }}"
@@ -127,7 +146,7 @@
         - name: "PHASE 4: Deploy services"
           block:
             - name: Deploy Samba4 Active Directory
-              ansible.builtin.include: deploy-samba4.yml
+              ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-samba4.yml"
               vars:
                 namespace: identity
                 domain: "{{ domain }}"
@@ -173,7 +192,7 @@
               failed_when: samba4_deployment.rc != 0
             
             - name: Deploy Authentik SSO
-              ansible.builtin.include: deploy-authentik.yml
+              ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-authentik.yml"
               vars:
                 namespace: identity
                 domain: "{{ domain }}"
@@ -224,7 +243,7 @@
               failed_when: authentik_deployment.rc != 0
             
             - name: Deploy Cilium CNI
-              ansible.builtin.include: deploy-cilium.yml
+              ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-cilium.yml"
               vars:
                 namespace: kube-system
                 domain: "{{ domain }}"

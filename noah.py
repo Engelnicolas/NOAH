@@ -18,6 +18,24 @@ from dotenv import load_dotenv  # type: ignore
 # Load environment variables from .env file
 load_dotenv()
 
+# Configuration paths from environment variables
+def get_noah_paths():
+    """Get NOAH directory paths from environment variables"""
+    return {
+        'root_dir': Path(os.getenv('NOAH_ROOT_DIR', os.getcwd())),
+        'scripts_dir': Path(os.getenv('NOAH_SCRIPTS_DIR', './Scripts')),
+        'certificates_dir': Path(os.getenv('NOAH_CERTIFICATES_DIR', './Certificates')),
+        'age_dir': Path(os.getenv('NOAH_AGE_DIR', './Age')),
+        'venv_dir': Path(os.getenv('NOAH_VENV_DIR', './.venv')),
+        'ansible_dir': Path(os.getenv('ANSIBLE_PLAYBOOK_DIR', './Ansible')),
+        'helm_dir': Path(os.getenv('HELM_CHART_DIR', './Helm')),
+        'sops_config': Path(os.getenv('SOPS_CONFIG_FILE', '.sops.yaml')),
+        'age_key_file': Path(os.getenv('AGE_KEY_FILE', './Age/keys.txt'))
+    }
+
+# Global paths instance
+NOAH_PATHS = get_noah_paths()
+
 from Scripts.cluster_manager import ClusterManager
 from Scripts.secret_manager import SecretManager
 from Scripts.helm_deployer import HelmDeployer
@@ -60,28 +78,27 @@ def check_repository_root():
 
 def get_security_config(domain=DEFAULT_DOMAIN):
     """Get security configuration for Helm and Ansible"""
-    age_dir = Path("Age")
-    certs_dir = Path("Certificates")
+    paths = get_noah_paths()
     
     return {
         'secrets': {
             'age': {
-                'enabled': age_dir.exists(),
-                'key_path': str(age_dir / "noah.key") if age_dir.exists() else None,
-                'public_key_path': str(age_dir / "noah.pub") if age_dir.exists() else None
+                'enabled': paths['age_dir'].exists(),
+                'key_path': str(paths['age_dir'] / "noah.key") if paths['age_dir'].exists() else None,
+                'public_key_path': str(paths['age_dir'] / "noah.pub") if paths['age_dir'].exists() else None
             },
             'sops': {
-                'enabled': Path(".sops.yaml").exists(),
-                'config_path': ".sops.yaml"
+                'enabled': paths['sops_config'].exists(),
+                'config_path': str(paths['sops_config'])
             }
         },
         'certificates': {
-            'enabled': certs_dir.exists(),
+            'enabled': paths['certificates_dir'].exists(),
             'domain': domain,
-            'ca_cert_path': str(certs_dir / "ca.crt") if certs_dir.exists() else None,
-            'ca_key_path': str(certs_dir / "ca.key") if certs_dir.exists() else None,
-            'wildcard_cert_path': str(certs_dir / f"*.{domain}.crt") if certs_dir.exists() else None,
-            'wildcard_key_path': str(certs_dir / f"*.{domain}.key") if certs_dir.exists() else None
+            'ca_cert_path': str(paths['certificates_dir'] / "ca.crt") if paths['certificates_dir'].exists() else None,
+            'ca_key_path': str(paths['certificates_dir'] / "ca.key") if paths['certificates_dir'].exists() else None,
+            'wildcard_cert_path': str(paths['certificates_dir'] / f"*.{domain}.crt") if paths['certificates_dir'].exists() else None,
+            'wildcard_key_path': str(paths['certificates_dir'] / f"*.{domain}.key") if paths['certificates_dir'].exists() else None
         },
         'tls': {
             'enabled': True,

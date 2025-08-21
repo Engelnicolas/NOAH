@@ -10,6 +10,9 @@ python noah.py cluster create --name noah-cluster --domain noah-infra.com
 # Destroy cluster completely
 python noah.py cluster destroy --force
 
+# Complete redeploy (cluster + all services) - NEW!
+python noah.py cluster redeploy --name noah-production --domain noah-infra.com
+
 # Check cluster status
 python noah.py status --all
 ```
@@ -75,7 +78,8 @@ python noah.py test ldap --domain noah-infra.com
 5. **Directory** → `python noah.py deploy samba4 --namespace identity --domain noah-infra.com` (optional)
 6. **Validation** → `python noah.py status --all`
 
-**Alternative**: Use `python noah.py deploy all` for steps 3-5 combined
+**Alternative 1**: Use `python noah.py deploy all` for steps 3-5 combined
+**Alternative 2**: Use `python noah.py cluster redeploy` for steps 1-5 combined (NEW!)
 
 ## Component Timeouts
 
@@ -142,6 +146,15 @@ kubectl describe pvc -n <namespace> <pvc-name>
 python noah.py cluster destroy --force
 rm -rf Age/ Certificates/ .sops.yaml  # Optional: remove all local state
 python noah.py cluster create --name noah-cluster --domain noah-infra.com
+```
+
+### Quick Redeploy (NEW!)
+```bash
+# One command for complete infrastructure redeploy
+python noah.py cluster redeploy --name noah-production --domain noah-infra.com --force
+
+# With configuration export
+python noah.py cluster redeploy --name noah-production --domain noah-infra.com --config-file redeploy-config.yaml
 ```
 
 ### Backup Before Changes

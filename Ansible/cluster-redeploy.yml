@@ -1,0 +1,365 @@
+---
+- name: NOAH Cluster Redeploy - Full Infrastructure Recreation
+  hosts: local
+  gather_facts: yes
+  vars:
+    cluster_name: "{{ cluster_name | default('noah-cluster') }}"
+    domain: "{{ domain | default('noah-infra.com') }}"
+    
+  tasks:
+    - name: "Execute complete redeploy process"
+      block:
+        - name: "PHASE 1: Pre-deployment validation"
+          block:
+            - name: Display redeploy configuration
+              ansible.builtin.debug:
+                msg: |
+                  === NOAH CLUSTER REDEPLOY CONFIGURATION ===
+                  Cluster Name: {{ cluster_name }}
+                  Domain: {{ domain }}
+                  Security Config: {{ security_config | default('Auto-generated') }}
+                  ==========================================
+            
+            - name: Validate required variables
+              ansible.builtin.fail:
+                msg: "Required variable {{ item }} is not defined"
+              when: vars[item] is not defined or vars[item] == ""
+              loop:
+                - cluster_name
+                - domain
+          
+          tags: [validation]
+        
+        - name: "PHASE 2: Clean existing cluster"
+          block:
+            - name: Run cluster destruction playbook
+              ansible.builtin.include: cluster-destroy.yml
+              vars:
+                cluster_name: "{{ cluster_name }}"
+                cleanup_secrets: true
+                cleanup_certificates: true
+                security_config: "{{ security_config }}"
+            
+            - name: Wait for cluster cleanup completion
+              ansible.builtin.pause:
+                seconds: 10
+                prompt: "Waiting for cluster cleanup to complete..."
+            
+            - name: Verify cluster is completely clean
+              ansible.builtin.shell: |
+                echo "=== VERIFYING CLEAN STATE ==="
+                
+                # Verify no K3s processes
+                if pgrep -f k3s >/dev/null 2>&1; then
+                  echo "ERROR: K3s processes still running"
+                  exit 1
+                fi
+                
+                # Verify no kubectl context
+                if kubectl cluster-info >/dev/null 2>&1; then
+                  echo "ERROR: Cluster still accessible"
+                  exit 1
+                fi
+                
+                # Verify no Helm releases
+                if command -v helm >/dev/null 2>&1; then
+                  if helm list --all-namespaces -o json 2>/dev/null | jq -e '. | length > 0' >/dev/null; then
+                    echo "ERROR: Helm releases still exist"
+                    exit 1
+                  fi
+                fi
+                
+                echo "✓ Cluster successfully cleaned"
+              register: cleanup_verification
+              failed_when: cleanup_verification.rc != 0
+          
+          tags: [cleanup]
+        
+        - name: "PHASE 3: Create new cluster"
+          block:
+            - name: Run cluster creation playbook
+              ansible.builtin.include: cluster-create.yml
+              vars:
+                cluster_name: "{{ cluster_name }}"
+                domain: "{{ domain }}"
+                security_config: "{{ security_config }}"
+            
+            - name: Wait for cluster to be ready
+              ansible.builtin.shell: |
+                echo "=== WAITING FOR CLUSTER READINESS ==="
+                timeout=300
+                start_time=$(date +%s)
+                
+                while true; do
+                  current_time=$(date +%s)
+                  elapsed=$((current_time - start_time))
+                  
+                  if [ $elapsed -gt $timeout ]; then
+                    echo "ERROR: Cluster readiness timeout after ${timeout}s"
+                    exit 1
+                  fi
+                  
+                  # Check if kubectl can connect
+                  if kubectl cluster-info >/dev/null 2>&1; then
+                    echo "✓ Cluster API is accessible"
+                    
+                    # Check if core pods are running
+                    if kubectl get pods -n kube-system --field-selector=status.phase=Running 2>/dev/null | grep -q "Running"; then
+                      echo "✓ Core system pods are running"
+                      
+                      # Additional validation: Check if we can create a test namespace
+                      if kubectl create namespace noah-redeploy-test 2>/dev/null; then
+                        kubectl delete namespace noah-redeploy-test 2>/dev/null
+                        echo "✓ Cluster is fully operational"
+                        break
+                      fi
+                    fi
+                  fi
+                  
+                  echo "Waiting for cluster... (${elapsed}s elapsed)"
+                  sleep 10
+                done
+              register: cluster_readiness
+              failed_when: cluster_readiness.rc != 0
+          
+          tags: [create]
+        
+        - name: "PHASE 4: Deploy services"
+          block:
+            - name: Deploy Samba4 Active Directory
+              ansible.builtin.include: deploy-samba4.yml
+              vars:
+                namespace: identity
+                domain: "{{ domain }}"
+                security_config: "{{ security_config }}"
+                service_name: samba4
+                use_generated_secrets: true
+                secrets_backend: sops
+                samba_realm: "{{ domain | upper }}"
+                samba_domain: "{{ domain | upper | replace('.', '_') }}"
+                create_admin_secret: true
+                admin_secret_name: samba4-admin-secret
+            
+            - name: Wait for Samba4 deployment
+              ansible.builtin.shell: |
+                echo "=== WAITING FOR SAMBA4 DEPLOYMENT ==="
+                timeout=300
+                start_time=$(date +%s)
+                
+                while true; do
+                  current_time=$(date +%s)
+                  elapsed=$((current_time - start_time))
+                  
+                  if [ $elapsed -gt $timeout ]; then
+                    echo "ERROR: Samba4 deployment timeout after ${timeout}s"
+                    exit 1
+                  fi
+                  
+                  # Check if Samba4 deployment is ready
+                  if kubectl get deployment samba4 -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
+                    echo "✓ Samba4 deployment is ready"
+                    
+                    # Additional check: Verify pod is actually running
+                    if kubectl get pods -n identity -l app=samba4 --field-selector=status.phase=Running 2>/dev/null | grep -q "Running"; then
+                      echo "✓ Samba4 pod is running"
+                      break
+                    fi
+                  fi
+                  
+                  echo "Waiting for Samba4... (${elapsed}s elapsed)"
+                  sleep 10
+                done
+              register: samba4_deployment
+              failed_when: samba4_deployment.rc != 0
+            
+            - name: Deploy Authentik SSO
+              ansible.builtin.include: deploy-authentik.yml
+              vars:
+                namespace: identity
+                domain: "{{ domain }}"
+                security_config: "{{ security_config }}"
+                service_name: authentik
+                use_generated_secrets: true
+                secrets_backend: sops
+                create_db_secrets: true
+                postgresql_secret_name: authentik-postgresql
+                redis_secret_name: authentik-redis
+                app_secret_name: authentik-secret
+                ldap_integration: true
+                ldap_base_dn: "dc={{ domain.split('.') | join(',dc=') }}"
+            
+            - name: Wait for Authentik deployment
+              ansible.builtin.shell: |
+                echo "=== WAITING FOR AUTHENTIK DEPLOYMENT ==="
+                timeout=300
+                start_time=$(date +%s)
+                
+                while true; do
+                  current_time=$(date +%s)
+                  elapsed=$((current_time - start_time))
+                  
+                  if [ $elapsed -gt $timeout ]; then
+                    echo "ERROR: Authentik deployment timeout after ${timeout}s"
+                    exit 1
+                  fi
+                  
+                  # Check if Authentik deployments are ready
+                  server_ready=$(kubectl get deployment authentik-server -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                  worker_ready=$(kubectl get deployment authentik-worker -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                  
+                  if [ "$server_ready" = "1" ] && [ "$worker_ready" = "1" ]; then
+                    echo "✓ Authentik server and worker deployments are ready"
+                    
+                    # Additional check: Verify pods are actually running
+                    if kubectl get pods -n identity -l app.kubernetes.io/name=authentik --field-selector=status.phase=Running 2>/dev/null | grep -q "Running"; then
+                      echo "✓ Authentik pods are running"
+                      break
+                    fi
+                  fi
+                  
+                  echo "Waiting for Authentik... (${elapsed}s elapsed) [Server: $server_ready, Worker: $worker_ready]"
+                  sleep 10
+                done
+              register: authentik_deployment
+              failed_when: authentik_deployment.rc != 0
+            
+            - name: Deploy Cilium CNI
+              ansible.builtin.include: deploy-cilium.yml
+              vars:
+                namespace: kube-system
+                domain: "{{ domain }}"
+                security_config: "{{ security_config }}"
+                service_name: cilium
+                use_generated_secrets: true
+                secrets_backend: sops
+                enable_hubble: true
+                hubble_tls_enabled: true
+                create_hubble_certs: true
+                hubble_cert_secret: hubble-server-certs
+            
+            - name: Wait for Cilium deployment
+              ansible.builtin.shell: |
+                echo "=== WAITING FOR CILIUM DEPLOYMENT ==="
+                timeout=300
+                start_time=$(date +%s)
+                
+                while true; do
+                  current_time=$(date +%s)
+                  elapsed=$((current_time - start_time))
+                  
+                  if [ $elapsed -gt $timeout ]; then
+                    echo "ERROR: Cilium deployment timeout after ${timeout}s"
+                    exit 1
+                  fi
+                  
+                  # Check if Cilium daemonset is ready
+                  if kubectl get daemonset cilium -n kube-system -o jsonpath='{.status.numberReady}' 2>/dev/null | grep -q "[1-9]"; then
+                    echo "✓ Cilium daemonset is ready"
+                    
+                    # Check if Hubble components are ready (if enabled)
+                    hubble_relay_ready=$(kubectl get deployment hubble-relay -n kube-system -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                    hubble_ui_ready=$(kubectl get deployment hubble-ui -n kube-system -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                    
+                    if [ "$hubble_relay_ready" = "1" ] && [ "$hubble_ui_ready" = "1" ]; then
+                      echo "✓ Hubble components are ready"
+                      break
+                    fi
+                  fi
+                  
+                  echo "Waiting for Cilium... (${elapsed}s elapsed)"
+                  sleep 10
+                done
+              register: cilium_deployment
+              failed_when: cilium_deployment.rc != 0
+          
+          tags: [deploy]
+        
+        - name: "PHASE 5: Post-deployment validation"
+          block:
+            - name: Validate all deployments
+              ansible.builtin.shell: |
+                echo "=== FINAL DEPLOYMENT VALIDATION ==="
+                
+                # Check all critical pods are running
+                echo "Checking pod status..."
+                kubectl get pods --all-namespaces --field-selector=status.phase!=Running,status.phase!=Succeeded 2>/dev/null || true
+                
+                # Validate specific services
+                echo "Validating Samba4..."
+                if ! kubectl get deployment samba4 -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
+                  echo "ERROR: Samba4 deployment not ready"
+                  exit 1
+                fi
+                
+                echo "Validating Authentik..."
+                if ! kubectl get deployment authentik-server -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
+                  echo "ERROR: Authentik server deployment not ready"
+                  exit 1
+                fi
+                
+                if ! kubectl get deployment authentik-worker -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
+                  echo "ERROR: Authentik worker deployment not ready"
+                  exit 1
+                fi
+                
+                echo "Validating Cilium..."
+                if ! kubectl get daemonset cilium -n kube-system -o jsonpath='{.status.numberReady}' 2>/dev/null | grep -q "[1-9]"; then
+                  echo "ERROR: Cilium daemonset not ready"
+                  exit 1
+                fi
+                
+                echo "✓ All services validated successfully"
+              register: final_validation
+              failed_when: final_validation.rc != 0
+            
+            - name: Display deployment summary
+              ansible.builtin.debug:
+                msg: |
+                  ============================================
+                  🎉 NOAH CLUSTER REDEPLOY COMPLETED SUCCESSFULLY!
+                  ============================================
+                  
+                  Cluster: {{ cluster_name }}
+                  Domain: {{ domain }}
+                  
+                  Deployed Services:
+                  ✓ Samba4 Active Directory (identity namespace)
+                  ✓ Authentik SSO (identity namespace) 
+                  ✓ Cilium CNI with Hubble (kube-system namespace)
+                  
+                  Access URLs:
+                  - Authentik SSO: https://auth.{{ domain }}
+                  - Hubble UI: https://hubble.{{ domain }}
+                  
+                  Next Steps:
+                  1. Configure Authentik SSO integration
+                  2. Test authentication flow
+                  3. Configure network policies with Cilium
+                  
+                  ============================================
+          
+          tags: [validation]
+      
+      rescue:
+        - name: Handle deployment failure
+          ansible.builtin.debug:
+            msg: |
+              ❌ NOAH CLUSTER REDEPLOY FAILED
+              ================================
+              
+              The redeploy process encountered an error during execution.
+              
+              Recommended recovery actions:
+              1. Check the failed task output above
+              2. Verify cluster state: kubectl get pods --all-namespaces
+              3. Check logs: kubectl logs -n <namespace> <pod-name>
+              4. For manual recovery, run individual commands:
+                 - python noah.py cluster destroy --force
+                 - python noah.py cluster create --name {{ cluster_name }} --domain {{ domain }}
+                 - python noah.py deploy all --domain {{ domain }}
+              
+              ================================
+        
+        - name: Fail the playbook
+          ansible.builtin.fail:
+            msg: "Redeploy process failed - see error messages above"

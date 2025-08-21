@@ -252,6 +252,9 @@
             timeout=300
             start_time=$(date +%s)
             
+            # Set kubeconfig for kubectl to work
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            
             while true; do
               current_time=$(date +%s)
               elapsed=$((current_time - start_time))
@@ -263,6 +266,7 @@
               
               if kubectl get nodes >/dev/null 2>&1; then
                 echo "✓ K3s is ready"
+                kubectl get nodes
                 break
               fi
               

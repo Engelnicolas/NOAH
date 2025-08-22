@@ -19,7 +19,6 @@ NOAH is a comprehensive Kubernetes-based infrastructure platform that provides:
 
 - **🔐 Single Sign-On (SSO)** via Authentik
 - **🌐 Network Security** via Cilium CNI
-- **📊 Monitoring & Observability** via Prometheus/Grafana
 - **🗂️ Directory Services** via Samba4 (optional)
 - **🔒 Secret Management** via SOPS/Age encryption
 - **🚪 Ingress Management** via NGINX
@@ -63,25 +62,25 @@ Once deployed, access your services at:
 ## 🏛️ Architecture
 
 ```
-┌─────────────────────────────────────────────┐
+┌──────────────────────────────────────────────┐
 │              NOAH Platform                   │
 │  ┌─────────────────────────────────────────┐ │
 │  │         Ingress Layer                   │ │
-│  │  NGINX → TLS → Service Routing         │ │
+│  │  NGINX → TLS → Service Routing          │ │
 │  └─────────────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────┐ │
-│  │      Authentication Layer              │ │
-│  │  Authentik SSO + LDAP + Samba4 AD      │ │
+│  │      Authentication Layer               │ │
+│  │  Authentik SSO + LDAP + Samba4 AD       │ │
 │  └─────────────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────┐ │
-│  │         Network Layer                  │ │
-│  │  Cilium CNI + Hubble + Policies        │ │
+│  │         Network Layer                   │ │
+│  │  Cilium CNI + Hubble + Policies         │ │
 │  └─────────────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────┐ │
-│  │        Security Layer                  │ │
-│  │  SOPS/Age + TLS + RBAC + Encryption    │ │
+│  │        Security Layer                   │ │
+│  │  SOPS/Age + TLS + RBAC + Encryption     │ │
 │  └─────────────────────────────────────────┘ │
-└─────────────────────────────────────────────┘
+└──────────────────────────────────────────────┘
 ```
 
 ## 🛠️ Management Tools
@@ -126,14 +125,6 @@ kubectl get secrets --all-namespaces
 - **Network Policies**: Cilium-based micro-segmentation
 - **RBAC**: Kubernetes role-based access control
 - **SSO Integration**: Centralized authentication for all services
-
-## 📊 Monitoring & Observability
-
-- **Metrics**: Prometheus scrapes all components
-- **Dashboards**: Grafana with NOAH-specific dashboards
-- **Network**: Hubble provides network flow visibility
-- **Logs**: Centralized logging with structured formats
-- **Alerts**: AlertManager for critical issues
 
 ## 🆘 Getting Help
 
@@ -218,5 +209,3 @@ noah-infrastructure/
 - **SOPS Documentation**: https://github.com/mozilla/sops
 
 ---
-
-**Need help?** Start with the [Quick Reference](quick-reference.md) or jump to the [Troubleshooting Guide](troubleshooting-guide.md) for specific issues.

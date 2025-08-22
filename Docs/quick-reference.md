@@ -79,7 +79,7 @@ python noah.py test ldap --domain noah-infra.com
 6. **Validation** → `python noah.py status --all`
 
 **Alternative 1**: Use `python noah.py deploy all` for steps 3-5 combined
-**Alternative 2**: Use `python noah.py cluster redeploy` for steps 1-5 combined (NEW!)
+**Alternative 2**: Use `python noah.py cluster redeploy` for steps 1-5 combined
 
 ## Component Timeouts
 

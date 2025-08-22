@@ -247,33 +247,131 @@
             INSTALL_K3S_EXEC: "server"
           become: yes
           
+        - name: Enable and start K3s service
+          shell: |
+            echo "=== ENABLING AND STARTING K3s SERVICE ==="
+            
+            # Enable K3s service for automatic startup
+            systemctl enable k3s
+            echo "✓ K3s service enabled for automatic startup"
+            
+            # Start K3s service
+            systemctl start k3s
+            echo "✓ K3s service start command issued"
+            
+            # Wait a moment for service to initialize
+            sleep 5
+            
+            # Check service status
+            if systemctl is-active --quiet k3s; then
+              echo "✓ K3s service is active"
+              systemctl status k3s --no-pager -l
+            else
+              echo "❌ K3s service failed to start"
+              systemctl status k3s --no-pager -l
+              exit 1
+            fi
+            
+            echo "=== K3s SERVICE START COMPLETE ==="
+          become: yes
+          register: k3s_service_start
+          
         - name: Wait for K3s to be ready
           shell: |
+            echo "=== WAITING FOR K3s STARTUP ==="
             timeout=300
             start_time=$(date +%s)
             
-            # Set kubeconfig for kubectl to work
-            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-            
+            # Wait for K3s service to start
+            echo "[STARTUP] Waiting for K3s service..."
             while true; do
               current_time=$(date +%s)
               elapsed=$((current_time - start_time))
               
               if [ $elapsed -gt $timeout ]; then
                 echo "ERROR: K3s startup timeout after ${timeout}s"
+                echo "Final status checks:"
+                systemctl status k3s --no-pager -l || true
                 exit 1
               fi
               
-              if kubectl get nodes >/dev/null 2>&1; then
-                echo "✓ K3s is ready"
-                kubectl get nodes
+              # Check if service is active
+              if systemctl is-active --quiet k3s; then
+                echo "✓ K3s service is active (${elapsed}s elapsed)"
                 break
               fi
               
-              echo "Waiting for K3s to start... (${elapsed}s elapsed)"
-              sleep 5
+              echo "Waiting for K3s service to start... (${elapsed}s elapsed)"
+              sleep 3
             done
+            
+            # Wait for kubeconfig file to be created
+            echo "[STARTUP] Waiting for kubeconfig creation..."
+            config_timeout=60
+            config_start=$(date +%s)
+            while true; do
+              config_current=$(date +%s)
+              config_elapsed=$((config_current - config_start))
+              
+              if [ $config_elapsed -gt $config_timeout ]; then
+                echo "ERROR: kubeconfig creation timeout after ${config_timeout}s"
+                ls -la /etc/rancher/k3s/ 2>/dev/null || echo "K3s config directory not found"
+                exit 1
+              fi
+              
+              if [ -f "/etc/rancher/k3s/k3s.yaml" ] && [ -s "/etc/rancher/k3s/k3s.yaml" ]; then
+                echo "✓ kubeconfig file created (${config_elapsed}s elapsed)"
+                echo "  File: /etc/rancher/k3s/k3s.yaml ($(stat -c%s /etc/rancher/k3s/k3s.yaml) bytes)"
+                break
+              fi
+              
+              echo "Waiting for kubeconfig file... (${config_elapsed}s elapsed)"
+              sleep 2
+            done
+            
+            # Set kubeconfig for kubectl to work
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            
+            # Wait for API server to respond
+            echo "[STARTUP] Waiting for API server..."
+            api_timeout=120
+            api_start=$(date +%s)
+            while true; do
+              api_current=$(date +%s)
+              api_elapsed=$((api_current - api_start))
+              
+              if [ $api_elapsed -gt $api_timeout ]; then
+                echo "ERROR: API server timeout after ${api_timeout}s"
+                echo "K3s service status:"
+                systemctl status k3s --no-pager -l || true
+                exit 1
+              fi
+              
+              if kubectl get --raw='/healthz' >/dev/null 2>&1; then
+                echo "✓ API server is healthy (${api_elapsed}s elapsed)"
+                break
+              fi
+              
+              echo "Waiting for API server... (${api_elapsed}s elapsed)"
+              sleep 3
+            done
+            
+            # Final connectivity test
+            echo "[STARTUP] Final connectivity test..."
+            if kubectl get nodes >/dev/null 2>&1; then
+              echo "✓ K3s cluster is fully ready"
+              kubectl get nodes -o wide
+              echo ""
+              echo "=== K3s STARTUP COMPLETE ==="
+              total_elapsed=$(($(date +%s) - start_time))
+              echo "Total startup time: ${total_elapsed}s"
+            else
+              echo "ERROR: kubectl connectivity test failed"
+              kubectl get nodes 2>&1 || true
+              exit 1
+            fi
           register: k3s_ready
+          failed_when: k3s_ready.rc != 0
           
         - name: Setup persistent kubectl access
           shell: |
@@ -309,6 +407,131 @@
             echo "✓ Configuration will persist across sessions"
           register: kubectl_setup
           
+        - name: Comprehensive K3s validation before deployment
+          shell: |
+            echo "=== COMPREHENSIVE K3s VALIDATION ==="
+            echo ""
+            
+            # Initialize validation status
+            validation_failed=0
+            
+            echo "[1/8] Checking K3s service status..."
+            if systemctl is-active --quiet k3s; then
+              echo "✓ K3s service is active and running"
+            else
+              echo "❌ K3s service is not running"
+              systemctl status k3s --no-pager -l
+              validation_failed=1
+            fi
+            
+            echo ""
+            echo "[2/8] Checking K3s process..."
+            if pgrep -f "k3s server" >/dev/null; then
+              echo "✓ K3s server process is running"
+              echo "  Process: $(pgrep -f 'k3s server' | head -1)"
+            else
+              echo "❌ K3s server process not found"
+              validation_failed=1
+            fi
+            
+            echo ""
+            echo "[3/8] Checking K3s kubeconfig file..."
+            if [ -f "/etc/rancher/k3s/k3s.yaml" ]; then
+              echo "✓ K3s kubeconfig exists: /etc/rancher/k3s/k3s.yaml"
+              echo "  File size: $(stat -c%s /etc/rancher/k3s/k3s.yaml) bytes"
+              echo "  Permissions: $(stat -c%a /etc/rancher/k3s/k3s.yaml)"
+            else
+              echo "❌ K3s kubeconfig file missing: /etc/rancher/k3s/k3s.yaml"
+              validation_failed=1
+            fi
+            
+            echo ""
+            echo "[4/8] Checking user kubectl config..."
+            if [ -f "/root/.kube/config" ]; then
+              echo "✓ User kubectl config exists: /root/.kube/config"
+              echo "  File size: $(stat -c%s /root/.kube/config) bytes"
+              echo "  Permissions: $(stat -c%a /root/.kube/config)"
+            else
+              echo "❌ User kubectl config missing: /root/.kube/config"
+              validation_failed=1
+            fi
+            
+            echo ""
+            echo "[5/8] Testing kubectl cluster connectivity..."
+            export KUBECONFIG=/root/.kube/config
+            if kubectl cluster-info >/dev/null 2>&1; then
+              echo "✓ kubectl can connect to cluster"
+              kubectl cluster-info --request-timeout=10s
+            else
+              echo "❌ kubectl cannot connect to cluster"
+              kubectl cluster-info --request-timeout=10s 2>&1 || true
+              validation_failed=1
+            fi
+            
+            echo ""
+            echo "[6/8] Checking cluster nodes..."
+            if kubectl get nodes >/dev/null 2>&1; then
+              echo "✓ Cluster nodes are accessible"
+              kubectl get nodes -o wide
+            else
+              echo "❌ Cannot access cluster nodes"
+              kubectl get nodes 2>&1 || true
+              validation_failed=1
+            fi
+            
+            echo ""
+            echo "[7/8] Checking core system pods..."
+            if kubectl get pods -n kube-system >/dev/null 2>&1; then
+              echo "✓ Can access kube-system namespace"
+              
+              # Check core pods
+              core_pods="coredns metrics-server"
+              for pod in $core_pods; do
+                if kubectl get pods -n kube-system -l k8s-app=$pod --field-selector=status.phase=Running >/dev/null 2>&1; then
+                  echo "  ✓ $pod is running"
+                else
+                  echo "  ⚠ $pod is not ready yet"
+                fi
+              done
+              
+              echo "  Current kube-system pods:"
+              kubectl get pods -n kube-system --no-headers | while read line; do
+                echo "    $line"
+              done
+            else
+              echo "❌ Cannot access kube-system namespace"
+              validation_failed=1
+            fi
+            
+            echo ""
+            echo "[8/8] Checking API server health..."
+            if kubectl get --raw='/healthz' >/dev/null 2>&1; then
+              echo "✓ Kubernetes API server is healthy"
+              echo "  Health status: $(kubectl get --raw='/healthz')"
+            else
+              echo "❌ Kubernetes API server health check failed"
+              validation_failed=1
+            fi
+            
+            echo ""
+            echo "=== K3s VALIDATION SUMMARY ==="
+            if [ $validation_failed -eq 0 ]; then
+              echo "✅ ALL CHECKS PASSED - K3s is ready for deployment"
+              echo "✅ Cluster is stable and accessible"
+              echo "✅ Proceeding to namespace creation and service deployment"
+            else
+              echo "❌ VALIDATION FAILED - Cannot proceed with deployment"
+              echo "❌ Please check the errors above and fix them before continuing"
+              echo "❌ Common fixes:"
+              echo "   - Wait longer for K3s to fully start"
+              echo "   - Check system resources (memory, disk space)"
+              echo "   - Restart K3s service: systemctl restart k3s"
+              exit 1
+            fi
+            echo "================================="
+          register: k3s_validation
+          failed_when: k3s_validation.rc != 0
+          
         - name: Create cluster namespaces
           kubernetes.core.k8s:
             name: "{{ item }}"
@@ -323,12 +546,12 @@
       debug:
         msg:
           - "Cluster {{ cluster_name }} initialized successfully"
-          - "Python virtual environment: {{ noah_venv_dir }} created"
-          - "NOAH dependencies installed from {{ noah_scripts_dir }}/requirements.txt"
+          - "Python virtual environment: {{ noah_venv_dir | default('./.venv') }} configured"
+          - "NOAH dependencies: verified"
           - "NOAH CLI verified and functional"
-          - "Age public key: {{ age_public_key.stdout }}"
+          - "Age public key: {{ age_public_key.stdout | default('generated') }}"
           - "Namespaces created: identity, cilium-system"
-          - "CA certificate generated in {{ noah_certificates_dir }}"
+          - "CA certificate generated in {{ noah_certificates_dir | default('./Certificates') }}"
           - "kubectl configured for persistent access (/root/.kube/config)"
           - "KUBECONFIG environment variable configured in shell profiles"
           - "Cluster ready for NOAH service deployment"

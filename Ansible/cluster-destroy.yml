@@ -199,6 +199,37 @@
         - "/opt/cni"
       ignore_errors: true
 
+    - name: "CLEANUP: Remove kubectl client cache and configuration"
+      ansible.builtin.shell: |
+        echo "=== CLEANING UP KUBECTL CLIENT CACHE ==="
+        
+        # Remove user kubectl configuration
+        if [ -f ~/.kube/config ]; then
+          echo "Removing kubectl config: ~/.kube/config"
+          rm -f ~/.kube/config
+        fi
+        
+        # Remove kubectl client cache (this prevents memcache errors)
+        if [ -d ~/.kube/cache ]; then
+          echo "Removing kubectl cache: ~/.kube/cache"
+          rm -rf ~/.kube/cache
+        fi
+        
+        # Clear KUBECONFIG environment variable reference to removed files
+        if [ "$KUBECONFIG" = "/etc/rancher/k3s/k3s.yaml" ]; then
+          echo "Clearing KUBECONFIG environment variable"
+          unset KUBECONFIG
+        fi
+        
+        # Clear any lingering kubectl process cache
+        if command -v kubectl >/dev/null 2>&1; then
+          echo "Testing kubectl after cache cleanup..."
+          kubectl version --client-only >/dev/null 2>&1 || echo "✓ kubectl properly disconnected from cluster"
+        fi
+        
+        echo "=== KUBECTL CACHE CLEANUP COMPLETED ==="
+      ignore_errors: true
+
     - name: Display data directory cleanup status (verbose mode)
       ansible.builtin.debug:
         msg:

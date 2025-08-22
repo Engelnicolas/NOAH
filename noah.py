@@ -18,6 +18,9 @@ from dotenv import load_dotenv  # type: ignore
 # Load environment variables from .env file
 load_dotenv()
 
+# Import CLI utilities
+from CLI.kubectl_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected
+
 # Configuration paths from environment variables
 def get_noah_paths():
     """Get NOAH directory paths from environment variables"""
@@ -394,6 +397,10 @@ def destroy(ctx, name, force, keep_secrets):
     if not keep_secrets:
         click.echo("[VERBOSE] Cleaning up local secrets and certificates...")
         ctx.obj['secrets'].cleanup_local_secrets()
+    
+    # Clean up kubectl client cache to prevent memcache errors
+    click.echo("[VERBOSE] Cleaning up kubectl client cache...")
+    cleanup_kubectl_cache()
 
 @cluster.command()
 @click.option('--name', default='noah-production', help='Cluster name')

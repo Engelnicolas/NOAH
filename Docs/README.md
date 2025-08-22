@@ -144,10 +144,13 @@ python noah.py cluster create --name noah-cluster --domain noah-infra.com
 
 ### Useful Debugging
 ```bash
-# Check all pods
+# Check all pods (when cluster exists)
 kubectl get pods --all-namespaces | grep -v Running
 
-# Check events
+# Note: After cluster destroy, kubectl will show connection errors - this is normal!
+# Connection refused + memcache errors = successful cluster destruction
+
+# Check events (when cluster exists)
 kubectl get events --sort-by=.metadata.creationTimestamp
 
 # Check Helm releases

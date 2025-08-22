@@ -1,0 +1,329 @@
+---
+# Network Policy for Samba4 Active Directory
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: samba4-network-policy
+  namespace: identity
+  labels:
+    app: samba4
+    component: active-directory
+spec:
+  podSelector:
+    matchLabels:
+      app: samba4
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  # Allow incoming connections for LDAP, Kerberos, and SMB
+  ingress:
+  - from:
+    # Allow from Authentik pods
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: authentik
+    # Allow from other services in identity namespace
+    - namespaceSelector:
+        matchLabels:
+          name: identity
+    # Allow from kube-system for DNS
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    # LDAP ports
+    - protocol: TCP
+      port: 389
+    - protocol: TCP
+      port: 636  # LDAPS
+    # Kerberos ports
+    - protocol: TCP
+      port: 88
+    - protocol: UDP
+      port: 88
+    - protocol: TCP
+      port: 464  # kpasswd
+    - protocol: UDP
+      port: 464
+    # SMB/CIFS ports
+    - protocol: TCP
+      port: 445
+    - protocol: TCP
+      port: 139
+    # DNS
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+      
+  # Allow outgoing connections
+  egress:
+  # Allow DNS queries
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  # Allow external DNS forwarders
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  # Allow connection to Kubernetes API
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 6443
+
+---
+# Network Policy for Authentik SSO
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: authentik-network-policy
+  namespace: identity
+  labels:
+    app.kubernetes.io/name: authentik
+    component: sso-server
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: authentik
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  # Allow incoming connections
+  ingress:
+  # Allow from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+  # Allow from other services in identity namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: identity
+  # Allow from kube-system for monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 9000  # Authentik main port
+    - protocol: TCP
+      port: 9443  # Authentik HTTPS port
+    - protocol: TCP
+      port: 9300  # Authentik metrics port
+      
+  # Allow outgoing connections
+  egress:
+  # Allow connection to Samba4 LDAP
+  - to:
+    - podSelector:
+        matchLabels:
+          app: samba4
+    ports:
+    - protocol: TCP
+      port: 389   # LDAP
+    - protocol: TCP
+      port: 636   # LDAPS
+    - protocol: TCP
+      port: 88    # Kerberos
+    - protocol: UDP
+      port: 88    # Kerberos UDP
+  # Allow connection to PostgreSQL
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow connection to Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow DNS queries
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  # Allow external connections (for email, webhooks, etc.)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 587   # SMTP
+    - protocol: TCP
+      port: 25    # SMTP
+  # Allow connection to Kubernetes API
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+
+---
+# Network Policy for PostgreSQL (Authentik database)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgresql-network-policy
+  namespace: identity
+  labels:
+    app.kubernetes.io/name: postgresql
+    component: database
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  # Allow incoming connections only from Authentik
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: authentik
+    ports:
+    - protocol: TCP
+      port: 5432
+      
+  # Minimal egress (DNS only)
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+---
+# Network Policy for Redis (Authentik cache)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-network-policy
+  namespace: identity
+  labels:
+    app.kubernetes.io/name: redis
+    component: cache
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  # Allow incoming connections only from Authentik
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: authentik
+    ports:
+    - protocol: TCP
+      port: 6379
+      
+  # Minimal egress (DNS only)
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+---
+# Network Policy for cross-namespace communication with Hubble UI
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hubble-sso-access
+  namespace: kube-system
+  labels:
+    app: cilium-hubble-ui
+    component: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      k8s-app: hubble-ui
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  # Allow incoming connections from ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+  # Allow from identity namespace for SSO validation
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: identity
+    ports:
+    - protocol: TCP
+      port: 8081  # Hubble UI port
+      
+  # Allow outgoing connections for SSO validation
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: identity
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: authentik
+    ports:
+    - protocol: TCP
+      port: 9000
+    - protocol: TCP
+      port: 9443
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

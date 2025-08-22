@@ -275,6 +275,40 @@
             done
           register: k3s_ready
           
+        - name: Setup persistent kubectl access
+          shell: |
+            echo "=== SETTING UP PERSISTENT KUBECTL ACCESS ==="
+            
+            # Create .kube directory for root user
+            mkdir -p /root/.kube
+            
+            # Copy K3s kubeconfig to standard location
+            cp /etc/rancher/k3s/k3s.yaml /root/.kube/config
+            
+            # Set proper ownership and permissions
+            chown root:root /root/.kube/config
+            chmod 600 /root/.kube/config
+            
+            # Add KUBECONFIG to shell profiles for persistent access
+            echo "# NOAH K3s kubectl configuration" >> /root/.bashrc
+            echo "export KUBECONFIG=/root/.kube/config" >> /root/.bashrc
+            
+            # Also add to .profile for login shells
+            echo "# NOAH K3s kubectl configuration" >> /root/.profile
+            echo "export KUBECONFIG=/root/.kube/config" >> /root/.profile
+            
+            # Set KUBECONFIG for current session
+            export KUBECONFIG=/root/.kube/config
+            
+            # Verify kubectl works with new config
+            kubectl cluster-info
+            kubectl get nodes
+            
+            echo "✓ Persistent kubectl access configured"
+            echo "✓ KUBECONFIG set to: /root/.kube/config"
+            echo "✓ Configuration will persist across sessions"
+          register: kubectl_setup
+          
         - name: Create cluster namespaces
           kubernetes.core.k8s:
             name: "{{ item }}"
@@ -295,6 +329,8 @@
           - "Age public key: {{ age_public_key.stdout }}"
           - "Namespaces created: identity, cilium-system"
           - "CA certificate generated in {{ noah_certificates_dir }}"
+          - "kubectl configured for persistent access (/root/.kube/config)"
+          - "KUBECONFIG environment variable configured in shell profiles"
           - "Cluster ready for NOAH service deployment"
 
     - name: "FINAL VALIDATION: Run NOAH setup doctor for comprehensive prerequisite check"
@@ -330,6 +366,34 @@
         
         echo ""
         echo "[VALIDATION] Additional cluster-specific checks..."
+        
+        # Check kubectl persistent access
+        echo ""
+        echo "[KUBECTL] Validating persistent kubectl configuration..."
+        if [ -f "/root/.kube/config" ]; then
+          echo "✅ kubectl config file: PRESENT (/root/.kube/config)"
+          
+          # Test kubectl connectivity without explicit KUBECONFIG
+          unset KUBECONFIG  # Clear any temporary KUBECONFIG
+          if kubectl cluster-info >/dev/null 2>&1; then
+            echo "✅ kubectl connectivity: WORKING (persistent access confirmed)"
+            kubectl_status="PASS"
+          else
+            echo "❌ kubectl connectivity: FAILED (persistent access not working)"
+            kubectl_status="FAIL"
+          fi
+          
+          # Check if KUBECONFIG is in shell profiles
+          if grep -q "KUBECONFIG=/root/.kube/config" /root/.bashrc; then
+            echo "✅ kubectl shell integration: CONFIGURED (.bashrc)"
+          else
+            echo "❌ kubectl shell integration: MISSING (.bashrc)"
+            kubectl_status="FAIL"
+          fi
+        else
+          echo "❌ kubectl config file: MISSING (/root/.kube/config)"
+          kubectl_status="FAIL"
+        fi
         
         # Check Age keys specifically
         if [ -f "${NOAH_AGE_DIR}/keys.txt" ]; then

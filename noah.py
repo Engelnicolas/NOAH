@@ -20,7 +20,7 @@ load_dotenv()
 
 # Import CLI utilities
 from CLI.kubectl_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected
-from CLI.redeploy_utils import execute_redeploy
+# from CLI.redeploy_utils import execute_redeploy  # Commented out - redeploy feature disabled
 
 # Configuration paths from environment variables
 def get_noah_paths():

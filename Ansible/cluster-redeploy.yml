@@ -143,8 +143,21 @@
           
           tags: [create]
         
-        - name: "PHASE 4: Deploy services"
+        - name: "PHASE 4: Deploy services with SSO integration"
           block:
+            # Step 1: Deploy Cilium network preparation FIRST
+            - name: Deploy Cilium CNI - Network Preparation Phase
+              ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-cilium.yml"
+              vars:
+                namespace: kube-system
+                domain: "{{ domain }}"
+                security_config: "{{ security_config }}"
+                deployment_phase: preparation
+                service_name: cilium-preparation
+                use_generated_secrets: true
+                secrets_backend: sops
+            
+            # Step 2: Deploy Samba4 Active Directory with network ready
             - name: Deploy Samba4 Active Directory
               ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-samba4.yml"
               vars:
@@ -159,9 +172,9 @@
                 create_admin_secret: true
                 admin_secret_name: samba4-admin-secret
             
-            - name: Wait for Samba4 deployment
+            - name: Wait for Samba4 deployment and network integration
               ansible.builtin.shell: |
-                echo "=== WAITING FOR SAMBA4 DEPLOYMENT ==="
+                echo "=== WAITING FOR SAMBA4 DEPLOYMENT WITH NETWORK INTEGRATION ==="
                 timeout=300
                 start_time=$(date +%s)
                 
@@ -178,20 +191,28 @@
                   if kubectl get deployment samba4 -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
                     echo "✓ Samba4 deployment is ready"
                     
-                    # Additional check: Verify pod is actually running
+                    # Additional check: Verify pod is actually running and network accessible
                     if kubectl get pods -n identity -l app=samba4 --field-selector=status.phase=Running 2>/dev/null | grep -q "Running"; then
                       echo "✓ Samba4 pod is running"
-                      break
+                      
+                      # Test LDAP connectivity (basic check)
+                      if kubectl exec -n identity deployment/samba4 -- ldapsearch -x -H ldap://localhost:389 -s base 2>/dev/null | grep -q "result: 0 Success"; then
+                        echo "✓ Samba4 LDAP service is accessible"
+                        break
+                      else
+                        echo "Waiting for Samba4 LDAP service to be ready..."
+                      fi
                     fi
                   fi
                   
-                  echo "Waiting for Samba4... (${elapsed}s elapsed)"
+                  echo "Waiting for Samba4 with network integration... (${elapsed}s elapsed)"
                   sleep 10
                 done
               register: samba4_deployment
               failed_when: samba4_deployment.rc != 0
-            
-            - name: Deploy Authentik SSO
+
+            # Step 3: Deploy Authentik SSO with Samba4 LDAP integration
+            - name: Deploy Authentik SSO with LDAP Integration
               ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-authentik.yml"
               vars:
                 namespace: identity
@@ -206,10 +227,12 @@
                 app_secret_name: authentik-secret
                 ldap_integration: true
                 ldap_base_dn: "dc={{ domain.split('.') | join(',dc=') }}"
-            
-            - name: Wait for Authentik deployment
+                ldap_server_uri: "ldap://samba4.identity.svc.cluster.local:389"
+                ldap_bind_dn: "cn=Administrator,cn=Users,dc={{ domain.split('.') | join(',dc=') }}"
+
+            - name: Wait for Authentik deployment with LDAP integration
               ansible.builtin.shell: |
-                echo "=== WAITING FOR AUTHENTIK DEPLOYMENT ==="
+                echo "=== WAITING FOR AUTHENTIK DEPLOYMENT WITH LDAP INTEGRATION ==="
                 timeout=300
                 start_time=$(date +%s)
                 
@@ -232,23 +255,32 @@
                     # Additional check: Verify pods are actually running
                     if kubectl get pods -n identity -l app.kubernetes.io/name=authentik --field-selector=status.phase=Running 2>/dev/null | grep -q "Running"; then
                       echo "✓ Authentik pods are running"
-                      break
+                      
+                      # Test LDAP connectivity from Authentik to Samba4
+                      if kubectl exec -n identity deployment/authentik-server -- wget -q -O- http://localhost:9000/api/v3/core/tenants/ 2>/dev/null | grep -q "noah-infra.com"; then
+                        echo "✓ Authentik API is responding"
+                        break
+                      else
+                        echo "Waiting for Authentik API to be ready..."
+                      fi
                     fi
                   fi
                   
-                  echo "Waiting for Authentik... (${elapsed}s elapsed) [Server: $server_ready, Worker: $worker_ready]"
+                  echo "Waiting for Authentik with LDAP integration... (${elapsed}s elapsed) [Server: $server_ready, Worker: $worker_ready]"
                   sleep 10
                 done
               register: authentik_deployment
               failed_when: authentik_deployment.rc != 0
-            
-            - name: Deploy Cilium CNI
+
+            # Step 4: Complete Cilium deployment with full SSO integration
+            - name: Deploy Cilium CNI - Full SSO Integration Phase
               ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-cilium.yml"
               vars:
                 namespace: kube-system
                 domain: "{{ domain }}"
                 security_config: "{{ security_config }}"
-                service_name: cilium
+                deployment_phase: sso-integration
+                service_name: cilium-sso-integration
                 use_generated_secrets: true
                 secrets_backend: sops
                 enable_hubble: true

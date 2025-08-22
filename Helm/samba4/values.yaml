@@ -14,6 +14,12 @@ service:
     kpasswd: 464
     smb: 445
     netbios: 139
+  # Enable headless service for better DNS resolution
+  clusterIP: None
+  # Add annotations for Cilium service mesh
+  annotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/shared: "true"
 
 persistence:
   enabled: true

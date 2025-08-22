@@ -43,14 +43,22 @@ authentik:
     useSSL: false
     from: authentik@noah-infra.com
   
-  # Samba 4 LDAP Integration
+  # Samba 4 LDAP Integration - Enhanced for Cilium networking
   ldap:
     enabled: true
     baseDn: "dc=noah-infra,dc=com"
     bindDn: "cn=Administrator,cn=Users,dc=noah-infra,dc=com"
     bindPassword: ""
-    serverUri: "ldap://samba4.identity.svc.cluster.local"
+    serverUri: "ldap://samba4.identity.svc.cluster.local:389"
     startTls: false
+    # Connection pool settings for better performance
+    connectionTimeout: 30
+    searchTimeout: 30
+    # Enable connection pooling
+    poolSize: 5
+    # Retry settings for network resilience
+    retryAttempts: 3
+    retryDelay: 5
     
   outposts:
     ldap:

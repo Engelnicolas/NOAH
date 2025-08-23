@@ -4,6 +4,14 @@
 
 This guide provides the standard workflow for deploying the complete NOAH (Network Operations and Authentication Hub) infrastructure from scratch. NOAH provides a comprehensive Kubernetes-based platform with SSO authentication, network security, and encrypted secret management.
 
+## 🆕 Recent Enhancements
+
+### Enhanced Deployment Options
+- **Complete Infrastructure Redeployment**: New Ansible playbook for full-stack deployment
+- **Optimized Service Order**: Cilium → Samba4 → Authentik for proper SSO foundation
+- **SSO-Ready Networking**: Pre-configured network policies for service communication
+- **Enhanced Validation**: Comprehensive testing and status checking
+
 ## Prerequisites
 
 ### System Requirements
@@ -20,8 +28,34 @@ The NOAH CLI will automatically install missing tools, but you can pre-install:
 - `age` - Age encryption tool
 - `sops` - Secrets Operations tool
 - `python3` and `pip3`
+- `ansible` - Infrastructure automation
 
-## Standard Deployment Workflow
+## 🚀 Recommended Deployment Method
+
+### Option 1: Complete Infrastructure Redeployment (Recommended)
+
+This is the newest and most reliable method for deploying NOAH infrastructure:
+
+```bash
+# Deploy complete infrastructure with optimized order
+ansible-playbook Ansible/cluster-redeploy.yml \
+  -e cluster_name=noah-production \
+  -e domain_name=noah-infra.com
+```
+
+**What this does:**
+- ✅ **Phase 1**: Validates environment and destroys existing cluster (if needed)
+- ✅ **Phase 2**: Creates fresh K3s cluster with enhanced validation
+- ✅ **Phase 3**: Generates encryption keys and certificates
+- ✅ **Phase 4**: Deploys services in optimized order:
+  1. **Cilium CNI** (complete with SSO network policies)
+  2. **Samba4** (Active Directory with enhanced validation)
+  3. **Authentik** (SSO with LDAP integration)
+- ✅ **Phase 5**: Comprehensive post-deployment validation
+
+### Option 2: Manual Step-by-Step Deployment
+
+For learning or troubleshooting purposes:
 
 ### Phase 1: Initial Setup and Prerequisites
 
@@ -43,11 +77,63 @@ python noah.py cluster destroy --force  # If needed
 
 ### Phase 2: Core Infrastructure Deployment
 
-#### 2.1 Create Fresh Kubernetes Cluster
+#### 2.1 Create Fresh Kubernetes Cluster (Enhanced)
 ```bash
-# Create new cluster with prerequisite validation
+# Create new cluster with comprehensive validation
 python noah.py cluster create --name noah-cluster --domain noah-infra.com
 ```
+
+**What this does:**
+- ✅ Validates no existing cluster components
+- ✅ Generates Age encryption keys
+- ✅ Creates SOPS configuration  
+- ✅ Generates TLS certificates for domain
+- ✅ Initializes K3s Kubernetes cluster with persistent kubeconfig
+- ✅ Sets up NOAH namespaces (identity, monitoring)
+- ✅ Enhanced connectivity validation and cache management
+
+#### 2.2 Deploy CNI (Cilium) - SSO-Ready Configuration
+```bash
+# Deploy Cilium networking with SSO network policies (10-minute timeout)
+python noah.py deploy cilium --namespace kube-system --domain noah-infra.com
+```
+
+**What this does:**
+- ✅ Deploys Cilium CNI via Helm with enhanced configuration
+- ✅ Enables service mesh and Hubble observability  
+- ✅ Configures SSO-ready network policies for identity services
+- ✅ Sets up ingress for Hubble UI with authentication
+- ✅ Validates network connectivity and policy enforcement
+
+### Phase 3: Identity and Authentication (Optimized Order)
+
+#### 3.1 Deploy Samba4 Active Directory (Deploy Second)
+```bash
+# Deploy Samba4 with enhanced validation (15-minute timeout)
+python noah.py deploy samba4 --namespace identity --domain noah-infra.com
+```
+
+**What this does:**
+- ✅ Deploys Samba4 Active Directory server
+- ✅ Configures LDAP services on port 389
+- ✅ Sets up persistent volume for domain data
+- ✅ Enhanced network connectivity validation
+- ✅ Encrypts secrets with SOPS/Age
+
+#### 3.2 Deploy Authentik SSO (Deploy Third - Connects to Samba4)
+```bash
+# Deploy Authentik with LDAP integration (12-minute timeout)
+python noah.py deploy authentik --namespace identity --domain noah-infra.com
+```
+
+**What this does:**
+- ✅ Deploys PostgreSQL database
+- ✅ Deploys Redis cache
+- ✅ Deploys Authentik server and worker
+- ✅ Configures LDAP connection to Samba4
+- ✅ Sets up ingress with TLS at https://auth.noah-infra.com
+- ✅ Validates SSO + LDAP connectivity
+- ✅ Encrypts secrets with SOPS
 
 **What this does:**
 - ✅ Validates no existing cluster components

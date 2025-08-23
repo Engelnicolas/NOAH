@@ -1,34 +1,51 @@
 # NOAH Quick Reference Guide
 
+## 🆕 Latest Enhancements
+
+### Complete Infrastructure Management
+```bash
+# NEW: Complete infrastructure redeployment (recommended)
+ansible-playbook Ansible/cluster-redeploy.yml \
+  -e cluster_name=noah-production \
+  -e domain_name=noah-infra.com
+
+# Enhanced SSO testing with network validation
+python noah.py test sso
+
+# Optimized deployment order: Cilium → Samba4 → Authentik
+```
+
 ## Essential Commands
 
 ### Cluster Management
 ```bash
-# Create fresh cluster
+# Create fresh cluster (enhanced validation)
 python noah.py cluster create --name noah-cluster --domain noah-infra.com
 
-# Destroy cluster completely
+# Destroy cluster completely (with cache cleanup)
 python noah.py cluster destroy --force
 
-# Complete redeploy (cluster + all services) - NEW!
-python noah.py cluster redeploy --name noah-production --domain noah-infra.com
+# Complete infrastructure redeployment (NEW - recommended approach)
+ansible-playbook Ansible/cluster-redeploy.yml \
+  -e cluster_name=noah-production \
+  -e domain_name=noah-infra.com
 
 # Check cluster status
 python noah.py status --all
 ```
 
-### Component Deployment
+### Component Deployment (Optimized Order)
 ```bash
-# Deploy core networking (required first)
+# 1. Deploy core networking first (SSO-ready configuration)
 python noah.py deploy cilium --namespace kube-system --domain noah-infra.com
 
-# Deploy authentication (12-min timeout)
-python noah.py deploy authentik --namespace identity --domain noah-infra.com
-
-# Deploy directory services (15-min timeout)
+# 2. Deploy directory services second (LDAP backend)
 python noah.py deploy samba4 --namespace identity --domain noah-infra.com
 
-# Deploy complete stack (alternative to individual deployments)
+# 3. Deploy authentication third (connects to Samba4)
+python noah.py deploy authentik --namespace identity --domain noah-infra.com
+
+# Alternative: Deploy all components (follows optimized order internally)
 python noah.py deploy all --namespace identity --domain noah-infra.com
 ```
 
@@ -57,16 +74,36 @@ python noah.py certificates info
 python noah.py certificates check
 ```
 
-### Testing and Validation
+### Testing & Validation (Enhanced)
 ```bash
-# Test SSO functionality
-python noah.py test sso --domain noah-infra.com
+# Comprehensive SSO + network validation (NEW - replaces separate tests)
+python noah.py test sso
 
-# Test network connectivity
-python noah.py test network
+# Component status checking
+python noah.py status --all
 
-# Test LDAP integration
-python noah.py test ldap --domain noah-infra.com
+# Network troubleshooting
+kubectl exec -n kube-system ds/cilium -- cilium status --brief
+kubectl get networkpolicies -n identity
+kubectl get pods -n identity -o wide
+
+# Service connectivity testing
+kubectl exec -n identity deployment/authentik-server -- nc -zv samba4.identity.svc.cluster.local 389
+```
+
+### Ansible Automation (Enhanced)
+```bash
+# Complete infrastructure redeployment (preferred method)
+ansible-playbook Ansible/cluster-redeploy.yml -e cluster_name=noah-prod -e domain_name=noah-infra.com
+
+# Individual component deployments
+ansible-playbook Ansible/deploy-cilium.yml -e domain_name=noah-infra.com    # SSO-ready networking
+ansible-playbook Ansible/deploy-samba4.yml -e domain_name=noah-infra.com    # Active Directory
+ansible-playbook Ansible/deploy-authentik.yml -e domain_name=noah-infra.com # SSO integration
+
+# Cluster lifecycle management
+ansible-playbook Ansible/cluster-create.yml -e cluster_name=noah-test -e domain_name=noah-infra.com
+ansible-playbook Ansible/cluster-destroy.yml
 ```
 
 ## Standard Deployment Order

@@ -1,8 +1,74 @@
 # NOAH Troubleshooting Guide
 
+## 🆕 Recent Enhancements
+
+### Enhanced Diagnostic Tools
+- **Integrated SSO Testing**: `python noah.py test sso` now includes network validation
+- **Optimized Deployment Order**: Ensures proper service dependencies
+- **Enhanced kubectl Cache Management**: Automatic cleanup prevents connection issues
+- **Comprehensive Status Checking**: Improved validation in all phases
+
 ## Common Issues and Solutions
 
-### 1. Deployment Timeouts
+### 1. Deployment Order Issues (NEW)
+
+#### Symptom
+```
+Authentik cannot connect to Samba4 LDAP
+Network policies blocking service communication
+```
+
+#### Solutions
+1. **Use the correct deployment order** (Cilium → Samba4 → Authentik):
+   ```bash
+   # Recommended: Use complete redeployment
+   ansible-playbook Ansible/cluster-redeploy.yml \
+     -e cluster_name=noah-cluster \
+     -e domain_name=noah-infra.com
+   ```
+
+2. **Verify network foundation is ready**:
+   ```bash
+   # Check Cilium is fully operational before proceeding
+   kubectl exec -n kube-system ds/cilium -- cilium status --brief
+   kubectl get networkpolicies -n identity
+   ```
+
+3. **Test service connectivity**:
+   ```bash
+   # Test Authentik → Samba4 connection
+   kubectl exec -n identity deployment/authentik-server -- \
+     nc -zv samba4.identity.svc.cluster.local 389
+   ```
+
+### 2. Network Policy Issues (ENHANCED)
+
+#### Symptom
+```
+Services cannot communicate despite being deployed
+Authentik LDAP connection failures
+```
+
+#### Solutions
+1. **Validate SSO network policies**:
+   ```bash
+   kubectl get networkpolicies -n identity
+   kubectl describe networkpolicy -n identity authentik-to-samba4-ldap
+   ```
+
+2. **Check Cilium policy enforcement**:
+   ```bash
+   kubectl exec -n kube-system ds/cilium -- cilium policy get
+   kubectl exec -n kube-system ds/cilium -- cilium endpoint list
+   ```
+
+3. **Use enhanced SSO testing**:
+   ```bash
+   # Comprehensive network + SSO validation
+   python noah.py test sso
+   ```
+
+### 3. Deployment Timeouts
 
 #### Symptom
 ```
@@ -26,60 +92,154 @@ Failed to deploy cilium: Error: UPGRADE FAILED: context deadline exceeded
    kubectl get pods --all-namespaces | grep -E "(Pending|ImagePullBackOff|CrashLoopBackOff)"
    ```
 
-4. **Manual cleanup and retry**:
+4. **Use complete redeployment** (often resolves complex issues):
    ```bash
-   helm uninstall <component> -n <namespace>
-   kubectl delete namespace <namespace> --force --grace-period=0
-   python noah.py deploy <component> --namespace <namespace> --domain noah-infra.com
+   ansible-playbook Ansible/cluster-redeploy.yml \
+     -e cluster_name=noah-cluster \
+     -e domain_name=noah-infra.com
    ```
 
-### 2. Pod Startup Failures
+### 4. Pod Startup Failures (ENHANCED)
 
 #### Cilium Pod Issues
 ```bash
-# Check Cilium status
+# Check Cilium status (enhanced diagnostics)
 kubectl get pods -n kube-system | grep cilium
 kubectl describe pod -n kube-system <cilium-pod>
 
+# Enhanced Cilium diagnostics
+kubectl exec -n kube-system ds/cilium -- cilium status --brief
+kubectl exec -n kube-system ds/cilium -- cilium connectivity test --help
+
 # Common fixes
 kubectl delete pod -n kube-system <stuck-cilium-pod>
-kubectl exec -n kube-system <working-cilium-pod> -- cilium status
 ```
 
-#### Authentik Pod Issues
+#### Samba4 Pod Issues (NEW)
+```bash
+# Check Samba4 deployment
+kubectl get pods -n identity | grep samba4
+kubectl logs -n identity deployment/samba4 --tail=50
+
+# Test LDAP service
+kubectl exec -n identity deployment/samba4 -- \
+  ldapsearch -x -H ldap://localhost:389 -s base
+
+# Check persistent volume
+kubectl get pvc -n identity | grep samba4
+```
+
+#### Authentik Pod Issues (ENHANCED)
 ```bash
 # Check Authentik components
 kubectl get pods -n identity | grep authentik
 
-# Check database connectivity
-kubectl logs -n identity deployment/authentik-server
+# Check database connectivity and LDAP integration
+kubectl logs -n identity deployment/authentik-server --tail=50
+kubectl logs -n identity deployment/authentik-worker --tail=50
 kubectl logs -n identity statefulset/authentik-postgresql
+
+# Test LDAP connectivity to Samba4
+kubectl exec -n identity deployment/authentik-server -- \
+  nc -zv samba4.identity.svc.cluster.local 389
 
 # Common fixes
 kubectl delete pod -n identity <stuck-authentik-pod>
 ```
 
-#### Samba4 Pod Issues
-```bash
-# Check Samba4 status
-kubectl get pods -n identity | grep samba4
-kubectl logs -n identity deployment/samba4
+### 5. kubectl Connection Issues (ENHANCED)
 
-# Check persistent volume
-kubectl get pvc -n identity
-kubectl describe pvc -n identity samba4-data
-
-# Common fixes
-kubectl delete pod -n identity <samba4-pod>  # Will recreate
+#### Symptom
+```
+The connection to the server localhost:6443 was refused
+kubectl cache-related errors after cluster operations
 ```
 
-### 3. Network Connectivity Issues
-
-#### Inter-Pod Communication
+#### Solutions (Automatic cleanup now included)
 ```bash
-# Test from one pod to another
-kubectl exec -n <namespace> <pod> -- ping <target-ip>
-kubectl exec -n <namespace> <pod> -- nslookup <service-name>
+# NOAH now includes automatic kubectl cache cleanup
+python noah.py cluster destroy --force  # Includes cache cleanup
+
+# Manual cache cleanup (if needed)
+kubectl config unset clusters.default
+kubectl config unset users.default
+kubectl config unset contexts.default
+rm -rf ~/.kube/cache/
+rm -rf ~/.kube/http-cache/
+
+# Verify disconnection (expected after destroy)
+kubectl get nodes  # Should show connection error - this is normal
+```
+
+#### Enhanced kubeconfig Management
+```bash
+# Check persistent kubeconfig setup
+echo $KUBECONFIG
+cat ~/.bashrc | grep KUBECONFIG
+
+# Verify cluster connectivity
+kubectl cluster-info
+kubectl get nodes
+```
+
+### 6. SSO and LDAP Integration Issues (NEW)
+
+#### Symptom
+```
+Authentik cannot authenticate users
+LDAP connection errors
+SSO login failures
+```
+
+#### Enhanced Diagnostic Commands
+```bash
+# Comprehensive SSO + network testing (NEW)
+python noah.py test sso
+
+# Individual component testing
+kubectl exec -n identity deployment/samba4 -- \
+  ldapsearch -x -H ldap://localhost:389 -s base
+
+kubectl exec -n identity deployment/authentik-server -- \
+  nc -zv samba4.identity.svc.cluster.local 389
+
+# Check Authentik API
+kubectl exec -n identity deployment/authentik-server -- \
+  wget -q -O- http://localhost:9000/api/v3/core/tenants/
+```
+
+#### Network Policy Validation
+```bash
+# Check SSO-specific network policies
+kubectl get networkpolicies -n identity
+kubectl describe networkpolicy -n identity authentik-to-samba4-ldap
+
+# Verify Cilium policy enforcement
+kubectl exec -n kube-system ds/cilium -- cilium policy get
+```
+
+### 7. Validation and Status Checking (ENHANCED)
+
+#### Comprehensive Status Check
+```bash
+# Enhanced overall status (includes SSO validation)
+python noah.py status --all
+
+# Component-specific status
+kubectl get pods -n identity -o wide
+kubectl get svc -n identity
+kubectl get ingress -n identity
+```
+
+#### Network Troubleshooting
+```bash
+# Cilium network status
+kubectl exec -n kube-system ds/cilium -- cilium status --brief
+kubectl exec -n kube-system ds/cilium -- cilium connectivity test
+
+# Service discovery testing
+kubectl exec -n identity deployment/authentik-server -- nslookup samba4.identity.svc.cluster.local
+```
 
 # Check Cilium connectivity
 kubectl exec -n kube-system <cilium-pod> -- cilium endpoint list

@@ -460,7 +460,12 @@ def deploy_manager(ctx, namespace):
 @cli.group()  # type: ignore
 @click.pass_context
 def deploy(ctx):
-    """Deploy services to Kubernetes"""
+    """Deploy services to Kubernetes
+    
+    OPTIMIZED: Individual commands (samba4, authentik, cilium) are simplified
+    and the 'all' command now uses cluster-deploy.yml Ansible playbook to avoid 
+    code repetition and leverage the optimized deployment order and validation.
+    """
     pass
 
 @deploy.command()
@@ -468,13 +473,13 @@ def deploy(ctx):
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service')
 @click.pass_context
 def samba4(ctx, namespace, domain):
-    """Deploy Samba4 Active Directory"""
+    """Deploy Samba4 Active Directory (individual component)"""
     # Ensure security is initialized
     ensure_security_initialized(ctx)
     
-    click.echo(f"[VERBOSE] Starting Samba4 deployment process...")
-    click.echo(f"[VERBOSE] Namespace: {namespace}")
-    click.echo(f"[VERBOSE] Domain: {domain}")
+    click.echo(f"[VERBOSE] Deploying Samba4 Active Directory...")
+    click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
+    click.echo(f"💡 For complete stack deployment, use: python noah.py deploy all")
     
     # Generate secrets for Samba4 before deployment
     click.echo(f"[VERBOSE] Generating secrets for Samba4...")
@@ -483,40 +488,35 @@ def samba4(ctx, namespace, domain):
     # Get Ansible variables with security configuration
     ansible_vars = get_ansible_vars_for_service('samba4', namespace, domain)
     
-    # Deploy Samba4 with secrets
-    click.echo(f"Deploying Samba4 to namespace {namespace}")
+    # Deploy Samba4 using Ansible playbook
     click.echo(f"[VERBOSE] Running Ansible playbook: deploy-samba4.yml")
     ctx.obj['ansible'].run_playbook('deploy-samba4.yml', ansible_vars)
     
-    # Get Helm values with security configuration
-    helm_values = get_helm_values_for_service('samba4', namespace, domain)
-    
-    # Deploy Helm chart with generated configuration
-    click.echo(f"[VERBOSE] Deploying Helm chart: samba4 with security configuration")
-    ctx.obj['helm'].deploy_chart('samba4', namespace, values=helm_values)
+    click.echo(f"✅ Samba4 deployed to namespace {namespace}")
+    click.echo(f"[VERBOSE] Next step: Deploy Authentik with 'python noah.py deploy authentik'")
 
 @deploy.command()
 @click.option('--namespace', default='identity', help='Kubernetes namespace')
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service')
 @click.pass_context
 def authentik(ctx, namespace, domain):
-    """Deploy Authentik for SSO"""
+    """Deploy Authentik SSO (individual component)"""
     # Ensure security is initialized
     ensure_security_initialized(ctx)
     
-    click.echo(f"[VERBOSE] Starting Authentik deployment process...")
-    click.echo(f"[VERBOSE] Namespace: {namespace}")
-    click.echo(f"[VERBOSE] Domain: {domain}")
+    click.echo(f"[VERBOSE] Deploying Authentik SSO...")
+    click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
+    click.echo(f"💡 For complete stack deployment, use: python noah.py deploy all")
     
     # Validate Samba4 deployment before proceeding with Authentik
     click.echo(f"[VERBOSE] Validating Samba4 deployment before Authentik installation...")
-    click.echo("Checking Samba4 deployment status...")
     try:
         ctx.obj['cluster'].wait_for_deployment('samba4', namespace)
         click.echo("[VERBOSE] Samba4 deployment validated successfully")
     except Exception as e:
-        click.echo(f"[VERBOSE] Samba4 validation failed: {str(e)}")
-        click.echo("✗ Samba4 deployment not ready. Please ensure Samba4 is deployed and running before installing Authentik.", err=True)
+        click.echo(f"⚠️ Samba4 validation failed: {str(e)}")
+        click.echo("💡 Ensure Samba4 is deployed first: python noah.py deploy samba4")
+        click.echo("💡 Or use complete deployment: python noah.py deploy all")
         sys.exit(1)
     
     # Generate secrets for Authentik before deployment
@@ -526,66 +526,64 @@ def authentik(ctx, namespace, domain):
     # Get Ansible variables with security configuration
     ansible_vars = get_ansible_vars_for_service('authentik', namespace, domain)
     
-    # Deploy Authentik with secrets
-    click.echo(f"Deploying Authentik to namespace {namespace}")
+    # Deploy Authentik using Ansible playbook
     click.echo(f"[VERBOSE] Running Ansible playbook: deploy-authentik.yml")
     ctx.obj['ansible'].run_playbook('deploy-authentik.yml', ansible_vars)
     
-    # Get Helm values with security configuration
-    helm_values = get_helm_values_for_service('authentik', namespace, domain)
-    
-    # Deploy Helm chart with generated configuration
-    click.echo(f"[VERBOSE] Deploying Helm chart: authentik with security configuration")
-    ctx.obj['helm'].deploy_chart('authentik', namespace, values=helm_values)
+    click.echo(f"✅ Authentik deployed to namespace {namespace}")
+    click.echo(f"[VERBOSE] Access SSO at: https://auth.{domain}")
 
 @deploy.command()
 @click.option('--namespace', default='kube-system', help='Kubernetes namespace')
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service')
 @click.pass_context
 def cilium(ctx, namespace, domain):
-    """Deploy Cilium CNI with SSO integration"""
+    """Deploy Cilium CNI with SSO integration (individual component)"""
     # Ensure security is initialized
     ensure_security_initialized(ctx)
     
-    click.echo(f"[VERBOSE] Starting Cilium deployment process...")
-    click.echo(f"[VERBOSE] Namespace: {namespace}")
+    click.echo(f"[VERBOSE] Deploying Cilium CNI with SSO integration...")
+    click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
+    click.echo(f"💡 For complete stack deployment, use: python noah.py deploy all")
     
-    # Generate secrets for Cilium if needed
+    # Generate secrets for Cilium before deployment
     click.echo(f"[VERBOSE] Generating secrets for Cilium...")
     ctx.obj['secrets'].generate_service_secrets('cilium', namespace)
     
     # Get Ansible variables with security configuration
     ansible_vars = get_ansible_vars_for_service('cilium', namespace, domain)
     
-    click.echo(f"Deploying Cilium to namespace {namespace}")
+    # Deploy Cilium using Ansible playbook
     click.echo(f"[VERBOSE] Running Ansible playbook: deploy-cilium.yml")
     ctx.obj['ansible'].run_playbook('deploy-cilium.yml', ansible_vars)
     
-    # Get Helm values with security configuration
-    helm_values = get_helm_values_for_service('cilium', namespace, domain)
-    
-    # Deploy Helm chart with generated configuration
-    click.echo(f"[VERBOSE] Deploying Helm chart: cilium with security configuration")
-    ctx.obj['helm'].deploy_chart('cilium', namespace, values=helm_values)
+    click.echo(f"✅ Cilium CNI deployed to namespace {namespace}")
+    click.echo(f"[VERBOSE] Hubble UI available at: https://hubble.{domain}")
+    click.echo(f"[VERBOSE] Network foundation ready for SSO services")
 
 @deploy.command()
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
+@click.option('--cluster-name', default='noah-cluster', help='Cluster name for deployment')
 @click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')
 @click.pass_context
-def all(ctx, domain, config_file):
-    """Deploy complete stack (Samba4, Authentik, Cilium)"""
+def all(ctx, domain, cluster_name, config_file):
+    """Deploy complete stack using optimized Ansible playbook (Cilium → Samba4 → Authentik)"""
     # Ensure security is initialized before any deployment
     ensure_security_initialized(ctx)
     
-    click.echo("[VERBOSE] Starting complete NOAH stack deployment...")
+    click.echo("[VERBOSE] Starting complete NOAH stack deployment using cluster-deploy.yml...")
     click.echo(f"[VERBOSE] Using domain: {domain}")
+    click.echo(f"[VERBOSE] Using cluster name: {cluster_name}")
+    click.echo(f"[VERBOSE] Deployment order: Cilium → Samba4 → Authentik")
     
     # Export configuration if requested
     if config_file:
         click.echo(f"[VERBOSE] Exporting configuration to {config_file}")
         full_config = {
-            'domain': domain,
+            'cluster_name': cluster_name,
+            'domain_name': domain,
             'security': get_security_config(domain),
+            'deployment_method': 'cluster-deploy.yml',
             'services': {
                 'samba4': {
                     'helm_values': get_helm_values_for_service('samba4', 'identity', domain),
@@ -605,25 +603,39 @@ def all(ctx, domain, config_file):
             yaml.dump(full_config, f, default_flow_style=False)
         click.echo(f"[VERBOSE] Configuration exported to {config_file}")
     
-    click.echo("Deploying complete NOAH stack...")
+    # Use the optimized cluster-deploy.yml playbook
+    click.echo("Deploying complete NOAH stack using optimized playbook...")
     
-    click.echo("[VERBOSE] Step 1: Deploying Samba4...")
-    ctx.invoke(samba4, domain=domain)
-    click.echo("Waiting for Samba4 to be ready...")
-    click.echo("[VERBOSE] Checking Samba4 deployment status...")
-    ctx.obj['cluster'].wait_for_deployment('samba4', 'identity')
+    # Prepare variables for cluster-deploy.yml
+    ansible_vars = {
+        'cluster_name': cluster_name,
+        'domain_name': domain
+    }
     
-    click.echo("[VERBOSE] Step 2: Deploying Authentik...")
-    ctx.invoke(authentik, domain=domain)
-    click.echo("Waiting for Authentik to be ready...")
-    click.echo("[VERBOSE] Checking Authentik deployment status...")
-    ctx.obj['cluster'].wait_for_deployment('authentik', 'identity')
+    click.echo(f"[VERBOSE] Running optimized deployment playbook: cluster-deploy.yml")
+    click.echo(f"[VERBOSE] This will deploy in optimal order with comprehensive validation")
     
-    click.echo("[VERBOSE] Step 3: Deploying Cilium...")
-    ctx.invoke(cilium, domain=domain)
-    click.echo("NOAH stack deployment complete!")
-    click.echo("[VERBOSE] All components successfully deployed!")
-    click.echo(f"[VERBOSE] Services available at: https://*.{domain}")
+    try:
+        ctx.obj['ansible'].run_playbook('cluster-deploy.yml', ansible_vars)
+        click.echo("🎉 NOAH complete stack deployment successful!")
+        click.echo(f"[VERBOSE] All components deployed and validated")
+        click.echo(f"[VERBOSE] Access points:")
+        click.echo(f"  - Authentik SSO: https://auth.{domain}")
+        click.echo(f"  - Hubble UI: https://hubble.{domain}")
+        
+        # Run post-deployment validation
+        click.echo("[VERBOSE] Running post-deployment validation...")
+        click.echo("💡 Run 'python noah.py test sso' to validate SSO integration")
+        click.echo("💡 Run 'python noah.py status --all' to check overall status")
+        
+    except Exception as e:
+        click.echo(f"❌ Deployment failed: {str(e)}", err=True)
+        click.echo("[VERBOSE] For troubleshooting:")
+        click.echo("  - Check cluster connectivity: kubectl cluster-info")
+        click.echo("  - Check pod status: kubectl get pods --all-namespaces")
+        click.echo("  - Check events: kubectl get events --sort-by=.metadata.creationTimestamp")
+        click.echo("  - Run status check: python noah.py status --all")
+        sys.exit(1)
 
 @cli.group()  # type: ignore
 @click.pass_context

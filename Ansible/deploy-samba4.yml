@@ -1,6 +1,6 @@
 ---
 - name: Deploy Samba4 Active Directory
-  hosts: local
+  hosts: localhost
   gather_facts: no
   vars:
     namespace: "{{ namespace | default('identity') }}"

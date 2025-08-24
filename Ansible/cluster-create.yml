@@ -138,6 +138,10 @@
         - identity
         - cilium-system
       when: false  # Skip in test mode
+      vars:
+        ansible_python_interpreter: "../.venv/bin/python"
+      environment:
+        PYTHONPATH: "../.venv/lib/python3.12/site-packages"
 
     - name: Initialize Age encryption
       shell: |
@@ -504,6 +508,10 @@
           loop:
             - identity
             - cilium-system
+          vars:
+            ansible_python_interpreter: "../.venv/bin/python"
+          environment:
+            PYTHONPATH: "../.venv/lib/python3.12/site-packages"
 
     - name: Display cluster creation summary
       debug:

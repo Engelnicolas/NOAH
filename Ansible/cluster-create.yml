@@ -1,6 +1,6 @@
 ---
 - name: Create NOAH Kubernetes Cluster
-  hosts: local
+  hosts: localhost
   gather_facts: yes
   vars:
     cluster_name: "noah-cluster"
@@ -641,7 +641,7 @@
         echo ""
         echo "[VALIDATION] Checking critical Python dependencies..."
         deps_status="PASS"
-        critical_deps="click kubernetes ansible PyYAML python-dotenv requests"
+        critical_deps="click kubernetes ansible yaml dotenv requests"
         for dep in $critical_deps; do
           if ${NOAH_VENV_DIR}/bin/python -c "import $dep" >/dev/null 2>&1; then
             echo "✅ Python $dep: INSTALLED"

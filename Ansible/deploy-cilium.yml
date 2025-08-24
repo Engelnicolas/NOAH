@@ -5,7 +5,8 @@
   vars:
     namespace: "{{ namespace | default('kube-system') }}"
     deployment_phase: "{{ deployment_phase | default('full') }}"  # 'preparation', 'sso-integration', or 'full'
-    
+    verbose_mode: true  # Enable verbose output by default
+
   tasks:
     - name: Display deployment phase
       debug:

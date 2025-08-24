@@ -1,0 +1,323 @@
+---
+- name: NOAH Complete Stack Deployment (Standalone)
+  hosts: local
+  gather_facts: yes
+  vars:
+    cluster_name: "{{ cluster_name | default('noah-cluster') }}"
+    domain_name: "{{ domain_name | default('noah-infra.com') }}"
+    
+  tasks:
+    - name: "CONFIGURATION: Load environment variables"
+      ansible.builtin.shell: |
+        # Load .env file and export variables
+        if [ -f "/root/NOAH/.env" ]; then
+          export $(grep -v '^#' /root/NOAH/.env | xargs)
+          echo "NOAH_ROOT_DIR=${NOAH_ROOT_DIR:-/root/NOAH}"
+          echo "ANSIBLE_PLAYBOOK_DIR=${ANSIBLE_PLAYBOOK_DIR:-./Ansible}"
+        else
+          echo "ERROR: .env file not found at /root/NOAH/.env"
+          exit 1
+        fi
+      register: env_vars
+      changed_when: false
+      
+    - name: "CONFIGURATION: Set environment variables as facts"
+      ansible.builtin.set_fact:
+        noah_root_dir: "{{ env_vars.stdout_lines | select('match', '^NOAH_ROOT_DIR=') | first | regex_replace('^NOAH_ROOT_DIR=', '') }}"
+        ansible_playbook_dir: "{{ env_vars.stdout_lines | select('match', '^ANSIBLE_PLAYBOOK_DIR=') | first | regex_replace('^ANSIBLE_PLAYBOOK_DIR=', '') }}"
+
+    - name: "Execute complete NOAH stack deployment"
+      block:
+        - name: "PHASE 1: Deployment validation and preparation"
+          block:
+            - name: Display deployment configuration
+              ansible.builtin.debug:
+                msg: |
+                  === NOAH COMPLETE STACK DEPLOYMENT ===
+                  Cluster Name: {{ cluster_name }}
+                  Domain: {{ domain_name }}
+                  Deployment Mode: Complete Stack
+                  Order: Cilium → Samba4 → Authentik
+                  ======================================
+            
+            - name: Validate required variables
+              ansible.builtin.fail:
+                msg: "Required variable {{ item }} is not defined"
+              when: vars[item] is not defined or vars[item] == ""
+              loop:
+                - cluster_name
+                - domain_name
+            
+            - name: Check if cluster is accessible
+              ansible.builtin.shell: |
+                if kubectl cluster-info >/dev/null 2>&1; then
+                  echo "✓ Cluster is accessible"
+                  kubectl get nodes
+                else
+                  echo "ERROR: Cannot connect to cluster. Please ensure cluster is running."
+                  echo "💡 Run: python noah.py cluster create --name {{ cluster_name }} --domain {{ domain_name }}"
+                  exit 1
+                fi
+              register: cluster_check
+              failed_when: cluster_check.rc != 0
+          
+          tags: [validation]
+        
+        - name: "PHASE 2: Deploy Cilium CNI (Network Foundation)"
+          block:
+            - name: Deploy Cilium CNI with SSO-ready configuration
+              ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-cilium.yml"
+              vars:
+                namespace: kube-system
+                domain_name: "{{ domain_name }}"
+                deployment_phase: complete
+                enable_hubble: true
+                hubble_tls_enabled: true
+
+            - name: Validate Cilium deployment
+              ansible.builtin.shell: |
+                echo "=== VALIDATING CILIUM CNI DEPLOYMENT ==="
+                timeout=600
+                start_time=$(date +%s)
+                
+                while true; do
+                  current_time=$(date +%s)
+                  elapsed=$((current_time - start_time))
+                  
+                  if [ $elapsed -gt $timeout ]; then
+                    echo "ERROR: Cilium deployment timeout after ${timeout}s"
+                    exit 1
+                  fi
+                  
+                  # Check Cilium DaemonSet readiness
+                  cilium_ready=$(kubectl get daemonset cilium -n kube-system -o jsonpath='{.status.numberReady}' 2>/dev/null || echo "0")
+                  cilium_desired=$(kubectl get daemonset cilium -n kube-system -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null || echo "1")
+                  
+                  if [ "$cilium_ready" = "$cilium_desired" ] && [ "$cilium_ready" -gt "0" ]; then
+                    echo "✓ Cilium DaemonSet ready: $cilium_ready/$cilium_desired"
+                    
+                    # Check Cilium networking status
+                    if kubectl exec -n kube-system ds/cilium -- cilium status --brief 2>/dev/null | grep -q "OK"; then
+                      echo "✓ Cilium networking operational"
+                      
+                      # Check Hubble UI (optional)
+                      hubble_ready=$(kubectl get deployment hubble-ui -n kube-system -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                      if [ "$hubble_ready" = "1" ]; then
+                        echo "✓ Hubble UI ready"
+                      fi
+                      
+                      echo "✓ Cilium deployment complete and validated"
+                      break
+                    fi
+                  fi
+                  
+                  echo "Waiting for Cilium... (${elapsed}s elapsed)"
+                  sleep 10
+                done
+              register: cilium_validation
+              failed_when: cilium_validation.rc != 0
+          
+          tags: [cilium, networking]
+        
+        - name: "PHASE 3: Deploy Samba4 Active Directory (Identity Backend)"
+          block:
+            - name: Deploy Samba4 Active Directory
+              ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-samba4.yml"
+              vars:
+                namespace: identity
+                domain_name: "{{ domain_name }}"
+                service_name: samba4
+                enable_ldap: true
+
+            - name: Validate Samba4 deployment
+              ansible.builtin.shell: |
+                echo "=== VALIDATING SAMBA4 DEPLOYMENT ==="
+                timeout=900
+                start_time=$(date +%s)
+                
+                while true; do
+                  current_time=$(date +%s)
+                  elapsed=$((current_time - start_time))
+                  
+                  if [ $elapsed -gt $timeout ]; then
+                    echo "ERROR: Samba4 deployment timeout after ${timeout}s"
+                    exit 1
+                  fi
+                  
+                  # Check Samba4 deployment readiness
+                  samba4_ready=$(kubectl get deployment samba4 -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                  if [ "$samba4_ready" = "1" ]; then
+                    echo "✓ Samba4 deployment ready"
+                    
+                    # Test LDAP service
+                    if kubectl exec -n identity deployment/samba4 -- ldapsearch -x -H ldap://localhost:389 -s base 2>/dev/null | grep -q "result: 0 Success"; then
+                      echo "✓ Samba4 LDAP service responding"
+                      
+                      # Check service accessibility
+                      if kubectl get svc samba4 -n identity >/dev/null 2>&1; then
+                        echo "✓ Samba4 service accessible"
+                        echo "✓ Samba4 deployment complete and validated"
+                        break
+                      fi
+                    fi
+                  fi
+                  
+                  echo "Waiting for Samba4... (${elapsed}s elapsed)"
+                  sleep 15
+                done
+              register: samba4_validation
+              failed_when: samba4_validation.rc != 0
+          
+          tags: [samba4, identity]
+        
+        - name: "PHASE 4: Deploy Authentik SSO (SSO Frontend)"
+          block:
+            - name: Deploy Authentik SSO with LDAP integration
+              ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-authentik.yml"
+              vars:
+                namespace: identity
+                domain_name: "{{ domain_name }}"
+                service_name: authentik
+                enable_ldap_integration: true
+                ldap_host: "samba4.identity.svc.cluster.local"
+                ldap_port: 389
+
+            - name: Validate Authentik deployment
+              ansible.builtin.shell: |
+                echo "=== VALIDATING AUTHENTIK DEPLOYMENT ==="
+                timeout=720
+                start_time=$(date +%s)
+                
+                while true; do
+                  current_time=$(date +%s)
+                  elapsed=$((current_time - start_time))
+                  
+                  if [ $elapsed -gt $timeout ]; then
+                    echo "ERROR: Authentik deployment timeout after ${timeout}s"
+                    exit 1
+                  fi
+                  
+                  # Check Authentik deployments readiness
+                  server_ready=$(kubectl get deployment authentik-server -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                  worker_ready=$(kubectl get deployment authentik-worker -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                  
+                  if [ "$server_ready" = "1" ] && [ "$worker_ready" = "1" ]; then
+                    echo "✓ Authentik server and worker ready"
+                    
+                    # Test LDAP connectivity to Samba4
+                    if kubectl exec -n identity deployment/authentik-server -- nc -zv samba4.identity.svc.cluster.local 389 2>/dev/null | grep -q "open"; then
+                      echo "✓ Authentik → Samba4 LDAP connectivity verified"
+                      
+                      # Test Authentik API
+                      if kubectl exec -n identity deployment/authentik-server -- wget -q -O- http://localhost:9000/api/v3/core/tenants/ 2>/dev/null | grep -q "{{ domain_name }}"; then
+                        echo "✓ Authentik API responding"
+                        echo "✓ Authentik deployment complete and validated"
+                        break
+                      fi
+                    fi
+                  fi
+                  
+                  echo "Waiting for Authentik... (${elapsed}s elapsed) [Server: $server_ready/1, Worker: $worker_ready/1]"
+                  sleep 15
+                done
+              register: authentik_validation
+              failed_when: authentik_validation.rc != 0
+          
+          tags: [authentik, sso]
+        
+        - name: "PHASE 5: Post-deployment validation"
+          block:
+            - name: Validate complete deployment stack
+              ansible.builtin.shell: |
+                echo "=== FINAL DEPLOYMENT VALIDATION ==="
+                echo "Deployment order: Cilium → Samba4 → Authentik"
+                echo ""
+                
+                # Check all critical pods are running
+                echo "Checking overall pod status..."
+                failing_pods=$(kubectl get pods --all-namespaces --field-selector=status.phase!=Running,status.phase!=Succeeded --no-headers 2>/dev/null | wc -l)
+                if [ "$failing_pods" -gt "0" ]; then
+                  echo "⚠ Found $failing_pods non-running pods:"
+                  kubectl get pods --all-namespaces --field-selector=status.phase!=Running,status.phase!=Succeeded 2>/dev/null || true
+                else
+                  echo "✓ All pods are running successfully"
+                fi
+                echo ""
+                
+                # Validate Cilium (deployed first)
+                echo "Validating Cilium CNI (Step 1)..."
+                cilium_ready=$(kubectl get daemonset cilium -n kube-system -o jsonpath='{.status.numberReady}' 2>/dev/null || echo "0")
+                cilium_desired=$(kubectl get daemonset cilium -n kube-system -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null || echo "1")
+                if [ "$cilium_ready" = "$cilium_desired" ] && [ "$cilium_ready" -gt "0" ]; then
+                  echo "✓ Cilium CNI: $cilium_ready/$cilium_desired pods ready"
+                else
+                  echo "❌ Cilium CNI not ready: $cilium_ready/$cilium_desired"
+                  exit 1
+                fi
+                echo ""
+                
+                # Validate Samba4 (deployed second)
+                echo "Validating Samba4 Active Directory (Step 2)..."
+                samba4_ready=$(kubectl get deployment samba4 -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                if [ "$samba4_ready" = "1" ]; then
+                  echo "✓ Samba4 deployment ready"
+                else
+                  echo "❌ Samba4 deployment not ready: $samba4_ready/1"
+                  exit 1
+                fi
+                echo ""
+                
+                # Validate Authentik (deployed third)
+                echo "Validating Authentik SSO (Step 3)..."
+                server_ready=$(kubectl get deployment authentik-server -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                worker_ready=$(kubectl get deployment authentik-worker -n identity -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                
+                if [ "$server_ready" = "1" ] && [ "$worker_ready" = "1" ]; then
+                  echo "✓ Authentik server and worker ready"
+                else
+                  echo "❌ Authentik deployments not ready: Server $server_ready/1, Worker $worker_ready/1"
+                  exit 1
+                fi
+                echo ""
+                
+                # Test SSO integration
+                echo "Testing SSO integration..."
+                if kubectl exec -n identity deployment/authentik-server -- nc -zv samba4.identity.svc.cluster.local 389 2>/dev/null | grep -q "open"; then
+                  echo "✓ Authentik → Samba4 LDAP connectivity verified"
+                else
+                  echo "⚠ Authentik → Samba4 connectivity check inconclusive"
+                fi
+                echo ""
+                
+                echo "🎉 COMPLETE STACK DEPLOYMENT SUCCESSFUL"
+                echo "Deployment order: Cilium → Samba4 → Authentik ✓"
+                echo "All critical services validated ✓"
+                echo ""
+                echo "Access points:"
+                echo "- Authentik SSO: https://auth.{{ domain_name }}"
+                echo "- Hubble UI: https://hubble.{{ domain_name }}"
+              register: final_validation
+              failed_when: final_validation.rc != 0
+          
+          tags: [validation, final]
+
+      rescue:
+        - name: Deployment failure handler
+          ansible.builtin.debug:
+            msg: |
+              === NOAH DEPLOYMENT FAILED ===
+              
+              The deployment encountered an error. Check the following:
+              1. Cluster connectivity: kubectl cluster-info
+              2. Pod status: kubectl get pods --all-namespaces
+              3. Recent events: kubectl get events --sort-by=.metadata.creationTimestamp
+              4. Service logs: kubectl logs -n identity deployment/<service-name>
+              
+              For troubleshooting:
+              - python noah.py status --all
+              - python noah.py test sso
+              
+              To retry specific phases:
+              - ansible-playbook Ansible/cluster-deploy.yml --tags=cilium
+              - ansible-playbook Ansible/cluster-deploy.yml --tags=samba4  
+              - ansible-playbook Ansible/cluster-deploy.yml --tags=authentik

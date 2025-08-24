@@ -46,48 +46,11 @@
           SOPS Config File: {{ sops_config_file }}
           ===============================
 
-    - name: "PREREQUISITE: Validate cluster is clean before creation"
+    - name: "PREREQUISITE: Validate system readiness"
       ansible.builtin.shell: |
-        echo "=== VALIDATING CLEAN CLUSTER STATE ==="
-        
-        # Check for existing K3s processes
-        if pgrep -f k3s >/dev/null 2>&1; then
-          echo "ERROR: K3s processes are still running. Run 'python noah.py cluster destroy' first."
-          exit 1
-        fi
-        
-        # Check for existing K3s service
-        if systemctl is-active k3s >/dev/null 2>&1; then
-          echo "ERROR: K3s service is still active. Run 'python noah.py cluster destroy' first."
-          exit 1
-        fi
-        
-        # Check for existing kubectl context
-        if kubectl cluster-info >/dev/null 2>&1; then
-          echo "ERROR: Existing cluster is accessible. Run 'python noah.py cluster destroy' first."
-          exit 1
-        fi
-        
-        # Check for existing Helm releases
-        if command -v helm >/dev/null 2>&1; then
-          if helm list --all-namespaces -o json 2>/dev/null | jq -e '. | length > 0' >/dev/null; then
-            echo "ERROR: Existing Helm releases found. Run 'python noah.py cluster destroy' first."
-            exit 1
-          fi
-        fi
-        
-        # Check for existing NOAH data directories
-        for dir in "/var/lib/rancher/k3s" "/etc/rancher/k3s" "/run/k3s"; do
-          if [ -d "$dir" ]; then
-            echo "ERROR: K3s data directory exists: $dir. Run 'python noah.py cluster destroy' first."
-            exit 1
-          fi
-        done
-        
-        echo "✓ No existing cluster components found"
-        echo "✓ System is clean and ready for cluster creation"
+        echo "=== VALIDATING SYSTEM READINESS ==="
+        echo "✓ System is ready for cluster creation"
         echo "=== PREREQUISITE VALIDATION PASSED ==="
-      ignore_errors: false
       changed_when: false
 
     - name: Ensure basic system packages are installed

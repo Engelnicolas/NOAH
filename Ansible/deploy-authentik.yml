@@ -1,6 +1,6 @@
 ---
 - name: Deploy Authentik SSO
-  hosts: local
+  hosts: localhost
   gather_facts: no
   vars:
     namespace: "{{ namespace | default('identity') }}"

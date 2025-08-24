@@ -4,6 +4,7 @@
   gather_facts: no
   vars:
     namespace: "{{ namespace | default('identity') }}"
+    verbose_mode: true  # Enable verbose output by default
     
   tasks:
     - name: Create Samba4 PersistentVolumeClaim

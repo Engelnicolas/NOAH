@@ -5,6 +5,7 @@
   vars:
     cluster_name: "{{ cluster_name | default('noah-cluster') }}"
     domain_name: "{{ domain_name | default('noah-infra.com') }}"
+    verbose_mode: true  # Enable verbose output by default
     
   tasks:
     - name: "CONFIGURATION: Load environment variables"

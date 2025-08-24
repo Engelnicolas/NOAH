@@ -1,4 +1,4 @@
-# NOAH Infrastructure Documentation
+# NOAH Documentation
 
 Welcome to the NOAH (Network Operations and Authentication Hub) infrastructure documentation. This comprehensive guide covers everything you need to deploy, manage, and troubleshoot your NOAH platform.
 
@@ -10,20 +10,6 @@ Welcome to the NOAH (Network Operations and Authentication Hub) infrastructure d
 
 ### 🔧 Technical Guides
 - **[Troubleshooting Guide](troubleshooting-guide.md)** - Solutions for common issues
-
-## 🆕 Recent Enhancements (Latest Updates)
-
-### ✨ **Enhanced Infrastructure Management**
-- **Complete Infrastructure Redeployment**: New `cluster-redeploy.yml` Ansible playbook for full stack redeployment
-- **Optimized Deployment Order**: Cilium → Samba4 → Authentik for proper SSO network foundation
-- **Enhanced K3s Validation**: Persistent kubeconfig setup with comprehensive connectivity checks
-- **Modular CLI Architecture**: Organized code with `CLI/` utilities for better maintainability
-
-### 🔧 **SSO & Network Improvements**
-- **SSO-Ready Cilium Integration**: Pre-configured network policies and service mesh for Authentik-Samba4 communication
-- **Enhanced Network Validation**: Integrated SSO network testing with comprehensive 10-point validation
-- **Improved Service Discovery**: Optimized DNS and service mesh configuration for identity services
-- **Network-First Approach**: Ensures CNI is fully operational before deploying dependent services
 
 ## 🏗️ What is NOAH?
 
@@ -39,11 +25,11 @@ NOAH is a comprehensive Kubernetes-based infrastructure platform that provides:
 
 ### Complete Infrastructure Deployment
 ```bash
-# 1. Destroy any existing setup (if needed)
-python noah.py cluster destroy --force
+# 1. Create the cluster
+python noah.py cluster create --name noah-cluster --domain noah-infra.com
 
 # 2. Deploy complete infrastructure with optimized order
-ansible-playbook Ansible/cluster-redeploy.yml -e cluster_name=noah-cluster -e domain_name=noah-infra.com
+python noah.py deploy all --domain noah-infra.com
 
 # 3. Test SSO and network integration
 python noah.py test sso
@@ -78,11 +64,6 @@ python noah.py test sso
 | **Samba4** | identity | Active Directory + LDAP services | 15 min | 2nd (Identity Backend) |
 | **Authentik** | identity | SSO authentication + LDAP integration | 12 min | 3rd (SSO Frontend) |
 
-### Enhanced Features
-- **SSO Integration**: Pre-configured network policies for Authentik ↔ Samba4 communication
-- **Service Mesh**: Cilium provides advanced networking with Hubble observability
-- **Network Security**: Micro-segmentation with default-deny policies
-- **Persistent Configuration**: Enhanced kubeconfig management for reliable cluster access
 
 ## 🔍 Service Access Points
 
@@ -169,29 +150,6 @@ ansible-playbook Ansible/deploy-samba4.yml     # Active Directory
 ansible-playbook Ansible/deploy-authentik.yml  # SSO integration
 ```
 
-# Testing and validation (enhanced)
-python noah.py test sso                      # Integrated SSO + network tests
-python noah.py status --all                  # Comprehensive status
-
-# Network troubleshooting  
-kubectl exec -n kube-system ds/cilium -- cilium status    # Cilium health
-kubectl get networkpolicies -n identity                   # SSO network policies
-```
-
-### Standard Kubernetes Tools
-```bash
-# Pod management
-kubectl get pods --all-namespaces
-kubectl logs -n <namespace> <pod>
-
-# Helm management
-helm list --all-namespaces
-helm status <release> -n <namespace>
-
-# Secret inspection
-kubectl get secrets --all-namespaces
-```
-
 ## 🔐 Security Features
 
 - **Encrypted Secrets**: All sensitive data encrypted with SOPS/Age
@@ -230,82 +188,6 @@ kubectl get events --sort-by=.metadata.creationTimestamp
 # Check Helm releases
 helm list --all-namespaces --failed
 ```
-
-## 📝 File Structure
-
-```
-noah-infrastructure/
-├── CLI/                            # CLI utilities and modules (NEW)
-│   ├── kubectl_utils.py           # kubectl cache management  
-│   ├── redeploy_utils.py          # Infrastructure redeployment
-│   └── __init__.py
-├── Docs/                          # Documentation (you are here)
-│   ├── deployment-guide.md        # Complete deployment workflow
-│   ├── quick-reference.md          # Essential commands
-│   ├── troubleshooting-guide.md    # Problem solutions
-│   └── README.md                   # This file
-├── Helm/                           # Helm charts (enhanced)
-│   ├── authentik/                  # SSO authentication + LDAP integration
-│   ├── cilium/                     # CNI networking + SSO-ready policies
-│   ├── samba4/                     # Directory services + enhanced validation  
-│   └── monitoring/                 # Observability stack
-├── Ansible/                        # Infrastructure automation (enhanced)
-│   ├── cluster-create.yml          # Cluster initialization + validation
-│   ├── cluster-destroy.yml         # Cleanup automation + cache management
-│   ├── cluster-redeploy.yml        # Complete redeployment (NEW)
-│   ├── deploy-cilium.yml           # SSO-ready Cilium deployment
-│   ├── deploy-samba4.yml           # Enhanced AD deployment
-│   ├── deploy-authentik.yml        # SSO + LDAP integration
-│   └── inventory/hosts.yml         # Ansible inventory
-├── Scripts/                        # Python modules (enhanced)
-│   ├── helm_deployer.py           # Helm deployment logic
-│   ├── cluster_manager.py         # Cluster operations + validation
-│   ├── secret_manager.py          # SOPS/Age integration
-│   ├── sso_tester.py              # SSO + network validation (enhanced)
-│   └── ansible_runner.py          # Ansible automation
-├── Certificates/                   # TLS certificates (auto-generated)
-├── Age/                           # Encryption keys (auto-generated)  
-└── noah.py                        # Main CLI interface (enhanced)
-```
-
-## 🔄 Regular Maintenance
-
-### Weekly
-- Run `python noah.py status --all`
-- Check certificate expiration
-- Review pod resource usage
-- Run `python noah.py test sso` for SSO health check
-
-### Monthly
-- Update component versions
-- Backup encryption keys
-- Review security logs
-- Test complete redeployment in staging environment
-
-### Quarterly
-- Security audit
-- Performance optimization
-- Documentation updates
-- Review and update network policies
-
----
-
-## � Latest Documentation Updates
-
-### Version 2.0 Enhancements (Latest)
-- ✅ **Complete Infrastructure Redeployment**: Added `cluster-redeploy.yml` for full-stack automation
-- ✅ **Optimized Deployment Order**: Updated guides to reflect Cilium → Samba4 → Authentik sequence
-- ✅ **Enhanced SSO Testing**: Integrated network validation with `python noah.py test sso`
-- ✅ **Improved Troubleshooting**: Added SSO integration, network policies, and kubectl cache issues
-- ✅ **Updated Architecture Diagrams**: Reflects new service dependencies and communication flows
-- ✅ **Enhanced Quick Reference**: Includes new Ansible automation and testing commands
-
-### Key Documentation Files Updated
-- **README.md**: Complete overhaul with new features and enhanced architecture
-- **quick-reference.md**: New Ansible commands and optimized deployment order
-- **deployment-guide.md**: Added automated deployment option and SSO integration steps
-- **troubleshooting-guide.md**: Enhanced with SSO debugging and network validation
-
 ---
 
 ## �📖 Additional Resources

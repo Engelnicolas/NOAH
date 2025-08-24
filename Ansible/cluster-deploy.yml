@@ -1,6 +1,6 @@
 ---
 - name: NOAH Complete Stack Deployment (Standalone)
-  hosts: local
+  hosts: localhost
   gather_facts: yes
   vars:
     cluster_name: "{{ cluster_name | default('noah-cluster') }}"

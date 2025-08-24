@@ -22,6 +22,7 @@ class AnsibleRunner:
         # Use relative path from Ansible directory
         cmd = [
             'ansible-playbook',
+            '-i', 'inventory/hosts.yml',  # Explicitly specify inventory
             playbook_name  # Just the filename since we'll run from Ansible dir
         ]
         
@@ -39,13 +40,13 @@ class AnsibleRunner:
         env['SOPS_AGE_KEY_FILE'] = str(self.config.get('AGE_KEY_FILE', './Age/keys.txt'))
         
         print(f"Running playbook: {playbook_name}")
-        result = subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=cwd)
+        result = subprocess.run(cmd, env=env, text=True, cwd=cwd)
         
         if result.returncode == 0:
             print(f"Playbook {playbook_name} executed successfully")
             return True
         else:
-            print(f"Playbook {playbook_name} failed: {result.stderr}")
+            print(f"Playbook {playbook_name} failed with exit code: {result.returncode}")
             return False
     
     def check_prerequisites(self) -> bool:

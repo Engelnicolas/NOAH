@@ -99,8 +99,12 @@ spec:
           {{- toYaml .Values.securityContext | nindent 10 }}
       volumes:
       - name: samba-data
+        {{- if .Values.persistence.enabled }}
         persistentVolumeClaim:
           claimName: {{ .Values.persistence.existingClaim }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
       - name: samba-config
         configMap:
           name: samba4-config

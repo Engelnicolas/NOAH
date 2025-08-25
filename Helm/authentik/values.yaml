@@ -9,12 +9,19 @@ worker:
   replicaCount: 1
 
 service:
-  type: ClusterIP
+  type: LoadBalancer  # Change from ClusterIP to LoadBalancer for external access
   port: 9000
-  annotations: {}
+  annotations:
+    # Use Cilium's LoadBalancer with external access
+    service.cilium.io/global: "true"
+    service.cilium.io/shared: "true"
+    # Enable domain-based routing
+    external-dns.alpha.kubernetes.io/hostname: "authentik.noah-infra.com"
+    # Configure load balancing algorithm
+    service.cilium.io/lb-algorithm: "round_robin"
 
 ingress:
-  enabled: true
+  enabled: false  # Disable traditional ingress, use LoadBalancer instead
   className: nginx
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod

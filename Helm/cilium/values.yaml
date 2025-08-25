@@ -34,6 +34,21 @@ serviceMesh:
 # Enable L7 policy enforcement for application-level security
 l7Proxy: true
 
+# Enable Cilium Ingress Controller for domain routing
+ingressController:
+  enabled: true
+  loadbalancerMode: shared
+  service:
+    type: LoadBalancer
+  # Enable Gateway API for modern ingress
+gatewayAPI:
+  enabled: true
+  
+# Enable advanced load balancing features  
+loadBalancer:
+  algorithm: round_robin
+  mode: snat
+
 # Enable BGP for advanced networking (if needed)
 bgp:
   enabled: false

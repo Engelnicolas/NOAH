@@ -27,10 +27,10 @@ helm dependency update
 authentik:
   ldap:
     enabled: true
-    baseDn: "dc=yourdomain,dc=com"
-    bindDn: "cn=Administrator,cn=Users,dc=yourdomain,dc=com"
-    bindPassword: "YourSecurePassword"
-    serverUri: "ldap://samba-dc.default.svc.cluster.local"
+    baseDn: "dc=noah-infra,dc=com"
+    bindDn: "cn=Administrator,cn=Users,dc=noah-infra,dc=com"
+    bindPassword: ""  # Set from secure secrets
+    serverUri: "ldap://samba4.identity.svc.cluster.local:389"
 
 ingress:
   hosts:

@@ -92,8 +92,8 @@ class HelmDeployer:
     
     def _decrypt_helm_secrets(self, secret_file: Path) -> Dict:
         """Decrypt Helm secrets using SOPS and transform to values format"""
-        from Scripts.secret_manager import SecretManager
-        sm = SecretManager(self.config)
+        from Scripts.noah_security_manager import NoahSecurityManager
+        sm = NoahSecurityManager(self.config)
         decrypted = sm.decrypt_secret(secret_file)
         
         # Check if this is a Kubernetes Secret resource and transform to values

@@ -8,15 +8,15 @@ import os
 from unittest.mock import Mock, patch
 from pathlib import Path
 
-# Add the current directory to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the parent directory to Python path to access Scripts
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def test_noah_imports():
     """Test that all noah.py imports work correctly"""
     print("Testing noah.py imports...")
     try:
         from Scripts.cluster_manager import ClusterManager
-        from Scripts.secret_manager import SecretManager
+        from Scripts.noah_security_manager import NoahSecurityManager
         from Scripts.helm_deployer import HelmDeployer
         from Scripts.ansible_runner import AnsibleRunner
         from Scripts.config_loader import ConfigLoader

@@ -54,7 +54,10 @@ spec:
           value: "UTC"
         # Configure user for dperson/samba (format: username;password)
         - name: USER
-          value: "admin;AdminPass123"
+          valueFrom:
+            secretKeyRef:
+              name: {{ if .Values.auth.externalSecrets }}samba4-security-secrets{{ else }}{{ include "samba4.fullname" . }}-secrets{{ end }}
+              key: {{ if .Values.auth.externalSecrets }}samba-user-config{{ else }}samba-user-config{{ end }}
         # Add share configuration
         - name: SHARE
           value: "data;/data;yes;no;no;admin"

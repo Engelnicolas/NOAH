@@ -41,7 +41,7 @@ def get_noah_paths():
 NOAH_PATHS = get_noah_paths()
 
 from Scripts.cluster_manager import ClusterManager
-from Scripts.noah_security_manager import NoahSecurityManager as SecretManager
+from Scripts.security_manager import NoahSecurityManager as SecretManager
 from Scripts.helm_deployer import HelmDeployer
 from Scripts.ansible_runner import AnsibleRunner
 from Scripts.config_loader import ConfigLoader

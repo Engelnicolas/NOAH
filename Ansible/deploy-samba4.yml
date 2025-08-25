@@ -72,7 +72,7 @@
           --namespace {{ samba_namespace }} \
           --values /tmp/samba4-values.yaml \
           --timeout 300s \
-          --dry-run
+          {% if dry_run | default(false) %}--dry-run{% endif %}
       register: samba4_helm_result
 
     - name: Set deployment status based on validation

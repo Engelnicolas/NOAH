@@ -454,6 +454,107 @@ class NoahSecurityManager:
         else:
             raise Exception(f"Failed to decrypt secret: {result.stderr}")
     
+    def generate_tls_certificates(self, domain: str):
+        """Generate self-signed TLS certificates for a domain using openssl"""
+        import subprocess
+        import os
+        
+        certs_dir = self.project_root / "Certificates"
+        certs_dir.mkdir(exist_ok=True)
+        
+        ca_cert_path = certs_dir / "ca.crt"
+        ca_key_path = certs_dir / "ca.key"
+        wildcard_cert_path = certs_dir / f"*.{domain}.crt"
+        wildcard_key_path = certs_dir / f"*.{domain}.key"
+        
+        print(f"🔐 Generating TLS certificates for domain: {domain}")
+        
+        # Check if openssl is available
+        try:
+            subprocess.run(['openssl', 'version'], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            raise Exception("OpenSSL is required for certificate generation. Please install openssl.")
+        
+        # Generate CA certificate if it doesn't exist
+        if not ca_cert_path.exists() or not ca_key_path.exists():
+            print("   Generating CA certificate...")
+            
+            # Generate CA private key
+            result = subprocess.run([
+                'openssl', 'genrsa', '-out', str(ca_key_path), '4096'
+            ], capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                raise Exception(f"Failed to generate CA key: {result.stderr}")
+            
+            # Set proper permissions on CA key
+            os.chmod(ca_key_path, 0o600)
+            
+            # Generate self-signed CA certificate
+            result = subprocess.run([
+                'openssl', 'req', '-new', '-x509', '-key', str(ca_key_path),
+                '-sha256', '-subj', '/C=US/ST=CA/O=NOAH/CN=NOAH CA',
+                '-days', '3650', '-out', str(ca_cert_path)
+            ], capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                raise Exception(f"Failed to generate CA certificate: {result.stderr}")
+            
+            os.chmod(ca_cert_path, 0o644)
+            print(f"   ✅ CA certificate generated: {ca_cert_path}")
+        else:
+            print(f"   ✅ CA certificate exists: {ca_cert_path}")
+        
+        # Generate wildcard certificate for the domain
+        print(f"   Generating wildcard certificate for *.{domain}...")
+        
+        # Generate private key for wildcard certificate
+        result = subprocess.run([
+            'openssl', 'genrsa', '-out', str(wildcard_key_path), '2048'
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            raise Exception(f"Failed to generate wildcard key: {result.stderr}")
+        
+        os.chmod(wildcard_key_path, 0o600)
+        
+        # Generate certificate signing request
+        csr_path = certs_dir / f"*.{domain}.csr"
+        result = subprocess.run([
+            'openssl', 'req', '-new', '-key', str(wildcard_key_path),
+            '-subj', f'/C=US/ST=CA/O=NOAH/CN=*.{domain}',
+            '-out', str(csr_path)
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            raise Exception(f"Failed to generate CSR: {result.stderr}")
+        
+        # Sign the certificate with CA
+        result = subprocess.run([
+            'openssl', 'x509', '-req', '-in', str(csr_path),
+            '-CA', str(ca_cert_path), '-CAkey', str(ca_key_path),
+            '-CAcreateserial', '-out', str(wildcard_cert_path),
+            '-days', '365', '-sha256'
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            raise Exception(f"Failed to sign wildcard certificate: {result.stderr}")
+        
+        os.chmod(wildcard_cert_path, 0o644)
+        
+        # Clean up CSR file
+        csr_path.unlink(missing_ok=True)
+        
+        print(f"   ✅ Wildcard certificate generated: {wildcard_cert_path}")
+        print(f"✅ TLS certificates generated successfully for {domain}")
+        
+        return {
+            'ca_cert': str(ca_cert_path),
+            'ca_key': str(ca_key_path),
+            'wildcard_cert': str(wildcard_cert_path),
+            'wildcard_key': str(wildcard_key_path)
+        }
+    
     def validate_age_setup(self):
         """Validate Age/SOPS encryption setup"""
         issues = []
@@ -653,6 +754,7 @@ Commands:
   scan                    - Scan for hardcoded passwords
   cleanup                 - Clean up temporary files
   cleanup-secrets         - Clean up local secrets and certificates
+  certificates <domain>   - Generate TLS certificates for domain
 
 Examples:
   python3 security_manager.py init
@@ -696,6 +798,12 @@ Examples:
         manager.cleanup_temp_files()
     elif command == "cleanup-secrets":
         manager.cleanup_local_secrets()
+    elif command == "certificates":
+        if len(sys.argv) > 2:
+            domain = sys.argv[2]
+            manager.generate_tls_certificates(domain)
+        else:
+            print("Usage: certificates <domain>")
     else:
         print(f"Unknown command: {command}")
         print("Run without arguments to see usage.")

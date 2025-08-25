@@ -31,9 +31,18 @@ persistence:
 domain:
   name: NOAH.LOCAL
   realm: NOAH.LOCAL
-  adminPassword: "" # Will be set from secrets
+  adminPassword: "" # Will be auto-generated if empty, or set from external secret management
   dnsForwarder: "8.8.8.8"
   netbiosName: DC1
+
+# Authentication configuration
+auth:
+  # Admin password - leave empty for auto-generation
+  adminPassword: ""
+  # Set to true to use external secret management (SOPS/Age)
+  externalSecrets: true
+  # Secret name for external management
+  secretName: "samba4-security-secrets"
 
 resources:
   limits:

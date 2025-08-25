@@ -106,9 +106,9 @@
           postgresql:
             enabled: true
             auth:
-              postgresPassword: "postgres123!"
+              postgresPassword: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=32') }}"
               username: "authentik"
-              password: ""  # Will be set from secrets
+              password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=32') }}"
               database: "authentik"
             persistence:
               enabled: false  # Use emptyDir for testing

@@ -79,8 +79,12 @@ postgresql:
   enabled: true
   auth:
     username: authentik
-    password: authentik
+    password: ""  # Will be set from secure secrets
     database: authentik
+    existingSecret: "authentik-security-secrets"
+    secretKeys:
+      adminPasswordKey: "postgresql-password"
+      userPasswordKey: "postgresql-password"
   primary:
     persistence:
       enabled: true
@@ -90,7 +94,9 @@ redis:
   enabled: true
   auth:
     enabled: true
-    password: authentik
+    password: ""  # Will be set from secure secrets
+    existingSecret: "authentik-security-secrets"
+    existingSecretPasswordKey: "redis-password"
   master:
     persistence:
       enabled: true

@@ -21,11 +21,14 @@ service:
     service.cilium.io/lb-algorithm: "round_robin"
 
 ingress:
-  enabled: false  # Disable traditional ingress, use LoadBalancer instead
-  className: nginx
+  enabled: false  # Currently using LoadBalancer for external access
+  className: cilium  # Options: "nginx", "cilium", or "traefik"
   annotations:
+    # Common annotations for all ingress controllers
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Nginx-specific (when className: nginx)
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # Cilium-specific annotations are auto-added when className: cilium
   hosts:
     - host: authentik.noah-infra.com
       paths:

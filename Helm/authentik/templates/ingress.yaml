@@ -1,14 +1,29 @@
 {{- if .Values.ingress.enabled -}}
+{{/*
+Multi-controller ingress for Authentik SSO
+Supports: nginx, cilium, traefik
+Current: {{ .Values.ingress.className | default "nginx" }}
+*/}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "authentik.fullname" . }}
   labels:
     {{- include "authentik.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
   annotations:
+    {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
+    {{- if eq .Values.ingress.className "cilium" }}
+    # Cilium-specific annotations for SSO
+    cilium.io/ssl-redirect: "true"
+    cilium.io/lb-algorithm: "round_robin"
+    cilium.io/service-mesh: "true"
+    cilium.io/proxy-read-timeout: "300s"
+    cilium.io/proxy-send-timeout: "300s"
+    cilium.io/cors-enable: "true"
+    cilium.io/cors-allow-origin: "*"
+    {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}

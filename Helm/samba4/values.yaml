@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: nowsci/samba-domain
+  repository: dperson/samba
   pullPolicy: IfNotPresent
   tag: "latest"
 

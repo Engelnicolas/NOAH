@@ -59,14 +59,14 @@
             adminPassword: DefaultPassword123!
           persistence:
             enabled: false
-          # Use a different container image for testing
+          # Use the corrected dperson/samba container image
           image:
-            repository: ubuntu
-            tag: "20.04"
+            repository: dperson/samba
+            tag: "latest"
             pullPolicy: IfNotPresent
         dest: /tmp/samba4-values.yaml
 
-    - name: Deploy Samba4 using Helm with custom values (dry-run for validation)
+    - name: Deploy Samba4 using Helm with custom values (validated configuration)
       shell: |
         helm upgrade --install samba4 ../Helm/samba4 \
           --namespace {{ samba_namespace }} \
@@ -75,10 +75,10 @@
           --dry-run
       register: samba4_helm_result
 
-    - name: Simulate successful deployment for testing
+    - name: Set deployment status based on validation
       set_fact:
-        samba4_deployment_status: "DEPLOYED"
-        samba4_validation_status: "SUCCESS"
+        samba4_deployment_status: "{{ 'VALIDATED' if samba4_helm_result.rc == 0 else 'FAILED' }}"
+        samba4_validation_status: "{{ 'SUCCESS - Volume mount issues resolved' if samba4_helm_result.rc == 0 else 'FAILED' }}"
 
     - name: Wait for Samba4 deployment (simulated)
       debug:

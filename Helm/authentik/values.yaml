@@ -62,7 +62,7 @@ authentik:
     
   outposts:
     ldap:
-      enabled: true
+      enabled: false
       replicaCount: 1
 
 postgresql:

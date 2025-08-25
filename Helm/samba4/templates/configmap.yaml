@@ -6,34 +6,34 @@ metadata:
     {{- include "samba4.labels" . | nindent 4 }}
 data:
   smb.conf: |
-    # Global parameters
     [global]
-        netbios name = {{ .Values.domain.netbiosName }}
-        realm = {{ .Values.domain.realm }}
-        server role = active directory domain controller
         workgroup = {{ .Values.domain.name }}
-        dns forwarder = {{ .Values.domain.dnsForwarder }}
-        
-        # Security settings
-        server signing = mandatory
-        ldap server require strong auth = yes
+        server string = Samba Server %v
+        netbios name = {{ .Values.domain.netbiosName }}
+        security = user
+        map to guest = bad user
+        dns proxy = no
         
         # Logging
         log level = 1
         log file = /var/log/samba/log.%m
         max log size = 1000
         
-        # TLS configuration
-        tls enabled = yes
-        tls keyfile = /etc/samba/tls/tls.key
-        tls certfile = /etc/samba/tls/tls.crt
-        tls cafile = /etc/samba/tls/ca.crt
+        # Performance and compatibility
+        socket options = TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=524288 SO_SNDBUF=524288
+        read raw = yes
+        write raw = yes
         
-    # SYSVOL and NETLOGON shares
-    [sysvol]
-        path = /var/lib/samba/sysvol
-        read only = No
+        # SMB protocol versions
+        min protocol = SMB2
+        max protocol = SMB3
         
-    [netlogon]
-        path = /var/lib/samba/sysvol/{{ .Values.domain.realm | lower }}/scripts
-        read only = No
+    [data]
+        comment = Samba Data Share
+        path = /data
+        browseable = yes
+        read only = no
+        guest ok = no
+        valid users = admin
+        create mask = 0775
+        directory mask = 0775

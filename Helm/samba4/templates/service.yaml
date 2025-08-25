@@ -7,26 +7,6 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.ports.ldap }}
-      targetPort: ldap
-      protocol: TCP
-      name: ldap
-    - port: {{ .Values.service.ports.ldaps }}
-      targetPort: ldaps
-      protocol: TCP
-      name: ldaps
-    - port: {{ .Values.service.ports.kerberos }}
-      targetPort: kerberos
-      protocol: TCP
-      name: kerberos-tcp
-    - port: {{ .Values.service.ports.kerberos }}
-      targetPort: kerberos-udp
-      protocol: UDP
-      name: kerberos-udp
-    - port: {{ .Values.service.ports.kpasswd }}
-      targetPort: kpasswd
-      protocol: TCP
-      name: kpasswd
     - port: {{ .Values.service.ports.smb }}
       targetPort: smb
       protocol: TCP

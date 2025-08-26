@@ -67,7 +67,13 @@
         - name: "PHASE 2: Deploy Cilium CNI (Network Foundation)"
           block:
             - name: Deploy Cilium CNI with SSO-ready configuration
-              ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-cilium.yml"
+              shell: |
+                cd {{ ansible_playbook_dir }}
+                ansible-playbook deploy-cilium.yml \
+                  -e namespace=kube-system \
+                  -e domain_name="{{ domain_name }}" \
+                  -e deployment_phase=complete \
+                  -e enable_hubble=true
               vars:
                 namespace: kube-system
                 domain_name: "{{ domain_name }}"
@@ -123,7 +129,13 @@
         - name: "PHASE 3: Deploy Samba4 Active Directory (Identity Backend)"
           block:
             - name: Deploy Samba4 Active Directory
-              ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-samba4.yml"
+              shell: |
+                cd {{ ansible_playbook_dir }}
+                ansible-playbook deploy-samba4.yml \
+                  -e namespace=identity \
+                  -e domain_name="{{ domain_name }}" \
+                  -e service_name=samba4 \
+                  -e enable_ldap=true
               vars:
                 namespace: identity
                 domain_name: "{{ domain_name }}"
@@ -174,7 +186,13 @@
         - name: "PHASE 4: Deploy Authentik SSO (SSO Frontend)"
           block:
             - name: Deploy Authentik SSO with LDAP integration
-              ansible.builtin.include: "{{ ansible_playbook_dir }}/deploy-authentik.yml"
+              shell: |
+                cd {{ ansible_playbook_dir }}
+                ansible-playbook deploy-authentik.yml \
+                  -e namespace=identity \
+                  -e domain_name="{{ domain_name }}" \
+                  -e service_name=authentik \
+                  -e enable_ldap_integration=true
               vars:
                 namespace: identity
                 domain_name: "{{ domain_name }}"

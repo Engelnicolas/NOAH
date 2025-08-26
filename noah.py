@@ -525,7 +525,7 @@ def samba4(ctx, namespace, domain):
     
     # Generate secrets for Samba4 before deployment
     click.echo(f"[VERBOSE] Generating secrets for Samba4...")
-    ctx.obj['secrets'].generate_service_secrets('samba4', namespace)
+    ctx.obj['secrets'].generate_service_secrets('samba4')
     
     # Get Ansible variables with security configuration
     ansible_vars = get_ansible_vars_for_service('samba4', namespace, domain)
@@ -563,7 +563,7 @@ def authentik(ctx, namespace, domain):
     
     # Generate secrets for Authentik before deployment
     click.echo(f"[VERBOSE] Generating secrets for Authentik...")
-    ctx.obj['secrets'].generate_service_secrets('authentik', namespace)
+    ctx.obj['secrets'].generate_service_secrets('authentik')
     
     # Get Ansible variables with security configuration
     ansible_vars = get_ansible_vars_for_service('authentik', namespace, domain)
@@ -590,7 +590,7 @@ def cilium(ctx, namespace, domain):
     
     # Generate secrets for Cilium before deployment
     click.echo(f"[VERBOSE] Generating secrets for Cilium...")
-    ctx.obj['secrets'].generate_service_secrets('cilium', namespace)
+    ctx.obj['secrets'].generate_service_secrets('cilium')
     
     # Get Ansible variables with security configuration
     ansible_vars = get_ansible_vars_for_service('cilium', namespace, domain)
@@ -720,7 +720,7 @@ def generate(ctx, service, namespace):
     click.echo(f"[VERBOSE] Service: {service}")
     click.echo(f"[VERBOSE] Namespace: {namespace}")
     click.echo(f"Generating secrets for {service} in namespace {namespace}")
-    ctx.obj['secrets'].generate_service_secrets(service, namespace)
+    ctx.obj['secrets'].generate_service_secrets(service)
 
 @secrets.command()
 @click.option('--service', required=True, help='Service name')
@@ -756,7 +756,7 @@ def validate(ctx, service, namespace, fix):
             # Re-deploy with synchronized secrets
             if service == 'authentik':
                 # Force regeneration with existing passwords
-                ctx.obj['secrets'].generate_service_secrets(service, namespace)
+                ctx.obj['secrets'].generate_service_secrets(service)
                 # Redeploy to apply fixes
                 ctx.obj['helm'].deploy_chart(service, namespace)
                 click.echo(f"✅ Secrets fixed and {service} redeployed")
@@ -774,7 +774,7 @@ def regenerate(ctx, service, namespace):
     ensure_security_initialized(ctx)
     
     click.echo(f"🔄 Regenerating secrets for {service} in namespace {namespace}...")
-    ctx.obj['secrets'].generate_service_secrets(service, namespace)
+    ctx.obj['secrets'].generate_service_secrets(service)
     click.echo(f"✅ Secrets regenerated for {service}")
 
 def check_command_exists(command):

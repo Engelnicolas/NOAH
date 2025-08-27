@@ -9,35 +9,43 @@ worker:
   replicaCount: 1
 
 service:
-  type: LoadBalancer  # Change from ClusterIP to LoadBalancer for external access
+  type: LoadBalancer  # External access for OIDC endpoints
   port: 9000
   annotations:
     # Use Cilium's LoadBalancer with external access
     service.cilium.io/global: "true"
     service.cilium.io/shared: "true"
-    # Enable domain-based routing
-    external-dns.alpha.kubernetes.io/hostname: "authentik.noah-infra.com"
+    # Enable domain-based routing for OIDC discovery
+    external-dns.alpha.kubernetes.io/hostname: "auth.noah-infra.com"
     # Configure load balancing algorithm
     service.cilium.io/lb-algorithm: "round_robin"
 
 ingress:
-  enabled: false  # Currently using LoadBalancer for external access
+  enabled: true  # Enable ingress for OIDC endpoints
   className: cilium  # Options: "nginx", "cilium", or "traefik"
   annotations:
     # Common annotations for all ingress controllers
     cert-manager.io/cluster-issuer: letsencrypt-prod
     # Nginx-specific (when className: nginx)
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    # Cilium-specific annotations are auto-added when className: cilium
+    # OIDC-specific headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "Access-Control-Allow-Origin: *";
+      more_set_headers "Access-Control-Allow-Methods: GET, POST, OPTIONS";
+      more_set_headers "Access-Control-Allow-Headers: Authorization, Content-Type";
   hosts:
-    - host: authentik.noah-infra.com
+    - host: auth.noah-infra.com
       paths:
         - path: /
           pathType: Prefix
+        - path: /application/o/
+          pathType: Prefix  # OIDC endpoints
+        - path: /.well-known/
+          pathType: Prefix  # OIDC discovery
   tls:
     - secretName: authentik-tls
       hosts:
-        - authentik.noah-infra.com
+        - auth.noah-infra.com
 
 authentik:
   # Use our existing secret instead of auto-generating
@@ -47,6 +55,12 @@ authentik:
   errorReporting:
     enabled: false
   logLevel: info
+  # OIDC Provider Configuration
+  oidc:
+    enabled: true
+    issuerUrl: "https://auth.noah-infra.com/application/o/kubernetes/"
+    clientId: "kubernetes-cluster"
+    # Client secret will be generated and stored in kubernetes secret
   email:
     host: smtp.noah-infra.com
     port: 587
@@ -80,7 +94,17 @@ postgresql:
   primary:
     persistence:
       enabled: true
-      size: 8Gi
+      size: 20Gi  # Increased for production OIDC usage
+      storageClass: ""  # Use default storage class
+      accessModes:
+        - ReadWriteOnce
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
 
 redis:
   enabled: true
@@ -92,16 +116,57 @@ redis:
   master:
     persistence:
       enabled: true
-      size: 2Gi
+      size: 4Gi  # Increased for session storage
+      storageClass: ""  # Use default storage class
+      accessModes:
+        - ReadWriteOnce
+    resources:
+      limits:
+        cpu: 250m
+        memory: 512Mi
+      requests:
+        cpu: 50m
+        memory: 128Mi
+
+# Persistent Volume for Authentik media files
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClass: ""  # Use default storage class
+  accessMode: ReadWriteOnce
+  mountPath: /media
 
 resources:
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: 1000m
+    memory: 1Gi
   requests:
-    cpu: 100m
-    memory: 256Mi
+    cpu: 200m
+    memory: 512Mi
+
+# Security context for production
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# OIDC Integration with Kubernetes
+kubernetes:
+  oidc:
+    enabled: true
+    # These will be used to configure kube-apiserver
+    issuerUrl: "https://auth.noah-infra.com/application/o/kubernetes/"
+    clientId: "kubernetes-cluster"
+    usernameClaim: "preferred_username"
+    groupsClaim: "groups"
+    signingAlgs: ["RS256"]
 
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# Service Monitor for Prometheus (if available)
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s

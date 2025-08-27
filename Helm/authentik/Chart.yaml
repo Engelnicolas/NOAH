@@ -1,8 +1,8 @@
 apiVersion: v2
 name: authentik
-description: A Helm chart for Authentik - Identity Provider for SSO with Samba 4 integration
+description: A Helm chart for Authentik - Standalone OIDC Identity Provider
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "2023.10.5"
 dependencies:
   - name: postgresql

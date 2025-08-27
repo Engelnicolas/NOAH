@@ -111,9 +111,10 @@ class NoahSecurityManager:
                 'bootstrap_token': self.generate_secure_password(50, include_special=False),
                 'postgresql_password': self.generate_secure_password(32),
                 'redis_password': self.generate_secure_password(32),
-                'ldap_bind_password': self.generate_secure_password(24),
-                'outpost_token': self.generate_secure_password(50, include_special=False),
+                'oidc_client_secret': self.generate_secure_password(32, include_special=False),
+                'jwt_signing_key': self.generate_secure_password(64, include_special=False),
                 'session_secret': self.generate_secure_password(32),
+                'email_password': self.generate_secure_password(24),
             },
             'cilium': {
                 'hubble_tls_key': self.generate_secure_password(32, include_special=False),

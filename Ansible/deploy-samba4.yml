@@ -1,11 +1,6 @@
 ---
 - name: Deploy Samba4 Active Directory
-  h          type: Opaque
-          stringData:
-            SAMBA_ADMIN_PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
-            SAMBA_DOMAIN: "NOAH.LOCAL"
-            SAMBA_REALM: "NOAH.LOCAL"
-            samba-user-config: "admin;{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}" localhost
+  hosts: localhost
   gather_facts: no
   vars:
     samba_namespace: "identity"

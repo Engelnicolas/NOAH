@@ -5,20 +5,50 @@ metadata:
   labels:
     {{- include "authentik.labels" . | nindent 4 }}
 data:
-  ldap-config.yaml: |
-    {{- if .Values.authentik.ldap.enabled }}
-    ldap_sources:
-      - name: "Samba 4 AD"
-        server_uri: {{ .Values.authentik.ldap.serverUri | quote }}
-        bind_cn: {{ .Values.authentik.ldap.bindDn | quote }}
-        base_dn: {{ .Values.authentik.ldap.baseDn | quote }}
-        start_tls: {{ .Values.authentik.ldap.startTls }}
-        object_uniqueness_field: "objectSid"
-        user_object_filter: "(objectClass=user)"
-        group_object_filter: "(objectClass=group)"
-        user_group_membership_field: "memberOf"
-        group_membership_field: "member"
-        sync_users: true
-        sync_groups: true
-        sync_parent_group: ""
+  oidc-config.yaml: |
+    {{- if .Values.authentik.oidc.enabled }}
+    oidc_providers:
+      - name: "Kubernetes Cluster OIDC"
+        client_id: {{ .Values.authentik.oidc.clientId | quote }}
+        issuer_url: {{ .Values.authentik.oidc.issuerUrl | quote }}
+        authorization_flow: "default-authentication-flow"
+        redirect_uris:
+          - "http://localhost:8080"
+          - "https://kubernetes.noah-infra.com/oauth/callback"
+        scopes:
+          - "openid"
+          - "profile"
+          - "email"
+          - "groups"
+        property_mappings:
+          - "authentik default OIDC Mapping: OpenID 'sub'"
+          - "authentik default OIDC Mapping: OpenID 'email'"
+          - "authentik default OIDC Mapping: OpenID 'email_verified'"
+          - "authentik default OIDC Mapping: OIDC Groups Claim"
     {{- end }}
+  
+  bootstrap-config.yaml: |
+    bootstrap:
+      admin_user: {{ .Values.authentik.bootstrap.adminUser | quote }}
+      admin_email: {{ .Values.authentik.bootstrap.adminEmail | quote }}
+      
+  app-config.yaml: |
+    # Authentik application configuration
+    server:
+      listen:
+        - "0.0.0.0:9000"
+      cookie_domain: ".noah-infra.com"
+      cookie_secure: true
+    
+    logging:
+      level: {{ .Values.authentik.logLevel | quote }}
+      
+    email:
+      {{- if .Values.authentik.email }}
+      host: {{ .Values.authentik.email.host | quote }}
+      port: {{ .Values.authentik.email.port }}
+      username: {{ .Values.authentik.email.username | quote }}
+      use_tls: {{ .Values.authentik.email.useTls }}
+      use_ssl: {{ .Values.authentik.email.useSSL }}
+      from: {{ .Values.authentik.email.from | quote }}
+      {{- end }}

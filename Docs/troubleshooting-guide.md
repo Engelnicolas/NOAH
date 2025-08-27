@@ -3,7 +3,7 @@
 ## 🆕 Recent Enhancements
 
 ### Enhanced Diagnostic Tools
-- **Integrated SSO Testing**: `python noah.py test sso` now includes network validation
+- **Integrated IAM Testing**: `python noah.py test sso` now includes network validation
 - **Optimized Deployment Order**: Ensures proper service dependencies
 - **Enhanced kubectl Cache Management**: Automatic cleanup prevents connection issues
 - **Comprehensive Status Checking**: Improved validation in all phases
@@ -14,12 +14,12 @@
 
 #### Symptom
 ```
-Authentik cannot connect to Samba4 LDAP
+Authentik connectivity issues
 Network policies blocking service communication
 ```
 
 #### Solutions
-1. **Use the correct deployment order** (Cilium → Samba4 → Authentik):
+1. **Use the correct deployment order** (Cilium → Authentik):
    ```bash
    # Recommended: Use complete redeployment
    ansible-playbook Ansible/cluster-redeploy.yml \
@@ -36,9 +36,9 @@ Network policies blocking service communication
 
 3. **Test service connectivity**:
    ```bash
-   # Test Authentik → Samba4 connection
+   # Test Authentik database connectivity
    kubectl exec -n identity deployment/authentik-server -- \
-     nc -zv samba4.identity.svc.cluster.local 389
+     nc -zv authentik-postgresql 5432
    ```
 
 ### 2. Network Policy Issues (ENHANCED)
@@ -46,14 +46,14 @@ Network policies blocking service communication
 #### Symptom
 ```
 Services cannot communicate despite being deployed
-Authentik LDAP connection failures
+Authentik database connection failures
 ```
 
 #### Solutions
-1. **Validate SSO network policies**:
+1. **Validate IAM network policies**:
    ```bash
    kubectl get networkpolicies -n identity
-   kubectl describe networkpolicy -n identity authentik-to-samba4-ldap
+   kubectl describe networkpolicy -n identity
    ```
 
 2. **Check Cilium policy enforcement**:
@@ -79,7 +79,6 @@ Failed to deploy cilium: Error: UPGRADE FAILED: context deadline exceeded
 1. **Check timeout settings** (already optimized):
    - Cilium: 10 minutes
    - Authentik: 12 minutes  
-   - Samba4: 15 minutes
 
 2. **Verify cluster resources**:
    ```bash
@@ -113,20 +112,6 @@ kubectl exec -n kube-system ds/cilium -- cilium connectivity test --help
 
 # Common fixes
 kubectl delete pod -n kube-system <stuck-cilium-pod>
-```
-
-#### Samba4 Pod Issues (NEW)
-```bash
-# Check Samba4 deployment
-kubectl get pods -n identity | grep samba4
-kubectl logs -n identity deployment/samba4 --tail=50
-
-# Test LDAP service
-kubectl exec -n identity deployment/samba4 -- \
-  ldapsearch -x -H ldap://localhost:389 -s base
-
-# Check persistent volume
-kubectl get pvc -n identity | grep samba4
 ```
 
 #### Authentik Pod Issues (ENHANCED)
@@ -193,26 +178,23 @@ SSO login failures
 
 #### Enhanced Diagnostic Commands
 ```bash
-# Comprehensive SSO + network testing (NEW)
+# Comprehensive IAM + network testing (NEW)
 python noah.py test sso
-
-# Individual component testing
-kubectl exec -n identity deployment/samba4 -- \
-  ldapsearch -x -H ldap://localhost:389 -s base
-
-kubectl exec -n identity deployment/authentik-server -- \
-  nc -zv samba4.identity.svc.cluster.local 389
 
 # Check Authentik API
 kubectl exec -n identity deployment/authentik-server -- \
   wget -q -O- http://localhost:9000/api/v3/core/tenants/
+
+# Test database connectivity
+kubectl exec -n identity deployment/authentik-server -- \
+  nc -zv authentik-postgresql 5432
 ```
 
 #### Network Policy Validation
 ```bash
-# Check SSO-specific network policies
+# Check IAM-specific network policies
 kubectl get networkpolicies -n identity
-kubectl describe networkpolicy -n identity authentik-to-samba4-ldap
+kubectl describe networkpolicy -n identity
 
 # Verify Cilium policy enforcement
 kubectl exec -n kube-system ds/cilium -- cilium policy get

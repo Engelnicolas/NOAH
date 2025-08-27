@@ -90,7 +90,7 @@
         done
         
         # Delete specific NOAH secrets by name pattern
-        for pattern in authentik samba4 cilium noah; do
+        for pattern in authentik cilium noah; do
           kubectl get secrets --all-namespaces --field-selector metadata.name~="$pattern" -o json 2>/dev/null | \
           jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | \
           while read namespace secret; do

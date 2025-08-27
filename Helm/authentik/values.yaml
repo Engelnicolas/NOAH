@@ -40,7 +40,10 @@ ingress:
         - authentik.noah-infra.com
 
 authentik:
-  secretKey: "" # Will be auto-generated if not set
+  # Use our existing secret instead of auto-generating
+  secret:
+    existingSecret: "authentik-secrets"
+    secretKey: "AUTHENTIK_SECRET_KEY"
   errorReporting:
     enabled: false
   logLevel: info
@@ -53,22 +56,11 @@ authentik:
     useSSL: false
     from: authentik@noah-infra.com
   
-  # Samba 4 LDAP Integration - Enhanced for Cilium networking
-  ldap:
+  # Standalone IAM Configuration - No external LDAP integration
+  bootstrap:
     enabled: true
-    baseDn: "dc=noah-infra,dc=com"
-    bindDn: "cn=Administrator,cn=Users,dc=noah-infra,dc=com"
-    bindPassword: ""
-    serverUri: "ldap://samba4.identity.svc.cluster.local:389"
-    startTls: false
-    # Connection pool settings for better performance
-    connectionTimeout: 30
-    searchTimeout: 30
-    # Enable connection pooling
-    poolSize: 5
-    # Retry settings for network resilience
-    retryAttempts: 3
-    retryDelay: 5
+    adminUser: "akadmin"
+    adminEmail: "admin@noah-infra.com"
     
   outposts:
     ldap:
@@ -81,7 +73,7 @@ postgresql:
     username: authentik
     password: ""  # Will be set from secure secrets
     database: authentik
-    existingSecret: "authentik-security-secrets"
+    existingSecret: "authentik-secrets"
     secretKeys:
       adminPasswordKey: "postgresql-password"
       userPasswordKey: "postgresql-password"
@@ -95,7 +87,7 @@ redis:
   auth:
     enabled: true
     password: ""  # Will be set from secure secrets
-    existingSecret: "authentik-security-secrets"
+    existingSecret: "authentik-secrets"
     existingSecretPasswordKey: "redis-password"
   master:
     persistence:

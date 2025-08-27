@@ -41,34 +41,26 @@ def test_cluster_create_with_destroy():
         print("✓ Cluster create correctly runs destroy first")
         return True
 
-def test_authentik_samba4_validation():
-    """Test that authentik deployment validates Samba4 first"""
-    print("Testing Authentik Samba4 validation...")
+def test_authentik_standalone_deployment():
+    """Test that authentik deployment works in standalone mode"""
+    print("Testing Authentik standalone deployment...")
     
     runner = CliRunner()
     
     with patch('noah.ConfigLoader'), \
          patch('noah.SecretManager'), \
          patch('noah.HelmDeployer'), \
-         patch('noah.AnsibleRunner'), \
-         patch('noah.ClusterManager') as mock_cluster:
-        
-        # Mock cluster manager that fails Samba4 validation
-        mock_cluster_instance = Mock()
-        mock_cluster.return_value = mock_cluster_instance
-        mock_cluster_instance.wait_for_deployment.side_effect = Exception("Samba4 not ready")
+         patch('noah.AnsibleRunner'):
         
         result = runner.invoke(noah.cli, ['deploy', 'authentik'])
         
-        # Check that it validates Samba4 first and fails appropriately
+        # Check that it deploys directly without dependencies
         output = result.output
-        assert '[VERBOSE] Starting Authentik deployment process...' in output
-        assert '[VERBOSE] Validating Samba4 deployment before Authentik installation...' in output
-        assert 'Checking Samba4 deployment status...' in output
-        assert '✗ Samba4 deployment not ready' in output
-        assert result.exit_code == 1
+        assert '[VERBOSE] Deploying Authentik SSO...' in output
+        assert '[VERBOSE] Generating secrets for Authentik...' in output
+        assert '[VERBOSE] Running Ansible playbook: deploy-authentik.yml' in output
         
-        print("✓ Authentik correctly validates Samba4 first")
+        print("✓ Authentik deployment works in standalone mode")
         return True
 
 def test_verbose_output_presence():
@@ -80,7 +72,7 @@ def test_verbose_output_presence():
     # Test various commands for verbose output
     commands_to_test = [
         (['secrets', 'init'], '[VERBOSE] Starting secret management initialization...'),
-        (['deploy', 'samba4'], '[VERBOSE] Starting Samba4 deployment process...'),
+        (['deploy', 'authentik'], '[VERBOSE] Deploying Authentik SSO...'),
         (['deploy', 'cilium'], '[VERBOSE] Starting Cilium deployment process...'),
     ]
     
@@ -109,7 +101,7 @@ def main():
     
     tests = [
         test_cluster_create_with_destroy,
-        test_authentik_samba4_validation,
+        test_authentik_standalone_deployment,
         test_verbose_output_presence
     ]
     

@@ -17,7 +17,7 @@ class ConfigLoader:
             load_dotenv(self.env_file)
         
         # Load all environment variables starting with NOAH_ or specific prefixes
-        prefixes = ['NOAH_', 'KUBERNETES_', 'SAMBA4_', 'AUTHENTIK_', 
+        prefixes = ['NOAH_', 'KUBERNETES_', 'AUTHENTIK_', 
                    'CILIUM_', 'TLS_', 'AGE_', 'SOPS_', 'ANSIBLE_', 'HELM_']
         
         for key, value in os.environ.items():
@@ -36,7 +36,6 @@ class ConfigLoader:
     def get_namespace(self, service: str) -> str:
         """Get namespace for a service"""
         namespace_map = {
-            'samba4': self.get('KUBERNETES_NAMESPACE_IDENTITY', 'identity'),
             'authentik': self.get('KUBERNETES_NAMESPACE_IDENTITY', 'identity'),
             'cilium': self.get('KUBERNETES_NAMESPACE_NETWORK', 'kube-system')
         }

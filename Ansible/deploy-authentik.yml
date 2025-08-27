@@ -1,5 +1,5 @@
 ---
-- name: Deploy Authentik SSO
+- name: Deploy Authentik SSO (Standalone)
   hosts: localhost
   gather_facts: no
   vars:
@@ -18,15 +18,7 @@
         kind: Namespace
         state: present
 
-    - name: Check if Samba4 service exists
-      kubernetes.core.k8s_info:
-        api_version: v1
-        kind: Service
-        name: samba4
-        namespace: "{{ authentik_namespace }}"
-      register: samba4_service_check
-
-    - name: Create simplified Authentik secrets for testing
+    - name: Create Authentik secrets for standalone deployment
       kubernetes.core.k8s:
         definition:
           apiVersion: v1
@@ -46,44 +38,14 @@
             AUTHENTIK_BOOTSTRAP_TOKEN: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=50') }}"
             AUTHENTIK_POSTGRESQL__PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
             AUTHENTIK_REDIS__PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
-
-    - name: Create Authentik LDAP Source Configuration for Samba4 integration
-      kubernetes.core.k8s:
-        definition:
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: authentik-ldap-config
-            namespace: "{{ authentik_namespace }}"
-            labels:
-              app.kubernetes.io/managed-by: Helm
-            annotations:
-              meta.helm.sh/release-name: authentik
-              meta.helm.sh/release-namespace: "{{ authentik_namespace }}"
-          data:
-            ldap-source.yaml: |
-              # LDAP Source Configuration for Samba4 Integration
-              server_uri: "{{ 'ldap://samba4.' + authentik_namespace + '.svc.cluster.local:389' if samba4_service_check.resources else 'ldap://samba4.identity.svc.cluster.local:389' }}"
-              bind_cn: "CN=admin,CN=Users,DC=noah,DC=local"
-              bind_password: "${SAMBA_ADMIN_PASSWORD}"
-              base_dn: "DC=noah,DC=local"
-              user_dn: "CN=Users,DC=noah,DC=local"
-              group_dn: "CN=Groups,DC=noah,DC=local"
-              sync_users: true
-              sync_groups: true
-              sync_parent_group: "noah-users"
-              additional_user_dn: "CN=Computers,DC=noah,DC=local"
-              additional_group_dn: "CN=Builtin,DC=noah,DC=local"
-              # Samba4 specific attributes
-              user_object_filter: "(objectClass=user)"
-              group_object_filter: "(objectClass=group)"
-              group_membership_field: "member"
-              object_uniqueness_field: "objectSid"
+            # Additional keys for PostgreSQL and Redis Helm charts
+            postgresql-password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
+            redis-password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
 
     - name: Create Authentik values file for Helm deployment
       copy:
         content: |
-          # Authentik configuration with Samba4 SSO integration
+          # Authentik standalone IAM configuration
           authentik:
             secret_key: ""  # Will be set from secrets
             bootstrap:
@@ -162,13 +124,6 @@
           # Worker configuration  
           worker:
             replicas: 1
-            
-          # LDAP outpost for Samba4 integration
-          ldap:
-            enabled: true
-            service:
-              type: ClusterIP
-              port: 389
         dest: /tmp/authentik-values.yaml
 
     - name: Deploy Authentik using Helm
@@ -183,14 +138,7 @@
     - name: Set deployment status based on validation
       set_fact:
         authentik_deployment_status: "{{ 'VALIDATED' if authentik_helm_result.rc == 0 else 'FAILED' }}"
-        authentik_validation_status: "{{ 'SUCCESS - SSO integration configured' if authentik_helm_result.rc == 0 else 'FAILED' }}"
-
-    - name: Check Samba4 connectivity for SSO integration
-      debug:
-        msg:
-          - "Samba4 service status: {{ 'FOUND' if samba4_service_check.resources else 'NOT FOUND' }}"
-          - "LDAP endpoint: {{ 'samba4.' + authentik_namespace + '.svc.cluster.local:389' if samba4_service_check.resources else 'samba4.identity.svc.cluster.local:389' }}"
-          - "SSO integration: {{ 'CONFIGURED' if samba4_service_check.resources else 'PENDING - Deploy Samba4 first' }}"
+        authentik_validation_status: "{{ 'SUCCESS - Standalone IAM configured' if authentik_helm_result.rc == 0 else 'FAILED' }}"
 
     - name: Display Authentik deployment status
       debug:
@@ -202,17 +150,16 @@
           - "Validation status: {{ authentik_validation_status }}"
           - "Helm dry-run: {{ 'SUCCESS' if authentik_helm_result.rc == 0 else 'FAILED' }}"
 
-    - name: Validate Authentik SSO deployment summary
+    - name: Validate Authentik standalone IAM deployment summary
       debug:
         msg:
-          - "=== AUTHENTIK SSO DEPLOYMENT SUMMARY ==="
+          - "=== AUTHENTIK STANDALONE IAM DEPLOYMENT SUMMARY ==="
           - "✓ Namespace: {{ authentik_namespace }}"
           - "✓ Secrets: authentik-secrets (Helm-managed)"
-          - "✓ ConfigMap: authentik-ldap-config (Samba4 integration)"
           - "✓ Helm Chart: ../Helm/authentik"
           - "✓ PostgreSQL: External dependency configured"
           - "✓ Redis: External dependency configured"
-          - "✓ LDAP Integration: {{ 'ACTIVE' if samba4_service_check.resources else 'PENDING' }}"
-          - "✓ SSO Backend: Samba4 LDAP ({{ 'Connected' if samba4_service_check.resources else 'Awaiting Samba4' }})"
+          - "✓ IAM Mode: Standalone (No external LDAP)"
+          - "✓ Authentication: Internal user database"
           - "✓ Validation: {{ authentik_validation_status }}"
-          - "⚠️  Note: Deploy Samba4 first for full SSO functionality"
+          - "✅ Ready for standalone IAM operations"

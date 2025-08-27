@@ -44,23 +44,19 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         env:
-        - name: USERID
-          value: "1000"
-        - name: GROUPID  
-          value: "1000"
-        - name: WORKGROUP
+        - name: DOMAIN
           value: {{ .Values.domain.name | quote }}
-        - name: TZ
-          value: "UTC"
-        # Configure user for dperson/samba (format: username;password)
-        - name: USER
+        - name: DOMAINPASS
           valueFrom:
             secretKeyRef:
               name: {{ if .Values.auth.externalSecrets }}samba4-security-secrets{{ else }}{{ include "samba4.fullname" . }}-secrets{{ end }}
-              key: {{ if .Values.auth.externalSecrets }}samba-user-config{{ else }}samba-user-config{{ end }}
-        # Add share configuration
-        - name: SHARE
-          value: "data;/data;yes;no;no;admin"
+              key: {{ if .Values.auth.externalSecrets }}SAMBA_ADMIN_PASSWORD{{ else }}SAMBA_ADMIN_PASSWORD{{ end }}
+        - name: DNSFORWARDER
+          value: {{ .Values.domain.dnsForwarder | quote }}
+        - name: HOSTIP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         ports:
         - name: smb
           containerPort: 445
@@ -73,19 +69,19 @@ spec:
           protocol: TCP
         livenessProbe:
           tcpSocket:
-            port: 139  # Use NetBIOS port which starts faster
-          initialDelaySeconds: 120  # Give more time for Samba to start
+            port: 389  # Check LDAP port for AD DC
+          initialDelaySeconds: 180  # AD DC takes longer to start
           periodSeconds: 30
           timeoutSeconds: 10
-          failureThreshold: 5  # More lenient
+          failureThreshold: 5
         readinessProbe:
           tcpSocket:
-            port: 139  # Use NetBIOS port which starts faster
-          initialDelaySeconds: 60  # Give more time
+            port: 389  # Check LDAP port for AD DC
+          initialDelaySeconds: 120  # AD DC takes longer to start
           periodSeconds: 15
           timeoutSeconds: 5
           successThreshold: 1
-          failureThreshold: 5  # More lenient
+          failureThreshold: 5
         volumeMounts:
         - name: samba-data
           mountPath: /data

@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: dperson/samba
+  repository: theworkflow/samba4
   pullPolicy: IfNotPresent
   tag: "latest"
 

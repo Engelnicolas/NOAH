@@ -1,6 +1,11 @@
 ---
 - name: Deploy Samba4 Active Directory
-  hosts: localhost
+  h          type: Opaque
+          stringData:
+            SAMBA_ADMIN_PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
+            SAMBA_DOMAIN: "NOAH.LOCAL"
+            SAMBA_REALM: "NOAH.LOCAL"
+            samba-user-config: "admin;{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}" localhost
   gather_facts: no
   vars:
     samba_namespace: "identity"
@@ -27,7 +32,7 @@
         namespace: "{{ samba_namespace }}"
       loop:
         - { kind: "ConfigMap", name: "samba4-config" }
-        - { kind: "Secret", name: "samba4-secrets" }
+        - { kind: "Secret", name: "samba4-security-secrets" }
         - { kind: "PersistentVolumeClaim", name: "samba4-data" }
       ignore_errors: yes
 
@@ -37,7 +42,7 @@
           apiVersion: v1
           kind: Secret
           metadata:
-            name: samba4-secrets
+            name: samba4-security-secrets
             namespace: "{{ samba_namespace }}"
             labels:
               app.kubernetes.io/managed-by: Helm
@@ -46,9 +51,10 @@
               meta.helm.sh/release-namespace: "{{ samba_namespace }}"
           type: Opaque
           stringData:
-            SAMBA_ADMIN_PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
+            SAMBA_ADMIN_PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
             SAMBA_DOMAIN: "NOAH.LOCAL"
             SAMBA_REALM: "NOAH.LOCAL"
+            samba-user-config: "admin;{{ lookup('password', '/dev/null chars=ascii_letters,digits length=24') }}"
 
     - name: Create temporary values file for Samba4
       copy:

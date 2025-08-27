@@ -15,5 +15,9 @@ spec:
       targetPort: netbios
       protocol: TCP
       name: netbios
+    - port: {{ .Values.service.ports.ldap }}
+      targetPort: ldap
+      protocol: TCP
+      name: ldap
   selector:
     {{- include "samba4.selectorLabels" . | nindent 4 }}

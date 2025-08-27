@@ -49,6 +49,21 @@ resources:
     cpu: 1000m
     memory: 1024Mi
   requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Network policy configuration
+networkPolicy:
+  enabled: true
+  allowFromNamespace: "identity"
+
+# Service mesh configuration
+serviceMesh:
+  enabled: true
+  annotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/shared: "true"
+  requests:
     cpu: 500m
     memory: 512Mi
 

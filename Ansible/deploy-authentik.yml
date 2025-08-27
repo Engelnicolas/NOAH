@@ -106,21 +106,50 @@
           postgresql:
             enabled: true
             auth:
-              postgresPassword: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=32') }}"
+              postgresPassword: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}"
               username: "authentik"
-              password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=32') }}"
+              password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}"
               database: "authentik"
-            persistence:
-              enabled: false  # Use emptyDir for testing
+            primary:
+              persistence:
+                enabled: false  # Use emptyDir for testing
+                storageClass: ""
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
           
           # External Redis configuration
           redis:
             enabled: true
             auth:
-              enabled: true
-              password: ""  # Will be set from secrets
-            persistence:
-              enabled: false  # Use emptyDir for testing
+              enabled: false  # Disable auth for testing simplicity
+              password: ""
+            master:
+              persistence:
+                enabled: false  # Use emptyDir for testing
+                storageClass: ""
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "200m"
+            replica:
+              persistence:
+                enabled: false  # Use emptyDir for testing
+                storageClass: ""
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "200m"
           
           # Server configuration
           server:

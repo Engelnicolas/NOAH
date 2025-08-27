@@ -68,21 +68,24 @@ spec:
         - name: netbios
           containerPort: 139
           protocol: TCP
+        - name: ldap
+          containerPort: 389
+          protocol: TCP
         livenessProbe:
           tcpSocket:
-            port: 445
-          initialDelaySeconds: 60
+            port: 139  # Use NetBIOS port which starts faster
+          initialDelaySeconds: 120  # Give more time for Samba to start
           periodSeconds: 30
           timeoutSeconds: 10
-          failureThreshold: 3
+          failureThreshold: 5  # More lenient
         readinessProbe:
           tcpSocket:
-            port: 445
-          initialDelaySeconds: 30
+            port: 139  # Use NetBIOS port which starts faster
+          initialDelaySeconds: 60  # Give more time
           periodSeconds: 15
           timeoutSeconds: 5
           successThreshold: 1
-          failureThreshold: 3
+          failureThreshold: 5  # More lenient
         volumeMounts:
         - name: samba-data
           mountPath: /data

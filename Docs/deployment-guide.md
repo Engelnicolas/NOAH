@@ -2,14 +2,14 @@
 
 ## Overview
 
-This guide provides the standard workflow for deploying the complete NOAH (Network Operations and Authentication Hub) infrastructure from scratch. NOAH provides a comprehensive Kubernetes-based platform with SSO authentication, network security, and encrypted secret management.
+This guide provides the standard workflow for deploying the complete NOAH (Network Operations and Authentication Hub) infrastructure from scratch. NOAH provides a comprehensive Kubernetes-based platform with standalone IAM authentication, network security, and encrypted secret management.
 
 ## 🆕 Recent Enhancements
 
 ### Enhanced Deployment Options
 - **Complete Infrastructure Redeployment**: New Ansible playbook for full-stack deployment
-- **Optimized Service Order**: Cilium → Samba4 → Authentik for proper SSO foundation
-- **SSO-Ready Networking**: Pre-configured network policies for service communication
+- **Optimized Service Order**: Cilium → Authentik for standalone IAM foundation
+- **IAM-Ready Networking**: Pre-configured network policies for service communication
 - **Enhanced Validation**: Comprehensive testing and status checking
 
 ## Prerequisites
@@ -48,9 +48,8 @@ ansible-playbook Ansible/cluster-redeploy.yml \
 - ✅ **Phase 2**: Creates fresh K3s cluster with enhanced validation
 - ✅ **Phase 3**: Generates encryption keys and certificates
 - ✅ **Phase 4**: Deploys services in optimized order:
-  1. **Cilium CNI** (complete with SSO network policies)
-  2. **Samba4** (Active Directory with enhanced validation)
-  3. **Authentik** (SSO with LDAP integration)
+  1. **Cilium CNI** (complete with IAM network policies)
+  2. **Authentik** (Standalone IAM with user management)
 - ✅ **Phase 5**: Comprehensive post-deployment validation
 
 ### Option 2: Manual Step-by-Step Deployment
@@ -101,28 +100,15 @@ python noah.py deploy cilium --namespace kube-system --domain noah-infra.com
 **What this does:**
 - ✅ Deploys Cilium CNI via Helm with enhanced configuration
 - ✅ Enables service mesh and Hubble observability  
-- ✅ Configures SSO-ready network policies for identity services
+- ✅ Configures IAM-ready network policies for identity services
 - ✅ Sets up ingress for Hubble UI with authentication
 - ✅ Validates network connectivity and policy enforcement
 
-### Phase 3: Identity and Authentication (Optimized Order)
+### Phase 3: Identity and Authentication
 
-#### 3.1 Deploy Samba4 Active Directory (Deploy Second)
+#### 3.1 Deploy Authentik IAM (Deploy Second)
 ```bash
-# Deploy Samba4 with enhanced validation (15-minute timeout)
-python noah.py deploy samba4 --namespace identity --domain noah-infra.com
-```
-
-**What this does:**
-- ✅ Deploys Samba4 Active Directory server
-- ✅ Configures LDAP services on port 389
-- ✅ Sets up persistent volume for domain data
-- ✅ Enhanced network connectivity validation
-- ✅ Encrypts secrets with SOPS/Age
-
-#### 3.2 Deploy Authentik SSO (Deploy Third - Connects to Samba4)
-```bash
-# Deploy Authentik with LDAP integration (12-minute timeout)
+# Deploy Authentik with standalone configuration (12-minute timeout)
 python noah.py deploy authentik --namespace identity --domain noah-infra.com
 ```
 
@@ -130,9 +116,9 @@ python noah.py deploy authentik --namespace identity --domain noah-infra.com
 - ✅ Deploys PostgreSQL database
 - ✅ Deploys Redis cache
 - ✅ Deploys Authentik server and worker
-- ✅ Configures LDAP connection to Samba4
+- ✅ Configures standalone identity management
 - ✅ Sets up ingress with TLS at https://auth.noah-infra.com
-- ✅ Validates SSO + LDAP connectivity
+- ✅ Validates IAM connectivity
 - ✅ Encrypts secrets with SOPS
 
 **What this does:**
@@ -196,21 +182,15 @@ python noah.py deploy authentik --namespace identity --domain noah-infra.com
 - ✅ Deploys PostgreSQL database
 - ✅ Deploys Redis cache
 - ✅ Deploys Authentik server and worker
-- ✅ Configures LDAP outpost
+- ✅ Configures standalone IAM
 - ✅ Sets up ingress with TLS
 - ✅ Encrypts secrets with SOPS
-
-#### 3.2 Deploy Directory Services (Optional)
-```bash
-# Deploy Samba4 Active Directory (15-minute timeout)
-python noah.py deploy samba4 --namespace identity --domain noah-infra.com
-```
 
 ### Phase 4: Complete Stack Deployment (Alternative)
 
 #### 4.1 Deploy All Components at Once
 ```bash
-# Deploy complete stack (Cilium + Authentik + Samba4)
+# Deploy complete stack (Cilium + Authentik)
 python noah.py deploy all --namespace identity --domain noah-infra.com
 ```
 
@@ -224,12 +204,12 @@ python noah.py status --all
 # Validate network connectivity
 python noah.py test network
 
-# Test SSO integration
+# Test IAM integration
 python noah.py test sso --domain noah-infra.com
 ```
 
 #### 5.2 Access Deployed Services
-- **Authentik SSO**: https://auth.noah-infra.com
+- **Authentik IAM**: https://auth.noah-infra.com
 - **Hubble Network UI**: https://hubble.noah-infra.com
 
 ## Configuration Management
@@ -265,7 +245,6 @@ python noah.py certificates info
 # Default timeouts:
 # - Cilium: 10 minutes
 # - Authentik: 12 minutes  
-# - Samba4: 15 minutes
 
 # Increase if needed for slower environments
 ```
@@ -291,13 +270,13 @@ kubectl exec -n kube-system <cilium-pod> -- cilium status
 python noah.py test network
 ```
 
-#### 4. SSO Issues
+#### 4. IAM Issues
 ```bash
 # Check Authentik logs
 kubectl logs -n identity deployment/authentik-server
 
-# Verify LDAP connectivity
-python noah.py test ldap --domain noah-infra.com
+# Verify IAM connectivity
+python noah.py test sso --domain noah-infra.com
 ```
 
 ### Cleanup and Reset

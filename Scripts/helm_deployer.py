@@ -29,7 +29,6 @@ class HelmDeployer:
         chart_timeouts = {
             'cilium': '600s',      # 10 minutes - CNI deployment
             'authentik': '720s',   # 12 minutes - DB + App initialization 
-            'samba4': '900s',      # 15 minutes - AD domain setup is complex
         }
         timeout = chart_timeouts.get(chart_name, self.timeout)
         
@@ -43,8 +42,8 @@ class HelmDeployer:
             '--timeout', timeout
         ]
         
-        # Add --wait flag for smaller charts, but not for complex ones like samba4 and authentik
-        if chart_name not in ['samba4', 'authentik', 'cilium']:
+        # Add --wait flag for smaller charts, but not for complex ones like authentik and cilium
+        if chart_name not in ['authentik', 'cilium']:
             cmd.append('--wait')
         
         # Add values file if exists
@@ -127,14 +126,6 @@ class HelmDeployer:
                             'password': redis_password
                         },
                         'enabled': True
-                    }
-                }
-            elif 'samba4' in str(secret_file):
-                return {
-                    'samba4': {
-                        'adminPassword': string_data.get('admin_password', ''),
-                        'domainAdminPassword': string_data.get('domain_admin_password', ''),
-                        'kerberosPassword': string_data.get('kerberos_password', '')
                     }
                 }
             # Add more transformations for other charts as needed

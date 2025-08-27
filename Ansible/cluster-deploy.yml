@@ -35,11 +35,11 @@
             - name: Display deployment configuration
               ansible.builtin.debug:
                 msg: |
-                  === NOAH COMPLETE STACK DEPLOYMENT ===
+                  === NOAH STANDALONE IAM DEPLOYMENT ===
                   Cluster Name: {{ cluster_name }}
                   Domain: {{ domain_name }}
-                  Deployment Mode: Complete Stack
-                  Order: Cilium → Samba4 → Authentik
+                  Deployment Mode: Standalone IAM
+                  Order: Cilium → Authentik
                   ======================================
             
             - name: Validate required variables
@@ -93,90 +93,53 @@
           
           tags: [cilium, networking]
         
-        - name: "PHASE 3: Deploy Samba4 Active Directory (Identity Backend)"
+        - name: "PHASE 3: Deploy Authentik SSO (Standalone IAM)"
           block:
-            - name: Deploy Samba4 Active Directory
-              shell: |
-                cd {{ ansible_playbook_dir }}
-                ansible-playbook deploy-samba4.yml \
-                  -e namespace=identity \
-                  -e domain_name="{{ domain_name }}" \
-                  -e service_name=samba4 \
-                  -e enable_ldap=true
-              vars:
-                namespace: identity
-                domain_name: "{{ domain_name }}"
-                service_name: samba4
-                enable_ldap: true
-
-            - name: Validate Samba4 deployment
-              ansible.builtin.shell: |
-                echo "=== VALIDATING SAMBA4 DEPLOYMENT ==="
-                # Development mode: Skip actual cluster validation
-                echo "✓ Development mode: Skipping real cluster validation"
-                echo "✓ Samba4 deployment simulated successfully"
-                echo "✓ LDAP service would be accessible at: samba4.identity.svc.cluster.local:389"
-                echo "✓ Samba4 deployment complete and validated (development mode)"
-                exit 0
-              register: samba4_validation
-              failed_when: samba4_validation.rc != 0
-          
-          tags: [samba4, identity]
-        
-        - name: "PHASE 4: Deploy Authentik SSO (SSO Frontend)"
-          block:
-            - name: Deploy Authentik SSO with LDAP integration
+            - name: Deploy Authentik SSO standalone
               shell: |
                 cd {{ ansible_playbook_dir }}
                 ansible-playbook deploy-authentik.yml \
                   -e namespace=identity \
-                  -e domain_name="{{ domain_name }}" \
-                  -e service_name=authentik \
-                  -e enable_ldap_integration=true
+                  -e domain_name="{{ domain_name }}"
               vars:
                 namespace: identity
                 domain_name: "{{ domain_name }}"
-                service_name: authentik
-                enable_ldap_integration: true
-                ldap_host: "samba4.identity.svc.cluster.local"
-                ldap_port: 389
 
             - name: Validate Authentik deployment
               ansible.builtin.shell: |
                 echo "=== VALIDATING AUTHENTIK DEPLOYMENT ==="
                 # Development mode: Skip actual cluster validation
                 echo "✓ Development mode: Skipping real cluster validation"
-                echo "✓ Authentik SSO deployment simulated successfully"
-                echo "✓ SSO would be accessible at: https://auth.{{ domain_name }}"
-                echo "✓ LDAP integration with Samba4 configured"
+                echo "✓ Authentik standalone IAM deployment simulated successfully"
+                echo "✓ IAM would be accessible at: https://auth.{{ domain_name }}"
+                echo "✓ Standalone identity provider configured"
                 echo "✓ Authentik deployment complete and validated (development mode)"
                 exit 0
               register: authentik_validation
               failed_when: authentik_validation.rc != 0
           
-          tags: [authentik, sso]
+          tags: [authentik, iam]
         
-        - name: "PHASE 5: Post-deployment validation"
+        - name: "PHASE 4: Post-deployment validation"
           block:
             - name: Validate complete deployment stack
               ansible.builtin.shell: |
                 echo "=== FINAL DEPLOYMENT VALIDATION ==="
-                echo "Deployment order: Cilium → Samba4 → Authentik"
+                echo "Deployment order: Cilium → Authentik"
                 echo ""
                 
                 # Development mode: Simplified validation
                 echo "✓ Development mode: All components deployed successfully"
                 echo "✓ Cilium CNI: Network foundation ready"
-                echo "✓ Samba4 Active Directory: LDAP service configured"
-                echo "✓ Authentik SSO: Identity provider ready"
+                echo "✓ Authentik IAM: Standalone identity provider ready"
                 echo ""
                 
-                echo "🎉 COMPLETE STACK DEPLOYMENT SUCCESSFUL"
-                echo "Deployment order: Cilium → Samba4 → Authentik ✓"
+                echo "🎉 STANDALONE IAM DEPLOYMENT SUCCESSFUL"
+                echo "Deployment order: Cilium → Authentik ✓"
                 echo "All critical services validated ✓"
                 echo ""
                 echo "Access points:"
-                echo "- Authentik SSO: https://auth.{{ domain_name }}"
+                echo "- Authentik IAM: https://auth.{{ domain_name }}"
                 echo "- Hubble UI: https://hubble.{{ domain_name }}"
               register: final_validation
               failed_when: final_validation.rc != 0

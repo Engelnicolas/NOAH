@@ -9,10 +9,10 @@ ansible-playbook Ansible/cluster-redeploy.yml \
   -e cluster_name=noah-production \
   -e domain_name=noah-infra.com
 
-# Enhanced SSO testing with network validation
+# Enhanced IAM testing with network validation
 python noah.py test sso
 
-# Optimized deployment order: Cilium → Samba4 → Authentik
+# Optimized deployment order: Cilium → Authentik
 ```
 
 ## Essential Commands
@@ -36,13 +36,10 @@ python noah.py status --all
 
 ### Component Deployment (Optimized Order)
 ```bash
-# 1. Deploy core networking first (SSO-ready configuration)
+# 1. Deploy core networking first (IAM-ready configuration)
 python noah.py deploy cilium --namespace kube-system --domain noah-infra.com
 
-# 2. Deploy directory services second (LDAP backend)
-python noah.py deploy samba4 --namespace identity --domain noah-infra.com
-
-# 3. Deploy authentication third (connects to Samba4)
+# 2. Deploy standalone IAM second
 python noah.py deploy authentik --namespace identity --domain noah-infra.com
 
 # Alternative: Deploy all components (follows optimized order internally)
@@ -53,7 +50,6 @@ python noah.py deploy all --namespace identity --domain noah-infra.com
 ```bash
 # Edit encrypted secrets
 python noah.py secrets edit authentik
-python noah.py secrets edit samba4
 
 # View secret status
 python noah.py secrets list
@@ -87,8 +83,8 @@ kubectl exec -n kube-system ds/cilium -- cilium status --brief
 kubectl get networkpolicies -n identity
 kubectl get pods -n identity -o wide
 
-# Service connectivity testing
-kubectl exec -n identity deployment/authentik-server -- nc -zv samba4.identity.svc.cluster.local 389
+# Test IAM connectivity
+python noah.py test sso --domain noah-infra.com
 ```
 
 ### Ansible Automation (Enhanced)
@@ -97,9 +93,8 @@ kubectl exec -n identity deployment/authentik-server -- nc -zv samba4.identity.s
 ansible-playbook Ansible/cluster-redeploy.yml -e cluster_name=noah-prod -e domain_name=noah-infra.com
 
 # Individual component deployments
-ansible-playbook Ansible/deploy-cilium.yml -e domain_name=noah-infra.com    # SSO-ready networking
-ansible-playbook Ansible/deploy-samba4.yml -e domain_name=noah-infra.com    # Active Directory
-ansible-playbook Ansible/deploy-authentik.yml -e domain_name=noah-infra.com # SSO integration
+ansible-playbook Ansible/deploy-cilium.yml -e domain_name=noah-infra.com    # IAM-ready networking
+ansible-playbook Ansible/deploy-authentik.yml -e domain_name=noah-infra.com # Standalone IAM
 
 # Cluster lifecycle management
 ansible-playbook Ansible/cluster-create.yml -e cluster_name=noah-test -e domain_name=noah-infra.com
@@ -112,7 +107,6 @@ ansible-playbook Ansible/cluster-destroy.yml
 2. **Cluster** → `python noah.py cluster create --name noah-cluster --domain noah-infra.com`
 3. **Networking** → `python noah.py deploy cilium --namespace kube-system --domain noah-infra.com`
 4. **Authentication** → `python noah.py deploy authentik --namespace identity --domain noah-infra.com`
-5. **Directory** → `python noah.py deploy samba4 --namespace identity --domain noah-infra.com` (optional)
 6. **Validation** → `python noah.py status --all`
 
 **Alternative 1**: Use `python noah.py deploy all` for steps 3-5 combined
@@ -122,12 +116,11 @@ ansible-playbook Ansible/cluster-destroy.yml
 
 - **Cilium**: 10 minutes (CNI deployment)
 - **Authentik**: 12 minutes (DB + App initialization)
-- **Samba4**: 15 minutes (AD domain setup)
 - **Others**: 10 minutes (default)
 
 ## Default Service URLs
 
-- **Authentik SSO**: https://auth.noah-infra.com
+- **Authentik IAM**: https://auth.noah-infra.com
 - **Hubble UI**: https://hubble.noah-infra.com
 
 ## Troubleshooting Quick Fixes

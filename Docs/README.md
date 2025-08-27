@@ -1,6 +1,17 @@
 # NOAH Documentation
 
-Welcome to the NOAH (Network Operations and Authentication Hub) infrastructure documentation. This comprehensive guide covers everything you need to deploy, manage, and troubleshoot your NOAH platform.
+Welcome to the NOAH (Network Operations and Authentication Hub) infrastructure documentation. This comprehensive guide covers everything you need to deploy, manag---
+
+## 📖 Additional Resources
+
+- **Kubernetes Documentation**: https://kubernetes.io/docs/
+- **Helm Documentation**: https://helm.sh/docs/
+- **Cilium Documentation**: https://docs.cilium.io/
+- **Authentik Documentation**: https://goauthentik.io/docs/
+- **SOPS Documentation**: https://github.com/mozilla/sops
+- **Ansible Documentation**: https://docs.ansible.com/
+
+---eshoot your NOAH platform.
 
 ## 📚 Documentation Index
 
@@ -15,10 +26,9 @@ Welcome to the NOAH (Network Operations and Authentication Hub) infrastructure d
 
 NOAH is a comprehensive Kubernetes-based infrastructure platform that provides:
 
-- **🔐 Single Sign-On (SSO)** via Authentik
+- **🔐 Identity and Access Management (IAM)** via Authentik
 - **🌐 Network Security** via Cilium CNI
-- **🗂️ Directory Services** via Samba4 (optional)
-- **🔒 Secret Management** via SOPS/Age encryption
+- ** Secret Management** via SOPS/Age encryption
 - **🚪 Ingress Management** via NGINX
 
 ## 🎯 Quick Start
@@ -31,7 +41,7 @@ python noah.py cluster create --name noah-cluster --domain noah-infra.com
 # 2. Deploy complete infrastructure with optimized order
 python noah.py deploy all --domain noah-infra.com
 
-# 3. Test SSO and network integration
+# 3. Test IAM integration
 python noah.py test sso
 
 # 4. Validate deployment status
@@ -43,16 +53,13 @@ python noah.py status --all
 # 1. Create cluster with enhanced validation
 python noah.py cluster create --name noah-cluster --domain noah-infra.com
 
-# 2. Deploy networking first (SSO-ready configuration)
+# 2. Deploy networking first (IAM-ready configuration)
 python noah.py deploy cilium --namespace kube-system --domain noah-infra.com
 
-# 3. Deploy directory services
-python noah.py deploy samba4 --namespace identity --domain noah-infra.com
-
-# 4. Deploy authentication (connects to Samba4)
+# 3. Deploy standalone authentication
 python noah.py deploy authentik --namespace identity --domain noah-infra.com
 
-# 5. Validate complete stack
+# 4. Validate complete stack
 python noah.py test sso
 ```
 
@@ -60,21 +67,19 @@ python noah.py test sso
 
 | Component | Namespace | Purpose | Timeout | Deployment Order |
 |-----------|-----------|---------|---------|------------------|
-| **Cilium** | kube-system | CNI networking + SSO network policies | 10 min | 1st (Foundation) |
-| **Samba4** | identity | Active Directory + LDAP services | 15 min | 2nd (Identity Backend) |
-| **Authentik** | identity | SSO authentication + LDAP integration | 12 min | 3rd (SSO Frontend) |
+| **Cilium** | kube-system | CNI networking + IAM network policies | 10 min | 1st (Foundation) |
+| **Authentik** | identity | Standalone IAM + User Management | 12 min | 2nd (IAM Solution) |
 
 
 ## 🔍 Service Access Points
 
 Once deployed, access your services at:
 
-- **Authentik SSO**: https://auth.noah-infra.com
+- **Authentik IAM**: https://auth.noah-infra.com
 - **Hubble Network UI**: https://hubble.noah-infra.com (Cilium observability)
-- **Samba4 LDAP**: ldap://samba4.identity.svc.cluster.local:389 (internal)
 
 ### Service Integration
-- **Authentik** connects to **Samba4** for user authentication via LDAP
+- **Authentik** provides standalone identity and access management
 - **Cilium** provides the network foundation with service mesh and policies
 - **Hubble UI** offers real-time network visibility and troubleshooting
 
@@ -89,15 +94,18 @@ Once deployed, access your services at:
 │  └───────────────────────────────────────────────────┘ │
 │  ┌───────────────────────────────────────────────────┐ │
 │  │           Authentication Layer                    │ │
-│  │  ┌─────────────────┐  ┌─────────────────────────┐ │ │
-│  │  │   Authentik     │←→│      Samba4 AD          │ │ │
-│  │  │   (SSO Web)     │  │   (LDAP Backend)        │ │ │
-│  │  └─────────────────┘  └─────────────────────────┘ │ │
+│  │  ┌─────────────────────────────────────────────┐ │ │
+│  │  │              Authentik                      │ │ │
+│  │  │       (Standalone IAM Solution)             │ │ │
+│  │  │   • User Management                         │ │ │
+│  │  │   • Authentication & Authorization          │ │ │
+│  │  │   • OIDC/SAML Provider                      │ │ │
+│  │  └─────────────────────────────────────────────┘ │ │
 │  └───────────────────────────────────────────────────┘ │
 │  ┌───────────────────────────────────────────────────┐ │
 │  │            Network Layer                          │ │
 │  │  Cilium CNI + Service Mesh + Hubble UI            │ │
-│  │  • Network Policies (SSO Communication)           │ │
+│  │  • Network Policies (IAM Communication)           │ │
 │  │  • Service Discovery & Load Balancing             │ │
 │  │  • Real-time Network Observability                │ │
 │  └───────────────────────────────────────────────────┘ │
@@ -109,9 +117,8 @@ Once deployed, access your services at:
 ```
 
 ### Deployment Flow
-1. **Cilium CNI**: Establishes network foundation with SSO-ready policies
-2. **Samba4**: Provides LDAP/AD backend for user authentication  
-3. **Authentik**: Connects to Samba4 and provides SSO web interface
+1. **Cilium CNI**: Establishes network foundation with IAM-ready policies
+2. **Authentik**: Provides standalone IAM solution with user management
 
 ## 🛠️ Management Tools
 
@@ -123,11 +130,10 @@ ansible-playbook Ansible/cluster-redeploy.yml  # Complete redeployment
 
 # Component deployment (optimized order)
 python noah.py deploy cilium                 # Deploy CNI foundation first
-python noah.py deploy samba4                 # Deploy LDAP backend second  
-python noah.py deploy authentik              # Deploy SSO frontend third
+python noah.py deploy authentik              # Deploy IAM solution second
 
 # Testing and validation (enhanced)
-python noah.py test sso                      # SSO + network validation
+python noah.py test sso                      # IAM + network validation
 python noah.py status --all                  # Comprehensive status check
 
 # Secret management
@@ -145,9 +151,8 @@ ansible-playbook Ansible/cluster-redeploy.yml \
   -e domain_name=noah-infra.com
 
 # Individual component deployment
-ansible-playbook Ansible/deploy-cilium.yml     # SSO-ready networking
-ansible-playbook Ansible/deploy-samba4.yml     # Active Directory  
-ansible-playbook Ansible/deploy-authentik.yml  # SSO integration
+ansible-playbook Ansible/deploy-cilium.yml     # IAM-ready networking
+ansible-playbook Ansible/deploy-authentik.yml  # Standalone IAM
 ```
 
 ## 🔐 Security Features
@@ -156,7 +161,7 @@ ansible-playbook Ansible/deploy-authentik.yml  # SSO integration
 - **TLS Everywhere**: Auto-generated certificates for all services
 - **Network Policies**: Cilium-based micro-segmentation
 - **RBAC**: Kubernetes role-based access control
-- **SSO Integration**: Centralized authentication for all services
+- **IAM Integration**: Centralized identity and access management
 
 ## 🆘 Getting Help
 

@@ -99,20 +99,12 @@ class NoahSecurityManager:
         """Generate all required secrets for a service
         
         Args:
-            service_name: Service name ('samba4', 'authentik', etc.)
+            service_name: Service name ('authentik', 'cilium', etc.)
             
         Returns:
             Dictionary of service-specific secrets
         """
         secrets_config = {
-            'samba4': {
-                'admin_password': self.generate_secure_password(24),
-                'domain_admin_password': self.generate_secure_password(24),
-                'service_account_password': self.generate_secure_password(24),
-                'machine_account_password': self.generate_secure_password(32),
-                'krb5_password': self.generate_secure_password(32),
-                'dns_key': self.generate_secure_password(32, include_special=False),
-            },
             'authentik': {
                 'secret_key': self.generate_secure_password(50, include_special=False),
                 'bootstrap_password': self.generate_secure_password(24),
@@ -148,12 +140,6 @@ class NoahSecurityManager:
         """
         secrets = self.generate_service_secrets(service_name)
         
-        # Service-specific formatting
-        if service_name == 'samba4':
-            # Create samba-user-config for dperson/samba format
-            user_config = f"admin;{secrets['admin_password']}"
-            secrets['samba_user_config'] = user_config
-            
         # Convert to base64 for Kubernetes secret
         secret_data = {}
         for key, value in secrets.items():
@@ -324,18 +310,7 @@ class NoahSecurityManager:
 
     def _create_helm_values_format(self, service_name, secrets):
         """Create Helm-compatible values format"""
-        if service_name == 'samba4':
-            return {
-                'domain': {
-                    'adminPassword': secrets['admin_password']
-                },
-                'secrets': {
-                    'adminPassword': secrets['admin_password'],
-                    'machinePassword': secrets['machine_account_password'],
-                    'servicePassword': secrets['service_account_password']
-                }
-            }
-        elif service_name == 'authentik':
+        if service_name == 'authentik':
             return {
                 'authentik': {
                     'secretKey': secrets['secret_key'],
@@ -398,7 +373,7 @@ class NoahSecurityManager:
         Returns:
             Dictionary of service -> created files
         """
-        services = ['samba4', 'authentik', 'cilium']
+        services = ['authentik', 'cilium']
         rotated_services = {}
         
         print(f"🔐 Rotating secrets for all services...")
@@ -758,7 +733,7 @@ Commands:
 
 Examples:
   python3 security_manager.py init
-  python3 security_manager.py rotate samba4
+  python3 security_manager.py rotate authentik
   python3 security_manager.py rotate-all
   python3 security_manager.py kubernetes authentik
         """)

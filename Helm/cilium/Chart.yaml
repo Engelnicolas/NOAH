@@ -3,11 +3,11 @@ name: noah-cilium
 description: NOAH wrapper for Cilium CNI with SSO integration and security enhancements
 type: application
 version: 0.2.0
-appVersion: "1.14.5"
+appVersion: "1.18.1"
 
 dependencies:
   - name: cilium
-    version: "1.14.5"
+    version: "1.18.1"
     repository: "https://helm.cilium.io/"
     condition: cilium.enabled
 

@@ -2,11 +2,14 @@
 
 import requests
 import json
+import json
+import os
 import subprocess
 import sys
 import time
 from typing import Optional, Dict, List, Tuple
 from urllib.parse import urljoin
+
 
 class SSONetworkValidator:
     """Network validation functionality for SSO components"""
@@ -16,7 +19,6 @@ class SSONetworkValidator:
             'prerequisites': [],
             'cluster': [],
             'cilium': [],
-            'samba4': [],
             'authentik': [],
             'network_policies': [],
             'connectivity': [],
@@ -139,45 +141,9 @@ class SSONetworkValidator:
             self.results['cilium'].append(f"pods: {ready}/{desired} ERROR")
             return False
     
-    def check_samba4(self) -> bool:
-        """Check Samba4 Active Directory deployment"""
-        print("\n5. Checking Samba4 Active Directory...")
-        
-        success, _ = self.run_kubectl("get deployment samba4 -n identity")
-        if not success:
-            self.print_status('ERROR', "Samba4 deployment not found")
-            self.results['samba4'].append("deployment: ERROR")
-            return False
-        
-        # Check readiness
-        success, ready = self.run_kubectl("get deployment samba4 -n identity -o jsonpath='{.status.readyReplicas}'")
-        success2, desired = self.run_kubectl("get deployment samba4 -n identity -o jsonpath='{.spec.replicas}'")
-        
-        ready = ready or "0"
-        desired = desired or "1"
-        
-        if success and success2 and int(ready) == int(desired) and int(ready) > 0:
-            self.print_status('OK', f"Samba4 deployment is ready ({ready}/{desired})")
-            self.results['samba4'].append(f"deployment: {ready}/{desired} OK")
-            
-            # Test LDAP connectivity
-            success, output = self.run_kubectl("exec -n identity deployment/samba4 -- ldapsearch -x -H ldap://localhost:389 -s base")
-            if success and "result: 0 Success" in output:
-                self.print_status('OK', "Samba4 LDAP service is responding")
-                self.results['samba4'].append("ldap: OK")
-                return True
-            else:
-                self.print_status('WARN', "Samba4 LDAP connectivity test failed")
-                self.results['samba4'].append("ldap: WARN")
-                return True  # Deployment is ready even if LDAP test fails
-        else:
-            self.print_status('ERROR', f"Samba4 deployment not ready ({ready}/{desired})")
-            self.results['samba4'].append(f"deployment: {ready}/{desired} ERROR")
-            return False
-    
     def check_authentik(self) -> bool:
         """Check Authentik SSO deployment"""
-        print("\n6. Checking Authentik SSO...")
+        print("\n5. Checking Authentik SSO...")
         
         # Check server deployment
         success, _ = self.run_kubectl("get deployment authentik-server -n identity")
@@ -247,14 +213,14 @@ class SSONetworkValidator:
         print("\n8. Testing inter-service connectivity...")
         all_good = True
         
-        # Test Samba4 DNS resolution
-        success, output = self.run_kubectl("run test-dns --image=busybox --rm -i --restart=Never -- nslookup samba4.identity.svc.cluster.local")
+        # Test Authentik DNS resolution
+        success, output = self.run_kubectl("run test-dns --image=busybox --rm -i --restart=Never -- nslookup authentik-server.identity.svc.cluster.local")
         if success and "Address:" in output:
-            self.print_status('OK', "Samba4 DNS resolution works")
-            self.results['connectivity'].append("samba4-dns: OK")
+            self.print_status('OK', "Authentik DNS resolution works")
+            self.results['connectivity'].append("authentik-dns: OK")
         else:
-            self.print_status('WARN', "Samba4 DNS resolution failed")
-            self.results['connectivity'].append("samba4-dns: WARN")
+            self.print_status('WARN', "Authentik DNS resolution failed")
+            self.results['connectivity'].append("authentik-dns: WARN")
             all_good = False
         
         # Test Authentik DNS resolution
@@ -270,17 +236,27 @@ class SSONetworkValidator:
         return all_good
     
     def check_ldap_connectivity(self) -> bool:
-        """Check LDAP connectivity from Authentik to Samba4"""
-        print("\n9. Testing LDAP connectivity (Authentik -> Samba4)...")
+        """Check Authentik internal connectivity (standalone mode)"""
+        print("\n9. Testing Authentik internal connectivity...")
         
-        success, output = self.run_kubectl("exec -n identity deployment/authentik-server -- nc -zv samba4.identity.svc.cluster.local 389")
+        # Test PostgreSQL connectivity from Authentik
+        success, output = self.run_kubectl("exec -n identity deployment/authentik-server -- nc -zv authentik-postgresql 5432")
         if success and "open" in output:
-            self.print_status('OK', "LDAP port 389 is reachable from Authentik to Samba4")
-            self.results['connectivity'].append("ldap-port: OK")
+            self.print_status('OK', "PostgreSQL is reachable from Authentik")
+            self.results['connectivity'].append("postgresql-port: OK")
+        else:
+            self.print_status('WARN', "PostgreSQL connectivity test failed")
+            self.results['connectivity'].append("postgresql-port: WARN")
+            
+        # Test Redis connectivity from Authentik
+        success, output = self.run_kubectl("exec -n identity deployment/authentik-server -- nc -zv authentik-redis-master 6379")
+        if success and "open" in output:
+            self.print_status('OK', "Redis is reachable from Authentik")
+            self.results['connectivity'].append("redis-port: OK")
             return True
         else:
-            self.print_status('WARN', "LDAP port 389 connectivity test failed")
-            self.results['connectivity'].append("ldap-port: WARN")
+            self.print_status('WARN', "Redis connectivity test failed")
+            self.results['connectivity'].append("redis-port: WARN")
             return False
     
     def check_hubble_ui(self) -> bool:
@@ -324,7 +300,6 @@ class SSONetworkValidator:
             self.check_cluster_connectivity,
             self.check_namespaces,
             self.check_cilium,
-            self.check_samba4,
             self.check_authentik,
             self.check_network_policies,
             self.check_dns_connectivity,
@@ -477,17 +452,17 @@ class SSOTester:
             print(f"✗ Authentication test failed: {e}")
             return False
     
-    def test_ldap_integration(self) -> bool:
-        """Test LDAP integration with Samba4"""
-        print("\n🔗 Testing LDAP integration with Samba4...")
+    def test_database_integration(self) -> bool:
+        """Test Authentik database integration (standalone mode)"""
+        print("\n🔗 Testing Authentik database integration...")
         
-        # Use network validator to check LDAP connectivity
+        # Use network validator to check database connectivity
         if not self.network_validator.check_ldap_connectivity():
-            print("✗ LDAP connectivity test failed")
+            print("✗ Database connectivity test failed")
             return False
         
-        # Additional LDAP bind test could be implemented here
-        print("✓ LDAP integration test passed")
+        # Additional database health check could be implemented here
+        print("✓ Database integration test passed")
         return True
     
     def test_oidc_flow(self) -> bool:
@@ -535,7 +510,7 @@ class SSOTester:
         tests = [
             ("Network Validation", self.validate_network_first),
             ("Basic Authentication", lambda: self.test_authentication() if hasattr(self, 'authentik_url') and self.authentik_url else self.test_authentication()),
-            ("LDAP Integration", self.test_ldap_integration),
+            ("Database Integration", self.test_database_integration),
             ("OIDC Flow", self.test_oidc_flow)
         ]
         

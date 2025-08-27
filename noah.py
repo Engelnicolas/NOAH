@@ -179,18 +179,7 @@ def get_helm_values_for_service(service, namespace, domain=DEFAULT_DOMAIN):
     }
     
     # Service-specific configurations
-    if service == 'samba4':
-        base_values.update({
-            'samba': {
-                'domain': domain.upper().replace('.', '_'),
-                'realm': domain.upper(),
-                'adminPassword': {
-                    'secretName': 'samba4-admin-secret',
-                    'secretKey': 'password'
-                }
-            }
-        })
-    elif service == 'authentik':
+    if service == 'authentik':
         base_values.update({
             'authentik': {
                 'secret_key': {
@@ -272,21 +261,12 @@ def get_ansible_vars_for_service(service, namespace, domain=DEFAULT_DOMAIN):
     }
     
     # Service-specific Ansible variables
-    if service == 'samba4':
-        ansible_vars.update({
-            'samba_realm': domain.upper(),
-            'samba_domain': domain.upper().replace('.', '_'),
-            'create_admin_secret': True,
-            'admin_secret_name': 'samba4-admin-secret'
-        })
-    elif service == 'authentik':
+    if service == 'authentik':
         ansible_vars.update({
             'create_db_secrets': True,
             'postgresql_secret_name': 'authentik-postgresql',
             'redis_secret_name': 'authentik-redis',
-            'app_secret_name': 'authentik-secret',
-            'ldap_integration': True,
-            'ldap_base_dn': f"dc={',dc='.join(domain.split('.'))}"
+            'app_secret_name': 'authentik-secret'
         })
     elif service == 'cilium':
         ansible_vars.update({
@@ -504,38 +484,11 @@ def deploy_manager(ctx, namespace):
 def deploy(ctx):
     """Deploy services to Kubernetes
     
-    OPTIMIZED: Individual commands (samba4, authentik, cilium) are simplified
+    OPTIMIZED: Individual commands (authentik, cilium) are simplified
     and the 'all' command now uses cluster-deploy.yml Ansible playbook to avoid 
     code repetition and leverage the optimized deployment order and validation.
     """
     pass
-
-@deploy.command()
-@click.option('--namespace', default='identity', help='Kubernetes namespace')
-@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service')
-@click.pass_context
-def samba4(ctx, namespace, domain):
-    """Deploy Samba4 Active Directory (individual component)"""
-    # Ensure security is initialized
-    ensure_security_initialized(ctx)
-    
-    click.echo(f"[VERBOSE] Deploying Samba4 Active Directory...")
-    click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
-    click.echo(f"💡 For complete stack deployment, use: python noah.py deploy all")
-    
-    # Generate secrets for Samba4 before deployment
-    click.echo(f"[VERBOSE] Generating secrets for Samba4...")
-    ctx.obj['secrets'].generate_service_secrets('samba4')
-    
-    # Get Ansible variables with security configuration
-    ansible_vars = get_ansible_vars_for_service('samba4', namespace, domain)
-    
-    # Deploy Samba4 using Ansible playbook
-    click.echo(f"[VERBOSE] Running Ansible playbook: deploy-samba4.yml")
-    ctx.obj['ansible'].run_playbook('deploy-samba4.yml', ansible_vars)
-    
-    click.echo(f"✅ Samba4 deployed to namespace {namespace}")
-    click.echo(f"[VERBOSE] Next step: Deploy Authentik with 'python noah.py deploy authentik'")
 
 @deploy.command()
 @click.option('--namespace', default='identity', help='Kubernetes namespace')
@@ -549,17 +502,6 @@ def authentik(ctx, namespace, domain):
     click.echo(f"[VERBOSE] Deploying Authentik SSO...")
     click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
     click.echo(f"💡 For complete stack deployment, use: python noah.py deploy all")
-    
-    # Validate Samba4 deployment before proceeding with Authentik
-    click.echo(f"[VERBOSE] Validating Samba4 deployment before Authentik installation...")
-    try:
-        ctx.obj['cluster'].wait_for_deployment('samba4', namespace)
-        click.echo("[VERBOSE] Samba4 deployment validated successfully")
-    except Exception as e:
-        click.echo(f"⚠️ Samba4 validation failed: {str(e)}")
-        click.echo("💡 Ensure Samba4 is deployed first: python noah.py deploy samba4")
-        click.echo("💡 Or use complete deployment: python noah.py deploy all")
-        sys.exit(1)
     
     # Generate secrets for Authentik before deployment
     click.echo(f"[VERBOSE] Generating secrets for Authentik...")
@@ -609,14 +551,14 @@ def cilium(ctx, namespace, domain):
 @click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')
 @click.pass_context
 def all(ctx, domain, cluster_name, config_file):
-    """Deploy complete stack using optimized Ansible playbook (Cilium → Samba4 → Authentik)"""
+    """Deploy complete stack using optimized Ansible playbook (Cilium → Authentik)"""
     # Ensure security is initialized before any deployment
     ensure_security_initialized(ctx)
     
     click.echo("[VERBOSE] Starting complete NOAH stack deployment using cluster-deploy.yml...")
     click.echo(f"[VERBOSE] Using domain: {domain}")
     click.echo(f"[VERBOSE] Using cluster name: {cluster_name}")
-    click.echo(f"[VERBOSE] Deployment order: Cilium → Samba4 → Authentik")
+    click.echo(f"[VERBOSE] Deployment order: Cilium → Authentik")
     
     # Export configuration if requested
     if config_file:
@@ -627,10 +569,6 @@ def all(ctx, domain, cluster_name, config_file):
             'security': get_security_config(domain),
             'deployment_method': 'cluster-deploy.yml',
             'services': {
-                'samba4': {
-                    'helm_values': get_helm_values_for_service('samba4', 'identity', domain),
-                    'ansible_vars': get_ansible_vars_for_service('samba4', 'identity', domain)
-                },
                 'authentik': {
                     'helm_values': get_helm_values_for_service('authentik', 'identity', domain),
                     'ansible_vars': get_ansible_vars_for_service('authentik', 'identity', domain)
@@ -659,15 +597,15 @@ def all(ctx, domain, cluster_name, config_file):
     
     try:
         ctx.obj['ansible'].run_playbook('cluster-deploy.yml', ansible_vars)
-        click.echo("🎉 NOAH complete stack deployment successful!")
+        click.echo("🎉 NOAH standalone IAM deployment successful!")
         click.echo(f"[VERBOSE] All components deployed and validated")
         click.echo(f"[VERBOSE] Access points:")
-        click.echo(f"  - Authentik SSO: https://auth.{domain}")
+        click.echo(f"  - Authentik IAM: https://auth.{domain}")
         click.echo(f"  - Hubble UI: https://hubble.{domain}")
         
         # Run post-deployment validation
         click.echo("[VERBOSE] Running post-deployment validation...")
-        click.echo("💡 Run 'python noah.py test sso' to validate SSO integration")
+        click.echo("💡 Run 'python noah.py test sso' to validate IAM integration")
         click.echo("💡 Run 'python noah.py status --all' to check overall status")
         
     except Exception as e:
@@ -733,7 +671,7 @@ def rotate(ctx, service):
     ctx.obj['secrets'].rotate_passwords(service)
 
 @secrets.command()
-@click.option('--service', required=True, help='Service to validate (authentik, samba4)')
+@click.option('--service', required=True, help='Service to validate (authentik)')
 @click.option('--namespace', default='identity', help='Kubernetes namespace')
 @click.option('--fix', is_flag=True, help='Automatically fix inconsistencies')
 @click.pass_context

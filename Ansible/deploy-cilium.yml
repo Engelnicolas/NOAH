@@ -15,7 +15,7 @@
       debug:
         msg: "Deploying Cilium in {{ cilium_deployment_phase }} mode"
 
-    # PHASE 1: Network Preparation (run BEFORE Samba4/Authentik)
+    # PHASE 1: Network Preparation (run BEFORE Authentik)
     - name: "NETWORK PREPARATION: Deploy basic Cilium CNI"
       block:
         - name: Add Cilium Helm repository

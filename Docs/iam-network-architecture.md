@@ -1,16 +1,16 @@
-# NOAH SSO Network Architecture
+# NOAH IAM Network Architecture
 
 ## Overview
 
-This document describes the enhanced Cilium network configuration for NOAH's SSO integration between Samba4 Active Directory and Authentik SSO.
+This document describes the enhanced Cilium network configuration for NOAH's standalone IAM solution using Authentik.
 
 ## Deployment Architecture
 
 ### Phase 1: Network Preparation
-Before deploying any SSO services, Cilium CNI is deployed with basic networking capabilities:
+Before deploying any IAM services, Cilium CNI is deployed with basic networking capabilities:
 
 ```
-1. Cilium CNI (basic) → 2. Samba4 → 3. Authentik → 4. Cilium CNI (full SSO)
+1. Cilium CNI (basic) → 2. Authentik IAM
 ```
 
 ### Benefits of Phased Deployment
@@ -18,14 +18,9 @@ Before deploying any SSO services, Cilium CNI is deployed with basic networking 
 1. **Network First**: Ensures proper networking foundation before services
 2. **Service Mesh Ready**: Prepares L7 policies and service mesh features
 3. **Secure by Default**: Network policies applied from the start
-4. **Better Connectivity**: DNS and service discovery working before SSO services start
+4. **Better Connectivity**: DNS and service discovery working before IAM services start
 
 ## Network Policies
-
-### Samba4 Network Policy
-- **Ingress**: Allows LDAP (389, 636), Kerberos (88), SMB (445) from Authentik
-- **Egress**: Allows DNS queries and external connections
-- **Security**: Restricts access to identity namespace only
 
 ### Authentik Network Policy  
 - **Ingress**: Allows HTTP/HTTPS from ingress controller

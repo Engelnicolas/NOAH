@@ -71,6 +71,11 @@
               host: "redis.{{ authentik_namespace }}.svc.cluster.local"
               port: 6379
               password: ""  # Will be set from secrets
+            ldap:
+              enabled: false  # LDAP disabled for standalone OIDC mode
+              bindPassword: ""  # Empty for standalone mode
+            email:
+              password: ""  # Will be set from secrets if needed
           
           # External PostgreSQL configuration
           postgresql:
@@ -136,7 +141,7 @@
 
     - name: Deploy Authentik using Helm
       shell: |
-        helm upgrade --install authentik ../Helm/authentik \
+        helm upgrade --install authentik /root/NOAH/Helm/authentik \
           --namespace {{ authentik_namespace }} \
           --values /tmp/authentik-values.yaml \
           --timeout 600s \

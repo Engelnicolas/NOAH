@@ -29,7 +29,7 @@ spec:
         - name: AUTHENTIK_REDIS__PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "authentik.fullname" . }}-secret
+              name: {{ .Values.authentik.secret.existingSecret | default (printf "%s-secret" (include "authentik.fullname" .)) }}
               key: redis-password
         - name: AUTHENTIK_POSTGRESQL__HOST
           value: "{{ include "authentik.postgresql.host" . }}"
@@ -40,12 +40,12 @@ spec:
         - name: AUTHENTIK_POSTGRESQL__PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "authentik.fullname" . }}-secret
+              name: {{ .Values.authentik.secret.existingSecret | default (printf "%s-secret" (include "authentik.fullname" .)) }}
               key: postgresql-password
         - name: AUTHENTIK_SECRET_KEY
           valueFrom:
             secretKeyRef:
-              name: {{ include "authentik.fullname" . }}-secret
+              name: {{ .Values.authentik.secret.existingSecret | default (printf "%s-secret" (include "authentik.fullname" .)) }}
               key: secret-key
         - name: AUTHENTIK_ERROR_REPORTING__ENABLED
           value: "{{ .Values.authentik.errorReporting.enabled }}"
@@ -65,7 +65,7 @@ spec:
         - name: AUTHENTIK_EMAIL__PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "authentik.fullname" . }}-secret
+              name: {{ .Values.authentik.secret.existingSecret | default (printf "%s-secret" (include "authentik.fullname" .)) }}
               key: email-password
         {{- end }}
         {{- if .Values.authentik.oidc.enabled }}
@@ -73,12 +73,12 @@ spec:
         - name: AUTHENTIK_BOOTSTRAP_TOKEN
           valueFrom:
             secretKeyRef:
-              name: {{ include "authentik.fullname" . }}-secret
+              name: {{ .Values.authentik.secret.existingSecret | default (printf "%s-secret" (include "authentik.fullname" .)) }}
               key: bootstrap-token
         - name: AUTHENTIK_BOOTSTRAP_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "authentik.fullname" . }}-secret
+              name: {{ .Values.authentik.secret.existingSecret | default (printf "%s-secret" (include "authentik.fullname" .)) }}
               key: bootstrap-password
         {{- end }}
         ports:

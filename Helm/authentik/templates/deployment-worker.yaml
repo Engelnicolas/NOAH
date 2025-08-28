@@ -26,11 +26,13 @@ spec:
         env:
         - name: AUTHENTIK_REDIS__HOST
           value: "{{ include "authentik.redis.host" . }}"
+        {{- if .Values.redis.auth.enabled }}
         - name: AUTHENTIK_REDIS__PASSWORD
           valueFrom:
             secretKeyRef:
               name: {{ .Values.authentik.secret.existingSecret | default (printf "%s-secret" (include "authentik.fullname" .)) }}
               key: redis-password
+        {{- end }}
         - name: AUTHENTIK_POSTGRESQL__HOST
           value: "{{ include "authentik.postgresql.host" . }}"
         - name: AUTHENTIK_POSTGRESQL__NAME

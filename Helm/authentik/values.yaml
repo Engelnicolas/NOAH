@@ -109,7 +109,7 @@ postgresql:
 redis:
   enabled: true
   auth:
-    enabled: true
+    enabled: false  # Disable Redis auth to match current deployment
     password: ""  # Will be set from secure secrets
     existingSecret: "authentik-secrets"
     existingSecretPasswordKey: "redis-password"

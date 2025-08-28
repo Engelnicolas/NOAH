@@ -95,7 +95,7 @@ postgresql:
     persistence:
       enabled: true
       size: 20Gi  # Increased for production OIDC usage
-      storageClass: ""  # Use default storage class
+      storageClass: "local-path"  # Use local-path storage class
       accessModes:
         - ReadWriteOnce
     resources:
@@ -117,7 +117,7 @@ redis:
     persistence:
       enabled: true
       size: 4Gi  # Increased for session storage
-      storageClass: ""  # Use default storage class
+      storageClass: "local-path"  # Use local-path storage class
       accessModes:
         - ReadWriteOnce
     resources:
@@ -132,7 +132,7 @@ redis:
 persistence:
   enabled: true
   size: 5Gi
-  storageClass: ""  # Use default storage class
+  storageClass: "local-path"  # Use local-path storage class
   accessMode: ReadWriteOnce
   mountPath: /media
 

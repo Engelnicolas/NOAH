@@ -513,6 +513,33 @@
           environment:
             PYTHONPATH: "../.venv/lib/python3.12/site-packages"
 
+    - name: Install local-path storage provisioner for K3s
+      block:
+        - name: Apply local-path storage provisioner manifest
+          shell: |
+            echo "=== INSTALLING LOCAL-PATH STORAGE PROVISIONER ==="
+            kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.30/deploy/local-path-storage.yaml
+            echo "✓ Local-path storage provisioner installed"
+            
+        - name: Wait for local-path provisioner to be ready
+          shell: |
+            echo "=== WAITING FOR STORAGE PROVISIONER ==="
+            kubectl wait --for=condition=available deployment/local-path-provisioner -n local-path-storage --timeout=120s
+            echo "✓ Local-path storage provisioner is ready"
+            
+        - name: Verify storage class is available
+          shell: |
+            echo "=== VERIFYING STORAGE CLASS ==="
+            kubectl get storageclass local-path
+            echo "✓ Local-path storage class is available"
+          register: storage_class_check
+          
+        - name: Set local-path as default storage class
+          shell: |
+            echo "=== SETTING DEFAULT STORAGE CLASS ==="
+            kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+            echo "✓ Local-path set as default storage class"
+
     - name: Display cluster creation summary
       debug:
         msg:

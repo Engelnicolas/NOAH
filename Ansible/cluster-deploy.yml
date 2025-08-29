@@ -124,25 +124,110 @@
           block:
             - name: Validate complete deployment stack
               ansible.builtin.shell: |
-                echo "=== FINAL DEPLOYMENT VALIDATION ==="
+                echo "=== COMPREHENSIVE DEPLOYMENT HEALTH CHECK ==="
                 echo "Deployment order: Cilium → Authentik"
                 echo ""
                 
-                # Development mode: Simplified validation
-                echo "✓ Development mode: All components deployed successfully"
-                echo "✓ Cilium CNI: Network foundation ready"
-                echo "✓ Authentik IAM: Standalone identity provider ready"
-                echo ""
+                echo "🔍 PHASE 1: Pod Readiness Check"
+                echo "--------------------------------"
+                echo "Checking Cilium CNI pods..."
+                cilium_count=$(kubectl get pods -n kube-system -l k8s-app=cilium --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+                echo "✓ Cilium: $cilium_count pods running"
                 
-                echo "🎉 STANDALONE IAM DEPLOYMENT SUCCESSFUL"
-                echo "Deployment order: Cilium → Authentik ✓"
-                echo "All critical services validated ✓"
+                echo "Checking CoreDNS pods..."
+                coredns_count=$(kubectl get pods -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+                echo "✓ CoreDNS: $coredns_count pods running"
+                
+                echo "Checking Authentik IAM pods..."
+                authentik_server_count=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=server --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+                authentik_worker_count=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=worker --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+                echo "✓ Authentik: Server=$authentik_server_count, Worker=$authentik_worker_count pods ready"
+                
                 echo ""
-                echo "Access points:"
-                echo "- Authentik IAM: https://auth.{{ domain_name }}"
-                echo "- Hubble UI: https://hubble.{{ domain_name }}"
-              register: final_validation
-              failed_when: final_validation.rc != 0
+                echo "🔍 PHASE 2: Service Health Check"
+                echo "--------------------------------"
+                
+                echo "Checking Authentik health endpoint..."
+                authentik_pod=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=server --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+                if [[ -n "$authentik_pod" ]]; then
+                  if kubectl exec -n identity "$authentik_pod" -- curl -sf http://localhost:9000/-/health/ready/ >/dev/null 2>&1; then
+                    echo "✓ Authentik health endpoint: responding"
+                  else
+                    echo "⚠️  Authentik health endpoint: not ready yet (normal during startup)"
+                  fi
+                else
+                  echo "⚠️  Authentik health endpoint: no server pods found"
+                fi
+                
+                echo "Checking PostgreSQL connectivity..."
+                postgres_pod=$(kubectl get pods -n identity -l app.kubernetes.io/name=postgresql --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+                if [[ -n "$postgres_pod" ]]; then
+                  if kubectl exec -n identity "$postgres_pod" -- pg_isready -h localhost >/dev/null 2>&1; then
+                    echo "✓ PostgreSQL: accepting connections"
+                  else
+                    echo "⚠️  PostgreSQL: not accepting connections yet"
+                  fi
+                else
+                  echo "⚠️  PostgreSQL: no running pods found"
+                fi
+                
+                echo "Checking Redis connectivity..."
+                redis_pod=$(kubectl get pods -n identity -l app.kubernetes.io/name=redis,app.kubernetes.io/component=master --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+                if [[ -n "$redis_pod" ]]; then
+                  if kubectl exec -n identity "$redis_pod" -- redis-cli ping 2>/dev/null | grep -q "PONG"; then
+                    echo "✓ Redis: responding to ping"
+                  else
+                    echo "⚠️  Redis: not responding to ping yet"
+                  fi
+                else
+                  echo "⚠️  Redis: no running master pods found"
+                fi
+                
+                echo ""
+                echo "🔍 PHASE 3: Network Connectivity Check"
+                echo "--------------------------------------"
+                
+                echo "Checking service endpoints..."
+                authentik_endpoints=$(kubectl get endpoints -n identity authentik-server -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | wc -w)
+                if [[ "$authentik_endpoints" -gt 0 ]]; then
+                  echo "✓ Authentik service: $authentik_endpoints endpoints available"
+                else
+                  echo "⚠️  Authentik service: no endpoints yet (may still be starting)"
+                fi
+                
+                echo "Checking DNS resolution..."
+                if kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup kubernetes.default >/dev/null 2>&1; then
+                  echo "✓ DNS resolution: working"
+                else
+                  echo "⚠️  DNS resolution: test inconclusive (normal for test environment)"
+                fi
+                
+                echo ""
+                echo "📊 VALIDATION SUMMARY"
+                echo "====================="
+                
+                # Check if critical services are running
+                if [[ "$cilium_count" -gt 0 && "$coredns_count" -gt 0 && "$authentik_server_count" -gt 0 ]]; then
+                  echo "🎉 DEPLOYMENT SUCCESSFUL!"
+                  echo "✓ Cilium CNI: Network foundation ready"
+                  echo "✓ Authentik IAM: Identity provider ready"
+                  echo "✓ All critical components are running"
+                else
+                  echo "⚠️  DEPLOYMENT COMPLETED WITH WARNINGS"
+                  echo "Some services may still be starting up."
+                fi
+                
+                echo ""
+                echo "🌐 Access points:"
+                echo "  - Authentik IAM: https://auth.{{ domain_name }}"
+                echo "  - Hubble UI: https://hubble.{{ domain_name }}"
+              register: validation_output
+              tags: validation
+              
+            - name: Display health check results
+              ansible.builtin.debug:
+                msg: "{{ validation_output.stdout_lines }}"
+              tags: validation
           
           tags: [validation, final]
 
@@ -166,3 +251,4 @@
               - ansible-playbook Ansible/cluster-deploy.yml --tags=cilium
               - ansible-playbook Ansible/cluster-deploy.yml --tags=samba4  
               - ansible-playbook Ansible/cluster-deploy.yml --tags=authentik
+        

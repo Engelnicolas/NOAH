@@ -10,7 +10,7 @@ requests>=2.31.0
 
 # Configuration and data formats
 PyYAML>=6.0.2
-python-dotenv>=1.1.1
+# Note: python-dotenv removed - NOAH now uses SOPS-encrypted YAML configuration
 
 # Kubernetes client library
 kubernetes>=33.1.0

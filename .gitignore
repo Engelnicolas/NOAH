@@ -28,7 +28,16 @@ env/
 venv/
 ENV/
 .env
+.env.*
 .envrc
+# Security: unencrypted config files
+config.yaml
+config.yml
+secrets.yaml
+secrets.yml
+# Keep only encrypted configs
+!*.enc.yaml
+!*.enc.yml
 
 # ---- Ansible ----
 *.retry

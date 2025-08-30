@@ -10,7 +10,8 @@ worker:
 
 service:
   type: LoadBalancer  # External access for OIDC endpoints
-  port: 9000
+  port: 80            # HTTP port
+  httpsPort: 443      # HTTPS port
   annotations:
     # Use Cilium's LoadBalancer with external access
     service.cilium.io/global: "true"

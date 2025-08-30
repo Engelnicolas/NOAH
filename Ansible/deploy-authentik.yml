@@ -18,7 +18,19 @@
         kind: Namespace
         state: present
 
-    - name: Create Authentik secrets for standalone OIDC deployment
+    - name: Decrypt Authentik secrets
+      shell: |
+        cd ../
+        export SOPS_AGE_KEY_FILE=./Age/keys.txt
+        sops -d Helm/authentik/secrets/authentik-secrets.enc.yaml > /tmp/authentik-secrets-decrypted.yaml
+      delegate_to: localhost
+
+    - name: Load decrypted secrets
+      include_vars:
+        file: /tmp/authentik-secrets-decrypted.yaml
+        name: authentik_secrets
+
+    - name: Create Authentik secrets from encrypted config
       kubernetes.core.k8s:
         definition:
           apiVersion: v1
@@ -33,22 +45,25 @@
               meta.helm.sh/release-namespace: "{{ authentik_namespace }}"
           type: Opaque
           stringData:
-            AUTHENTIK_SECRET_KEY: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=50') }}"
-            AUTHENTIK_BOOTSTRAP_PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
-            AUTHENTIK_BOOTSTRAP_TOKEN: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=50') }}"
-            AUTHENTIK_POSTGRESQL__PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
-            AUTHENTIK_REDIS__PASSWORD: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
-            # OIDC-specific secrets
-            oidc-client-secret: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}"
-            jwt-signing-key: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=64') }}"
-            session-secret: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}"
-            email-password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
-            # Additional keys for PostgreSQL and Redis Helm charts
-            postgresql-password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
-            redis-password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
-            secret-key: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=50') }}"
-            bootstrap-password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,punctuation length=24') }}"
-            bootstrap-token: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=50') }}"
+            # Core Authentik secrets from encrypted config
+            AUTHENTIK_SECRET_KEY: "{{ authentik_secrets.authentik.secretKey }}"
+            AUTHENTIK_BOOTSTRAP_PASSWORD: "{{ authentik_secrets.authentik.bootstrap.password }}"
+            AUTHENTIK_BOOTSTRAP_TOKEN: "{{ authentik_secrets.authentik.bootstrap.token }}"
+            # Database secrets
+            AUTHENTIK_POSTGRESQL__PASSWORD: "{{ authentik_secrets.postgresql.auth.password }}"
+            postgresql-password: "{{ authentik_secrets.postgresql.auth.password }}"
+            # Redis secrets  
+            AUTHENTIK_REDIS__PASSWORD: "{{ authentik_secrets.redis.auth.password }}"
+            redis-password: "{{ authentik_secrets.redis.auth.password }}"
+            # Additional keys for Helm charts compatibility
+            secret-key: "{{ authentik_secrets.authentik.secretKey }}"
+            bootstrap-password: "{{ authentik_secrets.authentik.bootstrap.password }}"
+            bootstrap-token: "{{ authentik_secrets.authentik.bootstrap.token }}"
+
+    - name: Clean up temporary decrypted secrets file
+      file:
+        path: /tmp/authentik-secrets-decrypted.yaml
+        state: absent
 
     - name: Create Authentik values file for Helm deployment
       copy:

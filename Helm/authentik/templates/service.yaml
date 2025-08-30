@@ -16,10 +16,12 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
-    - port: 9443
+    {{- if .Values.service.httpsPort }}
+    - port: {{ .Values.service.httpsPort }}
       targetPort: https
       protocol: TCP
       name: https
+    {{- end }}
   selector:
     {{- include "authentik.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: server

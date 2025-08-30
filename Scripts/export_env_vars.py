@@ -15,7 +15,7 @@ def main():
     try:
         # Load encrypted configuration
         loader = SecureEnvLoader()
-        loader.load_secure_env(Path('/root/NOAH/config.enc.yaml'))
+        loader.load_secure_env(Path('/root/NOAH/Config/config.enc.yaml'))
         
         # Output environment variables in shell format
         important_vars = [

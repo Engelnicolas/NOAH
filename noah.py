@@ -17,7 +17,7 @@ from Scripts.secure_env_loader import SecureEnvLoader
 
 # Load environment variables from encrypted configuration
 secure_loader = SecureEnvLoader()
-secure_loader.load_secure_env(Path("config.enc.yaml"))
+secure_loader.load_secure_env(Path("Config/config.enc.yaml"))
 
 # Import CLI utilities
 from CLI.kubectl_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected

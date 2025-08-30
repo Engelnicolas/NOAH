@@ -109,5 +109,4 @@ Default credentials available via: `python noah.py password show`
 - **Network**: Internet connectivity for component downloads
 
 ---
-Apache 2.0 licence 
-Made with ❤️
+Apache 2.0 licence - Made with ❤️

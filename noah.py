@@ -137,6 +137,99 @@ def get_authentik_credentials():
     except Exception as e:
         return None, f"Error retrieving credentials: {str(e)}"
 
+def regenerate_authentik_password():
+    """Generate a new Authentik admin password and update encrypted secrets"""
+    try:
+        import subprocess
+        import tempfile
+        import os
+        from Scripts.security_manager import NoahSecurityManager
+        
+        # Initialize security manager
+        security_manager = NoahSecurityManager()
+        
+        # Generate new password
+        new_password = security_manager.generate_secure_password(24)
+        
+        # Paths
+        age_key_file = NOAH_PATHS['age_key_file']
+        secrets_file = Path("Helm/authentik/secrets/authentik-secrets.enc.yaml")
+        
+        if not age_key_file.exists():
+            return None, f"Age key file not found: {age_key_file}"
+        
+        if not secrets_file.exists():
+            return None, f"Authentik secrets file not found: {secrets_file}"
+        
+        # Set SOPS environment variable
+        env = os.environ.copy()
+        env['SOPS_AGE_KEY_FILE'] = str(age_key_file)
+        
+        # Decrypt current secrets
+        result = subprocess.run([
+            'sops', '-d', str(secrets_file)
+        ], capture_output=True, text=True, env=env)
+        
+        if result.returncode != 0:
+            return None, f"Failed to decrypt secrets: {result.stderr}"
+        
+        # Parse and update secrets
+        import yaml
+        secrets_data = yaml.safe_load(result.stdout)
+        
+        if not secrets_data or 'authentik' not in secrets_data:
+            return None, "Invalid secrets format: missing authentik section"
+        
+        # Store old password
+        old_password = secrets_data.get('authentik', {}).get('bootstrap', {}).get('password', '')
+        
+        # Update the password
+        secrets_data['authentik']['bootstrap']['password'] = new_password
+        
+        # Create a backup of the original file
+        backup_file = secrets_file.with_suffix('.enc.yaml.backup')
+        import shutil
+        shutil.copy2(str(secrets_file), str(backup_file))
+        
+        try:
+            # Write updated secrets to a temporary file with correct extension
+            temp_secrets_file = Path("authentik-secrets-temp.enc.yaml")
+            with open(temp_secrets_file, 'w') as f:
+                yaml.dump(secrets_data, f, default_flow_style=False)
+            
+            # Encrypt the temporary file
+            result = subprocess.run([
+                'sops', '-e', '--in-place', str(temp_secrets_file)
+            ], capture_output=True, text=True, env=env)
+            
+            if result.returncode != 0:
+                return None, f"Failed to encrypt updated secrets: {result.stderr}"
+            
+            # Replace the original file
+            shutil.move(str(temp_secrets_file), str(secrets_file))
+            
+            # Remove backup file
+            backup_file.unlink()
+            
+            return {
+                'old_password': old_password,
+                'new_password': new_password,
+                'updated_file': str(secrets_file)
+            }, None
+            
+        except Exception as e:
+            # Restore from backup on error
+            if backup_file.exists():
+                shutil.move(str(backup_file), str(secrets_file))
+            # Clean up temp file if it exists
+            temp_file = Path("authentik-secrets-temp.enc.yaml")
+            if temp_file.exists():
+                temp_file.unlink()
+            raise e
+        
+    except Exception as e:
+        return None, f"Error regenerating password: {str(e)}"
+
 def check_repository_root():
     """Check if the current directory is the root of the NOAH repository"""
     current_dir = Path.cwd()
@@ -568,6 +661,61 @@ def deploy_manager(ctx, namespace):
 
 @cli.group()  # type: ignore
 @click.pass_context
+def password(ctx):
+    """Manage Authentik admin passwords"""
+    pass
+
+@password.command()
+@click.pass_context
+def new(ctx):
+    """Generate a new Authentik admin password"""
+    click.echo("🔄 Regenerating Authentik admin password...")
+    
+    result, error = regenerate_authentik_password()
+    if result:
+        click.echo("✅ Password regenerated successfully!")
+        click.echo("")
+        click.echo("📋 Password Change Summary:")
+        click.echo("=" * 50)
+        click.echo(f"Old password: {result['old_password']}")
+        click.echo(f"New password: {result['new_password']}")
+        click.echo(f"Updated file: {result['updated_file']}")
+        click.echo("=" * 50)
+        click.echo("")
+        click.echo("💡 The new password will be active after next deployment:")
+        click.echo("   python noah.py deploy authentik")
+        click.echo("   # or")
+        click.echo("   python noah.py deploy all")
+        click.echo("")
+        click.echo("🔍 To view current credentials after deployment:")
+        click.echo("   python noah.py password show")
+    else:
+        click.echo(f"❌ Failed to regenerate password: {error}", err=True)
+        sys.exit(1)
+
+@password.command()
+@click.pass_context
+def show(ctx):
+    """Show current Authentik admin credentials"""
+    click.echo("🔍 Current Authentik admin credentials:")
+    click.echo("=" * 50)
+    
+    credentials, error = get_authentik_credentials()
+    if credentials:
+        click.echo(f"📍 URL (HTTP):  {credentials['http_url']}")
+        click.echo(f"📍 URL (HTTPS): {credentials['https_url']}")
+        click.echo(f"👤 Username:    {credentials['admin_username']}")
+        click.echo(f"📧 Email:       {credentials['admin_email']}")
+        click.echo(f"🔑 Password:    {credentials['admin_password']}")
+        click.echo("")
+        click.echo("💡 You can log in using either the username or email address")
+    else:
+        click.echo(f"⚠️  Could not retrieve credentials: {error}")
+        click.echo("💡 Try running a deployment first: python noah.py deploy authentik")
+    click.echo("=" * 50)
+
+@cli.group()  # type: ignore
+@click.pass_context
 def deploy(ctx):
     """Deploy services to Kubernetes
     
@@ -580,11 +728,24 @@ def deploy(ctx):
 @deploy.command()
 @click.option('--namespace', default='identity', help='Kubernetes namespace')
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service')
+@click.option('--regenerate-password', is_flag=True, help='Generate new Authentik admin password')
 @click.pass_context
-def authentik(ctx, namespace, domain):
+def authentik(ctx, namespace, domain, regenerate_password):
     """Deploy Authentik SSO (individual component)"""
     # Ensure security is initialized
     ensure_security_initialized(ctx)
+    
+    # Regenerate Authentik password if requested
+    if regenerate_password:
+        click.echo("🔄 Regenerating Authentik admin password...")
+        result, error = regenerate_authentik_password()
+        if result:
+            click.echo(f"✅ Password updated successfully!")
+            click.echo(f"   Old password: {result['old_password']}")
+            click.echo(f"   New password: {result['new_password']}")
+        else:
+            click.echo(f"❌ Failed to regenerate password: {error}", err=True)
+            sys.exit(1)
     
     click.echo(f"[VERBOSE] Deploying Authentik SSO...")
     click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
@@ -654,11 +815,25 @@ def cilium(ctx, namespace, domain):
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
 @click.option('--cluster-name', default='noah-cluster', help='Cluster name for deployment')
 @click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')
+@click.option('--regenerate-password', is_flag=True, help='Generate new Authentik admin password')
 @click.pass_context
-def all(ctx, domain, cluster_name, config_file):
+def all(ctx, domain, cluster_name, config_file, regenerate_password):
     """Deploy complete stack using optimized Ansible playbook (Cilium → Authentik)"""
     # Ensure security is initialized before any deployment
     ensure_security_initialized(ctx)
+    
+    # Regenerate Authentik password if requested
+    if regenerate_password:
+        click.echo("🔄 Regenerating Authentik admin password...")
+        result, error = regenerate_authentik_password()
+        if result:
+            click.echo(f"✅ Password updated successfully!")
+            click.echo(f"   Old password: {result['old_password']}")
+            click.echo(f"   New password: {result['new_password']}")
+            click.echo(f"   Updated file: {result['updated_file']}")
+        else:
+            click.echo(f"❌ Failed to regenerate password: {error}", err=True)
+            sys.exit(1)
     
     click.echo("[VERBOSE] Starting complete NOAH stack deployment using cluster-deploy.yml...")
     click.echo(f"[VERBOSE] Using domain: {domain}")

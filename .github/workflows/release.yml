@@ -1,0 +1,159 @@
+name: 🏷️ NOAH Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  build:
+    name: 🏗️ Build Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+      
+      - name: Install dependencies
+        run: pip install -r Scripts/requirements.txt
+      
+      - name: Run tests
+        run: |
+          python -m py_compile noah.py
+          python -m py_compile Scripts/*.py
+          python noah.py --help
+      
+      - name: Create release package
+        run: |
+          mkdir -p dist/noah-${{ steps.version.outputs.version }}
+          
+          # Copy files
+          cp noah.py dist/noah-${{ steps.version.outputs.version }}/
+          cp -r Scripts dist/noah-${{ steps.version.outputs.version }}/
+          cp -r Ansible dist/noah-${{ steps.version.outputs.version }}/
+          cp -r Helm dist/noah-${{ steps.version.outputs.version }}/
+          cp -r Docs dist/noah-${{ steps.version.outputs.version }}/
+          
+          # Create install script
+          cat > dist/noah-${{ steps.version.outputs.version }}/install.sh << 'EOF'
+          #!/bin/bash
+          echo "🚀 Installing NOAH ${{ steps.version.outputs.version }}"
+          pip3 install -r Scripts/requirements.txt
+          chmod +x noah.py
+          echo "✅ Installation complete! Run ./noah.py --help to start"
+          EOF
+          chmod +x dist/noah-${{ steps.version.outputs.version }}/install.sh
+          
+          # Create README
+          cat > dist/noah-${{ steps.version.outputs.version }}/README.md << 'EOF'
+          # NOAH Infrastructure Tool
+          
+          Version: ${{ steps.version.outputs.version }}
+          
+          ## Quick Start
+          1. Run: `./install.sh`
+          2. Configure: `./noah.py config init`
+          3. Deploy: `./noah.py deploy all`
+          
+          See Docs/ for complete documentation.
+          EOF
+      
+      - name: Create archives
+        run: |
+          cd dist
+          tar -czf noah-${{ steps.version.outputs.version }}.tar.gz noah-${{ steps.version.outputs.version }}/
+          zip -r noah-${{ steps.version.outputs.version }}.zip noah-${{ steps.version.outputs.version }}/
+          sha256sum *.tar.gz *.zip > checksums.sha256
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG="${{ steps.version.outputs.version }}"
+          
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "## What's Changed in $CURRENT_TAG" >> $GITHUB_OUTPUT
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "" >> $GITHUB_OUTPUT
+            echo "### Commits:" >> $GITHUB_OUTPUT
+            git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD >> $GITHUB_OUTPUT
+          else
+            echo "" >> $GITHUB_OUTPUT
+            echo "### Initial Release" >> $GITHUB_OUTPUT
+            echo "- Complete NOAH infrastructure deployment tool" >> $GITHUB_OUTPUT
+          fi
+          echo "" >> $GITHUB_OUTPUT
+          echo "### Installation:" >> $GITHUB_OUTPUT
+          echo "\`\`\`bash" >> $GITHUB_OUTPUT
+          echo "wget https://github.com/${{ github.repository }}/releases/download/$CURRENT_TAG/noah-$CURRENT_TAG.tar.gz" >> $GITHUB_OUTPUT
+          echo "tar -xzf noah-$CURRENT_TAG.tar.gz" >> $GITHUB_OUTPUT
+          echo "cd noah-$CURRENT_TAG && ./install.sh" >> $GITHUB_OUTPUT
+          echo "\`\`\`" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create Release
+        uses: actions/create-release@v1
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          release_name: NOAH ${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+      
+      - name: Upload tar.gz
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/noah-${{ steps.version.outputs.version }}.tar.gz
+          asset_name: noah-${{ steps.version.outputs.version }}.tar.gz
+          asset_content_type: application/gzip
+      
+      - name: Upload zip
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/noah-${{ steps.version.outputs.version }}.zip
+          asset_name: noah-${{ steps.version.outputs.version }}.zip
+          asset_content_type: application/zip
+      
+      - name: Upload checksums
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/checksums.sha256
+          asset_name: checksums.sha256
+          asset_content_type: text/plain

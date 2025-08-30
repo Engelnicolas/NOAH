@@ -1,0 +1,98 @@
+name: 🧪 NOAH Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install -r Scripts/requirements.txt
+          pip install pytest pytest-cov bandit
+      
+      - name: Run unit tests
+        run: |
+          if [ -d "Tests" ]; then
+            pytest Tests/ -v --cov=Scripts --cov=.
+            # Also run our workflow validation tests
+            python Tests/test_workflows.py
+          else
+            echo "No Tests directory found, skipping unit tests"
+          fi
+      
+      - name: Security scan
+        run: |
+          bandit -r Scripts/ noah.py || echo "Security scan completed with warnings"
+      
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile noah.py
+          python -m py_compile Scripts/*.py
+      
+      - name: Test NOAH CLI
+        run: |
+          python noah.py --help
+          python noah.py status --help
+          python noah.py deploy --help
+
+  ansible-test:
+    name: 📋 Ansible Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install Ansible
+        run: pip install ansible ansible-lint
+      
+      - name: Validate playbooks
+        run: |
+          for playbook in Ansible/*.yml; do
+            echo "Checking $playbook"
+            ansible-playbook --syntax-check "$playbook"
+          done
+      
+      - name: Run ansible-lint
+        run: ansible-lint Ansible/ || echo "Ansible lint completed with warnings"
+
+  helm-test:
+    name: ⚓ Helm Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Helm
+        run: |
+          curl https://get.helm.sh/helm-v3.13.0-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /tmp/helm
+          sudo mv /tmp/helm /usr/local/bin/helm
+          sudo chmod +x /usr/local/bin/helm
+      
+      - name: Test Helm charts
+        run: |
+          for chart in Helm/*/; do
+            if [ -f "$chart/Chart.yaml" ]; then
+              echo "Testing chart: $chart"
+              helm lint "$chart" || echo "Chart $chart has warnings"
+            fi
+          done

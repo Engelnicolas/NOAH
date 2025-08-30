@@ -1,104 +1,312 @@
-# NOAH Troubleshooting Guide
+# 🔧 NOAH Troubleshooting Guide
 
-## 🆕 Recent Enhancements
+Quick solutions for NOAH infrastructure issues.
 
-### Enhanced Diagnostic Tools
-- **Integrated IAM Testing**: `python noah.py test sso` now includes network validation
-- **Optimized Deployment Order**: Ensures proper service dependencies
-- **Enhanced kubectl Cache Management**: Automatic cleanup prevents connection issues
-- **Comprehensive Status Checking**: Improved validation in all phases
+## � **Emergency Quick Fixes**
 
-## Common Issues and Solutions
-
-### 1. Deployment Order Issues (NEW)
-
-#### Symptom
-```
-Authentik connectivity issues
-Network policies blocking service communication
+### **Everything Broken? Start Here:**
+```bash
+# Nuclear option - complete reset
+python noah.py cluster destroy --force
+python noah.py cluster create --name noah --domain your-domain.com
+python noah.py deploy all --domain your-domain.com
 ```
 
-#### Solutions
-1. **Use the correct deployment order** (Cilium → Authentik):
-   ```bash
-   # Recommended: Use complete redeployment
-   ansible-playbook Ansible/cluster-redeploy.yml \
-     -e cluster_name=noah-cluster \
-     -e domain_name=noah-infra.com
-   ```
+### **Quick Health Check:**
+```bash
+# Check overall status
+python noah.py status
 
-2. **Verify network foundation is ready**:
-   ```bash
-   # Check Cilium is fully operational before proceeding
-   kubectl exec -n kube-system ds/cilium -- cilium status --brief
-   kubectl get networkpolicies -n identity
-   ```
+# Test authentication
+python noah.py test sso
 
-3. **Test service connectivity**:
-   ```bash
-   # Test Authentik database connectivity
-   kubectl exec -n identity deployment/authentik-server -- \
-     nc -zv authentik-postgresql 5432
-   ```
-
-### 2. Network Policy Issues (ENHANCED)
-
-#### Symptom
-```
-Services cannot communicate despite being deployed
-Authentik database connection failures
+# Basic cluster check
+kubectl get nodes && kubectl get pods -A
 ```
 
-#### Solutions
-1. **Validate IAM network policies**:
-   ```bash
-   kubectl get networkpolicies -n identity
-   kubectl describe networkpolicy -n identity
-   ```
+## 🚀 **Deployment Issues**
 
-2. **Check Cilium policy enforcement**:
-   ```bash
-   kubectl exec -n kube-system ds/cilium -- cilium policy get
-   kubectl exec -n kube-system ds/cilium -- cilium endpoint list
-   ```
+### **Deployment Fails**
+```bash
+# 1. Check requirements (4+ CPU, 8GB+ RAM, 50GB+ storage)
+free -h && df -h && nproc
 
-3. **Use enhanced SSO testing**:
-   ```bash
-   # Comprehensive network + SSO validation
-   python noah.py test sso
-   ```
+# 2. Test internet connectivity
+curl -I https://github.com
 
-### 3. Deployment Timeouts
-
-#### Symptom
-```
-Failed to deploy cilium: Error: UPGRADE FAILED: context deadline exceeded
+# 3. Clean and retry
+python noah.py cluster destroy --force
+rm -rf ~/.kube/ ~/.helm/
+python noah.py cluster create --name noah --domain your-domain.com
+python noah.py deploy all --domain your-domain.com
 ```
 
-#### Solutions
-1. **Check timeout settings** (already optimized):
-   - Cilium: 10 minutes
-   - Authentik: 12 minutes  
+### **Services Not Starting**
+```bash
+# Check specific service
+kubectl get pods -l app=authentik
+kubectl logs deployment/authentik-server
 
-2. **Verify cluster resources**:
-   ```bash
-   kubectl top nodes
-   kubectl top pods --all-namespaces
+# Restart service
+kubectl delete pod -l app=authentik
+```
+
+### **Can't Access Web Interface**
+```bash
+# 1. Check external IP
+kubectl get svc -A | grep LoadBalancer
+
+# 2. Test DNS (should point to external IP)
+nslookup auth.your-domain.com
+
+# 3. Add to /etc/hosts if needed
+echo "EXTERNAL_IP auth.your-domain.com" >> /etc/hosts
+```
+
+## 🔐 **Authentication Problems**
+
+### **Can't Login to Authentik**
+```bash
+# Get credentials
+python noah.py password show
+
+# Reset if needed
+python noah.py password new
+python noah.py deploy authentik
+```
+
+### **Database Issues**
+```bash
+# Quick fix - restart database
+kubectl delete pod -l app.kubernetes.io/name=postgresql
+
+# Check logs
+kubectl logs deployment/authentik-postgresql
+```
+
+## 🌐 **Network Problems**
+
+### **Pods Can't Communicate**
+```bash
+# Check Cilium status
+kubectl get pods -n kube-system -l k8s-app=cilium
+
+# Restart Cilium if needed
+kubectl delete pod -n kube-system -l k8s-app=cilium
+
+# Test connectivity
+kubectl exec -it <any-pod> -- ping google.com
+```
+
+### **Service Discovery Broken**
+```bash
+# Test DNS
+kubectl exec -it <any-pod> -- nslookup kubernetes.default.svc.cluster.local
+
+# Check CoreDNS
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+```
+
+## 🛠️ **Quick Fixes by Symptom**
+
+### **"Connection Refused" Errors**
+```bash
+# Restart the service
+kubectl delete pod -l app=<service-name>
+```
+
+### **"Permission Denied" Errors**
+```bash
+# Fix kubectl permissions
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+```
+
+### **"DNS Resolution Failed"**
+```bash
+# Add to /etc/hosts
+echo "EXTERNAL_IP auth.your-domain.com" >> /etc/hosts
+echo "EXTERNAL_IP hubble.your-domain.com" >> /etc/hosts
+```
+
+### **"Service Unavailable"**
+```bash
+# Check if pods are running
+kubectl get pods -A
+
+# Check resource usage
+kubectl top nodes
+```
+
+### **"Certificate Errors"**
+```bash
+# Check certificate validity
+openssl x509 -in Certificates/ca.crt -text -noout
+
+# Redeploy with fresh certificates
+python noah.py deploy all --regenerate-certs
+```
+
+## 📊 **Monitoring & Logs**
+
+### **Essential Commands**
+```bash
+# System overview
+python noah.py status
+kubectl get nodes
+kubectl get pods -A
+
+# Resource usage
+kubectl top nodes
+kubectl top pods -A
+
+# Recent events
+kubectl get events --sort-by=.metadata.creationTimestamp
+```
+
+### **Important Logs**
+```bash
+# Authentik
+kubectl logs deployment/authentik-server --tail=20
+
+# Cilium
+kubectl logs daemonset/cilium -n kube-system --tail=20
+
+# Database
+kubectl logs deployment/authentik-postgresql --tail=20
+```
+
+## 🆘 **Emergency Recovery**
+
+### **Cluster Unresponsive**
+```bash
+# Check cluster service
+sudo systemctl status k3s
+
+# Restart if needed
+sudo systemctl restart k3s
+sleep 30
+kubectl get nodes
+```
+
+### **Complete Reset (Last Resort)**
+```bash
+# 1. Backup important data
+python noah.py password show > backup-passwords.txt
+kubectl get secrets -A -o yaml > backup-secrets.yaml
+
+# 2. Destroy everything
+python noah.py cluster destroy --force
+rm -rf ~/.kube/ ~/.helm/
+
+# 3. Fresh install
+python noah.py cluster create --name noah --domain your-domain.com
+python noah.py deploy all --domain your-domain.com
+
+# 4. Restore passwords if needed
+# Use backup-passwords.txt to recreate accounts
+```
+
+## 💡 **Common Gotchas**
+
+1. **Wrong Domain**: Ensure DNS points to LoadBalancer IP
+2. **Resource Limits**: Need minimum 8GB RAM, 4 CPU cores
+3. **Firewall**: Ensure ports 80, 443, 6443 are open
+4. **Time Sync**: Check system time is synchronized
+5. **Disk Space**: Ensure 50GB+ available storage
+
+## 🔍 **Need More Help?**
+
+- Check system requirements in [README.md](README.md)
+- See detailed deployment in [deployment-guide.md](deployment-guide.md)
+- View command reference in [quick-reference.md](quick-reference.md)
+
+---
+
+**💡 Tip**: Most issues are solved by the "nuclear option" reset above. When in doubt, destroy and redeploy!
+   
+   # Verify key format
+   head -1 Age/keys.txt
    ```
 
-3. **Check for stuck resources**:
+2. **Re-encrypt configuration:**
    ```bash
-   kubectl get pods --all-namespaces | grep -E "(Pending|ImagePullBackOff|CrashLoopBackOff)"
+   # Regenerate Age key
+   age-keygen > Age/keys.txt
+   
+   # Update SOPS config
+   python noah.py config init
+   
+   # Re-encrypt secrets
+   sops updatekeys config.enc.yaml
    ```
 
-4. **Use complete redeployment** (often resolves complex issues):
+3. **Reset encryption:**
    ```bash
-   ansible-playbook Ansible/cluster-redeploy.yml \
-     -e cluster_name=noah-cluster \
-     -e domain_name=noah-infra.com
+   # Start fresh (will lose current config)
+   rm Age/keys.txt config.enc.yaml .sops.yaml
+   python noah.py config init
    ```
 
-### 4. Pod Startup Failures (ENHANCED)
+### **Issue: Certificate Errors**
+
+**Symptoms:**
+- SSL certificate warnings
+- TLS handshake failures
+- Certificate expired errors
+
+**Solutions:**
+
+1. **Check certificate status:**
+   ```bash
+   # View certificate details
+   openssl x509 -in Certificates/ca.crt -text -noout
+   
+   # Check expiration
+   openssl x509 -in Certificates/ca.crt -noout -dates
+   ```
+
+2. **Regenerate certificates:**
+   ```bash
+   # Remove old certificates
+   rm -rf Certificates/
+   
+   # Redeploy (will create new certs)
+   python noah.py deploy all --domain your-domain.com
+   ```
+
+## 🧪 **Testing & Validation Issues**
+
+### **Issue: Tests Fail**
+
+**Symptoms:**
+- `python noah.py test sso` fails
+- Workflow tests report errors
+- Health checks timeout
+
+**Solutions:**
+
+1. **Run detailed diagnostics:**
+   ```bash
+   # Verbose status check
+   python noah.py status --verbose
+   
+   # Individual component tests
+   kubectl get pods --all-namespaces
+   kubectl get svc --all-namespaces
+   kubectl get ingress --all-namespaces
+   ```
+
+2. **Check individual services:**
+   ```bash
+   # Test each service directly
+   curl -k https://auth.your-domain.com/if/admin/
+   curl -k https://hubble.your-domain.com/
+   
+   # Internal service tests
+   kubectl exec -it <pod> -- curl http://service:port/health
+   ```
+
+### Pod Startup Failures 
 
 #### Cilium Pod Issues
 ```bash
@@ -112,404 +320,4 @@ kubectl exec -n kube-system ds/cilium -- cilium connectivity test --help
 
 # Common fixes
 kubectl delete pod -n kube-system <stuck-cilium-pod>
-```
-
-#### Authentik Pod Issues (ENHANCED)
-```bash
-# Check Authentik components
-kubectl get pods -n identity | grep authentik
-
-# Check database connectivity and LDAP integration
-kubectl logs -n identity deployment/authentik-server --tail=50
-kubectl logs -n identity deployment/authentik-worker --tail=50
-kubectl logs -n identity statefulset/authentik-postgresql
-
-# Test LDAP connectivity to Samba4
-kubectl exec -n identity deployment/authentik-server -- \
-  nc -zv samba4.identity.svc.cluster.local 389
-
-# Common fixes
-kubectl delete pod -n identity <stuck-authentik-pod>
-```
-
-### 5. kubectl Connection Issues (ENHANCED)
-
-#### Symptom
-```
-The connection to the server localhost:6443 was refused
-kubectl cache-related errors after cluster operations
-```
-
-#### Solutions (Automatic cleanup now included)
-```bash
-# NOAH now includes automatic kubectl cache cleanup
-python noah.py cluster destroy --force  # Includes cache cleanup
-
-# Manual cache cleanup (if needed)
-kubectl config unset clusters.default
-kubectl config unset users.default
-kubectl config unset contexts.default
-rm -rf ~/.kube/cache/
-rm -rf ~/.kube/http-cache/
-
-# Verify disconnection (expected after destroy)
-kubectl get nodes  # Should show connection error - this is normal
-```
-
-#### Enhanced kubeconfig Management
-```bash
-# Check persistent kubeconfig setup
-echo $KUBECONFIG
-cat ~/.bashrc | grep KUBECONFIG
-
-# Verify cluster connectivity
-kubectl cluster-info
-kubectl get nodes
-```
-
-### 6. SSO and LDAP Integration Issues (NEW)
-
-#### Symptom
-```
-Authentik cannot authenticate users
-LDAP connection errors
-SSO login failures
-```
-
-#### Enhanced Diagnostic Commands
-```bash
-# Comprehensive IAM + network testing (NEW)
-python noah.py test sso
-
-# Check Authentik API
-kubectl exec -n identity deployment/authentik-server -- \
-  wget -q -O- http://localhost:9000/api/v3/core/tenants/
-
-# Test database connectivity
-kubectl exec -n identity deployment/authentik-server -- \
-  nc -zv authentik-postgresql 5432
-```
-
-#### Network Policy Validation
-```bash
-# Check IAM-specific network policies
-kubectl get networkpolicies -n identity
-kubectl describe networkpolicy -n identity
-
-# Verify Cilium policy enforcement
-kubectl exec -n kube-system ds/cilium -- cilium policy get
-```
-
-### 7. Validation and Status Checking (ENHANCED)
-
-#### Comprehensive Status Check
-```bash
-# Enhanced overall status (includes SSO validation)
-python noah.py status --all
-
-# Component-specific status
-kubectl get pods -n identity -o wide
-kubectl get svc -n identity
-kubectl get ingress -n identity
-```
-
-#### Network Troubleshooting
-```bash
-# Cilium network status
-kubectl exec -n kube-system ds/cilium -- cilium status --brief
-kubectl exec -n kube-system ds/cilium -- cilium connectivity test
-
-# Service discovery testing
-kubectl exec -n identity deployment/authentik-server -- nslookup samba4.identity.svc.cluster.local
-```
-
-# Check Cilium connectivity
-kubectl exec -n kube-system <cilium-pod> -- cilium endpoint list
-kubectl exec -n kube-system <cilium-pod> -- cilium status --verbose
-```
-
-#### Ingress Issues
-```bash
-# Check ingress controller
-kubectl get pods -n ingress-nginx
-kubectl logs -n ingress-nginx deployment/ingress-nginx-controller
-
-# Check ingress resources
-kubectl get ingress --all-namespaces
-kubectl describe ingress -n <namespace> <ingress-name>
-
-# Test ingress connectivity
-curl -k https://<service-url>
-```
-
-### 4. Secret Management Issues
-
-#### SOPS Decryption Failures
-```bash
-# Check Age key
-cat Age/keys.txt
-echo $SOPS_AGE_KEY_FILE
-
-# Test SOPS functionality
-sops --decrypt Helm/authentik/secrets/authentik-secrets.enc.yaml
-
-# Regenerate if corrupted
-python noah.py secrets regenerate-keys
-```
-
-#### Secret Not Found Errors
-```bash
-# Check secret existence
-kubectl get secrets --all-namespaces | grep <secret-name>
-
-# Recreate secret
-python noah.py secrets edit <component>
-python noah.py deploy <component> --namespace <namespace> --domain noah-infra.com
-```
-
-### 5. Database Issues
-
-#### PostgreSQL Connection Problems
-```bash
-# Check PostgreSQL status
-kubectl get pods -n identity | grep postgresql
-kubectl logs -n identity statefulset/authentik-postgresql
-
-# Check database connectivity from Authentik
-kubectl exec -n identity deployment/authentik-server -- pg_isready -h authentik-postgresql
-
-# Reset database (WARNING: Data loss)
-kubectl delete statefulset -n identity authentik-postgresql
-kubectl delete pvc -n identity data-authentik-postgresql-0
-python noah.py deploy authentik --namespace identity --domain noah-infra.com
-```
-
-#### Redis Connection Problems
-```bash
-# Check Redis status
-kubectl get pods -n identity | grep redis
-kubectl logs -n identity statefulset/authentik-redis-master
-
-# Test Redis connectivity
-kubectl exec -n identity statefulset/authentik-redis-master -- redis-cli ping
-```
-
-### 6. Certificate Issues
-
-#### TLS Certificate Problems
-```bash
-# Check certificate validity
-openssl x509 -in Certificates/*.noah-infra.com.crt -text -noout
-
-# Check certificate in cluster
-kubectl get secrets --all-namespaces | grep tls
-kubectl describe secret -n <namespace> <tls-secret>
-
-# Regenerate certificates
-python noah.py certificates regenerate --domain noah-infra.com
-```
-
-#### Certificate Authority Issues
-```bash
-# Verify CA certificate
-openssl x509 -in Certificates/ca.crt -text -noout
-
-# Check CA in configmap
-kubectl get configmap --all-namespaces | grep ca
-kubectl describe configmap -n <namespace> <ca-configmap>
-```
-
-### 7. Storage Issues
-
-#### Persistent Volume Problems
-```bash
-# Check PV/PVC status
-kubectl get pv,pvc --all-namespaces
-kubectl describe pvc -n <namespace> <pvc-name>
-
-# Check storage class
-kubectl get storageclass
-kubectl describe storageclass <storage-class>
-
-# Fix stuck PVC
-kubectl patch pvc -n <namespace> <pvc-name> -p '{"metadata":{"finalizers":null}}'
-```
-
-#### Disk Space Issues
-```bash
-# Check node disk usage
-kubectl exec -n kube-system <cilium-pod> -- df -h
-kubectl top nodes
-
-# Clean up unused images
-kubectl exec -n kube-system <cilium-pod> -- crictl images
-kubectl exec -n kube-system <cilium-pod> -- crictl rmi --prune
-```
-
-### 8. Authentication Issues
-
-#### Authentik Login Problems
-```bash
-# Check Authentik server logs
-kubectl logs -n identity deployment/authentik-server -f
-
-# Check worker logs
-kubectl logs -n identity deployment/authentik-worker -f
-
-# Reset admin password
-kubectl exec -n identity deployment/authentik-server -- ak create_admin_group
-```
-
-#### LDAP Integration Issues
-```bash
-# Check LDAP outpost
-kubectl get pods -n identity | grep ldap
-kubectl logs -n identity deployment/authentik-ldap-outpost
-
-# Test LDAP connectivity
-kubectl exec -n identity deployment/authentik-ldap-outpost -- ldapsearch -x -h localhost -p 389
-```
-
-### 9. Monitoring Issues
-
-#### Prometheus Not Scraping
-```bash
-# Check Prometheus status
-kubectl get pods -n monitoring | grep prometheus
-kubectl logs -n monitoring statefulset/prometheus-stack-prometheus
-
-# Check service monitors
-kubectl get servicemonitor --all-namespaces
-```
-
-#### Grafana Dashboard Issues
-```bash
-# Check Grafana pods
-kubectl get pods -n monitoring | grep grafana
-kubectl logs -n monitoring deployment/prometheus-stack-grafana
-
-# Reset Grafana admin password
-kubectl get secret -n monitoring prometheus-stack-grafana -o jsonpath="{.data.admin-password}" | base64 --decode
-```
-
-## Emergency Recovery Procedures
-
-### Complete Infrastructure Recovery
-```bash
-# 1. Save current state
-kubectl get all --all-namespaces > emergency-backup.yaml
-helm list --all-namespaces > helm-backup.yaml
-
-# 2. Perform complete reset
-python noah.py cluster destroy --force
-
-# 3. Recreate from scratch
-python noah.py cluster create --name noah-cluster --domain noah-infra.com
-python noah.py deploy cilium --namespace kube-system --domain noah-infra.com
-python noah.py deploy authentik --namespace identity --domain noah-infra.com
-python noah.py deploy samba4 --namespace identity --domain noah-infra.com
-python noah.py deploy all --namespace identity --domain noah-infra.com  # Or deploy complete stack
-```
-
-### Partial Component Recovery
-```bash
-# 1. Backup component state
-helm get values -n <namespace> <component> > <component>-values-backup.yaml
-
-# 2. Uninstall component
-helm uninstall <component> -n <namespace>
-
-# 3. Clean namespace (if needed)
-kubectl delete namespace <namespace> --force --grace-period=0
-
-# 4. Redeploy component
-python noah.py deploy <component> --namespace <namespace> --domain noah-infra.com
-```
-
-## Monitoring and Health Checks
-
-### Automated Health Check Script
-```bash
-#!/bin/bash
-# health-check.sh
-
-echo "=== NOAH Health Check ==="
-
-# Check cluster connectivity
-if ! kubectl cluster-info >/dev/null 2>&1; then
-    echo "❌ Cluster not accessible"
-    exit 1
-fi
-
-# Check critical pods
-critical_pods=$(kubectl get pods --all-namespaces --field-selector=status.phase!=Running -o name | wc -l)
-if [ "$critical_pods" -gt 0 ]; then
-    echo "⚠️  $critical_pods pods not running"
-    kubectl get pods --all-namespaces --field-selector=status.phase!=Running
-fi
-
-# Check Helm releases
-failed_releases=$(helm list --all-namespaces --failed -o json | jq '. | length')
-if [ "$failed_releases" -gt 0 ]; then
-    echo "❌ $failed_releases failed Helm releases"
-    helm list --all-namespaces --failed
-fi
-
-# Check certificates
-cert_files="Certificates/*.noah-infra.com.crt"
-for cert in $cert_files; do
-    if [ -f "$cert" ]; then
-        expiry=$(openssl x509 -in "$cert" -noout -enddate | cut -d= -f2)
-        echo "📜 Certificate expires: $expiry"
-    fi
-done
-
-echo "✅ Health check completed"
-```
-
-## Performance Optimization
-
-### Resource Limits
-```bash
-# Check resource usage
-kubectl top pods --all-namespaces --sort-by=cpu
-kubectl top pods --all-namespaces --sort-by=memory
-
-# Adjust resource limits in values.yaml files
-vim Helm/authentik/values.yaml
-vim Helm/cilium/values.yaml
-```
-
-### Network Performance
-```bash
-# Check Cilium metrics
-kubectl exec -n kube-system <cilium-pod> -- cilium metrics list
-```
-
-## Useful Debugging Commands
-
-```bash
-# Get everything in a namespace
-kubectl get all -n <namespace>
-
-# Describe all resources in a namespace
-kubectl describe all -n <namespace>
-
-# Get events sorted by time
-kubectl get events --sort-by=.metadata.creationTimestamp
-
-# Check resource quotas
-kubectl describe quota --all-namespaces
-
-# Check node conditions
-kubectl describe nodes
-
-# Get logs from all containers in a pod
-kubectl logs -n <namespace> <pod> --all-containers=true
-
-# Follow logs in real time
-kubectl logs -n <namespace> <pod> -f
-
-# Execute commands in running pod
-kubectl exec -it -n <namespace> <pod> -- /bin/bash
 ```

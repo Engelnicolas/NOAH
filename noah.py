@@ -51,6 +51,92 @@ VERSION = "0.0.1"
 # Load default domain from environment, fallback to noah-infra.com
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
 
+def get_authentik_credentials():
+    """Get Authentik admin credentials from encrypted configuration"""
+    try:
+        import subprocess
+        import tempfile
+        import os
+        
+        # Decrypt the authentik secrets using SOPS
+        age_key_file = NOAH_PATHS['age_key_file']
+        secrets_file = Path("Helm/authentik/secrets/authentik-secrets.enc.yaml")
+        
+        if not age_key_file.exists():
+            return None, f"Age key file not found: {age_key_file}"
+        
+        if not secrets_file.exists():
+            return None, f"Authentik secrets file not found: {secrets_file}"
+        
+        # Set SOPS environment variable
+        env = os.environ.copy()
+        env['SOPS_AGE_KEY_FILE'] = str(age_key_file)
+        
+        # Decrypt secrets
+        result = subprocess.run([
+            'sops', '-d', str(secrets_file)
+        ], capture_output=True, text=True, env=env)
+        
+        if result.returncode != 0:
+            return None, f"Failed to decrypt secrets: {result.stderr}"
+        
+        # Parse the decrypted YAML
+        import yaml
+        secrets_data = yaml.safe_load(result.stdout)
+        
+        # Extract credentials with validation
+        if not secrets_data or 'authentik' not in secrets_data:
+            return None, "Invalid secrets format: missing authentik section"
+        
+        bootstrap_data = secrets_data.get('authentik', {}).get('bootstrap', {})
+        bootstrap_password = bootstrap_data.get('password', '')
+        
+        if not bootstrap_password:
+            return None, "Bootstrap password not found in secrets"
+        
+        admin_email = 'admin@noah-infra.com'
+        admin_username = 'akadmin'
+        
+        # Get service URL with fallback
+        try:
+            kubectl_result = subprocess.run([
+                'kubectl', 'get', 'svc', '-n', 'identity', 'authentik-server', 
+                '-o', 'jsonpath={.status.loadBalancer.ingress[0].ip}'
+            ], capture_output=True, text=True, timeout=10)
+            
+            if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():
+                external_ip = kubectl_result.stdout.strip()
+                http_url = f"http://{external_ip}"
+                https_url = f"https://{external_ip}"
+            else:
+                # Try to get NodePort if LoadBalancer IP is not available
+                kubectl_result = subprocess.run([
+                    'kubectl', 'get', 'svc', '-n', 'identity', 'authentik-server', 
+                    '-o', 'jsonpath={.spec.ports[?(@.name=="https")].nodePort}'
+                ], capture_output=True, text=True, timeout=10)
+                
+                if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():
+                    https_port = kubectl_result.stdout.strip()
+                    http_url = f"http://65.21.238.126"  # Use node IP
+                    https_url = f"https://65.21.238.126:{https_port}"
+                else:
+                    http_url = "http://65.21.238.126"
+                    https_url = "https://65.21.238.126"
+        except Exception:
+            http_url = "http://65.21.238.126"
+            https_url = "https://65.21.238.126"
+        
+        return {
+            'http_url': http_url,
+            'https_url': https_url,
+            'admin_username': admin_username,
+            'admin_email': admin_email,
+            'admin_password': bootstrap_password
+        }, None
+        
+    except Exception as e:
+        return None, f"Error retrieving credentials: {str(e)}"
+
 def check_repository_root():
     """Check if the current directory is the root of the NOAH repository"""
     current_dir = Path.cwd()
@@ -517,6 +603,24 @@ def authentik(ctx, namespace, domain):
     
     click.echo(f"✅ Authentik deployed to namespace {namespace}")
     click.echo(f"[VERBOSE] Access SSO at: https://auth.{domain}")
+    
+    # Display Authentik credentials
+    click.echo("\n" + "="*50)
+    click.echo("🔐 AUTHENTIK ADMIN ACCESS")
+    click.echo("="*50)
+    
+    credentials, error = get_authentik_credentials()
+    if credentials:
+        click.echo(f"📍 URL (HTTP):  {credentials['http_url']}")
+        click.echo(f"📍 URL (HTTPS): {credentials['https_url']}")
+        click.echo(f"👤 Username:    {credentials['admin_username']}")
+        click.echo(f"📧 Email:       {credentials['admin_email']}")
+        click.echo(f"🔑 Password:    {credentials['admin_password']}")
+        click.echo("")
+        click.echo("💡 You can log in using either the username or email address")
+    else:
+        click.echo(f"⚠️  Could not retrieve credentials: {error}")
+    click.echo("="*50)
 
 @deploy.command()
 @click.option('--namespace', default='kube-system', help='Kubernetes namespace')
@@ -600,6 +704,26 @@ def all(ctx, domain, cluster_name, config_file):
         ctx.obj['ansible'].run_playbook('cluster-deploy.yml', ansible_vars)
         click.echo("🎉 NOAH standalone IAM deployment successful!")
         click.echo(f"[VERBOSE] All components deployed and validated")
+        
+        # Get and display Authentik credentials
+        click.echo("\n" + "="*60)
+        click.echo("🔐 AUTHENTIK ADMIN ACCESS")
+        click.echo("="*60)
+        
+        credentials, error = get_authentik_credentials()
+        if credentials:
+            click.echo(f"📍 URL (HTTP):  {credentials['http_url']}")
+            click.echo(f"📍 URL (HTTPS): {credentials['https_url']}")
+            click.echo(f"👤 Username:    {credentials['admin_username']}")
+            click.echo(f"📧 Email:       {credentials['admin_email']}")
+            click.echo(f"🔑 Password:    {credentials['admin_password']}")
+            click.echo("")
+            click.echo("💡 You can log in using either the username or email address")
+        else:
+            click.echo(f"⚠️  Could not retrieve credentials: {error}")
+            click.echo("💡 Try running: kubectl get secret -n identity authentik-secrets -o yaml")
+        
+        click.echo("="*60)
         click.echo(f"[VERBOSE] Access points:")
         click.echo(f"  - Authentik IAM: https://auth.{domain}")
         click.echo(f"  - Hubble UI: https://hubble.{domain}")

@@ -7,21 +7,17 @@
     verbose_mode: true  # Enable verbose output by default
     
   tasks:
-    - name: "LOAD CONFIGURATION: Read environment variables from .env file"
+    - name: "LOAD CONFIGURATION: Read environment variables from encrypted config"
       ansible.builtin.shell: |
-        # Load .env file and export variables
-        if [ -f "/root/NOAH/.env" ]; then
-          export $(grep -v '^#' /root/NOAH/.env | xargs)
-          echo "NOAH_ROOT_DIR=${NOAH_ROOT_DIR:-/root/NOAH}"
-          echo "NOAH_SCRIPTS_DIR=${NOAH_SCRIPTS_DIR:-./Scripts}"
-          echo "NOAH_CERTIFICATES_DIR=${NOAH_CERTIFICATES_DIR:-./Certificates}"
-          echo "NOAH_AGE_DIR=${NOAH_AGE_DIR:-./Age}"
-          echo "NOAH_VENV_DIR=${NOAH_VENV_DIR:-./.venv}"
-          echo "SOPS_CONFIG_FILE=${SOPS_CONFIG_FILE:-.sops.yaml}"
-        else
-          echo "ERROR: .env file not found at /root/NOAH/.env"
-          exit 1
-        fi
+        # Load encrypted configuration and export variables
+        cd /root/NOAH
+        python3 Scripts/export_env_vars.py
+        echo "NOAH_ROOT_DIR=/root/NOAH"
+        echo "NOAH_SCRIPTS_DIR=./Scripts"
+        echo "NOAH_CERTIFICATES_DIR=./Certificates"
+        echo "NOAH_AGE_DIR=./Age"
+        echo "NOAH_VENV_DIR=./.venv"
+        echo "SOPS_CONFIG_FILE=.sops.yaml"
       register: env_vars
       changed_when: false
       
@@ -567,8 +563,8 @@
         # Set the environment for NOAH CLI
         export PYTHONPATH=$(pwd):$PYTHONPATH
         
-        # Load environment variables
-        export $(grep -v '^#' .env | xargs)
+        # Load environment variables from encrypted config
+        eval "$(python3 Scripts/export_env_vars.py)"
         NOAH_VENV_DIR=${NOAH_VENV_DIR:-./.venv}
         NOAH_AGE_DIR=${NOAH_AGE_DIR:-./Age}
         NOAH_CERTIFICATES_DIR=${NOAH_CERTIFICATES_DIR:-./Certificates}

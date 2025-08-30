@@ -9,17 +9,13 @@
     verbose_mode: true  # Enable verbose output by default
     
   tasks:
-    - name: "CONFIGURATION: Load environment variables"
+    - name: "CONFIGURATION: Load environment variables from encrypted config"
       ansible.builtin.shell: |
-        # Load .env file and export variables
-        if [ -f "/root/NOAH/.env" ]; then
-          export $(grep -v '^#' /root/NOAH/.env | xargs)
-          echo "NOAH_ROOT_DIR=${NOAH_ROOT_DIR:-/root/NOAH}"
-          echo "ANSIBLE_PLAYBOOK_DIR=${ANSIBLE_PLAYBOOK_DIR:-./Ansible}"
-        else
-          echo "ERROR: .env file not found at /root/NOAH/.env"
-          exit 1
-        fi
+        # Load encrypted configuration and export variables
+        cd /root/NOAH
+        python3 Scripts/export_env_vars.py
+        echo "NOAH_ROOT_DIR=/root/NOAH"
+        echo "ANSIBLE_PLAYBOOK_DIR=./Ansible"
       register: env_vars
       changed_when: false
       

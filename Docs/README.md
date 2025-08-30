@@ -1,9 +1,9 @@
-# 🚀 NOAH Documentation
+# 🚀 NOAH  - Network Operations & Automation Hub
 
-Welcome to **NOAH** (Network Operations & Automation Hub) - a comprehensive Kubernetes infrastructure platform with integrated SSO, networking, and security automation.
+**NOAH** (Network Operations & Automation Hub) is a comprehensive Kubernetes infrastructure platform with integrated SSO, networking, and security automation.
 
 
-## 🏗️ **What is NOAH?**
+## **What is NOAH?**
 
 NOAH provides a complete infrastructure stack:
 
@@ -14,7 +14,7 @@ NOAH provides a complete infrastructure stack:
 - **🧪 Testing Suite** - Built-in validation and health checks
 - **🚀 CI/CD Ready** - GitHub Actions workflows included
 
-## 💼 **Use Cases**
+## **Use Cases**
 
 NOAH is designed for various infrastructure scenarios:
 
@@ -36,7 +36,7 @@ NOAH is designed for various infrastructure scenarios:
 - **CI/CD Integration** - Automated testing and deployment pipelines
 - **Container Orchestration** - Production-ready Kubernetes with networking
 
-## ⚡ **Quick Start**
+## **Quick Start**
 
 ### **Single Command Deployment**
 ```bash
@@ -64,7 +64,7 @@ python noah.py password show
 python noah.py test sso
 ```
 
-## 🎯 **Architecture Overview**
+## **Architecture Overview**
 
 ```
 ┌─────────────────────────────────────────┐
@@ -92,7 +92,7 @@ python noah.py test sso
 └─────────────────────────────────────────┘
 ```
 
-## 🌐 **Service Access**
+## **Service Access**
 
 After deployment, access services at:
 
@@ -101,7 +101,7 @@ After deployment, access services at:
 
 Default credentials available via: `python noah.py password show`
 
-## 📋 **Requirements**
+## **Requirements**
 
 ### **System**
 - **OS**: Ubuntu 20.04+ (recommended)
@@ -109,4 +109,5 @@ Default credentials available via: `python noah.py password show`
 - **Network**: Internet connectivity for component downloads
 
 ---
-Apache 2.0 licence - Made with ❤️
+Apache 2.0 licence 
+Made with ❤️

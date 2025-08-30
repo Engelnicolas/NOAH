@@ -8,8 +8,8 @@ import os
 from unittest.mock import Mock, patch
 from click.testing import CliRunner
 
-# Add current directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add project root to sys.path for module resolution
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import noah
 

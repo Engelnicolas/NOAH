@@ -13,10 +13,11 @@ import subprocess
 import shutil
 import time
 from pathlib import Path
-from dotenv import load_dotenv  # type: ignore
+from Scripts.secure_env_loader import SecureEnvLoader
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from encrypted configuration
+secure_loader = SecureEnvLoader()
+secure_loader.load_secure_env(Path("config.enc.yaml"))
 
 # Import CLI utilities
 from CLI.kubectl_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected

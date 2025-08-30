@@ -70,8 +70,10 @@ spec:
               name: {{ .Values.authentik.secret.existingSecret | default (printf "%s-secret" (include "authentik.fullname" .)) }}
               key: email-password
         {{- end }}
-        {{- if .Values.authentik.oidc.enabled }}
-        # OIDC Provider Configuration
+        {{- if .Values.authentik.bootstrap.enabled }}
+        # Bootstrap Admin User Configuration
+        - name: AUTHENTIK_BOOTSTRAP_EMAIL
+          value: "{{ .Values.authentik.bootstrap.adminEmail }}"
         - name: AUTHENTIK_BOOTSTRAP_TOKEN
           valueFrom:
             secretKeyRef:

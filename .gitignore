@@ -94,3 +94,6 @@ Helm/authentik/secrets/authentik-secrets.enc.yaml
 Helm/cilium/secrets/cilium-secrets.enc.yaml
 Helm/samba4/secrets/.temp-values.yaml
 Helm/cilium/secrets/cilium-secrets.enc.yaml
+Certificates/ca.crt
+Certificates/ca.key
+Certificates/ca.pem

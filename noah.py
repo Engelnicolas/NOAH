@@ -482,14 +482,15 @@ def ensure_security_initialized(ctx):
     else:
         click.echo("[VERBOSE] Age keys found in Age/ directory")
     
-    # Check and generate TLS certificates
+    # Check and generate TLS certificates for development/fallback
     certs_dir = Path("Certificates")
     if not certs_dir.exists() or not any(certs_dir.glob("*.crt")):
-        click.echo(f"[VERBOSE] No TLS certificates found. Generating self-signed certificates for {DEFAULT_DOMAIN}...")
+        click.echo(f"[VERBOSE] Generating self-signed certificates for development/fallback...")
         ctx.obj['secrets'].generate_tls_certificates(DEFAULT_DOMAIN)
-        click.echo(f"[VERBOSE] TLS certificates generated for domain: {DEFAULT_DOMAIN}")
+        click.echo(f"[VERBOSE] Self-signed certificates generated (development/fallback)")
+        click.echo(f"[VERBOSE] For production HTTPS, deploy cert-manager: python noah.py deploy cert-manager")
     else:
-        click.echo("[VERBOSE] TLS certificates found in Certificates/ directory")
+        click.echo("[VERBOSE] Self-signed certificates found (development/fallback ready)")
     
     # Export security configuration for debugging
     if click.get_current_context().obj.get('debug'):
@@ -1064,6 +1065,12 @@ def all(ctx, domain, cluster_name, config_file, regenerate_password):
         click.echo(f"   Traefik: https://dashboard.{domain}")
         
         click.echo("="*60)
+        
+        # Certificate management information
+        click.echo("🔒 TLS CERTIFICATES:")
+        click.echo("   📁 Self-signed certificates available for development")
+        click.echo("   🌍 For production HTTPS: 'python noah.py deploy cert-manager'")
+        click.echo("   🔄 Automatic Let's Encrypt renewal enabled")
         
         # Run post-deployment validation
         click.echo("[VERBOSE] Running post-deployment validation...")

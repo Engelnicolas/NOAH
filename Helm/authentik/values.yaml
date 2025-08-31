@@ -23,17 +23,15 @@ service:
 
 ingress:
   enabled: true  # Enable ingress for OIDC endpoints
-  className: cilium  # Options: "nginx", "cilium", or "traefik"
+  className: traefik  # Using Traefik ingress controller
   annotations:
-    # Common annotations for all ingress controllers
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    # Nginx-specific (when className: nginx)
-    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    # OIDC-specific headers
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      more_set_headers "Access-Control-Allow-Origin: *";
-      more_set_headers "Access-Control-Allow-Methods: GET, POST, OPTIONS";
-      more_set_headers "Access-Control-Allow-Headers: Authorization, Content-Type";
+    # Traefik-specific annotations
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: "letsencrypt"
+    # OIDC-specific headers for CORS
+    traefik.ingress.kubernetes.io/router.middlewares: "authentik-cors@kubernetescrd"
+    # SSL redirect
+    traefik.ingress.kubernetes.io/redirect-to-https: "true"
   hosts:
     - host: auth.noah-infra.com
       paths:

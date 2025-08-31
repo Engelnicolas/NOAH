@@ -1,0 +1,149 @@
+# Traefik Configuration for NOAH Infrastructure
+# Provides ingress for Authentik, Hubble UI, and other services
+
+# Service configuration
+service:
+  enabled: true
+  type: LoadBalancer
+  annotations:
+    # Cilium LoadBalancer integration
+    service.cilium.io/global: "true"
+    service.cilium.io/shared: "true"
+  spec:
+    # External traffic policy for better performance
+    externalTrafficPolicy: Local
+
+# Ports configuration
+ports:
+  web:
+    port: 80
+    expose: true
+    protocol: TCP
+  websecure:
+    port: 443
+    expose: true
+    protocol: TCP
+    tls:
+      enabled: true
+  traefik:
+    port: 9000
+    expose: false  # Dashboard port - keep internal for security
+
+# TLS configuration
+tls:
+  stores:
+    default:
+      defaultGeneratedCert:
+        resolver: letsencrypt
+        domain:
+          main: "*.noah-infra.com"
+
+# Certificate resolvers for automatic SSL
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@noah-infra.com
+      storage: /data/acme.json
+      # Use HTTP challenge for wildcard support
+      httpChallenge:
+        entryPoint: web
+      # Alternative: DNS challenge for wildcard certificates
+      # dnsChallenge:
+      #   provider: cloudflare
+
+# Dashboard configuration
+api:
+  dashboard: true
+  insecure: false  # Secure dashboard access
+
+# IngressClass configuration
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+
+# Pilot telemetry (disable for security)
+pilot:
+  enabled: false
+
+# Global arguments
+globalArguments:
+  - "--global.checknewversion=false"
+  - "--global.sendanonymoususage=false"
+
+# Additional arguments
+additionalArguments:
+  - "--serversTransport.insecureSkipVerify=true"
+  - "--log.level=INFO"
+  - "--accesslog=true"
+  - "--entrypoints.web.address=:80"
+  - "--entrypoints.websecure.address=:443"
+  - "--providers.kubernetescrd=true"
+  - "--providers.kubernetesingress=true"
+
+# Resource limits
+resources:
+  requests:
+    cpu: 100m
+    memory: 50Mi
+  limits:
+    cpu: 300m
+    memory: 150Mi
+
+# Security context
+securityContext:
+  capabilities:
+    drop: [ALL]
+  readOnlyRootFilesystem: true
+  runAsGroup: 65532
+  runAsNonRoot: true
+  runAsUser: 65532
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 65532
+
+# Deployment configuration
+deployment:
+  enabled: true
+  replicas: 1
+  annotations: {}
+  podAnnotations: {}
+  initContainers: []
+
+# Persistence for SSL certificates
+persistence:
+  enabled: true
+  name: data
+  accessMode: ReadWriteOnce
+  size: 128Mi
+  storageClass: ""
+  path: /data
+  annotations: {}
+
+# Service account
+serviceAccount:
+  name: ""
+
+# RBAC
+rbac:
+  enabled: true
+
+# Metrics (disabled by default)
+metrics:
+  prometheus:
+    enabled: false
+
+# Health checks
+readinessProbe:
+  failureThreshold: 1
+  initialDelaySeconds: 2
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 2
+
+livenessProbe:
+  failureThreshold: 3
+  initialDelaySeconds: 2
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 2

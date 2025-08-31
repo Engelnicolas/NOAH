@@ -1,0 +1,11 @@
+apiVersion: v2
+name: traefik
+description: Traefik ingress controller for NOAH infrastructure
+type: application
+version: 1.0.0
+appVersion: "3.0"
+
+dependencies:
+  - name: traefik
+    version: "28.3.0"
+    repository: "https://traefik.github.io/charts"

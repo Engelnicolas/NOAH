@@ -1,61 +1,73 @@
-# NOAH Cilium CNI Configuration - SSO Ready
-# This file configures Cilium to support standalone Authentik IAM
-# Network policies and service mesh configuration for secure communication
+# NOAH Cilium CNI Configuration - Core Settings
+# Simplified configuration that merges working settings
 
-# Enable/disable the dependency
-cilium:
-  enabled: true
+# Core Cilium configuration
+kubeProxyReplacement: true
+k8sServiceHost: 127.0.0.1
+k8sServicePort: 6443
 
-# Global NOAH settings
-global:
-  domain: noah-infra.com
-  sso:
-    enabled: true
-    provider: authentik
-    ldap_provider: standalone
+# Enable flow logging for service map
+flowLogsEnabled: true
+monitorAggregation: maximum
 
-# Cilium configuration overrides optimized for SSO
-operator:
-  replicas: 1
-  
+# IPAM configuration
 ipam:
   mode: kubernetes
-  
-# Enable strict kube-proxy replacement for better performance
-kubeProxyReplacement: strict
 
-k8sServiceHost: kubernetes.default.svc.cluster.local
-k8sServicePort: 443
+# Operator settings
+operator:
+  replicas: 1
+  # Enable CRD management for network policies and services
+  enableIPv4: true
+  enableIPv6: false
 
-# Enable service mesh features for SSO communication
+# Enable service mesh features
 serviceMesh:
   enabled: true
-
-# Enable L7 policy enforcement for application-level security
 l7Proxy: true
 
-# Enable Cilium Ingress Controller for domain routing
-ingressController:
-  enabled: true
-  loadbalancerMode: shared
-  service:
-    type: LoadBalancer
-  # Enable Gateway API for modern ingress
-gatewayAPI:
-  enabled: true
-  
-# Enable advanced load balancing features  
-loadBalancer:
-  algorithm: round_robin
-  mode: snat
+# Network policy enforcement  
+policyEnforcement: default
 
-# Enable BGP for advanced networking (if needed)
-bgp:
-  enabled: false
+# Resource configuration
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
 
 # Hubble configuration with SSO integration
 hubble:
   enabled: true
+  # Enable flow collection and metrics
+  metrics:
+    enabled:
+      - dns
+      - drop
+      - tcp
+      - flow
+      - icmp
+      - http
+    # Enable service monitoring metrics
+    serviceMonitor:
+      enabled: false
+    # Export flow metrics
+    dashboards:
+      enabled: false
+  # Configure flow export for service map functionality (v1.18+ format)
+  export:
+    static:
+      enabled: true
+      filePath: "/var/run/cilium/hubble/events.log"
+      fileMaxSizeMb: 10
+      fileMaxBackups: 5
+      fileCompress: true
+  # Enable service observability
+  observe:
+    # Enable service map data collection
+    historySize: 4096
   relay:
     enabled: true
     resources:
@@ -104,52 +116,8 @@ hubble:
           hosts:
             - hubble.noah-infra.com
 
-# Prometheus monitoring integration
+# Prometheus monitoring integration (disabled until operator available)
 prometheus:
   enabled: true
   serviceMonitor:
-    enabled: true
-    
-# Resource configuration
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 1000m
-    memory: 1Gi
-
-# Network Policy Configuration for SSO Services
-networkPolicy:
-  enabled: true
-
-# DNS configuration for proper service discovery
-dnsPolicy:
-  enabled: true
-
-# Enable identity-aware proxying
-identityAwareProxy:
-  enabled: true
-
-nodeSelector: {}
-tolerations: []
-affinity: {}
-
-# Additional configuration for SSO integration
-extraConfig:
-  # Enable CRDs for network policies
-  crd:
-    install: true
-  
-  # Configure service mesh for SSO
-  serviceMesh:
-    enableTracing: true
-    
-  # Configure identity for services
-  identity:
-    allocator: kvstore
-    
-  # Configure encryption for inter-service communication
-  encryption:
-    enabled: true
-    type: ipsec
+    enabled: false

@@ -4,13 +4,11 @@ metadata:
   name: traefik-dashboard
   namespace: traefik
   annotations:
-    # Traefik-specific annotations
+    # Traefik-specific annotations for HTTPS-only
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.tls.certresolver: "letsencrypt"
-    # Forward auth to Authentik for SSO protection
-    traefik.ingress.kubernetes.io/router.middlewares: "traefik-dashboard-auth@kubernetescrd"
-    # SSL redirect
-    traefik.ingress.kubernetes.io/redirect-to-https: "true"
+    traefik.ingress.kubernetes.io/router.middlewares: traefik-https-redirect@kubernetescrd,traefik-security-headers@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: traefik
   tls:

@@ -784,6 +784,54 @@ def authentik(ctx, namespace, domain, regenerate_password):
     click.echo("="*50)
 
 @deploy.command()
+@click.option('--namespace', default='cert-manager', help='Kubernetes namespace')
+@click.option('--email', default='admin@noah-infra.com', help='Email for Let\'s Encrypt certificates')
+@click.pass_context
+def cert_manager(ctx, namespace, email):
+    """Deploy cert-manager for automated TLS certificate management"""
+    if ctx.obj.get('verbose'):
+        click.echo(f"[VERBOSE] Domain: {DEFAULT_DOMAIN}")
+        click.echo(f"[VERBOSE] Namespace: {namespace}")
+        click.echo(f"[VERBOSE] Email: {email}")
+    
+    click.echo("🔒 Deploying cert-manager for Let's Encrypt certificates...")
+    
+    try:
+        # Add Jetstack repository and deploy cert-manager
+        import subprocess
+        
+        subprocess.run(['helm', 'repo', 'add', 'jetstack', 'https://charts.jetstack.io'], check=True)
+        subprocess.run(['helm', 'repo', 'update'], check=True)
+        
+        # Deploy cert-manager with CRDs
+        cmd = [
+            'helm', 'upgrade', '--install', 'cert-manager', 'jetstack/cert-manager',
+            '--namespace', namespace,
+            '--create-namespace',
+            '--set', 'installCRDs=true',
+            '--timeout', '300s'
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            click.echo("✅ cert-manager deployed successfully!")
+            
+            # Deploy ClusterIssuers using our Helm chart
+            config_loader = ConfigLoader()
+            deployer = HelmDeployer(config_loader)
+            deployer.deploy_chart('cert-manager', namespace)
+            
+            click.echo("✅ Let's Encrypt ClusterIssuers configured!")
+            click.echo(f"📧 Certificate email: {email}")
+            click.echo("🔒 Production issuer: letsencrypt-prod")
+            click.echo("🧪 Staging issuer: letsencrypt-staging")
+        else:
+            click.echo(f"❌ Deployment failed: {result.stderr}")
+            
+    except Exception as e:
+        click.echo(f"❌ Error deploying cert-manager: {e}")
+
+@deploy.command()
 @click.option('--namespace', default='kube-system', help='Kubernetes namespace')
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service')
 @click.pass_context

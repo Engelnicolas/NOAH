@@ -1,5 +1,5 @@
 # Traefik Configuration for NOAH Infrastructure
-# Provides ingress for Authentik, Hubble UI, and other services
+# Provides HTTPS-only ingress with Let's Encrypt certificates
 
 # Service configuration
 service:
@@ -27,34 +27,45 @@ ports:
       enabled: true
   traefik:
     port: 9000
-    expose: false  # Dashboard port - keep internal for security
+    expose: true  # Dashboard port - expose for health checks
+    exposedPort: 9000
 
-# TLS configuration
-tls:
-  stores:
-    default:
-      defaultGeneratedCert:
-        resolver: letsencrypt
-        domain:
-          main: "*.noah-infra.com"
+# Deployment configuration
+deployment:
+  enabled: true
+  kind: Deployment
+  replicas: 1
 
-# Certificate resolvers for automatic SSL
-certificatesResolvers:
-  letsencrypt:
-    acme:
-      email: admin@noah-infra.com
-      storage: /data/acme.json
-      # Use HTTP challenge for wildcard support
-      httpChallenge:
-        entryPoint: web
-      # Alternative: DNS challenge for wildcard certificates
-      # dnsChallenge:
-      #   provider: cloudflare
+# Resources
+resources:
+  requests:
+    cpu: "100m"
+    memory: "50Mi"
+  limits:
+    cpu: "300m"
+    memory: "150Mi"
+
+# RBAC
+rbac:
+  enabled: true
+
+# Persistence for ACME certificates
+persistence:
+  enabled: true
+  name: data
+  accessMode: ReadWriteOnce
+  size: 128Mi
+  path: /data
 
 # Dashboard configuration
 api:
   dashboard: true
-  insecure: true  # Allow insecure dashboard access for development
+  insecure: true
+
+# Health check endpoint
+ping:
+  enabled: true
+  entryPoint: "traefik"
 
 # IngressClass configuration
 ingressClass:
@@ -70,24 +81,20 @@ globalArguments:
   - "--global.checknewversion=false"
   - "--global.sendanonymoususage=false"
 
-# Additional arguments
+# Additional arguments for HTTPS and Let's Encrypt
 additionalArguments:
   - "--serversTransport.insecureSkipVerify=true"
   - "--log.level=INFO"
-  - "--accesslog=true"
-  - "--entrypoints.web.address=:80"
-  - "--entrypoints.websecure.address=:443"
-  - "--providers.kubernetescrd=true"
-  - "--providers.kubernetesingress=true"
-
-# Resource limits
-resources:
-  requests:
-    cpu: 100m
-    memory: 50Mi
-  limits:
-    cpu: 300m
-    memory: 150Mi
+  - "--certificatesresolvers.letsencrypt-prod.acme.email=admin@noah-infra.com"
+  - "--certificatesresolvers.letsencrypt-prod.acme.storage=/data/acme.json"
+  - "--certificatesresolvers.letsencrypt-prod.acme.httpchallenge.entrypoint=web"
+  - "--certificatesresolvers.letsencrypt-staging.acme.email=admin@noah-infra.com"
+  - "--certificatesresolvers.letsencrypt-staging.acme.storage=/data/acme-staging.json"
+  - "--certificatesresolvers.letsencrypt-staging.acme.httpchallenge.entrypoint=web"
+  - "--certificatesresolvers.letsencrypt-staging.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+  - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+  - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+  - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
 
 # Security context
 securityContext:
@@ -101,37 +108,6 @@ securityContext:
 # Pod security context
 podSecurityContext:
   fsGroup: 65532
-
-# Deployment configuration
-deployment:
-  enabled: true
-  replicas: 1
-  annotations: {}
-  podAnnotations: {}
-  initContainers: []
-
-# Persistence for SSL certificates
-persistence:
-  enabled: true
-  name: data
-  accessMode: ReadWriteOnce
-  size: 128Mi
-  storageClass: ""
-  path: /data
-  annotations: {}
-
-# Service account
-serviceAccount:
-  name: ""
-
-# RBAC
-rbac:
-  enabled: true
-
-# Metrics (disabled by default)
-metrics:
-  prometheus:
-    enabled: false
 
 # Health checks
 readinessProbe:

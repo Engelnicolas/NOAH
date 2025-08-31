@@ -1,0 +1,66 @@
+# cert-manager Configuration for NOAH Infrastructure
+# Provides automated Let's Encrypt SSL certificates for all services
+
+# cert-manager configuration
+cert-manager:
+  # Install CRDs automatically
+  installCRDs: true
+  
+  # Namespace configuration
+  namespace: cert-manager
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+      
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    
+  # Webhook configuration
+  webhook:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+        
+  # CA Injector configuration
+  cainjector:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+# Let's Encrypt ClusterIssuer configuration
+clusterIssuer:
+  # Production Let's Encrypt issuer
+  enabled: true
+  name: letsencrypt-prod
+  email: admin@noah-infra.com
+  server: https://acme-v02.api.letsencrypt.org/directory
+  
+  # Staging issuer for testing
+  staging:
+    enabled: true
+    name: letsencrypt-staging
+    email: admin@noah-infra.com
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+
+# ACME challenge configuration
+acme:
+  # Use HTTP-01 challenge with Traefik
+  solvers:
+    - http01:
+        ingress:
+          class: traefik

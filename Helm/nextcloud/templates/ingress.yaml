@@ -6,10 +6,10 @@ metadata:
   labels:
     {{- include "nextcloud.labels" . | nindent 4 }}
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-    # traefik.ingress.kubernetes.io/router.tls: "true"
-    # traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-nextcloud-security@kubernetescrd
-    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.middlewares: traefik-https-redirect@kubernetescrd,traefik-security-headers@kubernetescrd,{{ .Release.Namespace }}-nextcloud-security@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: traefik
   tls:

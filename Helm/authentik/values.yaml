@@ -25,13 +25,11 @@ ingress:
   enabled: true  # Enable ingress for OIDC endpoints
   className: traefik  # Using Traefik ingress controller
   annotations:
-    # Traefik-specific annotations
+    # Traefik-specific annotations for HTTPS-only
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.tls.certresolver: "letsencrypt"
-    # OIDC-specific headers for CORS
-    traefik.ingress.kubernetes.io/router.middlewares: "authentik-cors@kubernetescrd"
-    # SSL redirect
-    traefik.ingress.kubernetes.io/redirect-to-https: "true"
+    traefik.ingress.kubernetes.io/router.middlewares: traefik-https-redirect@kubernetescrd,traefik-security-headers@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
     - host: auth.noah-infra.com
       paths:

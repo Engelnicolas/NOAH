@@ -54,7 +54,7 @@ certificatesResolvers:
 # Dashboard configuration
 api:
   dashboard: true
-  insecure: false  # Secure dashboard access
+  insecure: true  # Allow insecure dashboard access for development
 
 # IngressClass configuration
 ingressClass:

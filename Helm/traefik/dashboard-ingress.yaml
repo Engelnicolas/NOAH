@@ -1,0 +1,63 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: traefik-dashboard
+  namespace: traefik
+  annotations:
+    # Traefik-specific annotations
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: "letsencrypt"
+    # Forward auth to Authentik for SSO protection
+    traefik.ingress.kubernetes.io/router.middlewares: "traefik-dashboard-auth@kubernetescrd"
+    # SSL redirect
+    traefik.ingress.kubernetes.io/redirect-to-https: "true"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - dashboard.noah-infra.com
+      secretName: traefik-dashboard-tls
+  rules:
+    - host: dashboard.noah-infra.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: traefik
+                port:
+                  number: 9000
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: traefik-dashboard-auth
+  namespace: traefik
+spec:
+  forwardAuth:
+    address: "https://auth.noah-infra.com/outpost.goauthentik.io/auth/traefik"
+    authResponseHeaders:
+      - "Set-Cookie"
+      - "X-authentik-username"
+      - "X-authentik-groups"
+      - "X-authentik-email"
+      - "X-authentik-name"
+      - "X-authentik-uid"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-dashboard
+  namespace: traefik
+spec:
+  selector:
+    app.kubernetes.io/instance: traefik-traefik
+    app.kubernetes.io/name: traefik
+  ports:
+    - name: dashboard
+      port: 9000
+      targetPort: 9000
+      protocol: TCP

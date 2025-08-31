@@ -1,0 +1,48 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: nextcloud-headers
+  namespace: {{ .Release.Namespace }}
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+      X-Forwarded-Port: "443"
+    customResponseHeaders:
+      # Nextcloud-specific headers
+      X-Content-Type-Options: "nosniff"
+      X-Frame-Options: "SAMEORIGIN"
+      X-XSS-Protection: "1; mode=block"
+      X-Robots-Tag: "none"
+      X-Download-Options: "noopen"
+      X-Permitted-Cross-Domain-Policies: "none"
+      Referrer-Policy: "no-referrer"
+      # Security headers
+      Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: nextcloud-security
+  namespace: {{ .Release.Namespace }}
+spec:
+  headers:
+    frameDeny: false  # Allow same origin for Nextcloud
+    contentTypeNosniff: true
+    browserXssFilter: true
+    referrerPolicy: "strict-origin-when-cross-origin"
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+
+---
+apiVersion: traefik.io/v1alpha1  
+kind: Middleware
+metadata:
+  name: nextcloud-redirect
+  namespace: {{ .Release.Namespace }}
+spec:
+  redirectRegex:
+    regex: "^https://([^/]+)/.well-known/(card|cal)dav"
+    replacement: "https://${1}/remote.php/dav/"
+    permanent: true

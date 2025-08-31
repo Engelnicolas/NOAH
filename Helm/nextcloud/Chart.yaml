@@ -1,0 +1,34 @@
+apiVersion: v2
+name: nextcloud
+description: Nextcloud file sharing and collaboration platform with SSO integration
+type: application
+version: 1.0.0
+appVersion: "28.0"
+
+dependencies:
+  - name: nextcloud
+    version: "4.6.4"
+    repository: "https://nextcloud.github.io/helm/"
+  - name: postgresql
+    version: "13.2.24"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.6.1"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+
+keywords:
+  - nextcloud
+  - file-sharing
+  - collaboration
+  - sso
+  - oidc
+
+maintainers:
+  - name: NOAH Infrastructure Team
+    email: admin@noah-infra.com
+
+sources:
+  - https://github.com/nextcloud/helm
+  - https://github.com/nextcloud/server

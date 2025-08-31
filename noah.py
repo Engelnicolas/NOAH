@@ -813,6 +813,80 @@ def cilium(ctx, namespace, domain):
 
 @deploy.command()
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
+@click.option('--namespace', default='collaboration', help='Kubernetes namespace')
+@click.option('--regenerate-secrets', is_flag=True, help='Generate new secrets for Nextcloud')
+@click.pass_context
+def nextcloud(ctx, domain, namespace, regenerate_secrets):
+    """Deploy Nextcloud file sharing platform with SSO integration"""
+    # Ensure security is initialized
+    ensure_security_initialized(ctx)
+    
+    click.echo("🗄️  Deploying Nextcloud file sharing platform...")
+    click.echo(f"[VERBOSE] Domain: cloud.{domain}")
+    click.echo(f"[VERBOSE] Namespace: {namespace}")
+    
+    # Regenerate secrets if requested
+    if regenerate_secrets:
+        click.echo("🔄 Regenerating Nextcloud secrets...")
+        try:
+            result = subprocess.run([
+                'python', 'Scripts/security_manager.py', 'rotate', 'nextcloud'
+            ], capture_output=True, text=True, check=True)
+            click.echo("✅ Secrets regenerated successfully")
+        except subprocess.CalledProcessError as e:
+            click.echo(f"❌ Secret regeneration failed: {e.stderr}", err=True)
+            sys.exit(1)
+    
+    # Deploy the chart
+    try:
+        # Create namespace
+        subprocess.run(['kubectl', 'create', 'namespace', namespace], 
+                      capture_output=True, check=False)
+        
+        # Deploy using Helm
+        ctx.obj['helm'].deploy_chart('nextcloud', namespace)
+        
+        click.echo("✅ Nextcloud deployed successfully!")
+        
+        # Get and display access information
+        click.echo("\n" + "="*60)
+        click.echo("🗄️  NEXTCLOUD ACCESS INFORMATION")
+        click.echo("="*60)
+        
+        # Decode secrets to show admin credentials
+        try:
+            # Get admin credentials from encrypted secrets
+            result = subprocess.run([
+                'kubectl', 'get', 'secret', 'nextcloud-admin-secret', 
+                '-n', namespace, '-o', 'jsonpath={.data.nextcloud-password}'
+            ], capture_output=True, text=True, check=True)
+            
+            import base64
+            admin_password = base64.b64decode(result.stdout).decode('utf-8')
+            
+            click.echo(f"📍 URL:        https://cloud.{domain}")
+            click.echo(f"👤 Username:   nextcloud-admin")
+            click.echo(f"🔑 Password:   {admin_password}")
+            click.echo(f"🔐 SSO Login:  Available via 'Log in with NOAH SSO' button")
+            
+        except Exception as e:
+            click.echo(f"⚠️  Could not retrieve admin credentials: {e}")
+            click.echo("💡 Try: kubectl get secret nextcloud-admin-secret -n collaboration -o yaml")
+        
+        click.echo("="*60)
+        click.echo(f"[VERBOSE] Nextcloud features:")
+        click.echo("  - File sharing and collaboration")
+        click.echo("  - SSO integration with Authentik")
+        click.echo("  - PostgreSQL database")
+        click.echo("  - Redis caching")
+        click.echo("  - Automatic SSL via Traefik")
+        
+    except Exception as e:
+        click.echo(f"❌ Nextcloud deployment failed: {str(e)}", err=True)
+        sys.exit(1)
+
+@deploy.command()
+@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
 @click.option('--cluster-name', default='noah-cluster', help='Cluster name for deployment')
 @click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')
 @click.option('--regenerate-password', is_flag=True, help='Generate new Authentik admin password')
@@ -902,6 +976,46 @@ def all(ctx, domain, cluster_name, config_file, regenerate_password):
         click.echo(f"[VERBOSE] Access points:")
         click.echo(f"  - Authentik IAM: https://auth.{domain}")
         click.echo(f"  - Hubble UI: https://hubble.{domain}")
+        click.echo(f"  - Nextcloud: https://cloud.{domain}")
+        click.echo(f"  - Traefik Dashboard: https://dashboard.{domain}")
+        
+        # Display all web portal information
+        click.echo("\n" + "="*60)
+        click.echo("🌐 WEB PORTAL ACCESS SUMMARY")
+        click.echo("="*60)
+        
+        # Show Authentik credentials
+        if credentials:
+            click.echo("🔐 AUTHENTIK SSO:")
+            click.echo(f"   URL: https://auth.{domain}")
+            click.echo(f"   Admin: {credentials['admin_username']}")
+            click.echo(f"   Password: {credentials['admin_password']}")
+        
+        # Show Nextcloud access info
+        try:
+            result = subprocess.run([
+                'kubectl', 'get', 'secret', 'nextcloud-admin-secret', 
+                '-n', 'collaboration', '-o', 'jsonpath={.data.nextcloud-password}'
+            ], capture_output=True, text=True, check=False)
+            
+            if result.returncode == 0:
+                import base64
+                nc_password = base64.b64decode(result.stdout).decode('utf-8')
+                click.echo("🗄️  NEXTCLOUD FILES:")
+                click.echo(f"   URL: https://cloud.{domain}")
+                click.echo(f"   Admin: nextcloud-admin")
+                click.echo(f"   Password: {nc_password}")
+            else:
+                click.echo("🗄️  NEXTCLOUD: Deploy with 'python noah.py deploy nextcloud'")
+        except:
+            click.echo("🗄️  NEXTCLOUD: Deploy with 'python noah.py deploy nextcloud'")
+        
+        click.echo("🌐 NETWORK MONITORING:")
+        click.echo(f"   Hubble UI: https://hubble.{domain}")
+        click.echo("🚪 LOAD BALANCER:")
+        click.echo(f"   Traefik: https://dashboard.{domain}")
+        
+        click.echo("="*60)
         
         # Run post-deployment validation
         click.echo("[VERBOSE] Running post-deployment validation...")

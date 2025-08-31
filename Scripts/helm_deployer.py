@@ -29,6 +29,7 @@ class HelmDeployer:
         chart_timeouts = {
             'cilium': '600s',      # 10 minutes - CNI deployment
             'authentik': '720s',   # 12 minutes - DB + App initialization 
+            'nextcloud': '900s',   # 15 minutes - Full stack with DB + Redis + App
         }
         timeout = chart_timeouts.get(chart_name, self.timeout)
         

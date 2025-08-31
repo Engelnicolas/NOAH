@@ -1,0 +1,12 @@
+dependencies:
+- name: nextcloud
+  repository: https://nextcloud.github.io/helm/
+  version: 4.6.4
+- name: postgresql
+  repository: https://charts.bitnami.com/bitnami
+  version: 13.2.24
+- name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 18.6.1
+digest: sha256:473c9dd885452cbc3f87a203a06544c20f0d1b2e26a09fb47fc8866b816bc4af
+generated: "2025-08-31T10:04:19.29269609+02:00"

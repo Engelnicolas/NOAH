@@ -19,9 +19,9 @@ from Scripts.secure_env_loader import SecureEnvLoader
 secure_loader = SecureEnvLoader()
 secure_loader.load_secure_env(Path("Config/config.enc.yaml"))
 
-# Import CLI utilities
-from CLI.kubectl_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected
-# from CLI.redeploy_utils import execute_redeploy  # Commented out - redeploy feature disabled
+# Import CLI utilities from Scripts
+from Scripts.cli_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected
+# from Scripts.redeploy_utils import execute_redeploy  # Commented out - redeploy feature disabled
 
 # Configuration paths from environment variables
 def get_noah_paths():

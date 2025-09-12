@@ -48,6 +48,7 @@ from Scripts.ansible_runner import AnsibleRunner
 from Scripts.config_loader import ConfigLoader
 from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists
 from Scripts.cluster_create.status_utils import show_cluster_status
+from Scripts.cluster_create.cluster_validation_utils import check_existing_cluster
 from Scripts.env_init.doctor_utils import diagnose_noah_environment
 
 VERSION = "0.0.2"
@@ -260,44 +261,6 @@ def check_repository_root():
         click.echo(f"   cd /path/to/noah-repository", err=True)
         click.echo(f"   python noah.py <command>", err=True)
         sys.exit(1)
-
-def check_existing_cluster():
-    """Check if a K3s cluster or related components exist"""
-    try:
-        # Check for existing K3s processes
-        result = subprocess.run(['pgrep', '-f', 'k3s'], capture_output=True)
-        if result.returncode == 0:
-            return True
-        
-        # Check for existing K3s service
-        result = subprocess.run(['systemctl', 'is-active', 'k3s'], capture_output=True)
-        if result.returncode == 0:
-            return True
-        
-        # Check for existing kubectl context
-        result = subprocess.run(['kubectl', 'cluster-info'], capture_output=True)
-        if result.returncode == 0:
-            return True
-        
-        # Check for existing NOAH data directories
-        data_dirs = ['/var/lib/rancher/k3s', '/etc/rancher/k3s', '/run/k3s']
-        for dir_path in data_dirs:
-            if Path(dir_path).exists():
-                return True
-        
-        # Check for existing Helm releases (only if cluster is accessible)
-        if shutil.which('helm') and subprocess.run(['kubectl', 'cluster-info'], capture_output=True).returncode == 0:
-            result = subprocess.run(['helm', 'list', '--all-namespaces', '-o', 'json'], 
-                                  capture_output=True, text=True)
-            if result.returncode == 0 and result.stdout.strip() and result.stdout.strip() != '[]':
-                return True
-        
-        return False
-    except Exception:
-        # If any check fails, assume no cluster exists
-        return False
-    
-    return True
 
 def get_security_config(domain=DEFAULT_DOMAIN):
     """Get security configuration for Helm and Ansible"""

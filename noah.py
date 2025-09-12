@@ -20,7 +20,7 @@ secure_loader = SecureEnvLoader()
 secure_loader.load_secure_env(Path("Config/config.enc.yaml"))
 
 # Import CLI utilities
-from CLI.kubectl_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected
+from Scripts.cluster_destroy.kubectl_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected
 # from CLI.redeploy_utils import execute_redeploy  # Commented out - redeploy feature disabled
 
 # Configuration paths from environment variables
@@ -46,6 +46,7 @@ from Scripts.security_manager import NoahSecurityManager as SecretManager
 from Scripts.helm_deployer import HelmDeployer
 from Scripts.ansible_runner import AnsibleRunner
 from Scripts.config_loader import ConfigLoader
+from Scripts.env_init.environment_initializer import initialize_noah_environment
 
 VERSION = "0.0.1"
 # Load default domain from environment, fallback to noah-infra.com
@@ -471,11 +472,8 @@ def ensure_security_initialized(ctx):
         # Create Age directory if it doesn't exist
         age_dir.mkdir(exist_ok=True)
         
-        # Initialize Age keys
-        ctx.obj['secrets'].initialize_age()
-        
-        # Configure SOPS
-        ctx.obj['secrets'].configure_sops()
+        # Initialize Age keys and configure SOPS
+        ctx.obj['secrets'].initialize_encryption()
         
         click.echo("[VERBOSE] Age keys generated successfully in Age/ directory")
         click.echo("[VERBOSE] SOPS configuration created")
@@ -941,9 +939,8 @@ def init(ctx):
     age_dir.mkdir(exist_ok=True)
     
     click.echo("[VERBOSE] Initializing Age keys...")
-    ctx.obj['secrets'].initialize_age()
-    click.echo("[VERBOSE] Configuring SOPS...")
-    ctx.obj['secrets'].configure_sops()
+    ctx.obj['secrets'].initialize_encryption()
+    click.echo("[VERBOSE] SOPS configuration completed.")
 
 @secrets.command()
 @click.option('--service', required=True, help='Service name')
@@ -1015,10 +1012,6 @@ def regenerate(ctx, service, namespace):
     ctx.obj['secrets'].generate_service_secrets(service)
     click.echo(f"✅ Secrets regenerated for {service}")
 
-def check_command_exists(command):
-    """Check if a command exists in the system PATH"""
-    return shutil.which(command) is not None
-
 def print_status(message, status="INFO"):
     """Print colored status messages"""
     colors = {
@@ -1030,316 +1023,13 @@ def print_status(message, status="INFO"):
     reset = "\033[0m"
     click.echo(f"{colors.get(status, '')}{message}{reset}")
 
-def update_sops_version():
-    """Update SOPS to the latest version"""
-    import requests  # type: ignore
-    import tarfile
-    import tempfile
-    import stat
-    import platform
-    
-    try:
-        print_status("[INFO] Checking current SOPS version...", "INFO")
-        
-        # Get current version
-        current_version = None
-        if check_command_exists('sops'):
-            try:
-                result = subprocess.run(['sops', '--version'], capture_output=True, text=True)
-                if result.returncode == 0:
-                    # Extract version from output like "sops 3.8.1 (latest)"
-                    for line in result.stdout.split('\n'):
-                        if 'sops' in line.lower():
-                            parts = line.split()
-                            for part in parts:
-                                if part.replace('.', '').replace('-', '').isdigit() or '.' in part:
-                                    current_version = part
-                                    break
-                            break
-            except Exception:
-                pass
-        
-        if current_version:
-            print_status(f"[INFO] Current SOPS version: {current_version}", "INFO")
-        else:
-            print_status("[INFO] SOPS not found or version not detected", "INFO")
-        
-        # Get latest version from GitHub API
-        print_status("[INFO] Fetching latest SOPS version...", "INFO")
-        response = requests.get("https://api.github.com/repos/getsops/sops/releases/latest", timeout=10)
-        response.raise_for_status()
-        
-        latest_release = response.json()
-        latest_version = latest_release['tag_name'].lstrip('v')
-        
-        print_status(f"[INFO] Latest SOPS version: {latest_version}", "INFO")
-        
-        # Check if update is needed
-        def version_compare(v1, v2):
-            """Compare two version strings"""
-            try:
-                v1_parts = [int(x) for x in v1.split('.')]
-                v2_parts = [int(x) for x in v2.split('.')]
-                
-                # Pad shorter version with zeros
-                max_len = max(len(v1_parts), len(v2_parts))
-                v1_parts += [0] * (max_len - len(v1_parts))
-                v2_parts += [0] * (max_len - len(v2_parts))
-                
-                for i in range(max_len):
-                    if v1_parts[i] < v2_parts[i]:
-                        return -1
-                    elif v1_parts[i] > v2_parts[i]:
-                        return 1
-                return 0
-            except (ValueError, AttributeError):
-                return -1  # Assume update needed if comparison fails
-        
-        if current_version and version_compare(current_version.strip(), latest_version) >= 0:
-            print_status("[SUCCESS] SOPS is already up to date", "SUCCESS")
-            return True
-        
-        print_status(f"[INFO] Updating SOPS from {current_version or 'not installed'} to {latest_version}...", "INFO")
-        
-        # Determine architecture and OS
-        system = platform.system().lower()
-        machine = platform.machine().lower()
-        
-        # Map architecture names
-        arch_map = {
-            'x86_64': 'amd64',
-            'amd64': 'amd64',
-            'arm64': 'arm64',
-            'aarch64': 'arm64',
-            'armv7l': 'arm',
-        }
-        
-        arch = arch_map.get(machine, 'amd64')
-        
-        # Find the appropriate download URL
-        download_url = None
-        binary_name = f"sops-v{latest_version}.{system}.{arch}"
-        
-        for asset in latest_release['assets']:
-            if asset['name'] == binary_name:
-                download_url = asset['browser_download_url']
-                break
-        
-        if not download_url:
-            print_status(f"[ERROR] No binary found for {system}-{arch}", "ERROR")
-            return False
-        
-        # Download and install
-        print_status(f"[INFO] Downloading SOPS {latest_version}...", "INFO")
-        
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file = Path(temp_dir) / "sops"
-            
-            # Download binary
-            response = requests.get(download_url, timeout=30)
-            response.raise_for_status()
-            
-            temp_file.write_bytes(response.content)
-            
-            # Make executable
-            temp_file.chmod(temp_file.stat().st_mode | stat.S_IEXEC)
-            
-            # Install to /usr/local/bin or ~/.local/bin
-            install_paths = ["/usr/local/bin/sops", f"{Path.home()}/.local/bin/sops"]
-            installed = False
-            
-            for install_path in install_paths:
-                try:
-                    install_dir = Path(install_path).parent
-                    install_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # Copy binary
-                    shutil.copy2(temp_file, install_path)
-                    Path(install_path).chmod(Path(install_path).stat().st_mode | stat.S_IEXEC)
-                    
-                    print_status(f"[SUCCESS] SOPS {latest_version} installed to {install_path}", "SUCCESS")
-                    installed = True
-                    break
-                    
-                except PermissionError:
-                    continue
-                except Exception as e:
-                    print_status(f"[WARNING] Failed to install to {install_path}: {e}", "WARNING")
-                    continue
-            
-            if not installed:
-                print_status("[ERROR] Failed to install SOPS - no writable location found", "ERROR")
-                print_status("[INFO] Try running with sudo or ensure ~/.local/bin is in PATH", "INFO")
-                return False
-        
-        # Verify installation
-        if check_command_exists('sops'):
-            try:
-                result = subprocess.run(['sops', '--version'], capture_output=True, text=True)
-                if result.returncode == 0:
-                    print_status("[SUCCESS] SOPS update completed successfully", "SUCCESS")
-                    return True
-            except Exception:
-                pass
-        
-        print_status("[WARNING] SOPS installed but not found in PATH", "WARNING")
-        print_status("[INFO] You may need to restart your shell or update PATH", "INFO")
-        return True
-        
-    except requests.RequestException as e:
-        print_status(f"[ERROR] Network error updating SOPS: {e}", "ERROR")
-        return False
-    except Exception as e:
-        print_status(f"[ERROR] Failed to update SOPS: {e}", "ERROR")
-        return False
-
 @setup.command()
 @click.option('--skip-deps', is_flag=True, help='Skip external dependency checks')
 @click.option('--skip-tests', is_flag=True, help='Skip validation tests')
 @click.pass_context
 def initialize(ctx, skip_deps, skip_tests):
     """Initialize NOAH environment with all dependencies"""
-    click.echo("🚀 NOAH - Network Operations & Automation Hub")
-    click.echo("=" * 50)
-    click.echo("Initializing NOAH environment...")
-    click.echo("")
-    
-    # Check Python version
-    print_status("[INFO] Checking Python installation...", "INFO")
-    python_version = sys.version.split()[0]
-    if sys.version_info >= (3, 8):
-        print_status(f"[SUCCESS] Python {python_version} found", "SUCCESS")
-    else:
-        print_status("[ERROR] Python 3.8+ is required", "ERROR")
-        sys.exit(1)
-    
-    # Check virtual environment
-    print_status("[INFO] Checking virtual environment...", "INFO")
-    venv_path = Path(".venv")
-    if not venv_path.exists():
-        print_status("[INFO] Creating Python virtual environment...", "INFO")
-        subprocess.run([sys.executable, "-m", "venv", ".venv"], check=True)
-        print_status("[SUCCESS] Virtual environment created", "SUCCESS")
-    else:
-        print_status("[SUCCESS] Virtual environment already exists", "SUCCESS")
-    
-    # Install Python dependencies
-    print_status("[INFO] Installing Python dependencies...", "INFO")
-    venv_python = venv_path / "bin" / "python"
-    if not venv_python.exists():
-        venv_python = venv_path / "Scripts" / "python.exe"  # Windows
-    
-    try:
-        subprocess.run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"], 
-                      check=True, capture_output=True)
-        subprocess.run([str(venv_python), "-m", "pip", "install", "-r", "Scripts/requirements.txt"], 
-                      check=True, capture_output=True)
-        print_status("[SUCCESS] Python dependencies installed", "SUCCESS")
-    except subprocess.CalledProcessError as e:
-        print_status(f"[ERROR] Failed to install dependencies: {e}", "ERROR")
-        sys.exit(1)
-    
-    # Check external dependencies
-    if not skip_deps:
-        print_status("[INFO] Checking external dependencies...", "INFO")
-        external_deps = {
-            'kubectl': 'Kubernetes CLI',
-            'helm': 'Helm package manager',
-            'ansible': 'Infrastructure automation',
-            'age': 'Encryption tool'
-        }
-        
-        missing_deps = []
-        for cmd, desc in external_deps.items():
-            if check_command_exists(cmd):
-                print_status(f"[SUCCESS] {cmd} found ({desc})", "SUCCESS")
-            else:
-                print_status(f"[WARNING] {cmd} not found ({desc})", "WARNING")
-                missing_deps.append(cmd)
-        
-        # Check and update SOPS
-        print_status("[INFO] Checking SOPS version...", "INFO")
-        if check_command_exists('sops'):
-            update_sops_version()
-        else:
-            print_status("[WARNING] SOPS not found - attempting to install latest version...", "WARNING")
-            if update_sops_version():
-                print_status("[SUCCESS] SOPS installed successfully", "SUCCESS")
-            else:
-                print_status("[ERROR] Failed to install SOPS", "ERROR")
-                missing_deps.append('sops')
-        
-        if missing_deps:
-            print_status("[WARNING] Missing external dependencies:", "WARNING")
-            click.echo("  Install with your package manager:")
-            click.echo(f"  Ubuntu/Debian: sudo apt install {' '.join(missing_deps)}")
-            click.echo(f"  RHEL/CentOS:   sudo dnf install {' '.join(missing_deps)}")
-            click.echo(f"  macOS:         brew install {' '.join(missing_deps)}")
-            click.echo("")
-    
-    # Initialize NOAH
-    print_status("[INFO] Initializing NOAH CLI...", "INFO")
-    os.environ['PYTHONPATH'] = f"{os.getcwd()}:{os.environ.get('PYTHONPATH', '')}"
-    
-    # Test CLI functionality
-    try:
-        result = subprocess.run([str(venv_python), "noah.py", "--help"], 
-                               capture_output=True, text=True, env=os.environ)
-        if result.returncode == 0:
-            print_status("[SUCCESS] NOAH CLI initialized successfully", "SUCCESS")
-        else:
-            print_status("[ERROR] Failed to initialize NOAH CLI", "ERROR")
-            sys.exit(1)
-    except Exception as e:
-        print_status(f"[ERROR] CLI test failed: {e}", "ERROR")
-        sys.exit(1)
-    
-    # Initialize security infrastructure
-    print_status("[INFO] Setting up security infrastructure...", "INFO")
-    try:
-        ctx.obj['secrets'].initialize_age()
-        ctx.obj['secrets'].configure_sops()
-        print_status("[SUCCESS] Security infrastructure initialized", "SUCCESS")
-    except Exception as e:
-        print_status(f"[WARNING] Security setup incomplete: {e}", "WARNING")
-    
-    # Run validation tests
-    if not skip_tests:
-        print_status("[INFO] Running validation tests...", "INFO")
-        test_files = ["Tests/test_noah.py", "Tests/test_modifications.py"]
-        tests_passed = 0
-        
-        for test_file in test_files:
-            if Path(test_file).exists():
-                try:
-                    result = subprocess.run([str(venv_python), test_file], 
-                                          capture_output=True, env=os.environ)
-                    if result.returncode == 0:
-                        tests_passed += 1
-                except Exception:
-                    pass
-        
-        if tests_passed > 0:
-            print_status(f"[SUCCESS] {tests_passed}/{len(test_files)} test suites passed", "SUCCESS")
-        else:
-            print_status("[WARNING] Some tests failed - run manually to debug", "WARNING")
-    
-    # Print completion message
-    click.echo("")
-    click.echo("🎉 NOAH Setup Complete!")
-    click.echo("=" * 25)
-    click.echo("")
-    click.echo("To use NOAH:")
-    click.echo("1. Activate virtual environment: source .venv/bin/activate")
-    click.echo("2. Set Python path: export PYTHONPATH=$(pwd):$PYTHONPATH")
-    click.echo("3. Use NOAH: python noah.py --help")
-    click.echo("")
-    click.echo("Quick start:")
-    click.echo("  python noah.py secrets init")
-    click.echo("  python noah.py cluster create --name my-cluster")
-    click.echo("  python noah.py deploy all --domain my-domain.com")
-    click.echo("")
-    print_status("[SUCCESS] Setup completed successfully!", "SUCCESS")
+    initialize_noah_environment(ctx, skip_deps, skip_tests, print_status)
 
 @setup.command()
 def update_sops():

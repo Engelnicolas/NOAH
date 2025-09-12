@@ -10,9 +10,9 @@
     - name: "LOAD CONFIGURATION: Read environment variables from encrypted config"
       ansible.builtin.shell: |
         # Load encrypted configuration and export variables
-        cd /root/NOAH
-        python3 Scripts/export_env_vars.py
-        echo "NOAH_ROOT_DIR=/root/NOAH"
+        cd {{ playbook_dir | dirname }}
+        python3 Scripts/cluster_create/export_env_vars.py
+        echo "NOAH_ROOT_DIR={{ playbook_dir | dirname }}"
         echo "NOAH_SCRIPTS_DIR=./Scripts"
         echo "NOAH_CERTIFICATES_DIR=./Certificates"
         echo "NOAH_AGE_DIR=./Age"
@@ -564,7 +564,7 @@
         export PYTHONPATH=$(pwd):$PYTHONPATH
         
         # Load environment variables from encrypted config
-        eval "$(python3 Scripts/export_env_vars.py)"
+        eval "$(python3 Scripts/cluster_create/export_env_vars.py)"
         NOAH_VENV_DIR=${NOAH_VENV_DIR:-./.venv}
         NOAH_AGE_DIR=${NOAH_AGE_DIR:-./Age}
         NOAH_CERTIFICATES_DIR=${NOAH_CERTIFICATES_DIR:-./Certificates}
@@ -672,7 +672,7 @@
         echo ""
         echo "[VALIDATION] Checking critical Python dependencies..."
         deps_status="PASS"
-        critical_deps="click kubernetes ansible yaml dotenv requests"
+        critical_deps="click kubernetes ansible yaml requests"
         for dep in $critical_deps; do
           if ${NOAH_VENV_DIR}/bin/python -c "import $dep" >/dev/null 2>&1; then
             echo "✅ Python $dep: INSTALLED"

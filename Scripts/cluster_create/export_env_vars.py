@@ -5,17 +5,21 @@ Export environment variables from encrypted SOPS configuration for Ansible
 
 import sys
 import os
-sys.path.insert(0, '/root/NOAH')
+from pathlib import Path
+
+# Get the current working directory (should be NOAH root)
+noah_root = Path.cwd()
+sys.path.insert(0, str(noah_root))
 
 from Scripts.secure_env_loader import SecureEnvLoader
-from pathlib import Path
 
 def main():
     """Load encrypted config and export environment variables"""
     try:
         # Load encrypted configuration
         loader = SecureEnvLoader()
-        loader.load_secure_env(Path('/root/NOAH/Config/config.enc.yaml'))
+        config_path = noah_root / 'Config' / 'config.enc.yaml'
+        loader.load_secure_env(config_path)
         
         # Output environment variables in shell format
         important_vars = [

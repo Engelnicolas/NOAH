@@ -46,7 +46,7 @@ from Scripts.security_manager import NoahSecurityManager as SecretManager
 from Scripts.helm_deployer import HelmDeployer
 from Scripts.ansible_runner import AnsibleRunner
 from Scripts.config_loader import ConfigLoader
-from Scripts.env_init.environment_initializer import initialize_noah_environment
+from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists
 
 VERSION = "0.0.1"
 # Load default domain from environment, fallback to noah-infra.com

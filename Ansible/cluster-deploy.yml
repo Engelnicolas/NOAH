@@ -12,9 +12,9 @@
     - name: "CONFIGURATION: Load environment variables from encrypted config"
       ansible.builtin.shell: |
         # Load encrypted configuration and export variables
-        cd /root/NOAH
-        python3 Scripts/export_env_vars.py
-        echo "NOAH_ROOT_DIR=/root/NOAH"
+        cd {{ playbook_dir | dirname }}
+        python3 Scripts/cluster_create/export_env_vars.py
+        echo "NOAH_ROOT_DIR={{ playbook_dir | dirname }}"
         echo "ANSIBLE_PLAYBOOK_DIR=./Ansible"
       register: env_vars
       changed_when: false

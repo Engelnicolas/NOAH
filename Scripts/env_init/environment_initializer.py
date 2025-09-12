@@ -419,7 +419,6 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
     click.echo("3. Use NOAH: python noah.py --help")
     click.echo("")
     click.echo("Quick start:")
-    click.echo("  python noah.py secrets init")
     click.echo("  python noah.py cluster create --name my-cluster")
     click.echo("  python noah.py deploy all --domain my-domain.com")
     click.echo("")

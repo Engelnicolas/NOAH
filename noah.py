@@ -503,23 +503,6 @@ def destroy(ctx, name, force, keep_secrets):
     """Destroy Kubernetes cluster and clean up resources"""
     destroy_cluster_command(ctx, name, force, keep_secrets, get_security_config)
 
-# NEW: Use modular redeploy command from CLI utilities
-# @cluster.command()
-# @click.option('--name', default='noah-production', help='Cluster name')
-# @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for TLS certificates and services')
-# @click.option('--force', is_flag=True, help='Force redeploy without confirmation')
-# @click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')
-# @click.pass_context
-# def redeploy(ctx, name, domain, force, config_file):
-#    """Redeploy complete NOAH infrastructure (cluster + all services)"""
-#    execute_redeploy(
-#        ctx, name, domain, force, config_file,
-#        ensure_security_initialized, 
-#        get_security_config,
-#        get_helm_values_for_service, 
-#        get_ansible_vars_for_service
-#    )
-
 @cli.group()  # type: ignore
 @click.pass_context
 def certificates(ctx):

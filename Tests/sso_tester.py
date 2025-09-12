@@ -381,7 +381,7 @@ class SSOTester:
             pass
         
         # Fallback: use service endpoint for internal testing
-        from Scripts.cluster_manager import ClusterManager
+        from Scripts.core_helm.cluster_manager import ClusterManager
         cm = ClusterManager(self.config)
         
         endpoint = cm.get_service_endpoint('authentik-server', 'identity')

@@ -41,14 +41,14 @@ def get_noah_paths():
 # Global paths instance
 NOAH_PATHS = get_noah_paths()
 
-from Scripts.cluster_manager import ClusterManager
+from Scripts.core_helm.cluster_manager import ClusterManager
 from Scripts.security_manager import NoahSecurityManager as SecretManager
 from Scripts.helm_deployer import HelmDeployer
 from Scripts.ansible_runner import AnsibleRunner
 from Scripts.config_loader import ConfigLoader
 from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 # Load default domain from environment, fallback to noah-infra.com
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
 
@@ -1163,7 +1163,7 @@ def sso(ctx):
     """Test SSO functionality"""
     click.echo("[VERBOSE] Starting SSO integration test...")
     click.echo("Testing SSO integration...")
-    from Scripts.sso_tester import SSOTester
+    from Tests.sso_tester import SSOTester
     tester = SSOTester(ctx.obj['config'])
     click.echo("[VERBOSE] Executing authentication test...")
     if tester.test_authentication():

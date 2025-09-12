@@ -20,6 +20,120 @@ def check_command_exists(command):
         return False
 
 
+def install_external_dependency(package_name, print_status):
+    """Install external dependency using appropriate method"""
+    try:
+        print_status(f"[INFO] Installing {package_name}...", "INFO")
+        
+        # Special installation methods for specific packages
+        if package_name == 'kubectl':
+            return install_kubectl(print_status)
+        elif package_name == 'helm':
+            return install_helm(print_status)
+        else:
+            # Default apt installation for other packages
+            return install_via_apt(package_name, print_status)
+            
+    except Exception as e:
+        print_status(f"[WARNING] Failed to install {package_name}: {e}", "WARNING")
+        return False
+
+
+def install_via_apt(package_name, print_status):
+    """Install package using apt package manager"""
+    try:
+        # Check if running with sudo privileges
+        if os.geteuid() != 0:
+            cmd = ['sudo', 'apt', 'update']
+            subprocess.run(cmd, check=True, capture_output=True)
+            cmd = ['sudo', 'apt', 'install', '-y', package_name]
+        else:
+            cmd = ['apt', 'update']
+            subprocess.run(cmd, check=True, capture_output=True)
+            cmd = ['apt', 'install', '-y', package_name]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            print_status(f"[SUCCESS] {package_name} installed successfully", "SUCCESS")
+            return True
+        else:
+            print_status(f"[WARNING] Failed to install {package_name}: {result.stderr}", "WARNING")
+            return False
+            
+    except subprocess.CalledProcessError as e:
+        print_status(f"[WARNING] Failed to install {package_name}: {e}", "WARNING")
+        return False
+    except PermissionError:
+        print_status(f"[WARNING] Permission denied installing {package_name}. Run with sudo.", "WARNING")
+        return False
+
+
+def install_kubectl(print_status):
+    """Install kubectl using official method"""
+    try:
+        # Download and install kubectl
+        commands = [
+            ['curl', '-LO', 'https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl'],
+            ['sudo', 'install', '-o', 'root', '-g', 'root', '-m', '0755', 'kubectl', '/usr/local/bin/kubectl'],
+            ['rm', 'kubectl']
+        ]
+        
+        # Use shell for the first command to handle $() substitution
+        result = subprocess.run('curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"', 
+                               shell=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            return False
+            
+        # Install kubectl
+        if os.geteuid() != 0:
+            result = subprocess.run(['sudo', 'install', '-o', 'root', '-g', 'root', '-m', '0755', 'kubectl', '/usr/local/bin/kubectl'], 
+                                   capture_output=True, text=True)
+        else:
+            result = subprocess.run(['install', '-o', 'root', '-g', 'root', '-m', '0755', 'kubectl', '/usr/local/bin/kubectl'], 
+                                   capture_output=True, text=True)
+        
+        # Clean up
+        subprocess.run(['rm', '-f', 'kubectl'], capture_output=True)
+        
+        return result.returncode == 0
+        
+    except Exception as e:
+        print_status(f"[WARNING] kubectl installation failed: {e}", "WARNING")
+        return False
+
+
+def install_helm(print_status):
+    """Install Helm using official script"""
+    try:
+        # Download and run Helm install script
+        result = subprocess.run(['curl', 'https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3'], 
+                               capture_output=True, text=True)
+        if result.returncode != 0:
+            return False
+            
+        # Save script to temp file and execute
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+            f.write(result.stdout)
+            script_path = f.name
+            
+        # Make executable and run
+        subprocess.run(['chmod', '+x', script_path], check=True)
+        if os.geteuid() != 0:
+            result = subprocess.run(['sudo', 'bash', script_path], capture_output=True, text=True)
+        else:
+            result = subprocess.run(['bash', script_path], capture_output=True, text=True)
+            
+        # Clean up
+        subprocess.run(['rm', '-f', script_path], capture_output=True)
+        
+        return result.returncode == 0
+        
+    except Exception as e:
+        print_status(f"[WARNING] Helm installation failed: {e}", "WARNING")
+        return False
+
+
 def update_sops_version(print_status=None):
     """Update SOPS to the latest version"""
     
@@ -216,7 +330,17 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
                 print_status(f"[SUCCESS] {cmd} found ({desc})", "SUCCESS")
             else:
                 print_status(f"[WARNING] {cmd} not found ({desc})", "WARNING")
-                missing_deps.append(cmd)
+                # Try to install the missing dependency automatically
+                print_status(f"[INFO] Attempting to install {cmd} automatically...", "INFO")
+                if install_external_dependency(cmd, print_status):
+                    # Verify installation
+                    if check_command_exists(cmd):
+                        print_status(f"[SUCCESS] {cmd} installed and verified ({desc})", "SUCCESS")
+                    else:
+                        print_status(f"[WARNING] {cmd} installation completed but not found in PATH", "WARNING")
+                        missing_deps.append(cmd)
+                else:
+                    missing_deps.append(cmd)
         
         # Check and update SOPS
         print_status("[INFO] Checking SOPS version...", "INFO")
@@ -231,8 +355,8 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
                 missing_deps.append('sops')
         
         if missing_deps:
-            print_status("[WARNING] Missing external dependencies:", "WARNING")
-            click.echo("  Install with your package manager:")
+            print_status("[WARNING] Some external dependencies could not be installed automatically:", "WARNING")
+            click.echo("  Please install manually with your package manager:")
             click.echo(f"  Ubuntu/Debian: sudo apt install {' '.join(missing_deps)}")
             click.echo(f"  RHEL/CentOS:   sudo dnf install {' '.join(missing_deps)}")
             click.echo(f"  macOS:         brew install {' '.join(missing_deps)}")

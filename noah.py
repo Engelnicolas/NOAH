@@ -47,6 +47,7 @@ from Scripts.helm_deployer import HelmDeployer
 from Scripts.ansible_runner import AnsibleRunner
 from Scripts.config_loader import ConfigLoader
 from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists
+from Scripts.cluster_create.status_utils import show_cluster_status
 
 VERSION = "0.0.2"
 # Load default domain from environment, fallback to noah-infra.com
@@ -1178,10 +1179,7 @@ def sso(ctx):
 @click.pass_context
 def status(ctx):
     """Show status of all deployed services"""
-    click.echo("[VERBOSE] Gathering system status information...")
-    click.echo("NOAH System Status")
-    click.echo("-" * 50)
-    ctx.obj['cluster'].show_status()
+    show_cluster_status(ctx)
 
 if __name__ == '__main__':
     cli()  # type: ignore

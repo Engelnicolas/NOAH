@@ -61,17 +61,3 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
-
-{{/*
-SSO Configuration Name
-*/}}
-{{- define "cilium.ssoConfigName" -}}
-{{- printf "%s-sso-config" (include "cilium.fullname" .) }}
-{{- end }}
-
-{{/*
-TLS Secret Name
-*/}}
-{{- define "cilium.tlsSecretName" -}}
-{{- .Values.tls.secretName | default (printf "%s-tls" (include "cilium.fullname" .)) }}
-{{- end }}

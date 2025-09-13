@@ -21,17 +21,19 @@
       changed_when: false
 
     - name: Check if K3s is running
-      ansible.builtin.command: systemctl is-active k3s
+      ansible.builtin.shell: |
+        systemctl is-active k3s 2>/dev/null || echo "inactive"
       register: k3s_status
-      ignore_errors: true
       changed_when: false
+      failed_when: false
 
     - name: Display initial cluster state (verbose mode)
       ansible.builtin.debug:
         msg:
           - "[VERBOSE] Starting NOAH cluster destruction process"
           - "[VERBOSE] kubectl available: {{ kubectl_check.rc == 0 }}"
-          - "[VERBOSE] K3s service active: {{ k3s_status.rc == 0 }}"
+          - "[VERBOSE] K3s service active: {{ k3s_status.stdout.strip() == 'active' }}"
+          - "[VERBOSE] K3s service status: {{ k3s_status.stdout.strip() }}"
           - "[VERBOSE] Target cluster: {{ cluster_name | default(default_cluster_name) }}"
           - "[VERBOSE] Verbose mode: {{ verbose_mode }}"
       when: verbose_mode | default(true)
@@ -143,12 +145,12 @@
         state: stopped
         enabled: false
       ignore_errors: true
-      when: k3s_status.rc == 0
+      when: k3s_status.stdout.strip() == 'active'
 
     - name: Display K3s service stop result (verbose mode)
       ansible.builtin.debug:
         msg: "[VERBOSE] K3s service stop attempted for active service"
-      when: verbose_mode | default(true) and k3s_status.rc == 0
+      when: verbose_mode | default(true) and k3s_status.stdout.strip() == 'active'
 
     - name: Kill any remaining K3s processes
       shell: |

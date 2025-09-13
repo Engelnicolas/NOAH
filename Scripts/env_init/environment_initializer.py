@@ -148,6 +148,202 @@ def update_sops_version(print_status=None):
             }
             icon = icons.get(status_type, "[INFO]")
             print(f"{icon} {message}")
+
+
+def check_kernel_config(config_name, required_value='y'):
+    """Check if a kernel configuration option is set to the required value"""
+    try:
+        # Check /proc/config.gz if available
+        config_paths = [
+            '/proc/config.gz',
+            f'/boot/config-{subprocess.run(["uname", "-r"], capture_output=True, text=True).stdout.strip()}',
+            '/boot/config',
+        ]
+        
+        for config_path in config_paths:
+            if os.path.exists(config_path):
+                if config_path.endswith('.gz'):
+                    import gzip
+                    with gzip.open(config_path, 'rt') as f:
+                        content = f.read()
+                else:
+                    with open(config_path, 'r') as f:
+                        content = f.read()
+                
+                # Look for the config option
+                for line in content.split('\n'):
+                    if line.startswith(f'{config_name}='):
+                        value = line.split('=', 1)[1]
+                        return value == required_value
+                    elif line.startswith(f'# {config_name} is not set'):
+                        return required_value == 'n'
+                break
+        
+        # If no config file found, try modprobe to check if module can be loaded
+        if config_name.startswith('CONFIG_') and required_value in ['m', 'y']:
+            module_name = config_name.replace('CONFIG_', '').lower()
+            result = subprocess.run(['modprobe', '-n', module_name], capture_output=True, text=True)
+            return result.returncode == 0
+        
+        return None  # Unable to determine
+        
+    except Exception:
+        return None
+
+
+def validate_kernel_requirements(print_status):
+    """Validate kernel configuration requirements for Cilium"""
+    
+    print_status("[INFO] Validating kernel configuration for Cilium...", "INFO")
+    
+    # Critical BPF requirements
+    bpf_configs = {
+        'CONFIG_BPF': 'y',
+        'CONFIG_BPF_SYSCALL': 'y', 
+        'CONFIG_BPF_JIT': 'y',
+        'CONFIG_CGROUP_BPF': 'y',
+        'CONFIG_PERF_EVENTS': 'y',
+        'CONFIG_SCHEDSTATS': 'y'
+    }
+    
+    # Networking requirements  
+    network_configs = {
+        'CONFIG_VXLAN': 'y',
+        'CONFIG_GENEVE': 'y',
+        'CONFIG_FIB_RULES': 'y'
+    }
+    
+    # Optional but recommended for iptables masquerading
+    iptables_configs = {
+        'CONFIG_NETFILTER_XT_SET': 'm',
+        'CONFIG_IP_SET': 'm', 
+        'CONFIG_IP_SET_HASH_IP': 'm',
+        'CONFIG_NETFILTER_XT_MATCH_COMMENT': 'm'
+    }
+    
+    warnings = []
+    errors = []
+    
+    # Check BPF configs (critical)
+    for config, required_value in bpf_configs.items():
+        result = check_kernel_config(config, required_value)
+        if result is True:
+            print_status(f"[SUCCESS] {config}={required_value} ✓", "SUCCESS")
+        elif result is False:
+            errors.append(f"{config} should be {required_value}")
+            print_status(f"[ERROR] {config} is not set to {required_value}", "ERROR")
+        else:
+            warnings.append(f"Unable to verify {config}")
+            print_status(f"[WARNING] Unable to verify {config}", "WARNING")
+    
+    # Check networking configs (critical) 
+    for config, required_value in network_configs.items():
+        result = check_kernel_config(config, required_value)
+        if result is True:
+            print_status(f"[SUCCESS] {config}={required_value} ✓", "SUCCESS")
+        elif result is False:
+            errors.append(f"{config} should be {required_value}")
+            print_status(f"[ERROR] {config} is not set to {required_value}", "ERROR")
+        else:
+            warnings.append(f"Unable to verify {config}")
+            print_status(f"[WARNING] Unable to verify {config}", "WARNING")
+    
+    # Check iptables configs (optional)
+    for config, required_value in iptables_configs.items():
+        result = check_kernel_config(config, required_value)
+        if result is True:
+            print_status(f"[SUCCESS] {config}={required_value} ✓", "SUCCESS")
+        elif result is False:
+            warnings.append(f"{config} should be {required_value} for iptables masquerading")
+            print_status(f"[WARNING] {config} not set - iptables masquerading may not work", "WARNING")
+        else:
+            print_status(f"[INFO] Unable to verify {config} (optional)", "INFO")
+    
+    return len(errors) == 0, warnings, errors
+
+
+def validate_kernel_version(print_status):
+    """Validate minimum kernel version for Cilium"""
+    
+    try:
+        # Get kernel version
+        result = subprocess.run(['uname', '-r'], capture_output=True, text=True)
+        if result.returncode != 0:
+            print_status("[ERROR] Unable to determine kernel version", "ERROR")
+            return False
+            
+        kernel_version = result.stdout.strip()
+        print_status(f"[INFO] Current kernel version: {kernel_version}", "INFO")
+        
+        # Parse version numbers
+        version_parts = kernel_version.split('.')
+        major = int(version_parts[0])
+        minor = int(version_parts[1]) if len(version_parts) > 1 else 0
+        
+        # Check minimum requirements
+        min_major = 5
+        min_minor = 10
+        
+        # Special case for RHEL 8.6+ which has backported features to 4.18
+        rhel_exception = False
+        try:
+            with open('/etc/os-release', 'r') as f:
+                os_info = f.read()
+                if 'Red Hat' in os_info or 'RHEL' in os_info:
+                    if major == 4 and minor >= 18:
+                        rhel_exception = True
+                        print_status("[INFO] RHEL detected - kernel 4.18+ acceptable with backports", "INFO")
+        except Exception:
+            pass
+        
+        # Validate version
+        if major > min_major or (major == min_major and minor >= min_minor):
+            print_status(f"[SUCCESS] Kernel version {kernel_version} meets minimum requirements (≥ 5.10)", "SUCCESS")
+            return True
+        elif rhel_exception:
+            print_status(f"[SUCCESS] Kernel version {kernel_version} acceptable for RHEL (≥ 4.18)", "SUCCESS")
+            return True
+        else:
+            print_status(f"[ERROR] Kernel version {kernel_version} below minimum requirement (≥ 5.10)", "ERROR")
+            print_status("[ERROR] Please upgrade your kernel or use a compatible distribution", "ERROR")
+            return False
+            
+    except Exception as e:
+        print_status(f"[ERROR] Failed to validate kernel version: {e}", "ERROR")
+        return False
+
+
+def ensure_bpf_filesystem(print_status):
+    """Ensure BPF filesystem is mounted"""
+    
+    try:
+        bpf_mount_point = '/sys/fs/bpf'
+        
+        # Check if BPF filesystem is already mounted
+        result = subprocess.run(['mount'], capture_output=True, text=True)
+        if f'{bpf_mount_point} type bpf' in result.stdout:
+            print_status(f"[SUCCESS] BPF filesystem already mounted at {bpf_mount_point}", "SUCCESS")
+            return True
+        
+        # Check if mount point exists
+        if not os.path.exists(bpf_mount_point):
+            print_status(f"[INFO] Creating BPF mount point {bpf_mount_point}...", "INFO")
+            os.makedirs(bpf_mount_point, exist_ok=True)
+        
+        # Mount BPF filesystem
+        print_status(f"[INFO] Mounting BPF filesystem at {bpf_mount_point}...", "INFO")
+        result = subprocess.run(['mount', '-t', 'bpf', 'bpf', bpf_mount_point], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print_status(f"[SUCCESS] BPF filesystem mounted at {bpf_mount_point}", "SUCCESS")
+            return True
+        else:
+            print_status(f"[ERROR] Failed to mount BPF filesystem: {result.stderr}", "ERROR")
+            return False
+            
+    except Exception as e:
+        print_status(f"[ERROR] BPF filesystem setup failed: {e}", "ERROR")
+        return False
     
     try:
         print_status("[INFO] Checking current SOPS version...", "INFO")
@@ -274,6 +470,45 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
                 print_status("[SUCCESS] age encryption tool installed", "SUCCESS")
             else:
                 print_status("[SUCCESS] age encryption tool already available", "SUCCESS")
+            
+            # Install kernel headers for BPF compilation (required for Cilium)
+            print_status("[INFO] Installing kernel headers for BPF compilation...", "INFO")
+            kernel_version = subprocess.run(['uname', '-r'], capture_output=True, text=True).stdout.strip()
+            subprocess.run(['apt-get', 'install', '-y', f'linux-headers-{kernel_version}'], check=True, capture_output=True)
+            print_status("[SUCCESS] Kernel headers installed", "SUCCESS")
+            
+            # Install clang and llvm for BPF compilation
+            clang_result = subprocess.run(['which', 'clang'], capture_output=True, text=True)
+            if clang_result.returncode != 0:
+                print_status("[INFO] Installing clang and llvm for BPF compilation...", "INFO")
+                subprocess.run(['apt-get', 'install', '-y', 'clang', 'llvm'], check=True, capture_output=True)
+                print_status("[SUCCESS] clang and llvm installed", "SUCCESS")
+            else:
+                print_status("[SUCCESS] clang and llvm already available", "SUCCESS")
+            
+            # Install essential Cilium runtime dependencies
+            print_status("[INFO] Installing Cilium runtime dependencies...", "INFO")
+            cilium_runtime_packages = [
+                'iproute2',       # Network interface management
+                'iptables',       # Netfilter rules (for non-BPF masquerading)
+                'ipset',          # IP set management
+                'kmod',           # Kernel module loading
+                'ca-certificates' # TLS/SSL operations
+            ]
+            
+            packages_to_install = []
+            for package in cilium_runtime_packages:
+                # Check if package is already installed
+                result = subprocess.run(['dpkg', '-l', package], capture_output=True, text=True)
+                if result.returncode != 0:
+                    packages_to_install.append(package)
+            
+            if packages_to_install:
+                print_status(f"[INFO] Installing missing packages: {', '.join(packages_to_install)}", "INFO")
+                subprocess.run(['apt-get', 'install', '-y'] + packages_to_install, check=True, capture_output=True)
+                print_status("[SUCCESS] Cilium runtime dependencies installed", "SUCCESS")
+            else:
+                print_status("[SUCCESS] All Cilium runtime dependencies already available", "SUCCESS")
                 
         except subprocess.CalledProcessError as e:
             print_status(f"[WARNING] Could not install system packages: {e}", "WARNING")
@@ -313,6 +548,42 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
     except subprocess.CalledProcessError as e:
         print_status(f"[ERROR] Failed to install dependencies: {e}", "ERROR")
         sys.exit(1)
+    
+    # Validate kernel and system requirements for Cilium
+    if not skip_deps:
+        print_status("[INFO] Validating system requirements for Cilium...", "INFO")
+        
+        # Validate kernel version
+        kernel_valid = validate_kernel_version(print_status)
+        if not kernel_valid:
+            print_status("[WARNING] Kernel version may cause issues with Cilium", "WARNING")
+        
+        # Validate kernel configuration
+        config_valid, warnings, errors = validate_kernel_requirements(print_status)
+        if errors:
+            print_status("[ERROR] Critical kernel configuration issues found:", "ERROR")
+            for error in errors:
+                print_status(f"[ERROR]   - {error}", "ERROR")
+            print_status("[ERROR] These configurations are required for Cilium to function properly", "ERROR")
+            print_status("[INFO] Consider recompiling your kernel with the required options", "INFO")
+        
+        if warnings:
+            print_status("[WARNING] Kernel configuration warnings:", "WARNING")
+            for warning in warnings:
+                print_status(f"[WARNING]   - {warning}", "WARNING")
+        
+        # Ensure BPF filesystem is mounted (try to mount if needed)
+        if is_root:
+            ensure_bpf_filesystem(print_status)
+        else:
+            print_status("[INFO] Checking BPF filesystem mount (requires root to fix)...", "INFO")
+            bpf_mount_point = '/sys/fs/bpf'
+            result = subprocess.run(['mount'], capture_output=True, text=True)
+            if f'{bpf_mount_point} type bpf' in result.stdout:
+                print_status(f"[SUCCESS] BPF filesystem mounted at {bpf_mount_point}", "SUCCESS")
+            else:
+                print_status(f"[WARNING] BPF filesystem not mounted at {bpf_mount_point}", "WARNING")
+                print_status("[INFO] Run 'sudo mount -t bpf bpf /sys/fs/bpf' to mount it", "INFO")
     
     # Check external dependencies
     if not skip_deps:

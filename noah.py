@@ -48,6 +48,7 @@ from Scripts.ansible_runner import AnsibleRunner
 from Scripts.config_loader import ConfigLoader
 from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists, update_sops_version
 from Scripts.env_init.doctor_utils import print_status, diagnose_noah_environment
+from Scripts.security import ensure_security_initialized, get_security_config
 from Scripts.cluster_create.status_utils import show_cluster_status
 from Scripts.cluster_create.cluster_validation_utils import check_existing_cluster
 from Scripts.cluster_create.cluster_create_utils import create_cluster
@@ -264,37 +265,6 @@ def check_repository_root():
         click.echo(f"   python noah.py <command>", err=True)
         sys.exit(1)
 
-def get_security_config(domain=DEFAULT_DOMAIN):
-    """Get security configuration for Helm and Ansible"""
-    paths = get_noah_paths()
-    
-    return {
-        'secrets': {
-            'age': {
-                'enabled': paths['age_dir'].exists(),
-                'key_path': str(paths['age_dir'] / "noah.key") if paths['age_dir'].exists() else None,
-                'public_key_path': str(paths['age_dir'] / "noah.pub") if paths['age_dir'].exists() else None
-            },
-            'sops': {
-                'enabled': paths['sops_config'].exists(),
-                'config_path': str(paths['sops_config'])
-            }
-        },
-        'certificates': {
-            'enabled': paths['certificates_dir'].exists(),
-            'domain': domain,
-            'ca_cert_path': str(paths['certificates_dir'] / "ca.crt") if paths['certificates_dir'].exists() else None,
-            'ca_key_path': str(paths['certificates_dir'] / "ca.key") if paths['certificates_dir'].exists() else None,
-            'wildcard_cert_path': str(paths['certificates_dir'] / f"*.{domain}.crt") if paths['certificates_dir'].exists() else None,
-            'wildcard_key_path': str(paths['certificates_dir'] / f"*.{domain}.key") if paths['certificates_dir'].exists() else None
-        },
-        'tls': {
-            'enabled': True,
-            'self_signed': True,
-            'domain': domain
-        }
-    }
-
 def get_helm_values_for_service(service, namespace, domain=DEFAULT_DOMAIN):
     """Generate Helm values for a specific service with security configuration"""
     security_config = get_security_config(domain)
@@ -425,42 +395,6 @@ def get_ansible_vars_for_service(service, namespace, domain=DEFAULT_DOMAIN):
         })
     
     return ansible_vars
-
-def ensure_security_initialized(ctx):
-    """Ensure SOPS/Age keys and certificates are initialized"""
-    age_dir = Path("Age")
-    sops_config = Path(".sops.yaml")
-    
-    # Check if Age keys exist
-    if not age_dir.exists() or not (any(age_dir.glob("*.key")) or (age_dir / "keys.txt").exists()):
-        click.echo("[VERBOSE] No Age keys found. Auto-generating SOPS/Age keys...")
-        click.echo("Initializing security infrastructure...")
-        
-        # Create Age directory if it doesn't exist
-        age_dir.mkdir(exist_ok=True)
-        
-        # Initialize Age keys and configure SOPS
-        ctx.obj['secrets'].initialize_encryption()
-        
-        click.echo("[VERBOSE] Age keys generated successfully in Age/ directory")
-        click.echo("[VERBOSE] SOPS configuration created")
-    else:
-        click.echo("[VERBOSE] Age keys found in Age/ directory")
-    
-    # Check and generate TLS certificates
-    certs_dir = Path("Certificates")
-    if not certs_dir.exists() or not any(certs_dir.glob("*.crt")):
-        click.echo(f"[VERBOSE] No TLS certificates found. Generating self-signed certificates for {DEFAULT_DOMAIN}...")
-        ctx.obj['secrets'].generate_tls_certificates(DEFAULT_DOMAIN)
-        click.echo(f"[VERBOSE] TLS certificates generated for domain: {DEFAULT_DOMAIN}")
-    else:
-        click.echo("[VERBOSE] TLS certificates found in Certificates/ directory")
-    
-    # Export security configuration for debugging
-    if click.get_current_context().obj.get('debug'):
-        security_config = get_security_config()
-        click.echo("[DEBUG] Security Configuration:")
-        click.echo(json.dumps(security_config, indent=2))
 
 @click.group()
 @click.version_option(version=VERSION, prog_name="NOAH")

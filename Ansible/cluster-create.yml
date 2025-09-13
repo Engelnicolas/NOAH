@@ -205,6 +205,8 @@
               --disable traefik \
               --disable servicelb \
               --disable local-storage \
+              --flannel-backend=none \
+              --disable-network-policy \
               --cluster-init
           environment:
             INSTALL_K3S_EXEC: "server"

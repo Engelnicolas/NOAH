@@ -1,5 +1,13 @@
 # NOAH Cilium CNI Configuration - SSO Ready
-# This file configures Cilium to support standalone Authentik IAM
+# This file configures C# BGP for advanced networking (if needed)
+bgp:
+  enabled: false
+
+# MetalLB load balancer (disabled by default)
+metallb:
+  enabled: false
+
+# Hubble configuration with SSO integration to support standalone Authentik IAM
 # Network policies and service mesh configuration for secure communication
 
 # Enable/disable the dependency
@@ -32,7 +40,24 @@ serviceMesh:
   enabled: true
 
 # Enable L7 policy enforcement for application-level security
-l7Proxy: true
+l7Proxy: false
+
+# BPF configuration to avoid compilation conflicts
+bpf:
+  masquerade: false
+  hostRouting: false
+  
+# Disable conflicting features to avoid BPF macro redefinition
+enableBPFMasquerading: false
+enableIPv4Masquerade: false
+enableIPv6Masquerade: false
+
+# Monitor configuration to avoid MONITOR_AGGREGATION conflicts
+monitor:
+  enabled: false
+
+# ARP responder configuration to avoid ENABLE_ARP_RESPONDER conflicts
+enableArpPingProbes: false
 
 # Enable Cilium Ingress Controller for domain routing
 ingressController:

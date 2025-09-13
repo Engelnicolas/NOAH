@@ -46,12 +46,12 @@ from Scripts.security_manager import NoahSecurityManager as SecretManager
 from Scripts.helm_deployer import HelmDeployer
 from Scripts.ansible_runner import AnsibleRunner
 from Scripts.config_loader import ConfigLoader
-from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists
+from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists, update_sops_version
+from Scripts.env_init.doctor_utils import print_status, diagnose_noah_environment
 from Scripts.cluster_create.status_utils import show_cluster_status
 from Scripts.cluster_create.cluster_validation_utils import check_existing_cluster
 from Scripts.cluster_create.cluster_create_utils import create_cluster
 from Scripts.cluster_destroy.cluster_destroy_utils import destroy_cluster_command
-from Scripts.env_init.doctor_utils import diagnose_noah_environment
 
 VERSION = "0.0.2"
 # Load default domain from environment, fallback to noah-infra.com

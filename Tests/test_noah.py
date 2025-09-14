@@ -19,7 +19,7 @@ def test_noah_imports():
         from Scripts.security_manager import NoahSecurityManager
         from Scripts.helm_deployer import HelmDeployer
         from Scripts.ansible_runner import AnsibleRunner
-        from Scripts.config_loader import ConfigLoader
+        from Scripts.utils.config_loader import ConfigLoader
         print("✓ All imports successful")
         return True
     except Exception as e:

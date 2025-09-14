@@ -45,9 +45,15 @@ from Scripts.core_helm.cluster_manager import ClusterManager
 from Scripts.security_manager import NoahSecurityManager as SecretManager
 from Scripts.helm_deployer import HelmDeployer
 from Scripts.ansible_runner import AnsibleRunner
-from Scripts.config_loader import ConfigLoader
+from Scripts.utils.config_loader import ConfigLoader
 from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists, update_sops_version
 from Scripts.env_init.doctor_utils import print_status, diagnose_noah_environment
+from Scripts.utils import (
+    config_show_command,
+    config_domains_command, 
+    config_helm_values_command,
+    config_override_command
+)
 from Scripts.security import ensure_security_initialized, get_security_config
 from Scripts.core_helm import cilium, get_ansible_vars_for_service
 from Scripts.cluster_create.status_utils import show_cluster_status
@@ -267,7 +273,16 @@ def check_repository_root():
         sys.exit(1)
 
 def get_helm_values_for_service(service, namespace, domain=DEFAULT_DOMAIN):
-    """Generate Helm values for a specific service with security configuration"""
+    """Generate Helm values for a specific service with enhanced ConfigLoader support"""
+    # Use enhanced ConfigLoader for dynamic domain management
+    config_loader = ConfigLoader()
+    
+    # Check if service exists in ConfigLoader's service configs
+    if service in config_loader.service_configs:
+        # Use ConfigLoader's enhanced values generation
+        return config_loader.generate_helm_values(service)
+    
+    # Fallback to legacy implementation for unknown services
     security_config = get_security_config(domain)
     
     base_values = {
@@ -297,7 +312,7 @@ def get_helm_values_for_service(service, namespace, domain=DEFAULT_DOMAIN):
         }
     }
     
-    # Service-specific configurations
+    # Legacy service configurations (for backward compatibility)
     if service == 'authentik':
         base_values.update({
             'authentik': {
@@ -831,6 +846,55 @@ def sso(ctx):
 def status(ctx):
     """Show status of all deployed services"""
     show_cluster_status(ctx)
+
+@cli.group()  # type: ignore
+@click.pass_context
+def config(ctx):
+    """Configuration management with dynamic domain support"""
+    pass
+
+@config.command()
+@click.option('--service', help='Show configuration for specific service')
+@click.option('--format', type=click.Choice(['yaml', 'json', 'env']), default='yaml', help='Output format')
+@click.pass_context
+def show(ctx, service, format):
+    """Show current configuration"""
+    from Scripts.utils.config_utils import show_configuration
+    show_configuration(service, format, ctx)
+
+@config.command()
+@click.argument('service')
+@click.option('--output', '-o', help='Output file path')
+@click.option('--custom-values', help='Custom values YAML file to merge')
+@click.pass_context
+def helm_values(ctx, service, output, custom_values):
+    """Generate Helm values for a service with dynamic domains"""
+    from Scripts.utils.config_utils import generate_helm_values
+    generate_helm_values(service, output, custom_values, ctx)
+
+@config.command()
+@click.pass_context
+def domains(ctx):
+    """List all service domains and FQDNs"""
+    from Scripts.utils.config_utils import show_domains
+    show_domains(ctx)
+
+@config.command()
+@click.argument('service')
+@click.option('--domain', help='Override service domain')
+@click.option('--subdomain', help='Override service subdomain') 
+@click.option('--namespace', help='Override service namespace')
+@click.pass_context
+def override(ctx, service, domain, subdomain, namespace):
+    """Set service-specific configuration overrides"""
+    from Scripts.utils.config_utils import override_service_configuration
+    result = override_service_configuration(service, domain, subdomain, namespace, ctx)
+    
+    if result:
+        # Show updated configuration
+        click.echo(f"\nUpdated configuration for {service}:")
+        click.echo(f"  FQDN: {result['fqdn']}")
+        click.echo(f"  Namespace: {result['namespace']}")
 
 if __name__ == '__main__':
     cli()  # type: ignore

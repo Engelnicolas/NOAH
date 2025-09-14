@@ -80,7 +80,7 @@
                       cpu: 200m
                       memory: 256Mi
                 ui:
-                  enabled: false  # Will be enabled in SSO integration phase
+                  enabled: true  # Enable Hubble UI with custom ingress template
                   
               # Resource configuration for preparation phase
               resources:

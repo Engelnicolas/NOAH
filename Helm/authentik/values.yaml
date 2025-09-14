@@ -8,25 +8,47 @@ image:
 worker:
   replicaCount: 1
 
+# ConfigLoader Integration - Dynamic Domain Management
+# These values can be set by ConfigLoader for dynamic domain management
+global:
+  domain: ""                    # Set by ConfigLoader or default to noah-infra.com
+  cluster_name: ""              # Set by ConfigLoader
+  environment: ""               # Set by ConfigLoader (dev/staging/production)
+  namespace: ""                 # Set by ConfigLoader
+  noah:
+    managed: false              # Set to true when managed by ConfigLoader
+    version: ""                 # Set by ConfigLoader
+
 service:
-  type: LoadBalancer  # External access for OIDC endpoints
-  port: 80            # HTTP port
-  httpsPort: 443      # HTTPS port
+  type: LoadBalancer            # External access for OIDC endpoints
+  port: 80                      # HTTP port
+  httpsPort: 443                # HTTPS port
+  # Dynamic service configuration - set by ConfigLoader
+  name: "authentik"             # Service name
+  subdomain: "auth"             # Default subdomain, can be overridden
+  domain: ""                    # Specific domain override (NOAH_AUTHENTIK_DOMAIN)
+  fqdn: ""                      # Full FQDN, computed by ConfigLoader
   annotations:
     # Use Cilium's LoadBalancer with external access
     service.cilium.io/global: "true"
     service.cilium.io/shared: "true"
-    # Enable domain-based routing for OIDC discovery
+    # Dynamic hostname annotation - will be updated by template
     external-dns.alpha.kubernetes.io/hostname: "auth.noah-infra.com"
     # Configure load balancing algorithm
     service.cilium.io/lb-algorithm: "round_robin"
 
+# TLS Configuration - can be managed by ConfigLoader
+tls:
+  enabled: true                 # Enable TLS by default
+  secretName: "authentik-tls"   # Default TLS secret name
+
 ingress:
-  enabled: true  # Enable ingress for OIDC endpoints
-  className: cilium  # Options: "nginx", "cilium", or "traefik"
+  enabled: true                 # Enable ingress for OIDC endpoints
+  className: cilium             # Options: "nginx", "cilium", or "traefik"
   annotations:
     # Common annotations for all ingress controllers
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     # Nginx-specific (when className: nginx)
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     # OIDC-specific headers
@@ -34,19 +56,27 @@ ingress:
       more_set_headers "Access-Control-Allow-Origin: *";
       more_set_headers "Access-Control-Allow-Methods: GET, POST, OPTIONS";
       more_set_headers "Access-Control-Allow-Headers: Authorization, Content-Type";
-  hosts:
-    - host: auth.noah-infra.com
-      paths:
-        - path: /
-          pathType: Prefix
-        - path: /application/o/
-          pathType: Prefix  # OIDC endpoints
-        - path: /.well-known/
-          pathType: Prefix  # OIDC discovery
-  tls:
-    - secretName: authentik-tls
-      hosts:
-        - auth.noah-infra.com
+  
+  # Static host configuration (used when ConfigLoader values are not provided)
+  # These will be ignored if service.fqdn or computed FQDN is available
+  hosts: []
+  # Example static configuration:
+  # hosts:
+  #   - host: auth.noah-infra.com
+  #     paths:
+  #       - path: /
+  #         pathType: Prefix
+  #       - path: /application/o/
+  #         pathType: Prefix
+  #       - path: /.well-known/
+  #         pathType: Prefix
+  
+  tls: []
+  # Example static TLS configuration:
+  # tls:
+  #   - secretName: authentik-tls
+  #     hosts:
+  #       - auth.noah-infra.com
 
 authentik:
   # Use our existing secret instead of auto-generating

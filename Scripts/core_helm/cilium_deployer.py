@@ -13,7 +13,7 @@ def get_ansible_vars_for_service(service, namespace, domain):
     security_config = get_security_config(domain)
     
     ansible_vars = {
-        'namespace': namespace,
+        'cilium_namespace': namespace,
         'domain': domain,
         'service_name': service,
         'security_config': security_config,

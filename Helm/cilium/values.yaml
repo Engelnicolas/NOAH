@@ -1,14 +1,42 @@
 # NOAH Cilium CNI Configuration
 # Configurable domain setup for flexible deployment
+# Enhanced with ConfigLoader dynamic domain management
 
-# Global NOAH configuration - CUSTOMIZE FOR YOUR ENVIRONMENT
+# ConfigLoader Integration - Dynamic Domain Management
+# These values can be set by ConfigLoader for dynamic domain management
 global:
-  domain: noah-infra.com  # CHANGE THIS to your domain
+  domain: ""                    # Set by ConfigLoader or default to noah-infra.com
+  cluster_name: ""              # Set by ConfigLoader
+  environment: ""               # Set by ConfigLoader (dev/staging/production)
+  namespace: ""                 # Set by ConfigLoader
+  noah:
+    managed: false              # Set to true when managed by ConfigLoader
+    version: ""                 # Set by ConfigLoader
+
+# Service configuration for Hubble UI - supports ConfigLoader values
+service:
+  name: "cilium"                # Service name
+  subdomain: "hubble"           # Default subdomain for Hubble UI
+  domain: ""                    # Specific domain override (NOAH_CILIUM_DOMAIN)
+  fqdn: ""                      # Full FQDN, computed by ConfigLoader
+
+# TLS Configuration - can be managed by ConfigLoader
+tls:
+  enabled: true                 # Enable TLS by default
+  secretName: "cilium-tls"      # Default TLS secret name
+
+# Ingress configuration for Hubble UI
+ingress:
+  enabled: true                 # Enable ingress for Hubble UI
+  className: "nginx"            # Default to nginx, can be overridden
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 
 # Hubble UI configuration - CUSTOMIZE FOR YOUR ENVIRONMENT  
 hubbleUI:
-  domain: ""  # If empty, uses global.domain
-  subdomain: hubble  # Subdomain for Hubble UI
+  domain: ""                    # If empty, uses global.domain
+  subdomain: hubble             # Subdomain for Hubble UI
   # Full domain will be: {subdomain}.{domain or global.domain}
 
 # MetalLB load balancer (disabled by default)
@@ -75,27 +103,11 @@ cilium:
             cpu: 200m
             memory: 256Mi
       ingress:
-        enabled: true
-        className: nginx
-        annotations:
-          cert-manager.io/cluster-issuer: "noah-ca-issuer"
-          # CUSTOMIZE THESE URLs FOR YOUR DOMAIN:
-          # Replace "noah-infra.com" with your actual domain
-          nginx.ingress.kubernetes.io/auth-url: "https://auth.noah-infra.com/outpost.goauthentik.io/auth/nginx"
-          nginx.ingress.kubernetes.io/auth-signin: "https://auth.noah-infra.com/outpost.goauthentik.io/start?rd=$escaped_request_uri"
-          nginx.ingress.kubernetes.io/auth-response-headers: "Set-Cookie,X-authentik-username,X-authentik-groups,X-authentik-email,X-authentik-name,X-authentik-uid"
-          nginx.ingress.kubernetes.io/server-snippet: |
-            add_header X-Frame-Options DENY;
-            add_header X-Content-Type-Options nosniff;
-            add_header X-XSS-Protection "1; mode=block";
-        hosts:
-          # CUSTOMIZE THIS: Replace "noah-infra.com" with your domain
-          - hubble.noah-infra.com
-        tls:
-          - secretName: hubble-tls
-            hosts:
-              # CUSTOMIZE THIS: Replace "noah-infra.com" with your domain
-              - hubble.noah-infra.com
+        enabled: false  # Disabled - using dedicated template instead
+        # Note: Ingress configuration moved to dedicated template
+        # for dynamic domain management via ConfigLoader
+        hosts: []  # Will be populated by ConfigLoader or template defaults
+        tls: []    # Will be populated by ConfigLoader or template defaults
 
   # Basic prometheus monitoring (without ServiceMonitor)
   prometheus:

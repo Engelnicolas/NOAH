@@ -7,7 +7,6 @@ cluster validation, cluster creation, and status monitoring.
 """
 
 # This module is part of the NOAH cluster creation workflow
-__version__ = "0.0.2"
 
 # Import utilities for easy access
 from .cluster_validation_utils import check_existing_cluster

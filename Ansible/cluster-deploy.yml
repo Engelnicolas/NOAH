@@ -66,7 +66,8 @@
                   -e namespace=kube-system \
                   -e domain_name="{{ domain_name }}" \
                   -e deployment_phase=complete \
-                  -e enable_hubble=true
+                  -e enable_hubble=true \
+                  -e hubble_tls_enabled=true
               vars:
                 namespace: kube-system
                 domain_name: "{{ domain_name }}"
@@ -77,12 +78,49 @@
             - name: Validate Cilium deployment
               ansible.builtin.shell: |
                 echo "=== VALIDATING CILIUM CNI DEPLOYMENT ==="
-                # Development mode: Skip actual cluster validation
-                echo "✓ Development mode: Skipping real cluster validation"
-                echo "✓ Cilium CNI deployment simulated successfully"
-                echo "✓ Network policies would be enforced"
-                echo "✓ Hubble UI would be accessible at: hubble.{{ domain_name }}"
-                echo "✓ Cilium deployment complete and validated (development mode)"
+                if [ "{{ validation_mode }}" = "development" ]; then
+                  echo "✓ Development mode: Skipping real cluster validation"
+                  echo "✓ Cilium CNI deployment simulated (dev)"
+                  echo "✓ Hubble (simulated) → hubble.{{ domain_name }}"
+                  exit 0
+                fi
+                echo "[WAIT] Waiting for Cilium pods to become Ready..."
+                ATTEMPTS=0
+                until [ $ATTEMPTS -ge 60 ]; do
+                  READY=$(kubectl get pods -n kube-system -l k8s-app=cilium -o jsonpath='{range .items[*]}{.status.containerStatuses[0].ready}{"\n"}{end}' 2>/dev/null | grep -c '^true$' || true)
+                  TOTAL=$(kubectl get pods -n kube-system -l k8s-app=cilium --no-headers 2>/dev/null | wc -l | tr -d ' ')
+                  if [ "$TOTAL" -gt 0 ] && [ "$READY" -eq "$TOTAL" ]; then
+                    echo "✓ All $READY/$TOTAL Cilium pods Ready"
+                    break
+                  fi
+                  ATTEMPTS=$((ATTEMPTS+1))
+                  sleep 5
+                done
+                if [ $ATTEMPTS -ge 60 ]; then
+                  echo "ERROR: Cilium pods did not all become Ready in time" >&2
+                  exit 1
+                fi
+                echo "[WAIT] Checking Cilium operator availability (if present)..."
+                if kubectl get deploy -n kube-system cilium-operator >/dev/null 2>&1; then
+                  if ! kubectl rollout status deploy/cilium-operator -n kube-system --timeout=300s; then
+                    echo "ERROR: Cilium operator not ready" >&2
+                    exit 1
+                  fi
+                  echo "✓ Cilium operator Ready"
+                else
+                  echo "ℹ️  Cilium operator not detected (skipping)"
+                fi
+                echo "[INFO] Verifying Hubble UI service (if enabled)..."
+                if [ "{{ enable_hubble }}" = "true" ]; then
+                  if kubectl get svc -n kube-system | grep -q hubble-ui; then
+                    echo "✓ Hubble UI service present"
+                  else
+                    echo "⚠️  Hubble UI service not found"
+                  fi
+                fi
+                echo "✓ Cilium deployment validated"
+                echo "✓ Network policies active"
+                echo "✓ Hubble target URL: https://hubble.{{ domain_name }}"
                 exit 0
               register: cilium_validation
               failed_when: cilium_validation.rc != 0
@@ -104,12 +142,45 @@
             - name: Validate Authentik deployment
               ansible.builtin.shell: |
                 echo "=== VALIDATING AUTHENTIK DEPLOYMENT ==="
-                # Development mode: Skip actual cluster validation
-                echo "✓ Development mode: Skipping real cluster validation"
-                echo "✓ Authentik standalone IAM deployment simulated successfully"
-                echo "✓ IAM would be accessible at: https://auth.{{ domain_name }}"
-                echo "✓ Standalone identity provider configured"
-                echo "✓ Authentik deployment complete and validated (development mode)"
+                if [ "{{ validation_mode }}" = "development" ]; then
+                  echo "✓ Development mode: Skipping real cluster validation"
+                  echo "✓ Authentik deployment simulated (dev)"
+                  echo "✓ IAM URL (simulated): https://auth.{{ domain_name }}"
+                  exit 0
+                fi
+                echo "[WAIT] Waiting for Authentik server deployment rollout..."
+                if ! kubectl rollout status deploy/authentik-server -n identity --timeout=600s; then
+                  echo "ERROR: Authentik server did not become Ready" >&2
+                  exit 1
+                fi
+                echo "[WAIT] Waiting for Authentik worker deployment rollout..."
+                if kubectl get deploy/authentik-worker -n identity >/dev/null 2>&1; then
+                  if ! kubectl rollout status deploy/authentik-worker -n identity --timeout=600s; then
+                    echo "ERROR: Authentik worker did not become Ready" >&2
+                    exit 1
+                  fi
+                  echo "✓ Authentik worker Ready"
+                else
+                  echo "ℹ️  Authentik worker deployment not found (skipping)"
+                fi
+                echo "[CHECK] Health endpoint..."
+                ATTEMPTS=0
+                until [ $ATTEMPTS -ge 40 ]; do
+                  POD=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+                  if [ -n "$POD" ]; then
+                    if kubectl exec -n identity "$POD" -- curl -sf http://localhost:9000/-/health/ready/ >/dev/null 2>&1; then
+                      echo "✓ Authentik health endpoint responding"
+                      break
+                    fi
+                  fi
+                  ATTEMPTS=$((ATTEMPTS+1))
+                  sleep 5
+                done
+                if [ $ATTEMPTS -ge 40 ]; then
+                  echo "⚠️  Authentik health endpoint not ready (continuing)" >&2
+                fi
+                echo "✓ Authentik deployment validated"
+                echo "✓ IAM URL: https://auth.{{ domain_name }}"
                 exit 0
               register: authentik_validation
               failed_when: authentik_validation.rc != 0

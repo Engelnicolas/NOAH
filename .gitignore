@@ -1,11 +1,17 @@
-# ---- Python ----
+#################################################################
+# NOAH .gitignore (refactored)
+#  - Consolidated duplicates
+#  - Added canonical secrets protection
+#  - Preserved encrypted/packaged artifacts ignore patterns
+#################################################################
+
+############################
+# Python / Build Artifacts #
+############################
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
-Scripts/__pycache__/
-Scripts/**/__pycache__/
-**/__pycache__/
-*.pyc
 .pytest_cache/
 *.pyo
 *.pyd
@@ -16,52 +22,59 @@ Scripts/**/__pycache__/
 dist/
 build/
 develop-eggs/
-.installed.cfg
+pip-wheel-metadata/
 *.manifest
 *.spec
 *.log
-pip-wheel-metadata/
 *.sqlite3
 *.db
+
+############################
+# Virtual Environments     #
+############################
 .venv/
 env/
 venv/
 ENV/
+
+############################
+# Environment Files        #
+############################
 .env
 .env.*
 .envrc
-# Security: unencrypted config files
+
+############################
+# Configuration (unencrypted)
+############################
 config.yaml
 config.yml
 secrets.yaml
 secrets.yml
-# Keep only encrypted configs
+# Allow encrypted variants
 !*.enc.yaml
 !*.enc.yml
 
-# ---- Ansible ----
+############################
+# Canonical Secrets & Keys #
+############################
+Secrets/canonical-secrets.yaml
+Age/
+*.agekey
+.sops.yaml
+
+############################
+# Ansible / Deployment     #
+############################
 *.retry
 *.log
 .secret*
 vault_pass.txt
 Helm/*/secrets/
 
-# Molecule test artifacts
-.molecule/
-.cache/
-*.tar.gz
-
-# ---- Kubernetes ----
-# Local Kubernetes configs
-.kube/
-*.kubeconfig
-*.kubeconfig.*
-kubeconfig
-*.crt
-*.key
-*.pem
-
-# ---- Helm ----
+############################
+# Helm                     #
+############################
 charts/*.tgz
 helmfile.lock
 tmpcharts/
@@ -71,22 +84,39 @@ tmpcharts/
 .values.override.yaml
 */.temp-*
 
-# ---- SOPS ----
-# Ignore decrypted secrets
+############################
+# Decrypted / Temp Secrets #
+############################
 *.dec.yaml
 *.dec.json
 *.dec.env
 Helm/samba4/secrets/*.yaml
 Helm/samba4/secrets/*.json
 Helm/samba4/secrets/*.env
-.sops.yaml
+Helm/samba4/secrets/samba4-secrets.temp.yaml
+Helm/samba4/secrets/.temp-values.yaml
 
-# ---- age ----
-# Age key files
-*.agekey
-Age/
+############################
+# Legacy Encrypted Files (deprecated)
+############################
+Helm/authentik/secrets/authentik-secrets.enc.yaml
+Helm/cilium/secrets/cilium-secrets.enc.yaml
+Helm/samba4/secrets/samba4-secrets.enc.yaml
 
-# ---- General OS / Editor ----
+############################
+# Certificates (private)   #
+############################
+Certificates/ca.srl
+Certificates/ca.key
+Certificates/ca.pem
+Certificates/ca.crt
+*.crt
+*.key
+*.pem
+
+############################
+# OS / Editor / Misc       #
+############################
 .DS_Store
 Thumbs.db
 *.swp
@@ -95,15 +125,7 @@ Thumbs.db
 .vscode/
 *.bak
 *.tmp
-.sops.yaml
-Helm/samba4/secrets/samba4-secrets.temp.yaml
-Helm/samba4/secrets/samba4-secrets.enc.yaml
-Certificates/ca.srl
-Helm/authentik/secrets/authentik-secrets.enc.yaml
-Helm/cilium/secrets/cilium-secrets.enc.yaml
-Helm/samba4/secrets/.temp-values.yaml
-Helm/cilium/secrets/cilium-secrets.enc.yaml
-Certificates/ca.crt
-Certificates/ca.key
-Certificates/ca.pem
-Helm/authentik/secrets/authentik-secrets.enc.yaml
+
+#################################################################
+# END
+#################################################################

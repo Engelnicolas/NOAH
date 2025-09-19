@@ -7,6 +7,8 @@
     domain_name: "{{ domain_name | default('noah-infra.com') }}"
     validation_mode: "{{ validation_mode | default('development') }}"  # development/production
     verbose_mode: true  # Enable verbose output by default
+    cilium_wait_timeout: "{{ cilium_wait_timeout | default(600) }}"   # seconds
+    authentik_rollout_timeout: "{{ authentik_rollout_timeout | default(600) }}"  # seconds
     
   tasks:
     - name: "CONFIGURATION: Load environment variables from encrypted config"
@@ -59,6 +61,10 @@
         
         - name: "PHASE 2: Deploy Cilium CNI (Network Foundation)"
           block:
+            - name: Record Cilium phase start time
+              ansible.builtin.set_fact:
+                phase_cilium_started: "{{ ansible_date_time.epoch | int }}"
+
             - name: Deploy Cilium CNI with SSO-ready configuration
               shell: |
                 cd {{ ansible_playbook_dir }}
@@ -75,60 +81,63 @@
                 enable_hubble: true
                 hubble_tls_enabled: true
 
-            - name: Validate Cilium deployment
-              ansible.builtin.shell: |
-                echo "=== VALIDATING CILIUM CNI DEPLOYMENT ==="
-                if [ "{{ validation_mode }}" = "development" ]; then
-                  echo "✓ Development mode: Skipping real cluster validation"
-                  echo "✓ Cilium CNI deployment simulated (dev)"
-                  echo "✓ Hubble (simulated) → hubble.{{ domain_name }}"
-                  exit 0
-                fi
-                echo "[WAIT] Waiting for Cilium pods to become Ready..."
-                ATTEMPTS=0
-                until [ $ATTEMPTS -ge 60 ]; do
-                  READY=$(kubectl get pods -n kube-system -l k8s-app=cilium -o jsonpath='{range .items[*]}{.status.containerStatuses[0].ready}{"\n"}{end}' 2>/dev/null | grep -c '^true$' || true)
-                  TOTAL=$(kubectl get pods -n kube-system -l k8s-app=cilium --no-headers 2>/dev/null | wc -l | tr -d ' ')
-                  if [ "$TOTAL" -gt 0 ] && [ "$READY" -eq "$TOTAL" ]; then
-                    echo "✓ All $READY/$TOTAL Cilium pods Ready"
-                    break
-                  fi
-                  ATTEMPTS=$((ATTEMPTS+1))
-                  sleep 5
-                done
-                if [ $ATTEMPTS -ge 60 ]; then
-                  echo "ERROR: Cilium pods did not all become Ready in time" >&2
-                  exit 1
-                fi
-                echo "[WAIT] Checking Cilium operator availability (if present)..."
-                if kubectl get deploy -n kube-system cilium-operator >/dev/null 2>&1; then
-                  if ! kubectl rollout status deploy/cilium-operator -n kube-system --timeout=300s; then
-                    echo "ERROR: Cilium operator not ready" >&2
-                    exit 1
-                  fi
-                  echo "✓ Cilium operator Ready"
-                else
-                  echo "ℹ️  Cilium operator not detected (skipping)"
-                fi
-                echo "[INFO] Verifying Hubble UI service (if enabled)..."
-                if [ "{{ enable_hubble }}" = "true" ]; then
-                  if kubectl get svc -n kube-system | grep -q hubble-ui; then
-                    echo "✓ Hubble UI service present"
-                  else
-                    echo "⚠️  Hubble UI service not found"
-                  fi
-                fi
-                echo "✓ Cilium deployment validated"
-                echo "✓ Network policies active"
-                echo "✓ Hubble target URL: https://hubble.{{ domain_name }}"
-                exit 0
-              register: cilium_validation
-              failed_when: cilium_validation.rc != 0
+            - name: Validate Cilium deployment (development shortcut)
+              ansible.builtin.debug:
+                msg:
+                  - "✓ Development mode: Skipping real Cilium validation"
+                  - "✓ Hubble (simulated) → hubble.{{ domain_name }}"
+              when: validation_mode == 'development'
+
+            - name: Wait for Cilium pods Ready (production)
+              kubernetes.core.k8s_info:
+                kind: Pod
+                namespace: kube-system
+                label_selectors:
+                  - k8s-app=cilium
+              register: cilium_pods
+              until: cilium_pods.resources | length > 0 and (cilium_pods.resources | map(attribute='status.containerStatuses') | map('first') | selectattr('ready') | list | length) == (cilium_pods.resources | length)
+              retries: "{{ (cilium_wait_timeout | int // 5) | int }}"
+              delay: 5
+              when: validation_mode != 'development'
+
+            - name: Check Cilium operator rollout (production)
+              kubernetes.core.k8s_info:
+                kind: Deployment
+                name: cilium-operator
+                namespace: kube-system
+              register: cilium_operator
+              failed_when: false
+              when: validation_mode != 'development'
+
+            - name: Wait for Cilium operator available (production)
+              ansible.builtin.command: >-
+                kubectl rollout status deploy/cilium-operator -n kube-system --timeout={{ cilium_wait_timeout }}s
+              register: cilium_operator_rollout
+              changed_when: false
+              failed_when: cilium_operator_rollout.rc != 0
+              when: validation_mode != 'development' and (cilium_operator.resources | length) > 0
+
+            - name: Check Hubble UI service presence (production)
+              kubernetes.core.k8s_info:
+                api_version: v1
+                kind: Service
+                name: hubble-ui
+                namespace: kube-system
+              register: hubble_ui_service
+              failed_when: false
+              when: validation_mode != 'development' and enable_hubble | bool
+
+            - name: Record Cilium phase end time
+              ansible.builtin.set_fact:
+                phase_cilium_ended: "{{ ansible_date_time.epoch | int }}"
           
           tags: [cilium, networking]
         
         - name: "PHASE 3: Deploy Authentik SSO (Standalone IAM)"
           block:
+            - name: Record Authentik phase start time
+              ansible.builtin.set_fact:
+                phase_authentik_started: "{{ ansible_date_time.epoch | int }}"
             - name: Deploy Authentik SSO standalone
               shell: |
                 cd {{ ansible_playbook_dir }}
@@ -139,56 +148,56 @@
                 namespace: identity
                 domain_name: "{{ domain_name }}"
 
-            - name: Validate Authentik deployment
+            - name: Validate Authentik deployment (development shortcut)
+              ansible.builtin.debug:
+                msg:
+                  - "✓ Development mode: Skipping Authentik rollout validation"
+                  - "✓ IAM URL (simulated): https://auth.{{ domain_name }}"
+              when: validation_mode == 'development'
+
+            - name: Wait for Authentik server rollout (production)
+              ansible.builtin.command: >-
+                kubectl rollout status deploy/authentik-server -n identity --timeout={{ authentik_rollout_timeout }}s
+              register: authentik_server_rollout
+              changed_when: false
+              failed_when: authentik_server_rollout.rc != 0
+              when: validation_mode != 'development'
+
+            - name: Wait for Authentik worker rollout (production if exists)
+              ansible.builtin.command: >-
+                kubectl rollout status deploy/authentik-worker -n identity --timeout={{ authentik_rollout_timeout }}s
+              register: authentik_worker_rollout
+              changed_when: false
+              failed_when: authentik_worker_rollout.rc != 0
+              when: validation_mode != 'development' and (lookup('ansible.builtin.pipe', 'kubectl get deploy/authentik-worker -n identity --no-headers 2>/dev/null | wc -l') | int) > 0
+
+            - name: Probe Authentik health endpoint (best-effort)
               ansible.builtin.shell: |
-                echo "=== VALIDATING AUTHENTIK DEPLOYMENT ==="
-                if [ "{{ validation_mode }}" = "development" ]; then
-                  echo "✓ Development mode: Skipping real cluster validation"
-                  echo "✓ Authentik deployment simulated (dev)"
-                  echo "✓ IAM URL (simulated): https://auth.{{ domain_name }}"
-                  exit 0
-                fi
-                echo "[WAIT] Waiting for Authentik server deployment rollout..."
-                if ! kubectl rollout status deploy/authentik-server -n identity --timeout=600s; then
-                  echo "ERROR: Authentik server did not become Ready" >&2
-                  exit 1
-                fi
-                echo "[WAIT] Waiting for Authentik worker deployment rollout..."
-                if kubectl get deploy/authentik-worker -n identity >/dev/null 2>&1; then
-                  if ! kubectl rollout status deploy/authentik-worker -n identity --timeout=600s; then
-                    echo "ERROR: Authentik worker did not become Ready" >&2
-                    exit 1
-                  fi
-                  echo "✓ Authentik worker Ready"
+                POD=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+                if [ -n "$POD" ]; then
+                  kubectl exec -n identity "$POD" -- curl -sf http://localhost:9000/-/health/ready/ >/dev/null 2>&1 && echo "READY" || echo "NOT_READY"
                 else
-                  echo "ℹ️  Authentik worker deployment not found (skipping)"
+                  echo "NO_POD"
                 fi
-                echo "[CHECK] Health endpoint..."
-                ATTEMPTS=0
-                until [ $ATTEMPTS -ge 40 ]; do
-                  POD=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-                  if [ -n "$POD" ]; then
-                    if kubectl exec -n identity "$POD" -- curl -sf http://localhost:9000/-/health/ready/ >/dev/null 2>&1; then
-                      echo "✓ Authentik health endpoint responding"
-                      break
-                    fi
-                  fi
-                  ATTEMPTS=$((ATTEMPTS+1))
-                  sleep 5
-                done
-                if [ $ATTEMPTS -ge 40 ]; then
-                  echo "⚠️  Authentik health endpoint not ready (continuing)" >&2
-                fi
-                echo "✓ Authentik deployment validated"
-                echo "✓ IAM URL: https://auth.{{ domain_name }}"
-                exit 0
-              register: authentik_validation
-              failed_when: authentik_validation.rc != 0
+              register: authentik_health_probe
+              retries: 20
+              delay: 10
+              until: authentik_health_probe.stdout == 'READY'
+              failed_when: false
+              when: validation_mode != 'development'
+
+            - name: Record Authentik phase end time
+              ansible.builtin.set_fact:
+                phase_authentik_ended: "{{ ansible_date_time.epoch | int }}"
           
           tags: [authentik, iam]
         
         - name: "PHASE 4: Post-deployment validation"
           block:
+            - name: Record final validation phase start
+              ansible.builtin.set_fact:
+                phase_validation_started: "{{ ansible_date_time.epoch | int }}"
+
             - name: Validate complete deployment stack
               ansible.builtin.shell: |
                 echo "=== COMPREHENSIVE DEPLOYMENT HEALTH CHECK ==="
@@ -291,10 +300,24 @@
               register: validation_output
               tags: validation
               
+            - name: Record final validation phase end
+              ansible.builtin.set_fact:
+                phase_validation_ended: "{{ ansible_date_time.epoch | int }}"
+
             - name: Display health check results
               ansible.builtin.debug:
                 msg: "{{ validation_output.stdout_lines }}"
               tags: validation
+
+            - name: Display phase duration summary
+              ansible.builtin.debug:
+                msg: |
+                  === PHASE DURATIONS (seconds) ===
+                  Cilium Phase: {{ (phase_cilium_ended | int) - (phase_cilium_started | int) if (phase_cilium_started is defined and phase_cilium_ended is defined) else 'n/a' }}
+                  Authentik Phase: {{ (phase_authentik_ended | int) - (phase_authentik_started | int) if (phase_authentik_started is defined and phase_authentik_ended is defined) else 'n/a' }}
+                  Validation Phase: {{ (phase_validation_ended | int) - (phase_validation_started | int) if (phase_validation_started is defined and phase_validation_ended is defined) else 'n/a' }}
+                  Total (Cilium + Authentik + Validation): {{ ((phase_cilium_ended | int) - (phase_cilium_started | int) + (phase_authentik_ended | int) - (phase_authentik_started | int) + (phase_validation_ended | int) - (phase_validation_started | int)) if (phase_cilium_ended is defined and phase_authentik_ended is defined and phase_validation_ended is defined) else 'n/a' }}
+              when: phase_cilium_ended is defined
           
           tags: [validation, final]
 

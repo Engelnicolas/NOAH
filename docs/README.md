@@ -9,7 +9,7 @@ NOAH provides a complete infrastructure stack:
 
 - **🔐 Authentik SSO** - Identity and access management
 - **🌐 Cilium CNI** - Advanced networking with ingress
-- **🔒 SOPS Encryption** - Secure secret management with Age keys
+- **🔒 Canonical Secrets Store** - Single authoritative encrypted secrets file (Age/SOPS protected)
 - **🔄 Automated Deployment** - Single-command infrastructure setup
 - **🧪 Testing Suite** - Built-in validation and health checks
 - **🚀 CI/CD Ready** - GitHub Actions workflows included
@@ -99,7 +99,16 @@ After deployment, access services at:
 - **Authentik SSO**: `https://auth.your-domain.com`
 - **Cilium Hubble**: `https://hubble.your-domain.com`
 
-Default credentials available via: `python noah.py password show`
+Retrieve Authentik credentials via: `python noah.py password show`
+
+Rotate Authentik admin password (versioned with metadata):
+```bash
+python noah.py password new
+# or during deployment
+python noah.py deploy authentik --regenerate-password
+```
+
+Each secret carries metadata `{ value, version, rotated_at }` and an integrity hash is computed deterministically across services.
 
 ## **Requirements**
 

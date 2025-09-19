@@ -17,7 +17,7 @@ import string
 import base64
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
 from datetime import datetime
 
 class NoahSecurityManager:
@@ -96,34 +96,132 @@ class NoahSecurityManager:
     # ================================
     
     def generate_service_secrets(self, service_name):
-        """Generate all required secrets for a service
-        
+        """Generate or retrieve deterministic secrets for a service.
+
+        Secrets are now sourced from a canonical encrypted store to ensure
+        consistent values across Helm, Ansible, and any regeneration calls.
+
         Args:
             service_name: Service name ('authentik', 'cilium', etc.)
-            
+
         Returns:
-            Dictionary of service-specific secrets
+            dict of service-specific secrets (stable once created)
         """
-        secrets_config = {
-            'authentik': {
-                'secret_key': self.generate_secure_password(50, include_special=False),
-                'bootstrap_password': self.generate_secure_password(24),
-                'bootstrap_token': self.generate_secure_password(50, include_special=False),
-                'postgresql_password': self.generate_secure_password(32),
-                'redis_password': self.generate_secure_password(32),
-                'oidc_client_secret': self.generate_secure_password(32, include_special=False),
-                'jwt_signing_key': self.generate_secure_password(64, include_special=False),
-                'session_secret': self.generate_secure_password(32),
-                'email_password': self.generate_secure_password(24),
-            },
-            'cilium': {
-                'hubble_tls_key': self.generate_secure_password(32, include_special=False),
-                'cluster_mesh_key': self.generate_secure_password(32, include_special=False),
-                'ca_key_passphrase': self.generate_secure_password(24),
+        try:
+            from Scripts.security.canonical_store import get_canonical_store
+            store = get_canonical_store(self.project_root)
+        except Exception as e:
+            print(f"[WARNING] Canonical secrets store unavailable ({e}) - falling back to ephemeral generation")
+            store = None
+
+        # Define required secrets + generator per service
+        required: Dict[str, Callable[[], str]] = {}
+        if service_name == 'authentik':
+            required = {
+                'secret_key': lambda: self.generate_secure_password(50, include_special=False),
+                'bootstrap_password': lambda: self.generate_secure_password(24),
+                'bootstrap_token': lambda: self.generate_secure_password(50, include_special=False),
+                'postgresql_password': lambda: self.generate_secure_password(32),
+                'redis_password': lambda: self.generate_secure_password(32),
+                'oidc_client_secret': lambda: self.generate_secure_password(32, include_special=False),
+                'jwt_signing_key': lambda: self.generate_secure_password(64, include_special=False),
+                'session_secret': lambda: self.generate_secure_password(32),
+                'email_password': lambda: self.generate_secure_password(24)
             }
-        }
-        
-        return secrets_config.get(service_name, {})
+        elif service_name == 'cilium':
+            required = {
+                'hubble_tls_key': lambda: self.generate_secure_password(32, include_special=False),
+                'cluster_mesh_key': lambda: self.generate_secure_password(32, include_special=False),
+                'ca_key_passphrase': lambda: self.generate_secure_password(24)
+            }
+        else:
+            # Unknown service -> return empty (extensibility point)
+            return {}
+
+        if store:
+            secrets_dict = store.ensure_service_entries(service_name, required)
+            return secrets_dict
+        else:
+            # Fallback (non-persistent) - generate all now
+            return {k: gen() for k, gen in required.items()}
+
+    def rotate_service_secrets_canonical(self, service_name: str, rotate_keys: Optional[list] = None) -> Dict[str, str]:
+        """Rotate selected secrets in the canonical store.
+
+        Args:
+            service_name: target service
+            rotate_keys: list of keys to rotate (None = all for service)
+        Returns:
+            Updated secrets dict
+        """
+        try:
+            from Scripts.security.canonical_store import get_canonical_store
+            store = get_canonical_store(self.project_root)
+        except Exception as e:
+            print(f"[ERROR] Cannot rotate canonical secrets (store unavailable): {e}")
+            return {}
+
+        # We need raw data access for metadata updates
+        services_root = store.data.get('services', {})
+        existing_full = services_root.get(service_name, {})
+        # Produce simplified map for return later
+        existing_simple = store.get_service_secrets(service_name)
+        if not existing_full:
+            print(f"[WARNING] No existing secrets for {service_name}; generating instead of rotating")
+            return self.generate_service_secrets(service_name)
+
+        # Use normal generator definitions to reconstruct required map
+        regen_all = self.generate_service_secrets(service_name)  # This will load existing; call again for generator map
+        # Build generator mapping again (inefficient but acceptable for small sets)
+        gen_mapping: Dict[str, Callable[[], str]] = {}
+        if service_name == 'authentik':
+            gen_mapping = {
+                'secret_key': lambda: self.generate_secure_password(50, include_special=False),
+                'bootstrap_password': lambda: self.generate_secure_password(24),
+                'bootstrap_token': lambda: self.generate_secure_password(50, include_special=False),
+                'postgresql_password': lambda: self.generate_secure_password(32),
+                'redis_password': lambda: self.generate_secure_password(32),
+                'oidc_client_secret': lambda: self.generate_secure_password(32, include_special=False),
+                'jwt_signing_key': lambda: self.generate_secure_password(64, include_special=False),
+                'session_secret': lambda: self.generate_secure_password(32),
+                'email_password': lambda: self.generate_secure_password(24)
+            }
+        elif service_name == 'cilium':
+            gen_mapping = {
+                'hubble_tls_key': lambda: self.generate_secure_password(32, include_special=False),
+                'cluster_mesh_key': lambda: self.generate_secure_password(32, include_special=False),
+                'ca_key_passphrase': lambda: self.generate_secure_password(24)
+            }
+
+        targets = rotate_keys or list(gen_mapping.keys())
+        rotated_count = 0
+        for key in targets:
+            if key not in gen_mapping:
+                print(f"[WARNING] Key '{key}' not recognized for service {service_name}")
+                continue
+            new_val = gen_mapping[key]()
+            entry = existing_full.get(key)
+            if isinstance(entry, dict):
+                entry['value'] = new_val
+                entry['version'] = (entry.get('version') or 1) + 1
+                entry['rotated_at'] = datetime.utcnow().isoformat() + 'Z'
+            else:
+                # Legacy string
+                existing_full[key] = {
+                    'value': new_val,
+                    'version': 2,
+                    'rotated_at': datetime.utcnow().isoformat() + 'Z'
+                }
+            existing_simple[key] = new_val
+            rotated_count += 1
+        if rotated_count:
+            try:
+                # Integrity will be recomputed on save
+                store.save()
+                print(f"[INFO] Rotated {rotated_count} secret(s) for {service_name} in canonical store")
+            except Exception as e:
+                print(f"[ERROR] Failed to persist rotated secrets: {e}")
+        return existing_simple
 
     # ================================
     # KUBERNETES SECRET MANAGEMENT
@@ -254,157 +352,7 @@ class NoahSecurityManager:
         except Exception as e:
             print(f"⚠️  SOPS configuration failed: {e}")
     
-    def create_encrypted_secret(self, service_name, namespace="identity"):
-        """Create SOPS-encrypted secret file for git storage
-        
-        Args:
-            service_name: Service name
-            namespace: Kubernetes namespace
-            
-        Returns:
-            Path to encrypted secret file
-        """
-        if not self.age_key_file.exists():
-            print("⚠️  Initialize encryption first: manager.initialize_encryption()")
-            return None
-            
-        # Generate secrets
-        secrets = self.generate_service_secrets(service_name)
-        
-        # Create Helm values format
-        helm_values = self._create_helm_values_format(service_name, secrets)
-        
-        # Save to Helm secrets directory
-        service_secrets_dir = self.helm_dir / service_name / "secrets"
-        service_secrets_dir.mkdir(parents=True, exist_ok=True)
-        
-        encrypted_file = service_secrets_dir / f"{service_name}-secrets.enc.yaml"
-        temp_file = service_secrets_dir / f"{service_name}-secrets.temp.enc.yaml"
-        
-        try:
-            # Write temporary unencrypted file
-            with open(temp_file, 'w') as f:
-                yaml.dump(helm_values, f, default_flow_style=False)
-            
-            # Encrypt with SOPS
-            result = subprocess.run([
-                'sops', '--encrypt', '--in-place', str(temp_file)
-            ], capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                # Move encrypted file to final location
-                temp_file.rename(encrypted_file)
-                print(f"✅ Encrypted secret created: {encrypted_file}")
-                return encrypted_file
-            else:
-                temp_file.unlink(missing_ok=True)
-                raise Exception(f"SOPS encryption failed: {result.stderr}")
-                
-        except FileNotFoundError:
-            print("⚠️  SOPS not found. Install with: https://github.com/mozilla/sops")
-            temp_file.unlink(missing_ok=True)
-            return None
-        except Exception as e:
-            temp_file.unlink(missing_ok=True)
-            print(f"❌ Encryption failed: {e}")
-            return None
 
-    def _create_helm_values_format(self, service_name, secrets):
-        """Create Helm-compatible values format"""
-        if service_name == 'authentik':
-            return {
-                'authentik': {
-                    'secretKey': secrets['secret_key'],
-                    'bootstrap': {
-                        'password': secrets['bootstrap_password'],
-                        'token': secrets['bootstrap_token']
-                    }
-                },
-                'postgresql': {
-                    'auth': {
-                        'password': secrets['postgresql_password']
-                    }
-                },
-                'redis': {
-                    'auth': {
-                        'password': secrets['redis_password']
-                    }
-                }
-            }
-        else:
-            return {'secrets': secrets}
-
-    # ================================
-    # SECRET ROTATION & MANAGEMENT
-    # ================================
-    
-    def rotate_service_secrets(self, service_name, format_type="both", namespace="identity"):
-        """Rotate all secrets for a service
-        
-        Args:
-            service_name: Service to rotate secrets for
-            format_type: "kubernetes", "encrypted", or "both"
-            namespace: Kubernetes namespace
-            
-        Returns:
-            List of created files
-        """
-        created_files = []
-        
-        if format_type in ["kubernetes", "both"]:
-            # Create Kubernetes secret
-            k8s_file = self.save_kubernetes_secret(service_name, namespace)
-            created_files.append(k8s_file)
-        
-        if format_type in ["encrypted", "both"]:
-            # Create encrypted secret for git
-            enc_file = self.create_encrypted_secret(service_name, namespace)
-            if enc_file:
-                created_files.append(enc_file)
-        
-        return created_files
-    
-    def rotate_all_secrets(self, format_type="both", namespace="identity"):
-        """Rotate secrets for all services
-        
-        Args:
-            format_type: "kubernetes", "encrypted", or "both"
-            namespace: Kubernetes namespace
-            
-        Returns:
-            Dictionary of service -> created files
-        """
-        services = ['authentik', 'cilium']
-        rotated_services = {}
-        
-        print(f"🔐 Rotating secrets for all services...")
-        
-        for service in services:
-            print(f"📝 Rotating {service} secrets...")
-            files = self.rotate_service_secrets(service, format_type, namespace)
-            rotated_services[service] = files
-        
-        self._print_rotation_summary(rotated_services, format_type)
-        return rotated_services
-    
-    def _print_rotation_summary(self, rotated_services, format_type):
-        """Print summary of secret rotation"""
-        print(f"\n🔐 Secret rotation complete!")
-        print(f"📁 Generated files:")
-        
-        for service, files in rotated_services.items():
-            print(f"   {service}:")
-            for file_path in files:
-                print(f"     - {file_path}")
-        
-        print(f"\n⚠️  IMPORTANT NEXT STEPS:")
-        if format_type in ["kubernetes", "both"]:
-            print("1. Apply Kubernetes secrets: kubectl apply -f Secrets/")
-            print("2. Restart deployments to use new credentials")
-        if format_type in ["encrypted", "both"]:
-            print("3. Commit encrypted secrets to git")
-            print("4. Update Helm deployments to reference encrypted secrets")
-        print("5. Store backup of old credentials securely")
 
     # ================================
     # UTILITY METHODS
@@ -414,21 +362,6 @@ class NoahSecurityManager:
         """Get current timestamp for metadata"""
         return datetime.now().isoformat() + "Z"
     
-    def decrypt_secret(self, secret_file: Path) -> Dict[str, Any]:
-        """Decrypt a SOPS-encrypted file"""
-        import subprocess
-        import os
-        result = subprocess.run(
-            ['sops', '--decrypt', str(secret_file)],
-            capture_output=True,
-            text=True,
-            env={**os.environ, 'SOPS_AGE_KEY_FILE': str(self.age_key_file)}
-        )
-        
-        if result.returncode == 0:
-            return yaml.safe_load(result.stdout)
-        else:
-            raise Exception(f"Failed to decrypt secret: {result.stderr}")
     
     def generate_tls_certificates(self, domain: str):
         """Generate self-signed TLS certificates for a domain using openssl"""
@@ -721,8 +654,6 @@ Usage:
 
 Commands:
   init                     - Initialize Age/SOPS encryption
-  rotate <service>         - Rotate secrets for specific service
-  rotate-all              - Rotate secrets for all services  
   kubernetes <service>     - Generate Kubernetes secret only
   encrypted <service>      - Generate encrypted secret only
   list                    - List all secret files
@@ -744,14 +675,6 @@ Examples:
     
     if command == "init":
         manager.initialize_encryption()
-    elif command == "rotate":
-        if len(sys.argv) > 2:
-            service = sys.argv[2]
-            manager.rotate_service_secrets(service)
-        else:
-            print("Usage: rotate <service>")
-    elif command == "rotate-all":
-        manager.rotate_all_secrets()
     elif command == "kubernetes":
         if len(sys.argv) > 2:
             service = sys.argv[2]

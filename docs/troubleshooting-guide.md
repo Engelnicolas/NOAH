@@ -70,9 +70,9 @@ echo "EXTERNAL_IP auth.your-domain.com" >> /etc/hosts
 # Get credentials
 python noah.py password show
 
-# Reset if needed
+# Reset (rotate) if needed – updates canonical secrets store
 python noah.py password new
-python noah.py deploy authentik
+python noah.py deploy authentik --regenerate-password
 ```
 
 ### **Database Issues**
@@ -203,7 +203,7 @@ python noah.py cluster create --name noah --domain your-domain.com
 python noah.py deploy all --domain your-domain.com
 
 # 4. Restore passwords if needed
-# Use backup-passwords.txt to recreate accounts
+# Use backup-passwords.txt to recreate accounts (rotation creates new versioned entry in canonical store)
 ```
 
 ## 💡 **Common Gotchas**
@@ -228,22 +228,22 @@ python noah.py deploy all --domain your-domain.com
    head -1 Age/keys.txt
    ```
 
-2. **Re-encrypt configuration:**
+2. **Canonical secrets operations:**
    ```bash
-   # Regenerate Age key
-   age-keygen > Age/keys.txt
-   
-   # Update SOPS config
-   python noah.py config init
-   
-   # Re-encrypt secrets
-   sops updatekeys config.enc.yaml
+   # Show canonical store (with metadata & integrity)
+   python noah.py secrets canonical --show
+
+   # Rotate Authentik admin password
+   python noah.py password new
+
+   # Force rotation during deploy
+   python noah.py deploy authentik --regenerate-password
    ```
 
-3. **Reset encryption:**
+3. **Reinitialize encryption keys (rare):**
    ```bash
-   # Start fresh (will lose current config)
-   rm Age/keys.txt config.enc.yaml .sops.yaml
+   # Regenerate Age key (will require manual re-encryption of canonical file if encrypted)
+   age-keygen > Age/keys.txt
    python noah.py config init
    ```
 

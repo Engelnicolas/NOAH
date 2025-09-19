@@ -55,6 +55,7 @@ from Scripts.utils import (
     config_override_command
 )
 from Scripts.security import ensure_security_initialized, get_security_config
+from Scripts.security.rotate_cli import register_rotate_command  # type: ignore
 from Scripts.core_helm import cilium, get_ansible_vars_for_service
 from Scripts.cluster_create.status_utils import show_cluster_status
 from Scripts.cluster_create.cluster_validation_utils import check_existing_cluster
@@ -66,183 +67,70 @@ VERSION = "0.0.3"
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
 
 def get_authentik_credentials():
-    """Get Authentik admin credentials from encrypted configuration"""
+    """Get Authentik admin credentials from canonical secrets store."""
     try:
-        import subprocess
-        import tempfile
-        import os
-        
-        # Decrypt the authentik secrets using SOPS
-        age_key_file = NOAH_PATHS['age_key_file']
-        secrets_file = Path("Helm/authentik/secrets/authentik-secrets.enc.yaml")
-        
-        if not age_key_file.exists():
-            return None, f"Age key file not found: {age_key_file}"
-        
-        if not secrets_file.exists():
-            return None, f"Authentik secrets file not found: {secrets_file}"
-        
-        # Set SOPS environment variable
-        env = os.environ.copy()
-        env['SOPS_AGE_KEY_FILE'] = str(age_key_file)
-        
-        # Decrypt secrets
-        result = subprocess.run([
-            'sops', '-d', str(secrets_file)
-        ], capture_output=True, text=True, env=env)
-        
-        if result.returncode != 0:
-            return None, f"Failed to decrypt secrets: {result.stderr}"
-        
-        # Parse the decrypted YAML
-        import yaml
-        secrets_data = yaml.safe_load(result.stdout)
-        
-        # Extract credentials with validation
-        if not secrets_data or 'authentik' not in secrets_data:
-            return None, "Invalid secrets format: missing authentik section"
-        
-        bootstrap_data = secrets_data.get('authentik', {}).get('bootstrap', {})
-        bootstrap_password = bootstrap_data.get('password', '')
-        
-        if not bootstrap_password:
-            return None, "Bootstrap password not found in secrets"
-        
+        from Scripts.security.canonical_store import get_canonical_store  # type: ignore
+        store = get_canonical_store()
+        svc = store.data.get('services', {}).get('authentik', {})
+        entry = svc.get('bootstrap_password')
+        password = entry.get('value') if isinstance(entry, dict) else entry
+        if not password:
+            return None, "Bootstrap password not present in canonical store"
         admin_email = 'admin@noah-infra.com'
         admin_username = 'akadmin'
-        
-        # Get service URL with fallback
+        import subprocess
         try:
             kubectl_result = subprocess.run([
-                'kubectl', 'get', 'svc', '-n', 'identity', 'authentik-server', 
+                'kubectl', 'get', 'svc', '-n', 'identity', 'authentik-server',
                 '-o', 'jsonpath={.status.loadBalancer.ingress[0].ip}'
             ], capture_output=True, text=True, timeout=10)
-            
             if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():
                 external_ip = kubectl_result.stdout.strip()
                 http_url = f"http://{external_ip}"
                 https_url = f"https://{external_ip}"
             else:
-                # Try to get NodePort if LoadBalancer IP is not available
-                kubectl_result = subprocess.run([
-                    'kubectl', 'get', 'svc', '-n', 'identity', 'authentik-server', 
-                    '-o', 'jsonpath={.spec.ports[?(@.name=="https")].nodePort}'
-                ], capture_output=True, text=True, timeout=10)
-                
-                if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():
-                    https_port = kubectl_result.stdout.strip()
-                    http_url = f"http://65.21.238.126"  # Use node IP
-                    https_url = f"https://65.21.238.126:{https_port}"
-                else:
-                    http_url = "http://65.21.238.126"
-                    https_url = "https://65.21.238.126"
+                http_url = "http://65.21.238.126"
+                https_url = "https://65.21.238.126"
         except Exception:
             http_url = "http://65.21.238.126"
             https_url = "https://65.21.238.126"
-        
         return {
             'http_url': http_url,
             'https_url': https_url,
             'admin_username': admin_username,
             'admin_email': admin_email,
-            'admin_password': bootstrap_password
+            'admin_password': password
         }, None
-        
     except Exception as e:
-        return None, f"Error retrieving credentials: {str(e)}"
+        return None, f"Error retrieving canonical credentials: {e}"
 
 def regenerate_authentik_password():
-    """Generate a new Authentik admin password and update encrypted secrets"""
+    """Generate a new Authentik admin password and update canonical store (increments version)."""
     try:
-        import subprocess
-        import tempfile
-        import os
-        from Scripts.security_manager import NoahSecurityManager
-        
-        # Initialize security manager
-        security_manager = NoahSecurityManager()
-        
-        # Generate new password
-        new_password = security_manager.generate_secure_password(24)
-        
-        # Paths
-        age_key_file = NOAH_PATHS['age_key_file']
-        secrets_file = Path("Helm/authentik/secrets/authentik-secrets.enc.yaml")
-        
-        if not age_key_file.exists():
-            return None, f"Age key file not found: {age_key_file}"
-        
-        if not secrets_file.exists():
-            return None, f"Authentik secrets file not found: {secrets_file}"
-        
-        # Set SOPS environment variable
-        env = os.environ.copy()
-        env['SOPS_AGE_KEY_FILE'] = str(age_key_file)
-        
-        # Decrypt current secrets
-        result = subprocess.run([
-            'sops', '-d', str(secrets_file)
-        ], capture_output=True, text=True, env=env)
-        
-        if result.returncode != 0:
-            return None, f"Failed to decrypt secrets: {result.stderr}"
-        
-        # Parse and update secrets
-        import yaml
-        secrets_data = yaml.safe_load(result.stdout)
-        
-        if not secrets_data or 'authentik' not in secrets_data:
-            return None, "Invalid secrets format: missing authentik section"
-        
-        # Store old password
-        old_password = secrets_data.get('authentik', {}).get('bootstrap', {}).get('password', '')
-        
-        # Update the password
-        secrets_data['authentik']['bootstrap']['password'] = new_password
-        
-        # Create a backup of the original file
-        backup_file = secrets_file.with_suffix('.enc.yaml.backup')
-        import shutil
-        shutil.copy2(str(secrets_file), str(backup_file))
-        
-        try:
-            # Write updated secrets to a temporary file with correct extension
-            temp_secrets_file = Path("authentik-secrets-temp.enc.yaml")
-            with open(temp_secrets_file, 'w') as f:
-                yaml.dump(secrets_data, f, default_flow_style=False)
-            
-            # Encrypt the temporary file
-            result = subprocess.run([
-                'sops', '-e', '--in-place', str(temp_secrets_file)
-            ], capture_output=True, text=True, env=env)
-            
-            if result.returncode != 0:
-                return None, f"Failed to encrypt updated secrets: {result.stderr}"
-            
-            # Replace the original file
-            shutil.move(str(temp_secrets_file), str(secrets_file))
-            
-            # Remove backup file
-            backup_file.unlink()
-            
-            return {
-                'old_password': old_password,
-                'new_password': new_password,
-                'updated_file': str(secrets_file)
-            }, None
-            
-        except Exception as e:
-            # Restore from backup on error
-            if backup_file.exists():
-                shutil.move(str(backup_file), str(secrets_file))
-            # Clean up temp file if it exists
-            temp_file = Path("authentik-secrets-temp.enc.yaml")
-            if temp_file.exists():
-                temp_file.unlink()
-            raise e
-        
+        from Scripts.security_manager import NoahSecurityManager  # type: ignore
+        from Scripts.security.canonical_store import get_canonical_store  # type: ignore
+        sm = NoahSecurityManager()
+        store = get_canonical_store()
+        # Ensure service entries exist first
+        sm.generate_service_secrets('authentik')
+        svc = store.data.get('services', {}).get('authentik', {})
+        old_entry = svc.get('bootstrap_password')
+        old_password = old_entry.get('value') if isinstance(old_entry, dict) else old_entry
+        new_password = sm.generate_secure_password(24)
+        # Update metadata
+        svc['bootstrap_password'] = {
+            'value': new_password,
+            'version': (old_entry.get('version') if isinstance(old_entry, dict) else 1) + 1 if old_entry else 1,
+            'rotated_at': __import__('datetime').datetime.utcnow().isoformat() + 'Z'
+        }
+        store.save()
+        return {
+            'old_password': old_password,
+            'new_password': new_password,
+            'updated_file': str(store._active_path())
+        }, None
     except Exception as e:
-        return None, f"Error regenerating password: {str(e)}"
+        return None, f"Error regenerating canonical password: {e}"
 
 def check_repository_root():
     """Check if the current directory is the root of the NOAH repository"""
@@ -704,6 +592,9 @@ def secrets(ctx):
     """Manage and validate service secrets"""
     pass
 
+# Dynamically register rotate command (externalized) AFTER group definition
+register_rotate_command(secrets)
+
 @secrets.command()
 @click.pass_context
 def init(ctx):
@@ -734,15 +625,7 @@ def generate(ctx, service, namespace):
     click.echo(f"Generating secrets for {service} in namespace {namespace}")
     ctx.obj['secrets'].generate_service_secrets(service)
 
-@secrets.command()
-@click.option('--service', required=True, help='Service name')
-@click.pass_context
-def rotate(ctx, service):
-    """Rotate passwords for a service"""
-    click.echo(f"[VERBOSE] Starting password rotation process...")
-    click.echo(f"[VERBOSE] Service: {service}")
-    click.echo(f"Rotating passwords for {service}")
-    ctx.obj['secrets'].rotate_passwords(service)
+## Legacy rotate command removed in favor of unified canonical rotate
 
 @secrets.command()
 @click.option('--service', required=True, help='Service to validate (authentik)')
@@ -788,6 +671,41 @@ def regenerate(ctx, service, namespace):
     click.echo(f"🔄 Regenerating secrets for {service} in namespace {namespace}...")
     ctx.obj['secrets'].generate_service_secrets(service)
     click.echo(f"✅ Secrets regenerated for {service}")
+
+@secrets.command(name='canonical')
+@click.option('--show', is_flag=True, help='Display canonical secrets (redacted by default)')
+@click.option('--service', help='Filter to a specific service')
+@click.option('--raw', is_flag=True, help='Show raw secret values (unsafe; do not use in shared terminals)')
+@click.pass_context
+def canonical_secrets(ctx, show, service, raw):
+    """Interact with canonical secrets store (read-only)."""
+    from Scripts.security.canonical_store import get_canonical_store  # type: ignore
+    store = get_canonical_store()
+    data = store.data
+    if not show:
+        click.echo("Canonical secrets store present.")
+        click.echo(f"Encrypted: {store.encrypted}")
+        click.echo(f"Services: {', '.join(sorted(data.get('services', {}).keys()))}")
+        click.echo("Use --show to display entries (redacted by default).")
+        return
+    services = data.get('services', {})
+    target = {service: services.get(service, {})} if service else services
+    click.echo("Canonical Secrets (" + ('RAW' if raw else 'REDACTED') + ")")
+    click.echo("Integrity: " + data.get('integrity', 'n/a'))
+    for svc, kv in sorted(target.items()):
+        click.echo(f"\n[{svc}]")
+        for k, v in sorted(kv.items()):
+            if isinstance(v, dict) and 'value' in v:
+                raw_val = v.get('value') or ''
+                display_val = raw_val if raw else (raw_val[:4] + '...' if raw_val else '')
+                ver = v.get('version', '?')
+                rotated = v.get('rotated_at', '')
+                click.echo(f"  {k}: {display_val}  (v{ver} rotated:{rotated})")
+            else:
+                display = v if raw else (v[:4] + '...' if v else '')
+                click.echo(f"  {k}: {display}")
+
+## Rotation command moved to Scripts/security/rotate_cli.py to simplify this file
 
 @setup.command()
 @click.option('--skip-deps', is_flag=True, help='Skip external dependency checks')

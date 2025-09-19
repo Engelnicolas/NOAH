@@ -18,52 +18,66 @@
         kind: Namespace
         state: present
 
-    - name: Decrypt Authentik secrets
+    - name: Ensure canonical Authentik secrets exist (Python helper)
       shell: |
         cd ../
-        export SOPS_AGE_KEY_FILE=./Age/keys.txt
-        sops -d Helm/authentik/secrets/authentik-secrets.enc.yaml > /tmp/authentik-secrets-decrypted.yaml
-      delegate_to: localhost
+        python - <<'PYEOF'
+import json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path('.').resolve()))
+from Scripts.security_manager import NoahSecurityManager  # type: ignore
+from Scripts.security.canonical_store import get_canonical_store  # type: ignore
+manager = NoahSecurityManager()
+manager.generate_service_secrets('authentik')  # idempotent
+store = get_canonical_store(Path('.'))
+svc = store.data.get('services', {}).get('authentik', {})
+def val(key):
+    entry = svc.get(key)
+    if isinstance(entry, dict):
+        return entry.get('value')
+    return entry or ''
+payload = {
+    'secret_key': val('secret_key'),
+    'bootstrap_password': val('bootstrap_password'),
+    'bootstrap_token': val('bootstrap_token'),
+    'postgresql_password': val('postgresql_password'),
+    'redis_password': val('redis_password'),
+}
+print(json.dumps(payload))
+PYEOF
+      register: authentik_canonical_output
+      changed_when: false
 
-    - name: Load decrypted secrets
-      include_vars:
-        file: /tmp/authentik-secrets-decrypted.yaml
-        name: authentik_secrets
+    - name: Parse canonical Authentik secrets
+      set_fact:
+        authentik_canonical: "{{ authentik_canonical_output.stdout | from_json }}"
 
-    - name: Create Authentik secrets from encrypted config
+    - name: Create/Update Authentik Kubernetes Secret from canonical store
       kubernetes.core.k8s:
         definition:
           apiVersion: v1
           kind: Secret
           metadata:
-            name: authentik-secrets
+            name: authentik-secret
             namespace: "{{ authentik_namespace }}"
-            labels:
-              app.kubernetes.io/managed-by: Helm
-            annotations:
-              meta.helm.sh/release-name: authentik
-              meta.helm.sh/release-namespace: "{{ authentik_namespace }}"
           type: Opaque
           stringData:
-            # Core Authentik secrets from encrypted config
-            AUTHENTIK_SECRET_KEY: "{{ authentik_secrets.authentik.secretKey }}"
-            AUTHENTIK_BOOTSTRAP_PASSWORD: "{{ authentik_secrets.authentik.bootstrap.password }}"
-            AUTHENTIK_BOOTSTRAP_TOKEN: "{{ authentik_secrets.authentik.bootstrap.token }}"
-            # Database secrets
-            AUTHENTIK_POSTGRESQL__PASSWORD: "{{ authentik_secrets.postgresql.auth.password }}"
-            postgresql-password: "{{ authentik_secrets.postgresql.auth.password }}"
-            # Redis secrets  
-            AUTHENTIK_REDIS__PASSWORD: "{{ authentik_secrets.redis.auth.password }}"
-            redis-password: "{{ authentik_secrets.redis.auth.password }}"
-            # Additional keys for Helm charts compatibility
-            secret-key: "{{ authentik_secrets.authentik.secretKey }}"
-            bootstrap-password: "{{ authentik_secrets.authentik.bootstrap.password }}"
-            bootstrap-token: "{{ authentik_secrets.authentik.bootstrap.token }}"
+            AUTHENTIK_SECRET_KEY: "{{ authentik_canonical.secret_key }}"
+            AUTHENTIK_BOOTSTRAP_PASSWORD: "{{ authentik_canonical.bootstrap_password }}"
+            AUTHENTIK_BOOTSTRAP_TOKEN: "{{ authentik_canonical.bootstrap_token }}"
+            AUTHENTIK_POSTGRESQL__PASSWORD: "{{ authentik_canonical.postgresql_password }}"
+            postgresql-password: "{{ authentik_canonical.postgresql_password }}"
+            AUTHENTIK_REDIS__PASSWORD: "{{ authentik_canonical.redis_password }}"
+            redis-password: "{{ authentik_canonical.redis_password }}"
+            secret-key: "{{ authentik_canonical.secret_key }}"
+            bootstrap-password: "{{ authentik_canonical.bootstrap_password }}"
+            bootstrap-token: "{{ authentik_canonical.bootstrap_token }}"
+      register: authentik_secret_apply
 
-    - name: Clean up temporary decrypted secrets file
-      file:
-        path: /tmp/authentik-secrets-decrypted.yaml
-        state: absent
+    - name: Report Authentik secret status
+      debug:
+        msg: >-
+          Authentik secret {{ 'created/updated' if authentik_secret_apply.changed else 'is up-to-date' }} via canonical store
 
     - name: Create Authentik values file for Helm deployment
       copy:
@@ -183,7 +197,7 @@
         msg:
           - "=== AUTHENTIK STANDALONE IAM DEPLOYMENT SUMMARY ==="
           - "✓ Namespace: {{ authentik_namespace }}"
-          - "✓ Secrets: authentik-secrets (Helm-managed)"
+          - "✓ Secrets: authentik-secret (canonical-managed)"
           - "✓ Helm Chart: ../Helm/authentik"
           - "✓ PostgreSQL: External dependency configured"
           - "✓ Redis: External dependency configured"

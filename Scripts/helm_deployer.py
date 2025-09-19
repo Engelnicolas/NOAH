@@ -51,16 +51,27 @@ class HelmDeployer:
         if values_file.exists():
             cmd.extend(['--values', str(values_file)])
         
-        # Add encrypted values if exists
-        encrypted_values = chart_path / 'secrets' / f'{chart_name}-secrets.enc.yaml'
-        if encrypted_values.exists():
-            # Decrypt and apply secrets
-            decrypted = self._decrypt_helm_secrets(encrypted_values)
-            temp_values = chart_path / 'secrets' / '.temp-values.yaml'
-            if yaml is None:
-                raise Exception("PyYAML is required for Helm deployments. Install with: pip install PyYAML")
-            temp_values.write_text(yaml.dump(decrypted))
-            cmd.extend(['--values', str(temp_values)])
+        # Secret values resolution order:
+        # 1. Canonical store (preferred)
+        # 2. Legacy encrypted helm secrets file (.enc.yaml) fallback
+        canonical_applied = False
+        try:
+            from Scripts.security.canonical_store import get_canonical_store  # type: ignore
+            store = get_canonical_store(self.chart_dir.parent)
+            service_secrets = store.get_service_secrets(chart_name)
+            if service_secrets:
+                canonical_values = self._transform_canonical_for_chart(chart_name, service_secrets)
+                temp_values = chart_path / 'secrets' / '.temp-canonical-values.yaml'
+                temp_values.parent.mkdir(exist_ok=True)
+                if yaml is None:
+                    raise Exception("PyYAML is required for Helm deployments. Install with: pip install PyYAML")
+                temp_values.write_text(yaml.dump(canonical_values))
+                cmd.extend(['--values', str(temp_values)])
+                canonical_applied = True
+        except Exception as e:
+            print(f"[WARNING] Canonical secret integration failed for {chart_name}: {e}")
+
+        # Legacy encrypted helm secrets fallback removed (canonical is authoritative)
         
         # Add custom values via temporary values file
         if values:
@@ -78,9 +89,10 @@ class HelmDeployer:
         if result.returncode == 0:
             print(f"Successfully deployed {chart_name}")
             # Clean up temp files
-            temp_values = chart_path / 'secrets' / '.temp-values.yaml'
-            if temp_values.exists():
-                temp_values.unlink()
+            for temp_name in ['.temp-values.yaml', '.temp-canonical-values.yaml', '.temp-custom-values.yaml']:
+                temp_file = chart_path / 'secrets' / temp_name
+                if temp_file.exists():
+                    temp_file.unlink()
             
             # Synchronize secrets after deployment to ensure consistency
             self._synchronize_secrets_post_deployment(chart_name, namespace)
@@ -89,48 +101,46 @@ class HelmDeployer:
             print(f"Failed to deploy {chart_name}: {result.stderr}")
             return False
     
-    def _decrypt_helm_secrets(self, secret_file: Path) -> Dict:
-        """Decrypt Helm secrets using SOPS and transform to values format"""
-        from Scripts.security_manager import NoahSecurityManager
-        sm = NoahSecurityManager(self.config)
-        decrypted = sm.decrypt_secret(secret_file)
-        
-        # Check if this is a Kubernetes Secret resource and transform to values
-        if isinstance(decrypted, dict) and decrypted.get('kind') == 'Secret':
-            string_data = decrypted.get('stringData', {})
-            
-            # Transform secret data to Helm values format
-            if 'authentik' in str(secret_file):
-                # Create coordinated values that ensure all components use the same passwords
-                postgresql_password = string_data.get('postgresql_password', '')
-                redis_password = string_data.get('redis_password', '')
-                secret_key = string_data.get('secret_key', '')
-                
-                print(f"[DEBUG] Using coordinated passwords: PostgreSQL={postgresql_password[:8]}..., Redis={redis_password[:8]}...")
-                
-                return {
-                    'authentik': {
-                        'secretKey': secret_key,
-                    },
-                    'postgresql': {
-                        'auth': {
-                            'username': 'authentik',
-                            'database': 'authentik',
-                            'password': postgresql_password
-                        },
-                        'enabled': True
-                    },
-                    'redis': {
-                        'auth': {
-                            'enabled': True,
-                            'password': redis_password
-                        },
-                        'enabled': True
+    # _decrypt_helm_secrets removed (legacy path)
+
+    def _transform_canonical_for_chart(self, chart_name: str, service_secrets: Dict[str, str]) -> Dict[str, Any]:
+        """Map canonical secrets dict to Helm values structure per chart.
+
+        Args:
+            chart_name: service/chart identifier (e.g., 'authentik')
+            service_secrets: raw canonical secrets mapping
+        Returns:
+            Dict suitable for passing as helm values
+        """
+        if chart_name == 'authentik':
+            return {
+                'authentik': {
+                    'secretKey': service_secrets.get('secret_key'),
+                    'bootstrap': {
+                        'password': service_secrets.get('bootstrap_password'),
+                        'token': service_secrets.get('bootstrap_token')
                     }
+                },
+                'postgresql': {
+                    'auth': {
+                        'username': 'authentik',
+                        'database': 'authentik',
+                        'password': service_secrets.get('postgresql_password')
+                    },
+                    'enabled': True
+                },
+                'redis': {
+                    'auth': {
+                        'enabled': True,
+                        'password': service_secrets.get('redis_password')
+                    },
+                    'enabled': True
                 }
-            # Add more transformations for other charts as needed
-            
-        return decrypted
+            }
+        elif chart_name == 'cilium':
+            # Currently secrets usage minimal; placeholder for future sensitive keys
+            return {}
+        return {}
     
     def _synchronize_secrets_post_deployment(self, chart_name: str, namespace: str):
         """Synchronize secrets after deployment to ensure all components use the same passwords"""

@@ -725,9 +725,8 @@ def validate(ctx, service, namespace, fix):
             if service == 'authentik':
                 # Force regeneration with existing passwords
                 ctx.obj['secrets'].generate_service_secrets(service)
-                # Redeploy to apply fixes
                 ctx.obj['helm'].deploy_chart(service, namespace)
-                click.echo(f"✅ Secrets fixed and {service} redeployed")
+                click.echo(f"✅ Secrets fixed and {service} deployed")
             else:
                 click.echo(f"❌ Auto-fix not implemented for {service}")
         else:

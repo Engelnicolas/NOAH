@@ -17,6 +17,12 @@ class AnsibleRunner:
         
         if not playbook_path.exists():
             raise Exception(f"Playbook not found: {playbook_path}")
+
+        # Test shortcut: allow skipping real Ansible execution in unit/integration tests
+        if os.environ.get('NOAH_SKIP_ANSIBLE', 'false').lower() in ('1','true','yes'):
+            print(f"[TEST-SHORTCUT] Skipping execution of {playbook_name} due to NOAH_SKIP_ANSIBLE env var.")
+            print(f"[TEST-SHORTCUT] Extra vars: {extra_vars}")
+            return True
         
         # Build ansible-playbook command - use config file in Ansible directory
         # Use relative path from Ansible directory

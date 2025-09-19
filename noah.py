@@ -66,8 +66,15 @@ VERSION = "0.0.3"
 # Load default domain from environment, fallback to noah-infra.com
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
 
-def get_authentik_credentials():
-    """Get Authentik admin credentials from canonical secrets store."""
+def get_authentik_credentials(domain: str | None = None):
+    """Get Authentik admin credentials from canonical secrets store.
+
+    Behavior changes:
+    - Removed hard-coded fallback IP.
+    - Prefer domain-based URLs (https://auth.<domain>) if domain provided.
+    - If no external IP yet, report status instead of misleading placeholder.
+    - Returns metadata: external_ip (or None) and resolution_status.
+    """
     try:
         from Scripts.security.canonical_store import get_canonical_store  # type: ignore
         store = get_canonical_store()
@@ -76,30 +83,45 @@ def get_authentik_credentials():
         password = entry.get('value') if isinstance(entry, dict) else entry
         if not password:
             return None, "Bootstrap password not present in canonical store"
+
         admin_email = 'admin@noah-infra.com'
         admin_username = 'akadmin'
+
+        external_ip = None
+        resolution_status = 'not_attempted'
         import subprocess
         try:
             kubectl_result = subprocess.run([
                 'kubectl', 'get', 'svc', '-n', 'identity', 'authentik-server',
                 '-o', 'jsonpath={.status.loadBalancer.ingress[0].ip}'
-            ], capture_output=True, text=True, timeout=10)
+            ], capture_output=True, text=True, timeout=8)
             if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():
                 external_ip = kubectl_result.stdout.strip()
-                http_url = f"http://{external_ip}"
-                https_url = f"https://{external_ip}"
+                resolution_status = 'ip_assigned'
             else:
-                http_url = "http://65.21.238.126"
-                https_url = "https://65.21.238.126"
+                resolution_status = 'pending'
         except Exception:
-            http_url = "http://65.21.238.126"
-            https_url = "https://65.21.238.126"
+            resolution_status = 'lookup_error'
+
+        # Prefer domain based URLs if domain given; fallback to IP only if present
+        if domain:
+            http_url = f"http://auth.{domain}"
+            https_url = f"https://auth.{domain}"
+        elif external_ip:
+            http_url = f"http://{external_ip}"
+            https_url = f"https://{external_ip}"
+        else:
+            http_url = "(external IP pending)"
+            https_url = "(external IP pending)"
+
         return {
             'http_url': http_url,
             'https_url': https_url,
             'admin_username': admin_username,
             'admin_email': admin_email,
-            'admin_password': password
+            'admin_password': password,
+            'external_ip': external_ip,
+            'resolution_status': resolution_status
         }, None
     except Exception as e:
         return None, f"Error retrieving canonical credentials: {e}"
@@ -377,21 +399,26 @@ def new(ctx):
         sys.exit(1)
 
 @password.command()
+@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for Authentik (used for URL display)')
 @click.pass_context
-def show(ctx):
+def show(ctx, domain):
     """Show current Authentik admin credentials"""
     click.echo("🔍 Current Authentik admin credentials:")
     click.echo("=" * 50)
-    
-    credentials, error = get_authentik_credentials()
+    credentials, error = get_authentik_credentials(domain=domain)
     if credentials:
-        click.echo(f"📍 URL (HTTP):  {credentials['http_url']}")
-        click.echo(f"📍 URL (HTTPS): {credentials['https_url']}")
-        click.echo(f"👤 Username:    {credentials['admin_username']}")
-        click.echo(f"📧 Email:       {credentials['admin_email']}")
-        click.echo(f"🔑 Password:    {credentials['admin_password']}")
+        click.echo(f"📍 URL (HTTP):   {credentials['http_url']}")
+        click.echo(f"📍 URL (HTTPS):  {credentials['https_url']}")
+        if credentials.get('external_ip'):
+            click.echo(f"🌐 External IP:  {credentials['external_ip']}")
+        click.echo(f"📶 Resolution:   {credentials.get('resolution_status','unknown')}")
+        click.echo(f"👤 Username:     {credentials['admin_username']}")
+        click.echo(f"📧 Email:        {credentials['admin_email']}")
+        click.echo(f"🔑 Password:     {credentials['admin_password']}")
         click.echo("")
         click.echo("💡 You can log in using either the username or email address")
+        if credentials.get('resolution_status') in ('pending','lookup_error'):
+            click.echo("💡 External IP not ready yet; ensure LoadBalancer/Ingress and DNS are configured.")
     else:
         click.echo(f"⚠️  Could not retrieve credentials: {error}")
         click.echo("💡 Try running a deployment first: python noah.py deploy authentik")
@@ -453,10 +480,13 @@ def authentik(ctx, namespace, domain, regenerate_password):
     click.echo("🔐 AUTHENTIK ADMIN ACCESS")
     click.echo("="*50)
     
-    credentials, error = get_authentik_credentials()
+    credentials, error = get_authentik_credentials(domain=domain)
     if credentials:
         click.echo(f"📍 URL (HTTP):  {credentials['http_url']}")
         click.echo(f"📍 URL (HTTPS): {credentials['https_url']}")
+        if credentials.get('external_ip'):
+            click.echo(f"🌐 External IP: {credentials['external_ip']}")
+        click.echo(f"📶 Resolution:  {credentials.get('resolution_status','unknown')}")
         click.echo(f"👤 Username:    {credentials['admin_username']}")
         click.echo(f"📧 Email:       {credentials['admin_email']}")
         click.echo(f"🔑 Password:    {credentials['admin_password']}")
@@ -479,8 +509,9 @@ def cilium_cmd(ctx, namespace, domain):
 @click.option('--cluster-name', default='noah-cluster', help='Cluster name for deployment')
 @click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')
 @click.option('--regenerate-password', is_flag=True, help='Generate new Authentik admin password')
+@click.option('--validation-mode', type=click.Choice(['development','production']), default='development', show_default=True, help='Validation strictness for deployment playbook')
 @click.pass_context
-def all(ctx, domain, cluster_name, config_file, regenerate_password):
+def all(ctx, domain, cluster_name, config_file, regenerate_password, validation_mode):
     """Deploy complete stack using optimized Ansible playbook (Cilium → Authentik)"""
     # Ensure security is initialized before any deployment
     ensure_security_initialized(ctx)
@@ -502,6 +533,15 @@ def all(ctx, domain, cluster_name, config_file, regenerate_password):
     click.echo(f"[VERBOSE] Using domain: {domain}")
     click.echo(f"[VERBOSE] Using cluster name: {cluster_name}")
     click.echo(f"[VERBOSE] Deployment order: Cilium → Authentik")
+    click.echo(f"[VERBOSE] Validation mode: {validation_mode}")
+
+    # Ensure Authentik secrets exist early (mirrors individual authentik deployment)
+    click.echo(f"[VERBOSE] Ensuring Authentik canonical secrets are generated before playbook run...")
+    try:
+        ctx.obj['secrets'].generate_service_secrets('authentik')
+    except Exception as gen_err:
+        click.echo(f"❌ Failed to generate Authentik secrets prior to deployment: {gen_err}", err=True)
+        sys.exit(1)
     
     # Export configuration if requested
     if config_file:
@@ -532,7 +572,8 @@ def all(ctx, domain, cluster_name, config_file, regenerate_password):
     # Prepare variables for cluster-deploy.yml
     ansible_vars = {
         'cluster_name': cluster_name,
-        'domain_name': domain
+        'domain_name': domain,
+        'validation_mode': validation_mode
     }
     
     click.echo(f"[VERBOSE] Running optimized deployment playbook: cluster-deploy.yml")
@@ -548,18 +589,24 @@ def all(ctx, domain, cluster_name, config_file, regenerate_password):
         click.echo("🔐 AUTHENTIK ADMIN ACCESS")
         click.echo("="*60)
         
-        credentials, error = get_authentik_credentials()
+        credentials, error = get_authentik_credentials(domain=domain)
         if credentials:
-            click.echo(f"📍 URL (HTTP):  {credentials['http_url']}")
-            click.echo(f"📍 URL (HTTPS): {credentials['https_url']}")
+            click_echo_http = credentials['http_url']
+            click_echo_https = credentials['https_url']
+            click.echo(f"📍 URL (HTTP):  {click_echo_http}")
+            click.echo(f"📍 URL (HTTPS): {click_echo_https}")
+            if credentials.get('external_ip'):
+                click.echo(f"🌐 External IP: {credentials['external_ip']}")
+            click.echo(f"📶 Resolution:  {credentials.get('resolution_status','unknown')}")
             click.echo(f"👤 Username:    {credentials['admin_username']}")
             click.echo(f"📧 Email:       {credentials['admin_email']}")
             click.echo(f"🔑 Password:    {credentials['admin_password']}")
             click.echo("")
             click.echo("💡 You can log in using either the username or email address")
         else:
-            click.echo(f"⚠️  Could not retrieve credentials: {error}")
-            click.echo("💡 Try running: kubectl get secret -n identity authentik-secrets -o yaml")
+            click.echo(f"⚠️  Could not retrieve credentials from canonical store: {error}")
+            click.echo("💡 Ensure playbook created Kubernetes secret 'authentik-secret' and canonical-secrets.yaml contains authentik.admin_password")
+            click.echo("💡 You can inspect secret: kubectl get secret -n identity authentik-secret -o yaml")
         
         click.echo("="*60)
         click.echo(f"[VERBOSE] Access points:")

@@ -86,7 +86,7 @@
                 msg:
                   - "✓ Development mode: Skipping real Cilium validation"
                   - "✓ Hubble (simulated) → hubble.{{ domain_name }}"
-              when: validation_mode == 'development'
+              when: validation_mode is defined and validation_mode == 'development'
 
             - name: Wait for Cilium pods Ready (production)
               kubernetes.core.k8s_info:
@@ -153,7 +153,7 @@
                 msg:
                   - "✓ Development mode: Skipping Authentik rollout validation"
                   - "✓ IAM URL (simulated): https://auth.{{ domain_name }}"
-              when: validation_mode == 'development'
+              when: validation_mode is defined and validation_mode == 'development'
 
             - name: Wait for Authentik server rollout (production)
               ansible.builtin.command: >-
@@ -189,6 +189,40 @@
             - name: Record Authentik phase end time
               ansible.builtin.set_fact:
                 phase_authentik_ended: "{{ ansible_date_time.epoch | int }}"
+
+            - name: Check TLS secret presence (production)
+              kubernetes.core.k8s_info:
+                api_version: v1
+                kind: Secret
+                name: authentik-tls
+                namespace: identity
+              register: authentik_tls_secret
+              failed_when: false
+              when: validation_mode != 'development'
+
+            - name: Report TLS secret status (production)
+              ansible.builtin.debug:
+                msg: >-
+                  {{ '✓ TLS secret authentik-tls present' if (authentik_tls_secret.resources | length) > 0 else '⚠️  TLS secret authentik-tls not found yet' }}
+              when: validation_mode != 'development'
+
+            - name: DNS resolution for auth.<domain> with retry (production)
+              ansible.builtin.shell: |
+                set -o pipefail
+                host auth.{{ domain_name }} 2>/dev/null | grep -E "has address|domain name pointer" || echo "NO_DNS"
+              register: auth_dns_lookup
+              changed_when: false
+              failed_when: false
+              retries: 12            # Up to ~3 minutes (12 * 15s)
+              delay: 15
+              until: auth_dns_lookup.stdout is defined and auth_dns_lookup.stdout != 'NO_DNS'
+              when: validation_mode != 'development'
+
+            - name: Display DNS readiness (production)
+              ansible.builtin.debug:
+                msg: >-
+                  {{ '✓ DNS resolution for auth.' + domain_name + ' successful' if (auth_dns_lookup.stdout is defined and auth_dns_lookup.stdout != 'NO_DNS') else '⚠️  DNS for auth.' + domain_name + ' not resolving after retries' }}
+              when: validation_mode != 'development'
           
           tags: [authentik, iam]
         
@@ -318,6 +352,11 @@
                   Validation Phase: {{ (phase_validation_ended | int) - (phase_validation_started | int) if (phase_validation_started is defined and phase_validation_ended is defined) else 'n/a' }}
                   Total (Cilium + Authentik + Validation): {{ ((phase_cilium_ended | int) - (phase_cilium_started | int) + (phase_authentik_ended | int) - (phase_authentik_started | int) + (phase_validation_ended | int) - (phase_validation_started | int)) if (phase_cilium_ended is defined and phase_authentik_ended is defined and phase_validation_ended is defined) else 'n/a' }}
               when: phase_cilium_ended is defined
+
+            - name: Fail fast if any phase failed (production)
+              ansible.builtin.fail:
+                msg: "One or more deployment phases failed. See earlier logs for details."
+              when: (deployment_phase_failed | default(false)) and validation_mode == 'production'
           
           tags: [validation, final]
 
@@ -341,4 +380,7 @@
               - ansible-playbook Ansible/cluster-deploy.yml --tags=cilium
               - ansible-playbook Ansible/cluster-deploy.yml --tags=samba4  
               - ansible-playbook Ansible/cluster-deploy.yml --tags=authentik
+        - name: Set failure flag
+          ansible.builtin.set_fact:
+            deployment_phase_failed: true
         

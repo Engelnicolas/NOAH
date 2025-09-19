@@ -67,30 +67,70 @@ python noah.py test sso
 ## **Architecture Overview**
 
 ```
-┌─────────────────────────────────────────┐
-│               Users/Apps                │
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│            Load Balancer                │
-│             (MetalLB)                   │
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│         Ingress Controller              │
-│            (Cilium)                     │
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│           Authentik SSO                 │
-│    (Identity & Access Management)       │
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│         Kubernetes Cluster              │
-│              (K3s)                      │
-└─────────────────────────────────────────┘
+		  +-----------------------------+
+		  |        End Users / Apps     |
+		  +---------------+-------------+
+				    |
+				    v
+			( HTTPS / OIDC / SSO )
+				    |
+	 +-----------------------+-----------------------+
+	 |            Ingress & Network (Cilium)         |
+	 |  - L7 routing  - TLS termination  - eBPF       |
+	 +-----------------------+-----------------------+
+				    |
+				    v
+		     +---------------------------+
+		     |       Authentik SSO       |
+		     |  Identity & Access Layer  |
+		     +-----------+---------------+
+				   |
+		   +-------------+-------------+
+		   |  PostgreSQL |    Redis    |
+		   |  (State)    | (Sessions)  |
+		   +------+------+-----+-------+
+			   |            |
+			   +-----+------+ 
+				  |
+		     +----------v-----------+
+		     |   Kubernetes (K3s)   |
+		     |  API / Scheduling    |
+		     +----------+-----------+
+				  |
+		    Orchestrated Deployment
+				  |
+	 +----------+-----------+--------------+----------------+
+	 |  NOAH CLI | Ansible   | Helm Charts  | Secrets Store  |
+	 |  (Click)  | Playbooks | (Cilium,     | (Canonical)    |
+	 |           |           |  Authentik)  | Age/SOPS YAML  |
+	 +-----------+-----------+--------------+----------------+
+				  |
+			  Validation & Tests
+			    (Health / DNS)
 ```
+
+### Key Architectural Principles
+
+- **Single Source of Truth for Secrets**: All sensitive material lives in a canonical encrypted YAML (metadata: `value`, `version`, `rotated_at`, plus integrity hash).
+- **Deterministic Deployments**: `deploy all` funnels through one optimized Ansible playbook to ensure ordered, validated rollout (Cilium → Authentik → post‑checks).
+- **Separation of Concerns**: Python CLI handles UX + secret prep; Ansible handles orchestration; Helm charts handle workload packaging.
+- **Progressive Validation Modes**: `--validation-mode development|production` toggles depth (shortcuts vs full rollout + DNS/TLS checks + fail‑fast semantics).
+- **Composable Security**: Secret generation and rotation isolated in `NoahSecurityManager` with versioned rotations and integrity verification.
+- **Extensibility**: Add new services by defining required secrets, Helm values, and integrating into the playbook phases.
+- **Safety in CI**: `NOAH_SKIP_ANSIBLE=true` allows fast credential/secrets path testing without a cluster.
+
+### Runtime Flow (High-Level)
+1. User invokes CLI (e.g., `python noah.py deploy all --domain example.com`).
+2. Canonical secrets ensured (idempotent generation if missing).
+3. Ansible playbook runs phased deployment (network → identity → validation) with timing metrics.
+4. DNS/TLS readiness & health probes surface environment status (production mode retries DNS & fails hard on phase errors).
+5. Credentials displayed using canonical store (never scraped from Kubernetes secrets directly).
+6. Tests / status commands provide post-deploy visibility.
+
+### Future Enhancement Ideas
+- Structured JSON summary artifact for CI pipelines.
+- Ingress HTTP(S) probe with certificate validation.
+- Watch-mode credentials command that waits for external IP + DNS.
 
 ## **Service Access**
 
@@ -117,5 +157,24 @@ Each secret carries metadata `{ value, version, rotated_at }` and an integrity h
 - **Resources**: 4+ CPU cores, 8GB+ RAM, 50GB+ storage
 - **Network**: Internet connectivity for component downloads
 
+## **Testing & CI Shortcuts**
+
+Lightweight test:
+```bash
+python Tests/test_noah.py
+```
+
+Mocked end-to-end secret generation without running real Ansible (useful in CI without Kubernetes):
+```bash
+NOAH_SKIP_ANSIBLE=true python Tests/test_deploy_all_secrets.py
+```
+
+Pytest example:
+```bash
+NOAH_SKIP_ANSIBLE=true python -m pytest Tests/test_deploy_all_secrets.py -q
+```
+
+Setting `NOAH_SKIP_ANSIBLE=true` causes the internal runner to skip invoking `ansible-playbook` while still performing canonical secret generation and CLI flow.
+
 ---
-Apache 2.0 licence - Made with ❤️
+Made with ❤️

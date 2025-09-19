@@ -95,12 +95,12 @@ class AuthentikDeploymentVerifier:
             return False
     
     def check_secrets(self) -> bool:
-        """Check if required secrets exist"""
+        """Check if required secrets exist (standardized name authentik-secret)"""
         print(f"\n🔐 Checking secrets...")
-        success, _ = self.run_kubectl(['get', 'secret', 'authentik-secrets', '-n', self.namespace])
+        success, _ = self.run_kubectl(['get', 'secret', 'authentik-secret', '-n', self.namespace])
         if not success:
             self.print_status('ERROR', "Authentik secrets not found")
-            self.results['secrets'].append("authentik-secrets: ERROR")
+            self.results['secrets'].append("authentik-secret: ERROR")
             return False
             
         self.print_status('OK', "Authentik secrets found")
@@ -115,7 +115,7 @@ class AuthentikDeploymentVerifier:
         all_keys_present = True
         for key in required_keys:
             success, _ = self.run_kubectl([
-                'get', 'secret', 'authentik-secrets', '-n', self.namespace,
+                'get', 'secret', 'authentik-secret', '-n', self.namespace,
                 '-o', f'jsonpath={{.data.{key}}}'
             ])
             if success:

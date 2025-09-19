@@ -45,8 +45,7 @@ def test_cluster_create_with_destroy():
         assert '[VERBOSE] Checking for existing cluster components...' in output
         assert '[VERBOSE] Running Ansible playbook: cluster-create.yml' in output
         
-        print("✓ Cluster create correctly shows verbose output")
-        return True
+    print("✓ Cluster create correctly shows verbose output")
 
 def test_authentik_standalone_deployment():
     """Test that authentik deployment works in standalone mode"""
@@ -67,8 +66,7 @@ def test_authentik_standalone_deployment():
         assert '[VERBOSE] Generating secrets for Authentik...' in output
         assert '[VERBOSE] Running Ansible playbook: deploy-authentik.yml' in output
         
-        print("✓ Authentik deployment works in standalone mode")
-        return True
+    print("✓ Authentik deployment works in standalone mode")
 
 def test_verbose_output_presence():
     """Test that verbose output is present in all commands"""
@@ -97,13 +95,8 @@ def test_verbose_output_presence():
             
             result = runner.invoke(noah.cli, cmd)
             
-            if expected_verbose in result.output:
-                print(f"✓ Verbose output found in: {' '.join(cmd)}")
-            else:
-                print(f"✗ Verbose output missing in: {' '.join(cmd)}")
-                return False
-    
-    return True
+            assert expected_verbose in result.output, f"Verbose output missing in {' '.join(cmd)}"
+            print(f"✓ Verbose output found in: {' '.join(cmd)}")
 
 def main():
     """Run modification-specific tests"""

@@ -13,13 +13,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import noah  # type: ignore
 
-CANONICAL_FILE = Path('Secrets/canonical-secrets.yaml')
+PLAINTEXT_FILE = Path('Secrets/canonical-secrets.yaml')
+ENCRYPTED_FILE = Path('Secrets/canonical-secrets.enc.yaml')
 
 
 def test_deploy_all_generates_authentik_secrets():
     # Remove canonical file if exists to simulate fresh run
-    if CANONICAL_FILE.exists():
-        CANONICAL_FILE.unlink()
+    # Remove both variants to simulate fresh run
+    if PLAINTEXT_FILE.exists():
+        PLAINTEXT_FILE.unlink()
+    if ENCRYPTED_FILE.exists():
+        ENCRYPTED_FILE.unlink()
 
     # Set env to skip actual Ansible
     os.environ['NOAH_SKIP_ANSIBLE'] = 'true'
@@ -30,10 +34,12 @@ def test_deploy_all_generates_authentik_secrets():
     # Basic CLI success
     assert result.exit_code == 0, f"CLI exited with non-zero: {result.output}"
 
-    # Canonical secrets file should exist now
-    assert CANONICAL_FILE.exists(), "canonical-secrets.yaml was not created during deploy all"
+    # Canonical secrets file (encrypted or plaintext) should now exist
+    assert PLAINTEXT_FILE.exists() or ENCRYPTED_FILE.exists(), "Canonical secrets file was not created (neither plaintext nor encrypted)"
 
-    content = CANONICAL_FILE.read_text()
+    # Read whichever exists
+    target_file = PLAINTEXT_FILE if PLAINTEXT_FILE.exists() else ENCRYPTED_FILE
+    content = target_file.read_text(errors='ignore')
     assert 'authentik:' in content, "Authentik service section missing in canonical secrets file"
     assert 'bootstrap_password:' in content, "bootstrap_password entry missing for Authentik"
 

@@ -48,7 +48,7 @@ import os
 import subprocess
 import yaml
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 
 CANONICAL_FILENAME_ENCRYPTED = "canonical-secrets.enc.yaml"
 CANONICAL_FILENAME_PLAINTEXT = "canonical-secrets.yaml"
@@ -153,7 +153,7 @@ class CanonicalSecretsStore:
                 print(f"[WARNING] Failed to parse canonical secrets: {e}")
                 self.data = {}
         if not self.data:
-            self.data = {"version": CURRENT_SCHEMA_VERSION, "services": {}, "generated_at": datetime.utcnow().isoformat() + "Z"}
+            self.data = {"version": CURRENT_SCHEMA_VERSION, "services": {}, "generated_at": datetime.now(timezone.utc).isoformat()}
         # Upgrade schema if needed
         self._upgrade_schema_if_needed()
         # Integrity check / initialization
@@ -213,7 +213,7 @@ class CanonicalSecretsStore:
                 svc[key] = {
                     'value': value,
                     'version': 1,
-                    'rotated_at': datetime.utcnow().isoformat() + 'Z'
+                    'rotated_at': datetime.now(timezone.utc).isoformat()
                 }
                 changed = True
             elif isinstance(svc[key], str):
@@ -222,11 +222,11 @@ class CanonicalSecretsStore:
                 svc[key] = {
                     'value': raw_val,
                     'version': 1,
-                    'rotated_at': datetime.utcnow().isoformat() + 'Z'
+                    'rotated_at': datetime.now(timezone.utc).isoformat()
                 }
                 changed = True
         if changed:
-            self.data["updated_at"] = datetime.utcnow().isoformat() + "Z"
+            self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
             self.save()
         # Return simplified dict {key: value}
         return {k: (v.get('value') if isinstance(v, dict) else v) for k, v in svc.items()}
@@ -256,10 +256,10 @@ class CanonicalSecretsStore:
                     secrets_map[key] = {
                         'value': value,
                         'version': 1,
-                        'rotated_at': datetime.utcnow().isoformat() + 'Z'
+                        'rotated_at': datetime.now(timezone.utc).isoformat()
                     }
             self.data['version'] = CURRENT_SCHEMA_VERSION
-            self.data['schema_upgraded_at'] = datetime.utcnow().isoformat() + 'Z'
+            self.data['schema_upgraded_at'] = datetime.now(timezone.utc).isoformat()
             # Recompute integrity post-upgrade
             self.data['integrity'] = self._compute_integrity()
             try:

@@ -15,16 +15,15 @@ def test_noah_imports():
     """Test that all noah.py imports work correctly"""
     print("Testing noah.py imports...")
     try:
-        from Scripts.core_helm.cluster_manager import ClusterManager
-        from Scripts.security_manager import NoahSecurityManager
-        from Scripts.helm_deployer import HelmDeployer
-        from Scripts.ansible_runner import AnsibleRunner
-        from Scripts.utils.config_loader import ConfigLoader
+        from Scripts.core_helm.cluster_manager import ClusterManager  # noqa: F401
+        from Scripts.security_manager import NoahSecurityManager  # noqa: F401
+        from Scripts.helm_deployer import HelmDeployer  # noqa: F401
+        from Scripts.ansible_runner import AnsibleRunner  # noqa: F401
+        from Scripts.utils.config_loader import ConfigLoader  # noqa: F401
         print("✓ All imports successful")
-        return True
     except Exception as e:
         print(f"✗ Import failed: {e}")
-        return False
+        assert False
 
 def test_cli_structure():
     """Test that the CLI structure is correct"""
@@ -53,10 +52,9 @@ def test_cli_structure():
         assert 'Deploy services to Kubernetes' in result.output
         print("✓ Deploy command help works")
         
-        return True
     except Exception as e:
         print(f"✗ CLI structure test failed: {e}")
-        return False
+        assert False
 
 def test_verbose_functionality():
     """Test that verbose output is included"""
@@ -85,41 +83,8 @@ def test_verbose_functionality():
             assert '[VERBOSE] Gathering system status information...' in result.output
             print("✓ Verbose output detected in status command")
         
-        return True
     except Exception as e:
         print(f"✗ Verbose functionality test failed: {e}")
-        return False
+        assert False
 
-def main():
-    """Run all tests"""
-    print("=" * 60)
-    print("NOAH Deployment Script Tests")
-    print("=" * 60)
-    
-    tests = [
-        test_noah_imports,
-        test_cli_structure,
-        test_verbose_functionality
-    ]
-    
-    passed = 0
-    total = len(tests)
-    
-    for test in tests:
-        print(f"\n{'-' * 40}")
-        if test():
-            passed += 1
-        print(f"{'-' * 40}")
-    
-    print(f"\n{'=' * 60}")
-    print(f"Test Results: {passed}/{total} tests passed")
-    
-    if passed == total:
-        print("🎉 All tests passed! NOAH deployment script is working correctly.")
-        return 0
-    else:
-        print("❌ Some tests failed. Please check the output above.")
-        return 1
-
-if __name__ == '__main__':
-    sys.exit(main())
+"""Pytest collects functions above; legacy main harness removed."""

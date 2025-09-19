@@ -26,11 +26,8 @@ def test_redeploy_command():
             text=True
         )
         
-        if "redeploy" in result.stdout:
-            print("✅ PASS: redeploy command found in cluster commands")
-        else:
-            print("❌ FAIL: redeploy command not found")
-            return False
+        assert "redeploy" in result.stdout, "redeploy command not found in cluster help"
+        print("✅ PASS: redeploy command found in cluster commands")
             
     except Exception as e:
         print(f"❌ FAIL: Error running cluster help: {e}")
@@ -60,11 +57,8 @@ def test_redeploy_command():
             if text not in result.stdout:
                 missing_text.append(text)
         
-        if not missing_text:
-            print("✅ PASS: redeploy command help contains all expected content")
-        else:
-            print(f"❌ FAIL: redeploy command help missing: {missing_text}")
-            return False
+        assert not missing_text, f"redeploy help missing: {missing_text}"
+        print("✅ PASS: redeploy command help contains all expected content")
             
     except Exception as e:
         print(f"❌ FAIL: Error running redeploy help: {e}")
@@ -74,9 +68,7 @@ def test_redeploy_command():
     print("\nTest 3: Checking Ansible playbook...")
     playbook_path = noah_dir / "Ansible" / "cluster-redeploy.yml"
     
-    if not playbook_path.exists():
-        print(f"❌ FAIL: Ansible playbook not found at {playbook_path}")
-        return False
+    assert playbook_path.exists(), f"Ansible playbook not found at {playbook_path}"
     
     try:
         result = subprocess.run(
@@ -86,11 +78,8 @@ def test_redeploy_command():
             text=True
         )
         
-        if result.returncode == 0:
-            print("✅ PASS: Ansible playbook syntax is valid")
-        else:
-            print(f"❌ FAIL: Ansible playbook syntax error: {result.stderr}")
-            return False
+        assert result.returncode == 0, f"Ansible playbook syntax error: {result.stderr}"
+        print("✅ PASS: Ansible playbook syntax is valid")
             
     except Exception as e:
         print(f"❌ FAIL: Error checking playbook syntax: {e}")
@@ -100,19 +89,14 @@ def test_redeploy_command():
     print("\nTest 4: Checking documentation...")
     quick_ref_path = noah_dir / "Docs" / "quick-reference.md"
     
-    if not quick_ref_path.exists():
-        print(f"❌ FAIL: Quick reference not found at {quick_ref_path}")
-        return False
+    assert quick_ref_path.exists(), f"Quick reference not found at {quick_ref_path}"
     
     try:
         with open(quick_ref_path, 'r') as f:
             content = f.read()
         
-        if "cluster redeploy" in content and "NEW!" in content:
-            print("✅ PASS: Documentation updated with redeploy command")
-        else:
-            print("❌ FAIL: Documentation not updated with redeploy command")
-            return False
+        assert "cluster redeploy" in content and "NEW!" in content, "Documentation not updated with redeploy command"
+        print("✅ PASS: Documentation updated with redeploy command")
             
     except Exception as e:
         print(f"❌ FAIL: Error reading documentation: {e}")
@@ -123,7 +107,7 @@ def test_redeploy_command():
     print("The redeploy command is ready for use:")
     print("python noah.py cluster redeploy --name noah-production --domain noah-infra.com")
     
-    return True
+    # Success indicated by absence of assertion failures
 
 if __name__ == "__main__":
     success = test_redeploy_command()

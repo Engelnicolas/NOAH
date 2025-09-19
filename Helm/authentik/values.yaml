@@ -79,9 +79,9 @@ ingress:
   #       - auth.noah-infra.com
 
 authentik:
-  # Use our existing secret instead of auto-generating
+  # Use our existing secret instead of auto-generating (standardized name authentik-secret)
   secret:
-    existingSecret: "authentik-secrets"
+    existingSecret: "authentik-secret"
     secretKey: "AUTHENTIK_SECRET_KEY"
   errorReporting:
     enabled: false
@@ -118,7 +118,7 @@ postgresql:
     username: authentik
     password: ""  # Will be set from secure secrets
     database: authentik
-    existingSecret: "authentik-secrets"
+    existingSecret: "authentik-secret"
     secretKeys:
       adminPasswordKey: "postgresql-password"
       userPasswordKey: "postgresql-password"
@@ -142,7 +142,7 @@ redis:
   auth:
     enabled: false  # Disable Redis auth to match current deployment
     password: ""  # Will be set from secure secrets
-    existingSecret: "authentik-secrets"
+    existingSecret: "authentik-secret"
     existingSecretPasswordKey: "redis-password"
   master:
     persistence:

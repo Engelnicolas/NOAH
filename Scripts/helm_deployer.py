@@ -50,10 +50,8 @@ class HelmDeployer:
         values_file = chart_path / 'values.yaml'
         if values_file.exists():
             cmd.extend(['--values', str(values_file)])
-        
-        # Secret values resolution order:
-        # 1. Canonical store (preferred)
-        # 2. Legacy encrypted helm secrets file (.enc.yaml) fallback
+
+        # Apply canonical secret values if available
         canonical_applied = False
         try:
             from Scripts.security.canonical_store import get_canonical_store  # type: ignore
@@ -71,7 +69,7 @@ class HelmDeployer:
         except Exception as e:
             print(f"[WARNING] Canonical secret integration failed for {chart_name}: {e}")
 
-        # Legacy encrypted helm secrets fallback removed (canonical is authoritative)
+        # Legacy encrypted helm secrets pathway removed; canonical store is authoritative
         
         # Add custom values via temporary values file
         if values:
@@ -101,7 +99,7 @@ class HelmDeployer:
             print(f"Failed to deploy {chart_name}: {result.stderr}")
             return False
     
-    # _decrypt_helm_secrets removed (legacy path)
+    # Legacy decryption helper fully removed; only canonical path supported
 
     def _transform_canonical_for_chart(self, chart_name: str, service_secrets: Dict[str, str]) -> Dict[str, Any]:
         """Map canonical secrets dict to Helm values structure per chart.

@@ -18,7 +18,7 @@ import base64
 import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 
 class NoahSecurityManager:
     """Unified security manager for NOAH infrastructure"""
@@ -87,9 +87,6 @@ class NoahSecurityManager:
         secrets.SystemRandom().shuffle(password)
         return ''.join(password)
     
-    def generate_password(self, length: int = 24) -> str:
-        """Legacy method for backward compatibility (max 24 chars)"""
-        return self.generate_secure_password(min(length, 24), include_special=True)
 
     # ================================
     # SERVICE-SPECIFIC SECRETS
@@ -204,13 +201,13 @@ class NoahSecurityManager:
             if isinstance(entry, dict):
                 entry['value'] = new_val
                 entry['version'] = (entry.get('version') or 1) + 1
-                entry['rotated_at'] = datetime.utcnow().isoformat() + 'Z'
+                entry['rotated_at'] = datetime.now(timezone.utc).isoformat()
             else:
                 # Legacy string
                 existing_full[key] = {
                     'value': new_val,
                     'version': 2,
-                    'rotated_at': datetime.utcnow().isoformat() + 'Z'
+                    'rotated_at': datetime.now(timezone.utc).isoformat()
                 }
             existing_simple[key] = new_val
             rotated_count += 1

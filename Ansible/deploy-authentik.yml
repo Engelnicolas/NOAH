@@ -18,33 +18,9 @@
         kind: Namespace
         state: present
 
-    - name: Ensure canonical Authentik secrets exist (Python helper)
-      shell: |
-        cd ../
-        python - <<'PYEOF'
-import json, sys
-from pathlib import Path
-sys.path.insert(0, str(Path('.').resolve()))
-from Scripts.security_manager import NoahSecurityManager  # type: ignore
-from Scripts.security.canonical_store import get_canonical_store  # type: ignore
-manager = NoahSecurityManager()
-manager.generate_service_secrets('authentik')  # idempotent
-store = get_canonical_store(Path('.'))
-svc = store.data.get('services', {}).get('authentik', {})
-def val(key):
-    entry = svc.get(key)
-    if isinstance(entry, dict):
-        return entry.get('value')
-    return entry or ''
-payload = {
-    'secret_key': val('secret_key'),
-    'bootstrap_password': val('bootstrap_password'),
-    'bootstrap_token': val('bootstrap_token'),
-    'postgresql_password': val('postgresql_password'),
-    'redis_password': val('redis_password'),
-}
-print(json.dumps(payload))
-PYEOF
+    - name: Export canonical Authentik secrets (script)
+      command: >-
+        python ../Scripts/security/export_canonical_service.py --service authentik
       register: authentik_canonical_output
       changed_when: false
 

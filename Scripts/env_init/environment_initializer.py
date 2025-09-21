@@ -191,6 +191,66 @@ def check_kernel_config(config_name, required_value='y'):
         return None
 
 
+def verify_kubernetes_client(venv_python: Path, print_status):
+    """Verify that the Kubernetes Python client is installed inside the virtualenv.
+
+    Tries to import kubernetes and report its version. If the import fails, it will
+    attempt an explicit installation (even though requirements should have handled it)
+    and re-verify. Exits the process with error if still unavailable so the user gets
+    a clear actionable message.
+    """
+    try:
+        # First attempt: import using the virtualenv interpreter
+        result = subprocess.run(
+            [str(venv_python), "-c", "import kubernetes, json; import sys; print(kubernetes.__version__)"] ,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            version = result.stdout.strip().splitlines()[-1]
+            if version:
+                print_status(f"[SUCCESS] Kubernetes Python client available (version {version})", "SUCCESS")
+            else:
+                print_status("[SUCCESS] Kubernetes Python client available", "SUCCESS")
+            return True
+        else:
+            print_status("[WARNING] Kubernetes Python client import failed on first attempt", "WARNING")
+            print_status(f"[INFO] stderr: {result.stderr.strip()}", "INFO")
+    except Exception as e:
+        print_status(f"[WARNING] Kubernetes import raised exception: {e}", "WARNING")
+
+    # Attempt (re)installation explicitly
+    print_status("[INFO] Attempting to (re)install kubernetes client explicitly...", "INFO")
+    try:
+        reinstall = subprocess.run(
+            [str(venv_python), "-m", "pip", "install", "--no-cache-dir", "kubernetes"],
+            capture_output=True,
+            text=True,
+        )
+        if reinstall.returncode != 0:
+            print_status("[ERROR] pip failed installing kubernetes package", "ERROR")
+            print_status(f"[ERROR] pip stderr: {reinstall.stderr.strip()[:500]}", "ERROR")
+            return False
+    except Exception as e:
+        print_status(f"[ERROR] Exception during kubernetes installation: {e}", "ERROR")
+        return False
+
+    # Re-verify import
+    second = subprocess.run(
+        [str(venv_python), "-c", "import kubernetes; print(kubernetes.__version__)"] ,
+        capture_output=True,
+        text=True,
+    )
+    if second.returncode == 0:
+        version = second.stdout.strip().splitlines()[-1]
+        print_status(f"[SUCCESS] Kubernetes Python client installed (version {version})", "SUCCESS")
+        return True
+    else:
+        print_status("[ERROR] Unable to import kubernetes client after installation attempt", "ERROR")
+        print_status(f"[ERROR] stderr: {second.stderr.strip()[:500]}", "ERROR")
+        return False
+
+
 def validate_kernel_requirements(print_status):
     """Validate kernel configuration requirements for Cilium"""
     
@@ -561,6 +621,13 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
         print_status("[SUCCESS] Python dependencies installed", "SUCCESS")
     except subprocess.CalledProcessError as e:
         print_status(f"[ERROR] Failed to install dependencies: {e}", "ERROR")
+        sys.exit(1)
+
+    # Explicit verification of Kubernetes Python client (user requested assurance)
+    print_status("[INFO] Verifying Kubernetes Python client installation...", "INFO")
+    if not verify_kubernetes_client(venv_python, print_status):
+        print_status("[ERROR] Kubernetes Python client is required but could not be verified.", "ERROR")
+        print_status("[ERROR] Please check network connectivity or install manually: .venv/bin/pip install kubernetes", "ERROR")
         sys.exit(1)
     
     # Validate kernel and system requirements for Cilium

@@ -3,7 +3,9 @@
 import subprocess
 import json
 import time
-from typing import Dict, Any, Optional
+import sys
+from pathlib import Path
+from typing import Dict, Any, Optional, List
 
 # Optional imports with graceful fallbacks
 yaml: Optional[Any] = None
@@ -20,7 +22,10 @@ try:
     from kubernetes import client, config  # type: ignore
     from kubernetes.client.rest import ApiException  # type: ignore
 except ImportError:
-    pass
+    # Attempt late import after adding virtualenv site-packages in _initialize_kubernetes
+    client = None  # type: ignore
+    config = None  # type: ignore
+    ApiException = None  # type: ignore
 
 class ClusterManager:
     def __init__(self, config_loader):
@@ -32,8 +37,43 @@ class ClusterManager:
     
     def _initialize_kubernetes(self):
         """Initialize Kubernetes clients"""
+        global client, config, ApiException
+
         if client is None or config is None:
-            print(f"Warning: Could not initialize Kubernetes client: kubernetes library not available")
+            # Try to dynamically discover a local .venv if user forgot to activate it
+            venv_candidates: List[Path] = []
+            cwd = Path.cwd()
+            venv_dir = cwd / '.venv'
+            if venv_dir.exists():
+                # Typical Linux/macOS path
+                site_pkgs = venv_dir / 'lib'
+                if site_pkgs.exists():
+                    # Find python* directory then site-packages
+                    for py_dir in site_pkgs.iterdir():
+                        if py_dir.is_dir() and py_dir.name.startswith('python'):
+                            sp = py_dir / 'site-packages'
+                            if sp.exists():
+                                venv_candidates.append(sp)
+                # Windows layout fallback
+                win_sp = venv_dir / 'Lib' / 'site-packages'
+                if win_sp.exists():
+                    venv_candidates.append(win_sp)
+            # Deduplicate while preserving order
+            added_paths = []
+            for p in venv_candidates:
+                p_str = str(p)
+                if p_str not in sys.path:
+                    sys.path.insert(0, p_str)
+                    added_paths.append(p_str)
+            if added_paths:
+                try:
+                    from kubernetes import client as k_client, config as k_config  # type: ignore
+                    from kubernetes.client.rest import ApiException as KApiException  # type: ignore
+                    client, config, ApiException = k_client, k_config, KApiException
+                except Exception:
+                    pass
+        if client is None or config is None:
+            print("Warning: Could not initialize Kubernetes client: kubernetes library not available (activate venv with 'source .venv/bin/activate')")
             return
         
         try:
@@ -135,25 +175,113 @@ class ClusterManager:
             return None
     
     def show_status(self):
-        """Display status of all NOAH components"""
-        if self.apps_v1 is None:
-            print("⚠️  Warning: No Kubernetes cluster connected. Cannot show deployment status")
-            print("💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
-            print("\n📋 Available commands without cluster:")
-            print("  • python noah.py cluster create --name <cluster-name>")
-            print("  • python noah.py setup doctor  (check environment)")
-            print("  • python noah.py secrets generate --service <service>")
+        """Display enriched status of NOAH cluster and key namespaces.
+
+        Sections:
+          • Cluster Summary (context, nodes, version)
+          • Namespace Deployments (identity, kube-system)
+          • Pod Health Totals
+        Falls back to 'kubectl' if Python client not initialized.
+        """
+        if self.apps_v1 is None or self.core_v1 is None:
+            # Fallback: attempt kubectl basic summary
+            print("⚠️  Warning: No Kubernetes Python client. Attempting kubectl fallback...")
+            if not self._kubectl_exists():
+                print("❌ Neither Kubernetes client library nor kubectl available; cannot show status.")
+                print("💡 Install client: pip install kubernetes OR configure kubectl context.")
+                return
+            self._kubectl_fallback_summary()
             return
-        
+
+        # --- Cluster summary ---
+        try:
+            nodes = self.core_v1.list_node().items
+            node_count = len(nodes)
+            versions = {n.status.node_info.kubelet_version for n in nodes if n.status and n.status.node_info}
+            contexts = self._current_kube_context()
+            print("Cluster Summary")
+            print("  Context:    " + (contexts or "(unknown)"))
+            print(f"  Nodes:      {node_count}")
+            print(f"  Kubelets:   {', '.join(sorted(versions)) if versions else 'n/a'}")
+        except Exception as e:
+            print(f"  (Cluster summary unavailable: {e})")
+
+        # --- Namespace deployments ---
         namespaces = ['identity', 'kube-system']
+        total_ready = 0
+        total_replicas = 0
         for ns in namespaces:
             print(f"\nNamespace: {ns}")
             try:
                 deployments = self.apps_v1.list_namespaced_deployment(namespace=ns)
+                if not deployments.items:
+                    print("  (no deployments)")
                 for dep in deployments.items:
                     ready = dep.status.ready_replicas or 0
                     total = dep.spec.replicas or 0
-                    status = "✓" if ready == total else "✗"
-                    print(f"  {status} {dep.metadata.name}: {ready}/{total} replicas ready")
+                    total_ready += ready
+                    total_replicas += total
+                    status = "✓" if ready == total and total > 0 else ("…" if ready > 0 else "✗")
+                    print(f"  {status} {dep.metadata.name}: {ready}/{total} ready")
             except Exception as e:
                 print(f"  Error reading namespace: {e}")
+
+        # --- Pod health aggregate ---
+        if total_replicas > 0:
+            pct = (total_ready / total_replicas) * 100 if total_replicas else 0
+            print(f"\nDeployment Readiness: {total_ready}/{total_replicas} ({pct:.1f}%)")
+        else:
+            print("\nDeployment Readiness: (no replicas defined)")
+
+    # ----------------- Helpers -----------------
+    def _kubectl_exists(self) -> bool:
+        return subprocess.run(['which', 'kubectl'], capture_output=True).returncode == 0
+
+    def _current_kube_context(self) -> Optional[str]:
+        try:
+            result = subprocess.run(['kubectl', 'config', 'current-context'], capture_output=True, text=True)
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            return None
+        return None
+
+    def _kubectl_fallback_summary(self):
+        # Basic info via kubectl if python client missing
+        try:
+            ctx = self._current_kube_context() or "(unknown)"
+            print("Cluster Summary (kubectl)")
+            print(f"  Context:    {ctx}")
+            nodes = subprocess.run(['kubectl', 'get', 'nodes', '-o', 'json'], capture_output=True, text=True)
+            node_count = 0
+            versions = set()
+            if nodes.returncode == 0:
+                data = json.loads(nodes.stdout)
+                for item in data.get('items', []):
+                    node_count += 1
+                    v = item.get('status', {}).get('nodeInfo', {}).get('kubeletVersion')
+                    if v:
+                        versions.add(v)
+            print(f"  Nodes:      {node_count}")
+            print(f"  Kubelets:   {', '.join(sorted(versions)) if versions else 'n/a'}")
+            # Namespaces quick list
+            for ns in ['identity', 'kube-system']:
+                print(f"\nNamespace: {ns}")
+                dep_proc = subprocess.run(['kubectl', 'get', 'deploy', '-n', ns, '-o', 'json'], capture_output=True, text=True)
+                if dep_proc.returncode != 0:
+                    print("  (unavailable)")
+                    continue
+                ddata = json.loads(dep_proc.stdout)
+                items = ddata.get('items', [])
+                if not items:
+                    print("  (no deployments)")
+                    continue
+                for dep in items:
+                    spec = dep.get('spec', {})
+                    replicas = spec.get('replicas', 0) or 0
+                    status_d = dep.get('status', {})
+                    ready = status_d.get('readyReplicas', 0) or 0
+                    status_flag = '✓' if replicas and ready == replicas else ('…' if ready > 0 else '✗')
+                    print(f"  {status_flag} {dep['metadata']['name']}: {ready}/{replicas} ready")
+        except Exception as e:
+            print(f"(kubectl fallback failed: {e})")

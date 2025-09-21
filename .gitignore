@@ -95,6 +95,16 @@ Helm/samba4/secrets/*.json
 Helm/samba4/secrets/*.env
 Helm/samba4/secrets/samba4-secrets.temp.yaml
 Helm/samba4/secrets/.temp-values.yaml
+Scripts/Secrets/canonical-secrets.yaml
+Scripts/Secrets/*.dec.yaml
+Scripts/Secrets/*.dec.json
+Scripts/Secrets/*.dec.env
+Scripts/Secrets/.temp-*
+Scripts/Secrets/temp-*
+Scripts/Secrets/secret-*.yaml
+Scripts/Secrets/secret-*.json
+Scripts/Secrets/secret-*.env
+Scripts/Secrets/*.log
 
 ############################
 # Legacy Encrypted Files (deprecated)

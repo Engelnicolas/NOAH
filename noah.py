@@ -27,8 +27,8 @@ from Scripts.cluster_destroy.kubectl_utils import cleanup_kubectl_cache, display
 
 from Scripts.core_helm.cluster_manager import ClusterManager
 from Scripts.security.security_manager import NoahSecurityManager as SecretManager
-from Scripts.helm_deployer import HelmDeployer
-from Scripts.ansible_runner import AnsibleRunner
+from Scripts.utils.helm_deployer import HelmDeployer
+from Scripts.utils.ansible_runner import AnsibleRunner
 from Scripts.utils.config_loader import ConfigLoader
 from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists, update_sops_version
 from Scripts.env_init.doctor_utils import print_status, diagnose_noah_environment

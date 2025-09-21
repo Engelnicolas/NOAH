@@ -21,9 +21,14 @@ from .config_utils import (
     config_override_command
 )
 
+from .configure_k8s_oidc import KubernetesOIDCConfigurator
+
 # Import modules for direct access
 from . import config_loader
 from . import config_cli
+from . import configure_k8s_oidc
+from . import ansible_runner
+from . import helm_deployer
 
 __all__ = [
     # Core utility functions
@@ -42,7 +47,12 @@ __all__ = [
     'config_domains_command',
     'config_helm_values_command',
     'config_override_command',
+    # OIDC Configuration
+    'KubernetesOIDCConfigurator',
     # Modules
     'config_loader',
-    'config_cli'
+    'config_cli',
+    'configure_k8s_oidc',
+    'ansible_runner',
+    'helm_deployer'
 ]

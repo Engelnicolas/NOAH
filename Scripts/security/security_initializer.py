@@ -8,21 +8,7 @@ import click
 import json
 import os
 from pathlib import Path
-
-
-def get_noah_paths():
-    """Get NOAH directory paths from environment variables"""
-    return {
-        'root_dir': Path(os.getenv('NOAH_ROOT_DIR', os.getcwd())),
-        'scripts_dir': Path(os.getenv('NOAH_SCRIPTS_DIR', './Scripts')),
-        'certificates_dir': Path(os.getenv('NOAH_CERTIFICATES_DIR', './Certificates')),
-        'age_dir': Path(os.getenv('NOAH_AGE_DIR', './Age')),
-        'venv_dir': Path(os.getenv('NOAH_VENV_DIR', './.venv')),
-        'ansible_dir': Path(os.getenv('ANSIBLE_PLAYBOOK_DIR', './Ansible')),
-        'helm_dir': Path(os.getenv('HELM_CHART_DIR', './Helm')),
-        'sops_config': Path(os.getenv('SOPS_CONFIG_FILE', '.sops.yaml')),
-        'age_key_file': Path(os.getenv('AGE_KEY_FILE', './Age/keys.txt'))
-    }
+from Scripts.utils.paths import get_noah_paths  # reuse centralized implementation
 
 
 def get_security_config(domain=None):

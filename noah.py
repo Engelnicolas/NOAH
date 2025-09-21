@@ -13,6 +13,7 @@ import subprocess
 import shutil
 import time
 from pathlib import Path
+from Scripts.utils.paths import get_noah_paths, NOAH_PATHS
 from Scripts.secure_env_loader import SecureEnvLoader
 
 # Load environment variables from encrypted configuration
@@ -22,23 +23,7 @@ secure_loader.load_secure_env(Path("Config/config.enc.yaml"))
 # Import CLI utilities
 from Scripts.cluster_destroy.kubectl_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected
 
-# Configuration paths from environment variables
-def get_noah_paths():
-    """Get NOAH directory paths from environment variables"""
-    return {
-        'root_dir': Path(os.getenv('NOAH_ROOT_DIR', os.getcwd())),
-        'scripts_dir': Path(os.getenv('NOAH_SCRIPTS_DIR', './Scripts')),
-        'certificates_dir': Path(os.getenv('NOAH_CERTIFICATES_DIR', './Certificates')),
-        'age_dir': Path(os.getenv('NOAH_AGE_DIR', './Age')),
-        'venv_dir': Path(os.getenv('NOAH_VENV_DIR', './.venv')),
-        'ansible_dir': Path(os.getenv('ANSIBLE_PLAYBOOK_DIR', './Ansible')),
-        'helm_dir': Path(os.getenv('HELM_CHART_DIR', './Helm')),
-        'sops_config': Path(os.getenv('SOPS_CONFIG_FILE', '.sops.yaml')),
-        'age_key_file': Path(os.getenv('AGE_KEY_FILE', './Age/keys.txt'))
-    }
-
-# Global paths instance
-NOAH_PATHS = get_noah_paths()
+## Paths now provided by Scripts.utils.paths (get_noah_paths, NOAH_PATHS)
 
 from Scripts.core_helm.cluster_manager import ClusterManager
 from Scripts.security_manager import NoahSecurityManager as SecretManager

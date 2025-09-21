@@ -105,6 +105,14 @@ Scripts/Secrets/secret-*.yaml
 Scripts/Secrets/secret-*.json
 Scripts/Secrets/secret-*.env
 Scripts/Secrets/*.log
+Scripts/Certificates/ca.srl
+Scripts/Certificates/ca.key
+Scripts/Certificates/ca.pem
+Scripts/Certificates/ca.crt
+Scripts/Certificates/*.crt
+Scripts/Certificates/*.key
+Scripts/Certificates/*.pem
+Scripts/Certificates/*.srl
 
 ############################
 # Legacy Encrypted Files (deprecated)

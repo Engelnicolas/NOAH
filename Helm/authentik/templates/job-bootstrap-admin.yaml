@@ -25,7 +25,7 @@ spec:
         args:
           - |
             echo "Waiting for Authentik server to be ready..."
-            until nc -z {{ include "authentik.fullname" . }}-server.{{ .Release.Namespace }}.svc.cluster.local 80; do
+            until nc -z {{ include "authentik.fullname" . }}-server.{{ .Release.Namespace }}.svc.cluster.local {{ .Values.service.port }}; do
               echo "Waiting for Authentik server..."
               sleep 10
             done
@@ -33,15 +33,11 @@ spec:
             
             # Test HTTP endpoint
             echo "Testing Authentik HTTP endpoint..."
-            until curl -s http://{{ include "authentik.fullname" . }}-server.{{ .Release.Namespace }}.svc.cluster.local:80/-/health/live/ > /dev/null; do
+            until curl -s http://{{ include "authentik.fullname" . }}-server.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}/-/health/live/ > /dev/null; do
               echo "Waiting for Authentik to respond to HTTP requests..."
               sleep 5
             done
             echo "Authentik is responding to HTTP requests!"
-            
-            # Wait additional time for Authentik to fully initialize
-            echo "Waiting for Authentik to fully initialize..."
-            sleep 30
       containers:
       - name: create-admin-user
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

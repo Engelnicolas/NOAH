@@ -176,9 +176,11 @@ resources:
     memory: 512Mi
 
 # Security context for production
-securityContext:
+securityContext:  # Container-level security context
   runAsNonRoot: true
   runAsUser: 1000
+
+podSecurityContext:  # Pod-level security context (fsGroup belongs here)
   fsGroup: 1000
 
 # OIDC Integration with Kubernetes

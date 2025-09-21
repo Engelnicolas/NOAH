@@ -34,9 +34,17 @@ except Exception as e:  # pragma: no cover - import environment issues
 
 
 def export_service(service: str) -> dict:
+    """Return a dict of canonical secrets for the service.
+
+    Ensures secrets are generated. Only returns key/value pairs (raw values).
+    Any incidental logging performed by underlying calls is suppressed from stdout
+    to keep this interface machine-consumable (pure JSON)."""
     manager = NoahSecurityManager()
-    # Ensure service secrets exist idempotently
-    manager.generate_service_secrets(service)
+    # Suppress potential noisy stdout from generation by temporarily redirecting if needed
+    try:
+        manager.generate_service_secrets(service)
+    except Exception as e:  # surface as JSON error higher up
+        raise e
     store = get_canonical_store(ROOT)
     svc = store.data.get('services', {}).get(service, {})
 

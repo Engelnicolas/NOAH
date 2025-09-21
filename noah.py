@@ -306,7 +306,7 @@ def cilium_cmd(ctx, namespace, domain):
 @click.option('--cluster-name', default='noah-cluster', help='Cluster name for deployment')
 @click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')
 @click.option('--regenerate-password', is_flag=True, help='Generate new Authentik admin password')
-@click.option('--validation-mode', type=click.Choice(['development','production']), default='development', show_default=True, help='Validation strictness for deployment playbook')
+@click.option('--validation-mode', type=click.Choice(['development','production']), default='production', show_default=True, help='Validation strictness for deployment playbook')
 @click.pass_context
 def all(ctx, domain, cluster_name, config_file, regenerate_password, validation_mode):
     """Deploy complete stack using optimized Ansible playbook (Cilium → Authentik)"""
@@ -401,9 +401,25 @@ def all(ctx, domain, cluster_name, config_file, regenerate_password, validation_
     
     click.echo(f"[VERBOSE] Running optimized deployment playbook: cluster-deploy.yml")
     click.echo(f"[VERBOSE] This will deploy in optimal order with comprehensive validation")
+    # Production mode preflight: verify cluster connectivity (lightweight)
+    if validation_mode == 'production':
+        try:
+            import subprocess
+            preflight = subprocess.run(['kubectl','cluster-info'], capture_output=True, text=True)
+            if preflight.returncode != 0:
+                click.echo("❌ kubectl cluster-info failed; cluster not reachable. Aborting production deployment.", err=True)
+                click.echo(preflight.stderr.strip(), err=True)
+                sys.exit(1)
+            else:
+                click.echo("[VERBOSE] kubectl cluster-info succeeded – proceeding with production deployment")
+        except FileNotFoundError:
+            click.echo("❌ kubectl not found in PATH. Install kubectl or switch to --validation-mode development.", err=True)
+            sys.exit(1)
     
     try:
-        ctx.obj['ansible'].run_playbook('cluster-deploy.yml', ansible_vars)
+        play_success = ctx.obj['ansible'].run_playbook('cluster-deploy.yml', ansible_vars)
+        if not play_success:
+            raise RuntimeError("Ansible playbook cluster-deploy.yml reported failure (non-zero exit code)")
         click.echo("🎉 NOAH standalone IAM deployment successful!")
         click.echo(f"[VERBOSE] All components deployed and validated")
         

@@ -5,10 +5,15 @@
   vars:
     cluster_name: "{{ cluster_name | default('noah-cluster') }}"
     domain_name: "{{ domain_name | default('noah-infra.com') }}"
-    validation_mode: "{{ validation_mode | default('development') }}"  # development/production
+    validation_mode: "{{ validation_mode | default('production') }}"  # validation modes: production (default) or development
+    strict_development_validation: "{{ strict_development_validation | default(false) }}"  # dev-only hard fail toggle
     verbose_mode: true  # Enable verbose output by default
-    cilium_wait_timeout: "{{ cilium_wait_timeout | default(600) }}"   # seconds
-    authentik_rollout_timeout: "{{ authentik_rollout_timeout | default(600) }}"  # seconds
+    # Use raw numbers to avoid self-referential recursion; allow override via --extra-vars
+    cilium_wait_timeout: 300   # seconds (override with -e cilium_wait_timeout=900)
+    authentik_rollout_timeout: 300  # seconds (override with -e authentik_rollout_timeout=900)
+    enable_hubble: true  # default enable Hubble in production
+    hubble_tls_enabled: true
+    authentik_helm_timeout: "300s"  # override with -e authentik_helm_timeout=900s
     
   tasks:
     - name: "CONFIGURATION: Load environment variables from encrypted config"
@@ -66,16 +71,19 @@
                 phase_cilium_started: "{{ ansible_date_time.epoch | int }}"
 
             - name: Deploy Cilium CNI with SSO-ready configuration
-              shell: |
-                cd {{ ansible_playbook_dir }}
-                ansible-playbook deploy-cilium.yml \
-                  -e namespace=kube-system \
-                  -e domain_name="{{ domain_name }}" \
-                  -e deployment_phase=complete \
-                  -e enable_hubble=true \
-                  -e hubble_tls_enabled=true
+              ansible.builtin.command: >-
+                ansible-playbook deploy-cilium.yml
+                -e namespace=kube-system
+                -e domain_name="{{ domain_name }}"
+                -e deployment_phase=complete
+                -e enable_hubble=true
+                -e hubble_tls_enabled=true
+              args:
+                chdir: "{{ playbook_dir }}"
+              register: cilium_subplay
+              failed_when: cilium_subplay.rc != 0
               vars:
-                namespace: kube-system
+                cilium_namespace: kube-system
                 domain_name: "{{ domain_name }}"
                 deployment_phase: complete
                 enable_hubble: true
@@ -139,13 +147,17 @@
               ansible.builtin.set_fact:
                 phase_authentik_started: "{{ ansible_date_time.epoch | int }}"
             - name: Deploy Authentik SSO standalone
-              shell: |
-                cd {{ ansible_playbook_dir }}
-                ansible-playbook deploy-authentik.yml \
-                  -e namespace=identity \
-                  -e domain_name="{{ domain_name }}"
+              ansible.builtin.command: >-
+                ansible-playbook deploy-authentik.yml
+                -e authentik_namespace=identity
+                -e domain_name="{{ domain_name }}"
+                -e authentik_helm_timeout={{ authentik_helm_timeout }}
+              args:
+                chdir: "{{ playbook_dir }}"
+              register: authentik_subplay
+              failed_when: authentik_subplay.rc != 0
               vars:
-                namespace: identity
+                authentik_namespace: identity
                 domain_name: "{{ domain_name }}"
 
             - name: Validate Authentik deployment (development shortcut)
@@ -343,6 +355,51 @@
                 msg: "{{ validation_output.stdout_lines }}"
               tags: validation
 
+            - name: Collect critical component readiness metrics
+              ansible.builtin.shell: |
+                set -euo pipefail
+                json_escape() { echo "$1" | sed 's/"/\\"/g'; }
+                cilium=$(kubectl get pods -n kube-system -l k8s-app=cilium --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l | tr -d ' ')
+                coredns=$(kubectl get pods -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l | tr -d ' ')
+                authentik_server=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=server --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l | tr -d ' ')
+                authentik_endpoints=$(kubectl get endpoints -n identity authentik-server -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | wc -w | tr -d ' ')
+                printf '{"cilium":%s,"coredns":%s,"authentik_server":%s,"authentik_endpoints":%s}\n' "${cilium:-0}" "${coredns:-0}" "${authentik_server:-0}" "${authentik_endpoints:-0}"
+              register: critical_readiness_raw
+              changed_when: false
+              failed_when: false
+              tags: validation
+
+            - name: Parse critical readiness JSON
+              ansible.builtin.set_fact:
+                critical_readiness: "{{ (critical_readiness_raw.stdout | default('{}')) | from_json }}"
+              when: critical_readiness_raw.stdout is defined and critical_readiness_raw.stdout | length > 0
+              tags: validation
+
+            - name: Derive list of missing critical components
+              ansible.builtin.set_fact:
+                critical_missing: >-
+                  {{ []
+                     + (['cilium'] if (critical_readiness.cilium | default(0) | int) == 0 else [])
+                     + (['coredns'] if (critical_readiness.coredns | default(0) | int) == 0 else [])
+                     + (['authentik_server'] if (critical_readiness.authentik_server | default(0) | int) == 0 else [])
+                  }}
+              when: critical_readiness is defined
+              tags: validation
+
+            - name: Show missing critical components (development mode only)
+              ansible.builtin.debug:
+                msg: >-
+                  ⚠️  Development validation: missing critical components → {{ critical_missing | join(', ') }} (deployment not failed automatically)
+              when: validation_mode == 'development' and not strict_development_validation | bool and critical_missing is defined and (critical_missing | length) > 0
+              tags: validation
+
+            - name: Fail if critical components absent (production or strict dev)
+              ansible.builtin.fail:
+                msg: >-
+                  Critical components missing: {{ critical_missing | join(', ') }}. Deployment failed due to failed readiness criteria.
+              when: (validation_mode == 'production' or strict_development_validation | bool) and critical_missing is defined and (critical_missing | length) > 0
+              tags: validation
+
             - name: Display phase duration summary
               ansible.builtin.debug:
                 msg: |
@@ -383,4 +440,18 @@
         - name: Set failure flag
           ansible.builtin.set_fact:
             deployment_phase_failed: true
+      always:
+        - name: Display success banner (only if no failure)
+          ansible.builtin.debug:
+            msg: |
+              🎉 NOAH standalone IAM deployment successful!
+              All requested components completed without fatal errors.
+          when: 
+            - not (deployment_phase_failed | default(false))
+            - not (critical_missing is defined and (critical_missing | length) > 0)
+
+        - name: Force non-zero exit on failure (development & production)
+          ansible.builtin.fail:
+            msg: "Deployment failed (one or more phases). See logs above."
+          when: deployment_phase_failed | default(false)
         

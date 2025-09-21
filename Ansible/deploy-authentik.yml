@@ -6,6 +6,7 @@
     authentik_namespace: "identity"
     verbose_mode: true  # Enable verbose output by default
     ansible_python_interpreter: "../.venv/bin/python"
+    authentik_helm_timeout: "{{ authentik_helm_timeout | default('600s') }}"
     
   environment:
     PYTHONPATH: "../.venv/lib/python3.12/site-packages:{{ ansible_env.PYTHONPATH | default('') }}"
@@ -26,7 +27,23 @@
 
     - name: Parse canonical Authentik secrets
       set_fact:
-        authentik_canonical: "{{ authentik_canonical_output.stdout | from_json }}"
+        _raw_lines: "{{ authentik_canonical_output.stdout.split('\n') | reject('equalto','') | list }}"
+      changed_when: false
+
+    - name: Extract JSON payload line
+      set_fact:
+        _json_line: "{{ _raw_lines[-1] if (_raw_lines | length) > 0 else '' }}"
+      changed_when: false
+
+    - name: Fail if JSON payload missing or not starting with '{'
+      ansible.builtin.fail:
+        msg: "Canonical secrets export did not produce JSON on last line"
+      when: _json_line | length == 0 or (_json_line[0] != '{')
+
+    - name: Convert canonical JSON to fact
+      set_fact:
+        authentik_canonical: "{{ _json_line | from_json }}"
+      changed_when: false
 
     - name: Create/Update Authentik Kubernetes Secret from canonical store
       kubernetes.core.k8s:
@@ -50,10 +67,29 @@
             bootstrap-token: "{{ authentik_canonical.bootstrap_token }}"
       register: authentik_secret_apply
 
+    - name: Create TLS secret for Authentik ingress
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: authentik-tls
+            namespace: "{{ authentik_namespace }}"
+          type: kubernetes.io/tls
+          data:
+            tls.crt: "{{ lookup('file', '../Certificates/*.noah-infra.com.crt') | b64encode }}"
+            tls.key: "{{ lookup('file', '../Certificates/*.noah-infra.com.key') | b64encode }}"
+      register: authentik_tls_secret_apply
+
     - name: Report Authentik secret status
       debug:
         msg: >-
           Authentik secret {{ 'created/updated' if authentik_secret_apply.changed else 'is up-to-date' }} via canonical store
+
+    - name: Report TLS secret status
+      debug:
+        msg: >-
+          TLS secret {{ 'created/updated' if authentik_tls_secret_apply.changed else 'is up-to-date' }} for ingress
 
     - name: Create Authentik values file for Helm deployment
       copy:
@@ -131,10 +167,50 @@
                   memory: "256Mi"
                   cpu: "200m"
           
+          # Ingress configuration for external access
+          ingress:
+            enabled: true
+            className: "nginx"  # Use nginx ingress controller
+            annotations:
+              cert-manager.io/cluster-issuer: "letsencrypt-prod"
+              nginx.ingress.kubernetes.io/ssl-redirect: "true"
+              nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+              nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+              nginx.ingress.kubernetes.io/configuration-snippet: |
+                more_set_headers "Access-Control-Allow-Origin: *";
+                more_set_headers "Access-Control-Allow-Methods: GET, POST, OPTIONS";
+                more_set_headers "Access-Control-Allow-Headers: Authorization, Content-Type";
+            hosts:
+              - host: "auth.{{ domain_name | default('noah-infra.com') }}"
+                paths:
+                  - path: /
+                    pathType: Prefix
+                  - path: /application/o/
+                    pathType: Prefix
+                  - path: /.well-known/
+                    pathType: Prefix
+            tls:
+              - secretName: authentik-tls
+                hosts:
+                  - "auth.{{ domain_name | default('noah-infra.com') }}"
+          
+          # TLS configuration
+          tls:
+            enabled: true
+            secretName: "authentik-tls"
+          
+          # Global domain configuration for dynamic FQDN
+          global:
+            domain: "{{ domain_name | default('noah-infra.com') }}"
+          
+          # Service configuration  
+          service:
+            subdomain: "auth"
+            fqdn: "auth.{{ domain_name | default('noah-infra.com') }}"
+            port: 9000
+          
           # Server configuration
           server:
-            ingress:
-              enabled: false  # Disable for internal testing
             service:
               type: ClusterIP
             replicas: 1
@@ -144,14 +220,33 @@
             replicas: 1
         dest: /tmp/authentik-values.yaml
 
+    - name: Adopt existing secrets for Helm (if present)
+      ansible.builtin.shell: >-
+        kubectl patch secret {{ item }} -n {{ authentik_namespace }} --type merge -p '{
+          "metadata": {
+            "labels": {"app.kubernetes.io/managed-by": "Helm"},
+            "annotations": {
+              "meta.helm.sh/release-name": "authentik",
+              "meta.helm.sh/release-namespace": "{{ authentik_namespace }}"
+            }
+          }
+        }' 2>/dev/null || true
+      changed_when: false
+      loop:
+        - authentik-secret
+        - authentik-tls
+
     - name: Deploy Authentik using Helm
-      shell: |
-        helm upgrade --install authentik /root/NOAH/Helm/authentik \
-          --namespace {{ authentik_namespace }} \
-          --values /tmp/authentik-values.yaml \
-          --timeout 600s \
-          {% if dry_run | default(false) %}--dry-run{% endif %}
+      ansible.builtin.command: >-
+        helm upgrade --install authentik Helm/authentik
+        --namespace {{ authentik_namespace }}
+        --values /tmp/authentik-values.yaml
+        --timeout {{ authentik_helm_timeout }}
+        {{ '--dry-run' if (dry_run | default(false)) else '' }}
+      args:
+        chdir: "{{ playbook_dir | dirname }}"
       register: authentik_helm_result
+      failed_when: authentik_helm_result.rc != 0
 
     - name: Set deployment status based on validation
       set_fact:

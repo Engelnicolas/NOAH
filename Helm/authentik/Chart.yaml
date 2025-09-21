@@ -3,6 +3,9 @@ name: authentik
 description: A Helm chart for Authentik - Standalone OIDC Identity Provider
 type: application
 
+version: 0.1.0
+appVersion: "2025.09"
+
 dependencies:
   - name: postgresql
     version: "13.2.24"

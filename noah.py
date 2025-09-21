@@ -52,7 +52,7 @@ from Scripts.cluster_create.cluster_validation_utils import check_existing_clust
 from Scripts.cluster_create.cluster_create_utils import create_cluster
 from Scripts.cluster_destroy.cluster_destroy_utils import destroy_cluster_command
 
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 # Load default domain from environment, fallback to noah-infra.com
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
 def check_repository_root():

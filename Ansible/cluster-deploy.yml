@@ -187,7 +187,14 @@
               ansible.builtin.shell: |
                 POD=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
                 if [ -n "$POD" ]; then
-                  kubectl exec -n identity "$POD" -- curl -sf http://localhost:9000/-/health/ready/ >/dev/null 2>&1 && echo "READY" || echo "NOT_READY"
+                  kubectl exec -n identity "$POD" -- python -c "
+                import urllib.request
+                try:
+                    response = urllib.request.urlopen('http://localhost:9000/-/health/ready/')
+                    exit(0 if response.getcode() in [200, 204] else 1)
+                except Exception:
+                    exit(1)
+                " >/dev/null 2>&1 && echo "READY" || echo "NOT_READY"
                 else
                   echo "NO_POD"
                 fi

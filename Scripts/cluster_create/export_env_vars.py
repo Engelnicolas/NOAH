@@ -11,7 +11,7 @@ from pathlib import Path
 noah_root = Path.cwd()
 sys.path.insert(0, str(noah_root))
 
-from Scripts.secure_env_loader import SecureEnvLoader
+from Scripts.security.secure_env_loader import SecureEnvLoader
 
 def main():
     """Load encrypted config and export environment variables"""

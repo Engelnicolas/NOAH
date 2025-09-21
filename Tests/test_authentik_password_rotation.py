@@ -14,7 +14,7 @@ from datetime import datetime
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from Scripts.security_manager import NoahSecurityManager  # type: ignore
+from Scripts.security.security_manager import NoahSecurityManager  # type: ignore
 from Scripts.security.canonical_store import get_canonical_store  # type: ignore
 from noah import regenerate_authentik_password  # type: ignore
 

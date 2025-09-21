@@ -16,7 +16,7 @@ def test_noah_imports():
     print("Testing noah.py imports...")
     try:
         from Scripts.core_helm.cluster_manager import ClusterManager  # noqa: F401
-        from Scripts.security_manager import NoahSecurityManager  # noqa: F401
+        from Scripts.security.security_manager import NoahSecurityManager  # noqa: F401
         from Scripts.helm_deployer import HelmDeployer  # noqa: F401
         from Scripts.ansible_runner import AnsibleRunner  # noqa: F401
         from Scripts.utils.config_loader import ConfigLoader  # noqa: F401

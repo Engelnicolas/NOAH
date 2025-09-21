@@ -70,7 +70,7 @@ def get_authentik_credentials(domain: str | None = None) -> tuple[Optional[dict[
 def regenerate_authentik_password():
     """Generate a new Authentik admin password and update canonical store (increments version)."""
     try:
-        from Scripts.security_manager import NoahSecurityManager  # type: ignore
+        from Scripts.security.security_manager import NoahSecurityManager  # type: ignore
         from Scripts.security.canonical_store import get_canonical_store  # type: ignore
         sm = NoahSecurityManager()
         store = get_canonical_store()

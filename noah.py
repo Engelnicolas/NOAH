@@ -14,7 +14,7 @@ import shutil
 import time
 from pathlib import Path
 from Scripts.utils.paths import get_noah_paths, NOAH_PATHS
-from Scripts.secure_env_loader import SecureEnvLoader
+from Scripts.security.secure_env_loader import SecureEnvLoader
 
 # Load environment variables from encrypted configuration
 secure_loader = SecureEnvLoader()
@@ -26,7 +26,7 @@ from Scripts.cluster_destroy.kubectl_utils import cleanup_kubectl_cache, display
 ## Paths now provided by Scripts.utils.paths (get_noah_paths, NOAH_PATHS)
 
 from Scripts.core_helm.cluster_manager import ClusterManager
-from Scripts.security_manager import NoahSecurityManager as SecretManager
+from Scripts.security.security_manager import NoahSecurityManager as SecretManager
 from Scripts.helm_deployer import HelmDeployer
 from Scripts.ansible_runner import AnsibleRunner
 from Scripts.utils.config_loader import ConfigLoader

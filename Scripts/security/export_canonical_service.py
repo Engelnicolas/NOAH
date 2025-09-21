@@ -26,7 +26,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 try:
-    from Scripts.security_manager import NoahSecurityManager  # type: ignore
+    from Scripts.security.security_manager import NoahSecurityManager  # type: ignore
     from Scripts.security.canonical_store import get_canonical_store  # type: ignore
 except Exception as e:  # pragma: no cover - import environment issues
     print(json.dumps({"error": f"Failed to load NOAH modules: {e}"}), file=sys.stderr)

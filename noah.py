@@ -55,7 +55,13 @@ from Scripts.utils import (
 )
 from Scripts.security import ensure_security_initialized, get_security_config
 from Scripts.security.rotate_cli import register_rotate_command  # type: ignore
-from Scripts.core_helm import cilium, get_ansible_vars_for_service
+from Scripts.core_helm import (
+    cilium,
+    get_ansible_vars_for_service,
+    get_authentik_credentials,
+    regenerate_authentik_password,
+    get_helm_values_for_service
+)
 from Scripts.cluster_create.status_utils import show_cluster_status
 from Scripts.cluster_create.cluster_validation_utils import check_existing_cluster
 from Scripts.cluster_create.cluster_create_utils import create_cluster
@@ -64,96 +70,6 @@ from Scripts.cluster_destroy.cluster_destroy_utils import destroy_cluster_comman
 VERSION = "0.0.3"
 # Load default domain from environment, fallback to noah-infra.com
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
-
-def get_authentik_credentials(domain: str | None = None):
-    """Get Authentik admin credentials from canonical secrets store.
-
-    Behavior changes:
-    - Removed hard-coded fallback IP.
-    - Prefer domain-based URLs (https://auth.<domain>) if domain provided.
-    - If no external IP yet, report status instead of misleading placeholder.
-    - Returns metadata: external_ip (or None) and resolution_status.
-    """
-    try:
-        from Scripts.security.canonical_store import get_canonical_store  # type: ignore
-        store = get_canonical_store()
-        svc = store.data.get('services', {}).get('authentik', {})
-        entry = svc.get('bootstrap_password')
-        password = entry.get('value') if isinstance(entry, dict) else entry
-        if not password:
-            return None, "Bootstrap password not present in canonical store"
-
-        admin_email = 'admin@noah-infra.com'
-        admin_username = 'akadmin'
-
-        external_ip = None
-        resolution_status = 'not_attempted'
-        import subprocess
-        try:
-            kubectl_result = subprocess.run([
-                'kubectl', 'get', 'svc', '-n', 'identity', 'authentik-server',
-                '-o', 'jsonpath={.status.loadBalancer.ingress[0].ip}'
-            ], capture_output=True, text=True, timeout=8)
-            if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():
-                external_ip = kubectl_result.stdout.strip()
-                resolution_status = 'ip_assigned'
-            else:
-                resolution_status = 'pending'
-        except Exception:
-            resolution_status = 'lookup_error'
-
-        # Prefer domain based URLs if domain given; fallback to IP only if present
-        if domain:
-            http_url = f"http://auth.{domain}"
-            https_url = f"https://auth.{domain}"
-        elif external_ip:
-            http_url = f"http://{external_ip}"
-            https_url = f"https://{external_ip}"
-        else:
-            http_url = "(external IP pending)"
-            https_url = "(external IP pending)"
-
-        return {
-            'http_url': http_url,
-            'https_url': https_url,
-            'admin_username': admin_username,
-            'admin_email': admin_email,
-            'admin_password': password,
-            'external_ip': external_ip,
-            'resolution_status': resolution_status
-        }, None
-    except Exception as e:
-        return None, f"Error retrieving canonical credentials: {e}"
-
-def regenerate_authentik_password():
-    """Generate a new Authentik admin password and update canonical store (increments version)."""
-    try:
-        from Scripts.security_manager import NoahSecurityManager  # type: ignore
-        from Scripts.security.canonical_store import get_canonical_store  # type: ignore
-        sm = NoahSecurityManager()
-        store = get_canonical_store()
-        # Ensure service entries exist first
-        sm.generate_service_secrets('authentik')
-        svc = store.data.get('services', {}).get('authentik', {})
-        old_entry = svc.get('bootstrap_password')
-        old_password = old_entry.get('value') if isinstance(old_entry, dict) else old_entry
-        new_password = sm.generate_secure_password(24)
-        # Update metadata
-        from datetime import datetime, timezone
-        svc['bootstrap_password'] = {
-            'value': new_password,
-            'version': (old_entry.get('version') if isinstance(old_entry, dict) else 1) + 1 if old_entry else 1,
-            'rotated_at': datetime.now(timezone.utc).isoformat()
-        }
-        store.save()
-        return {
-            'old_password': old_password,
-            'new_password': new_password,
-            'updated_file': str(store._active_path())
-        }, None
-    except Exception as e:
-        return None, f"Error regenerating canonical password: {e}"
-
 def check_repository_root():
     """Check if the current directory is the root of the NOAH repository"""
     current_dir = Path.cwd()
@@ -181,110 +97,6 @@ def check_repository_root():
         click.echo(f"   cd /path/to/noah-repository", err=True)
         click.echo(f"   python noah.py <command>", err=True)
         sys.exit(1)
-
-def get_helm_values_for_service(service, namespace, domain=DEFAULT_DOMAIN):
-    """Generate Helm values for a specific service with enhanced ConfigLoader support"""
-    # Use enhanced ConfigLoader for dynamic domain management
-    config_loader = ConfigLoader()
-    
-    # Check if service exists in ConfigLoader's service configs
-    if service in config_loader.service_configs:
-        # Use ConfigLoader's enhanced values generation
-        return config_loader.generate_helm_values(service)
-    
-    # Fallback to legacy implementation for unknown services
-    security_config = get_security_config(domain)
-    
-    base_values = {
-        'global': {
-            'domain': domain,
-            'namespace': namespace
-        },
-        'security': security_config,
-        'secrets': {
-            'enabled': security_config['secrets']['age']['enabled'],
-            'managed': True,
-            'backend': 'sops',
-            'age': {
-                'enabled': security_config['secrets']['age']['enabled'],
-                'publicKey': security_config['secrets']['age']['public_key_path']
-            }
-        },
-        'tls': {
-            'enabled': security_config['certificates']['enabled'],
-            'domain': domain,
-            'selfSigned': True,
-            'certificateSecret': f"{service}-tls",
-            'ca': {
-                'enabled': True,
-                'secretName': 'noah-ca-certificate'
-            }
-        }
-    }
-    
-    # Legacy service configurations (for backward compatibility)
-    if service == 'authentik':
-        base_values.update({
-            'authentik': {
-                'secret_key': {
-                    'secretName': 'authentik-secret',
-                    'secretKey': 'secret-key'
-                },
-                'postgresql': {
-                    'password': {
-                        'secretName': 'authentik-postgresql',
-                        'secretKey': 'password'
-                    }
-                },
-                'redis': {
-                    'password': {
-                        'secretName': 'authentik-redis',
-                        'secretKey': 'password'
-                    }
-                }
-            },
-            'ingress': {
-                'enabled': True,
-                'hosts': [{
-                    'host': f"auth.{domain}",
-                    'paths': [{
-                        'path': '/',
-                        'pathType': 'Prefix'
-                    }]
-                }],
-                'tls': [{
-                    'secretName': 'authentik-tls',
-                    'hosts': [f"auth.{domain}"]
-                }]
-            }
-        })
-    elif service == 'cilium':
-        base_values.update({
-            'hubble': {
-                'relay': {
-                    'enabled': True,
-                    'tls': {
-                        'server': {
-                            'enabled': True,
-                            'secretName': 'hubble-server-certs'
-                        }
-                    }
-                },
-                'ui': {
-                    'enabled': True,
-                    'ingress': {
-                        'enabled': True,
-                        'hosts': [f"hubble.{domain}"],
-                        'tls': [{
-                            'secretName': 'hubble-ui-tls',
-                            'hosts': [f"hubble.{domain}"]
-                        }]
-                    }
-                }
-            }
-        })
-    
-    return base_values
 
 @click.group()
 @click.version_option(version=VERSION, prog_name="NOAH")

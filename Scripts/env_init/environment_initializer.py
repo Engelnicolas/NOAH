@@ -206,7 +206,9 @@ def validate_kernel_requirements(print_status):
         'CONFIG_SCHEDSTATS': 'y'
     }
     
-    # Networking requirements  
+    # Networking requirements
+    # NOTE: VXLAN and GENEVE are acceptable as built-in (y) OR loadable module (m) if the module
+    # can be resolved via modprobe dry-run. We keep CONFIG_FIB_RULES strict.
     network_configs = {
         'CONFIG_VXLAN': 'y',
         'CONFIG_GENEVE': 'y',
@@ -236,12 +238,24 @@ def validate_kernel_requirements(print_status):
             warnings.append(f"Unable to verify {config}")
             print_status(f"[WARNING] Unable to verify {config}", "WARNING")
     
-    # Check networking configs (critical) 
+    # Check networking configs (VXLAN/GENEVE allow module fallback)
     for config, required_value in network_configs.items():
         result = check_kernel_config(config, required_value)
         if result is True:
             print_status(f"[SUCCESS] {config}={required_value} ✓", "SUCCESS")
-        elif result is False:
+            continue
+        # For VXLAN / GENEVE attempt module load fallback if not built-in
+        if result is False and config in ("CONFIG_VXLAN", "CONFIG_GENEVE"):
+            module_name = config.replace('CONFIG_', '').lower()
+            modprobe = subprocess.run(['modprobe', '-n', module_name], capture_output=True, text=True)
+            if modprobe.returncode == 0:
+                print_status(f"[SUCCESS] {config} available as module (modprobe {module_name}) ✓", "SUCCESS")
+                continue
+            else:
+                errors.append(f"{config} should be built-in or available as module")
+                print_status(f"[ERROR] {config} not built-in and module not found", "ERROR")
+                continue
+        if result is False:
             errors.append(f"{config} should be {required_value}")
             print_status(f"[ERROR] {config} is not set to {required_value}", "ERROR")
         else:
@@ -686,8 +700,7 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
     click.echo("")
     click.echo("To use NOAH:")
     click.echo("1. Activate virtual environment: source .venv/bin/activate")
-    click.echo("2. Set Python path: export PYTHONPATH=$(pwd):$PYTHONPATH")
-    click.echo("3. Use NOAH: python noah.py --help")
+    click.echo("2. Use NOAH: python noah.py --help")
     click.echo("")
     click.echo("Quick start:")
     click.echo("  python noah.py cluster create --name my-cluster")

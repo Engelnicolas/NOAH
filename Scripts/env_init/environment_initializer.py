@@ -616,7 +616,7 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
     try:
         subprocess.run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"], 
                       check=True, capture_output=True)
-        subprocess.run([str(venv_python), "-m", "pip", "install", "-r", "Scripts/requirements.txt"], 
+        subprocess.run([str(venv_python), "-m", "pip", "install", "-r", "Scripts/utils/requirements.txt"],
                       check=True, capture_output=True)
         print_status("[SUCCESS] Python dependencies installed", "SUCCESS")
     except subprocess.CalledProcessError as e:

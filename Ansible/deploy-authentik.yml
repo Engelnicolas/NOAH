@@ -5,11 +5,11 @@
   vars:
     authentik_namespace: "identity"
     verbose_mode: true  # Enable verbose output by default
-    ansible_python_interpreter: "../.venv/bin/python"
-    authentik_helm_timeout: "{{ authentik_helm_timeout | default('600s') }}"
-    
+    ansible_python_interpreter: "{{ playbook_dir }}/../.venv/bin/python"
+    authentik_helm_timeout: "600s"
+
   environment:
-    PYTHONPATH: "../.venv/lib/python3.12/site-packages:{{ ansible_env.PYTHONPATH | default('') }}"
+    PYTHONPATH: "{{ playbook_dir }}/../.venv/lib/python3.12/site-packages:{{ ansible_env.PYTHONPATH | default('') }}"
     
   tasks:
     - name: Create namespace
@@ -21,7 +21,7 @@
 
     - name: Export canonical Authentik secrets (script)
       command: >-
-        python ../Scripts/security/export_canonical_service.py --service authentik
+        python {{ playbook_dir }}/../Scripts/security/export_canonical_service.py --service authentik
       register: authentik_canonical_output
       changed_when: false
 
@@ -67,6 +67,23 @@
             bootstrap-token: "{{ authentik_canonical.bootstrap_token }}"
       register: authentik_secret_apply
 
+    - name: Find TLS certificate file for domain
+      ansible.builtin.find:
+        paths: "{{ playbook_dir }}/../Certificates"
+        patterns: "*{{ domain_name | default('noah-infra.com') }}.crt"
+      register: tls_cert_files
+
+    - name: Find TLS key file for domain
+      ansible.builtin.find:
+        paths: "{{ playbook_dir }}/../Certificates"
+        patterns: "*{{ domain_name | default('noah-infra.com') }}.key"
+      register: tls_key_files
+
+    - name: Fail if TLS certificate files not found
+      ansible.builtin.fail:
+        msg: "TLS certificate or key file not found for domain {{ domain_name | default('noah-infra.com') }}"
+      when: (tls_cert_files.matched == 0) or (tls_key_files.matched == 0)
+
     - name: Create TLS secret for Authentik ingress
       kubernetes.core.k8s:
         definition:
@@ -77,8 +94,8 @@
             namespace: "{{ authentik_namespace }}"
           type: kubernetes.io/tls
           data:
-            tls.crt: "{{ lookup('file', '../Certificates/*.noah-infra.com.crt') | b64encode }}"
-            tls.key: "{{ lookup('file', '../Certificates/*.noah-infra.com.key') | b64encode }}"
+            tls.crt: "{{ lookup('file', tls_cert_files.files[0].path) | b64encode }}"
+            tls.key: "{{ lookup('file', tls_key_files.files[0].path) | b64encode }}"
       register: authentik_tls_secret_apply
 
     - name: Report Authentik secret status
@@ -122,9 +139,9 @@
           postgresql:
             enabled: true
             auth:
-              postgresPassword: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}"
+              postgresPassword: "{{ authentik_canonical.postgresql_password }}"
               username: "authentik"
-              password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}"
+              password: "{{ authentik_canonical.postgresql_password }}"
               database: "authentik"
             primary:
               persistence:
@@ -142,8 +159,8 @@
           redis:
             enabled: true
             auth:
-              enabled: false  # Disable auth for testing simplicity
-              password: ""
+              enabled: true
+              password: "{{ authentik_canonical.redis_password }}"
             master:
               persistence:
                 enabled: false  # Use emptyDir for testing
@@ -238,13 +255,11 @@
 
     - name: Deploy Authentik using Helm
       ansible.builtin.command: >-
-        helm upgrade --install authentik Helm/authentik
+        helm upgrade --install authentik {{ playbook_dir }}/../Helm/authentik
         --namespace {{ authentik_namespace }}
         --values /tmp/authentik-values.yaml
         --timeout {{ authentik_helm_timeout }}
         {{ '--dry-run' if (dry_run | default(false)) else '' }}
-      args:
-        chdir: "{{ playbook_dir | dirname }}"
       register: authentik_helm_result
       failed_when: authentik_helm_result.rc != 0
 
@@ -269,7 +284,7 @@
           - "=== AUTHENTIK STANDALONE IAM DEPLOYMENT SUMMARY ==="
           - "✓ Namespace: {{ authentik_namespace }}"
           - "✓ Secrets: authentik-secret (canonical-managed)"
-          - "✓ Helm Chart: ../Helm/authentik"
+          - "✓ Helm Chart: {{ playbook_dir }}/../Helm/authentik"
           - "✓ PostgreSQL: External dependency configured"
           - "✓ Redis: External dependency configured"
           - "✓ IAM Mode: Standalone (No external LDAP)"

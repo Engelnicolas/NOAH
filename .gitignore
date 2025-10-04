@@ -59,6 +59,9 @@ secrets.yml
 # Canonical Secrets & Keys #
 ############################
 Secrets/canonical-secrets.yaml
+Secrets/canonical-secrets.enc.yaml
+Scripts/Secrets/canonical-secrets.yaml
+Scripts/Secrets/canonical-secrets.enc.yaml
 Age/
 *.agekey
 .sops.yaml

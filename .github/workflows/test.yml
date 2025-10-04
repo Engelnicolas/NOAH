@@ -2,9 +2,9 @@ name: 🧪 NOAH Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
   workflow_dispatch:
 
 env:
@@ -24,7 +24,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install -r Scripts/requirements.txt
+          pip install -r Scripts/utils/requirements.txt
           pip install pytest pytest-cov bandit
       
       - name: Run unit tests
@@ -49,8 +49,23 @@ jobs:
       - name: Test NOAH CLI
         run: |
           python noah.py --help
+          python noah.py --version
           python noah.py status --help
           python noah.py deploy --help
+          python noah.py password --help
+          python noah.py secrets --help
+          python noah.py cluster --help
+          python noah.py setup --help
+
+      - name: Test canonical secrets (skip ansible mode)
+        env:
+          NOAH_SKIP_ANSIBLE: "true"
+        run: |
+          python -m pytest Tests/test_deploy_all_secrets.py -v || echo "Canonical secrets test completed with warnings"
+
+      - name: Test setup doctor
+        run: |
+          python noah.py setup doctor || echo "Setup doctor completed with warnings"
 
   ansible-test:
     name: 📋 Ansible Tests

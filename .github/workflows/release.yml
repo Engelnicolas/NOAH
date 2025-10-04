@@ -40,7 +40,7 @@ jobs:
           echo "Release version: $VERSION"
       
       - name: Install dependencies
-        run: pip install -r Scripts/requirements.txt
+        run: pip install -r Scripts/utils/requirements.txt
       
       - name: Run tests
         run: |
@@ -63,7 +63,7 @@ jobs:
           cat > dist/noah-${{ steps.version.outputs.version }}/install.sh << 'EOF'
           #!/bin/bash
           echo "🚀 Installing NOAH ${{ steps.version.outputs.version }}"
-          pip3 install -r Scripts/requirements.txt
+          pip3 install -r Scripts/utils/requirements.txt
           chmod +x noah.py
           echo "✅ Installation complete! Run ./noah.py --help to start"
           EOF
@@ -71,16 +71,23 @@ jobs:
           
           # Create README
           cat > dist/noah-${{ steps.version.outputs.version }}/README.md << 'EOF'
-          # NOAH Infrastructure Tool
-          
+          # NOAH - Network Operations & Automation Hub
+
           Version: ${{ steps.version.outputs.version }}
-          
+
           ## Quick Start
           1. Run: `./install.sh`
-          2. Configure: `./noah.py config init`
-          3. Deploy: `./noah.py deploy all`
-          
-          See Docs/ for complete documentation.
+          2. Initialize: `./noah.py setup initialize`
+          3. Create cluster: `./noah.py cluster create --domain your-domain.com`
+          4. Deploy: `./noah.py deploy all --domain your-domain.com`
+
+          ## Features
+          - Authentik SSO Identity Provider
+          - Cilium CNI with eBPF networking
+          - Canonical encrypted secrets management (Age/SOPS)
+          - Automated Kubernetes deployment
+
+          See docs/ for complete documentation.
           EOF
       
       - name: Create archives

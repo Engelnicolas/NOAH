@@ -2,7 +2,7 @@ name: 🚀 NOAH Deploy
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   workflow_dispatch:
     inputs:
       environment:
@@ -36,7 +36,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install -r Scripts/requirements.txt
+          pip install -r Scripts/utils/requirements.txt
           pip install ansible
       
       - name: Validate Python syntax
@@ -68,7 +68,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       
       - name: Install dependencies
-        run: pip install -r Scripts/requirements.txt
+        run: pip install -r Scripts/utils/requirements.txt
       
       - name: Setup SOPS/Age
         env:
@@ -104,9 +104,9 @@ jobs:
       - name: Deploy NOAH
         run: |
           if [ "${{ github.event.inputs.environment }}" = "production" ]; then
-            python noah.py deploy all --domain noah-infra.com
+            python noah.py deploy all --domain noah-infra.com --validation-mode production
           else
-            python noah.py deploy all --domain staging.noah-infra.com
+            python noah.py deploy all --domain staging.noah-infra.com --validation-mode development
           fi
       
       - name: Test deployment

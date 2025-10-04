@@ -24,16 +24,18 @@ def install_external_dependency(package_name, print_status):
     """Install external dependency using appropriate method"""
     try:
         print_status(f"[INFO] Installing {package_name}...", "INFO")
-        
+
         # Special installation methods for specific packages
         if package_name == 'kubectl':
             return install_kubectl(print_status)
         elif package_name == 'helm':
             return install_helm(print_status)
+        elif package_name == 'docker':
+            return install_docker(print_status)
         else:
             # Default apt installation for other packages
             return install_via_apt(package_name, print_status)
-            
+
     except Exception as e:
         print_status(f"[WARNING] Failed to install {package_name}: {e}", "WARNING")
         return False
@@ -106,31 +108,53 @@ def install_helm(print_status):
     """Install Helm using official script"""
     try:
         # Download and run Helm install script
-        result = subprocess.run(['curl', 'https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3'], 
+        result = subprocess.run(['curl', 'https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3'],
                                capture_output=True, text=True)
         if result.returncode != 0:
             return False
-            
+
         # Save script to temp file and execute
         import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
             f.write(result.stdout)
             script_path = f.name
-            
+
         # Make executable and run
         subprocess.run(['chmod', '+x', script_path], check=True)
         if os.geteuid() != 0:
             result = subprocess.run(['sudo', 'bash', script_path], capture_output=True, text=True)
         else:
             result = subprocess.run(['bash', script_path], capture_output=True, text=True)
-            
+
         # Clean up
         subprocess.run(['rm', '-f', script_path], capture_output=True)
-        
+
         return result.returncode == 0
-        
+
     except Exception as e:
         print_status(f"[WARNING] Helm installation failed: {e}", "WARNING")
+        return False
+
+
+def install_docker(print_status):
+    """Install Docker using NOAH's Python installer"""
+    try:
+        from Scripts.env_init.docker_installer import DockerInstaller
+
+        print_status("[INFO] Installing Docker using NOAH Docker installer...", "INFO")
+
+        installer = DockerInstaller(dry_run=False, channel='stable')
+        success = installer.install()
+
+        if success:
+            print_status("[SUCCESS] Docker installed successfully", "SUCCESS")
+        else:
+            print_status("[WARNING] Docker installation encountered issues", "WARNING")
+
+        return success
+
+    except Exception as e:
+        print_status(f"[WARNING] Docker installation failed: {e}", "WARNING")
         return False
 
 

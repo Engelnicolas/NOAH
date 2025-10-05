@@ -41,8 +41,8 @@
                   === NOAH STANDALONE IAM DEPLOYMENT ===
                   Cluster Name: {{ cluster_name }}
                   Domain: {{ domain_name }}
-                  Deployment Mode: Standalone IAM
-                  Order: Cilium → Authentik
+                  Deployment Mode: Standalone IAM + Dashboard
+                  Order: Cilium → Authentik → Headlamp
                   ======================================
             
             - name: Validate required variables
@@ -244,8 +244,78 @@
               when: validation_mode != 'development'
           
           tags: [authentik, iam]
-        
-        - name: "PHASE 4: Post-deployment validation"
+
+        - name: "PHASE 4: Deploy Headlamp Kubernetes Dashboard (with SSO)"
+          block:
+            - name: Record Headlamp phase start time
+              ansible.builtin.set_fact:
+                phase_headlamp_started: "{{ ansible_date_time.epoch | int }}"
+
+            - name: Deploy Headlamp Kubernetes Dashboard with Authentik SSO
+              ansible.builtin.command: >-
+                ansible-playbook deploy-headlamp.yml
+                -e headlamp_namespace=kube-system
+                -e domain_name="{{ domain_name }}"
+                -e headlamp_helm_timeout={{ headlamp_helm_timeout | default('300s') }}
+              args:
+                chdir: "{{ playbook_dir }}"
+              register: headlamp_subplay
+              failed_when: headlamp_subplay.rc != 0
+              vars:
+                headlamp_namespace: kube-system
+                domain_name: "{{ domain_name }}"
+
+            - name: Validate Headlamp deployment (development shortcut)
+              ansible.builtin.debug:
+                msg:
+                  - "✓ Development mode: Skipping Headlamp rollout validation"
+                  - "✓ Dashboard URL (simulated): https://headlamp.{{ domain_name }}"
+              when: validation_mode is defined and validation_mode == 'development'
+
+            - name: Wait for Headlamp deployment rollout (production)
+              ansible.builtin.command: >-
+                kubectl rollout status deploy/headlamp -n kube-system --timeout=300s
+              register: headlamp_rollout
+              changed_when: false
+              failed_when: headlamp_rollout.rc != 0
+              when: validation_mode != 'development'
+
+            - name: Check Headlamp pod readiness (production)
+              kubernetes.core.k8s_info:
+                kind: Pod
+                namespace: kube-system
+                label_selectors:
+                  - app.kubernetes.io/name=headlamp
+              register: headlamp_pods
+              until: headlamp_pods.resources | length > 0 and (headlamp_pods.resources | map(attribute='status.containerStatuses') | map('first') | selectattr('ready') | list | length) == (headlamp_pods.resources | length)
+              retries: 20
+              delay: 10
+              failed_when: false
+              when: validation_mode != 'development'
+
+            - name: Record Headlamp phase end time
+              ansible.builtin.set_fact:
+                phase_headlamp_ended: "{{ ansible_date_time.epoch | int }}"
+
+            - name: Check TLS secret presence for Headlamp (production)
+              kubernetes.core.k8s_info:
+                api_version: v1
+                kind: Secret
+                name: headlamp-tls
+                namespace: kube-system
+              register: headlamp_tls_secret
+              failed_when: false
+              when: validation_mode != 'development'
+
+            - name: Report Headlamp TLS secret status (production)
+              ansible.builtin.debug:
+                msg: >-
+                  {{ '✓ TLS secret headlamp-tls present' if (headlamp_tls_secret.resources | length) > 0 else '⚠️  TLS secret headlamp-tls not found yet' }}
+              when: validation_mode != 'development'
+
+          tags: [headlamp, dashboard]
+
+        - name: "PHASE 5: Post-deployment validation"
           block:
             - name: Record final validation phase start
               ansible.builtin.set_fact:
@@ -254,7 +324,7 @@
             - name: Validate complete deployment stack
               ansible.builtin.shell: |
                 echo "=== COMPREHENSIVE DEPLOYMENT HEALTH CHECK ==="
-                echo "Deployment order: Cilium → Authentik"
+                echo "Deployment order: Cilium → Authentik → Headlamp"
                 echo ""
                 
                 echo "🔍 PHASE 1: Pod Readiness Check"
@@ -271,7 +341,11 @@
                 authentik_server_count=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=server --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
                 authentik_worker_count=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=worker --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
                 echo "✓ Authentik: Server=$authentik_server_count, Worker=$authentik_worker_count pods ready"
-                
+
+                echo "Checking Headlamp Dashboard pods..."
+                headlamp_count=$(kubectl get pods -n kube-system -l app.kubernetes.io/name=headlamp --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+                echo "✓ Headlamp: $headlamp_count pods running"
+
                 echo ""
                 echo "🔍 PHASE 2: Service Health Check"
                 echo "--------------------------------"
@@ -336,19 +410,21 @@
                 echo "====================="
                 
                 # Check if critical services are running
-                if [[ "$cilium_count" -gt 0 && "$coredns_count" -gt 0 && "$authentik_server_count" -gt 0 ]]; then
+                if [[ "$cilium_count" -gt 0 && "$coredns_count" -gt 0 && "$authentik_server_count" -gt 0 && "$headlamp_count" -gt 0 ]]; then
                   echo "🎉 DEPLOYMENT SUCCESSFUL!"
                   echo "✓ Cilium CNI: Network foundation ready"
                   echo "✓ Authentik IAM: Identity provider ready"
+                  echo "✓ Headlamp Dashboard: Kubernetes management UI ready"
                   echo "✓ All critical components are running"
                 else
                   echo "⚠️  DEPLOYMENT COMPLETED WITH WARNINGS"
                   echo "Some services may still be starting up."
                 fi
-                
+
                 echo ""
                 echo "🌐 Access points:"
                 echo "  - Authentik IAM: https://auth.{{ domain_name }}"
+                echo "  - Headlamp Dashboard: https://headlamp.{{ domain_name }}"
                 echo "  - Hubble UI: https://hubble.{{ domain_name }}"
               register: validation_output
               tags: validation
@@ -370,7 +446,8 @@
                 coredns=$(kubectl get pods -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l | tr -d ' ')
                 authentik_server=$(kubectl get pods -n identity -l app.kubernetes.io/name=authentik,app.kubernetes.io/component=server --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l | tr -d ' ')
                 authentik_endpoints=$(kubectl get endpoints -n identity authentik-server -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | wc -w | tr -d ' ')
-                printf '{"cilium":%s,"coredns":%s,"authentik_server":%s,"authentik_endpoints":%s}\n' "${cilium:-0}" "${coredns:-0}" "${authentik_server:-0}" "${authentik_endpoints:-0}"
+                headlamp=$(kubectl get pods -n kube-system -l app.kubernetes.io/name=headlamp --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l | tr -d ' ')
+                printf '{"cilium":%s,"coredns":%s,"authentik_server":%s,"authentik_endpoints":%s,"headlamp":%s}\n' "${cilium:-0}" "${coredns:-0}" "${authentik_server:-0}" "${authentik_endpoints:-0}" "${headlamp:-0}"
               register: critical_readiness_raw
               changed_when: false
               failed_when: false
@@ -389,6 +466,7 @@
                      + (['cilium'] if (critical_readiness.cilium | default(0) | int) == 0 else [])
                      + (['coredns'] if (critical_readiness.coredns | default(0) | int) == 0 else [])
                      + (['authentik_server'] if (critical_readiness.authentik_server | default(0) | int) == 0 else [])
+                     + (['headlamp'] if (critical_readiness.headlamp | default(0) | int) == 0 else [])
                   }}
               when: critical_readiness is defined
               tags: validation
@@ -413,8 +491,9 @@
                   === PHASE DURATIONS (seconds) ===
                   Cilium Phase: {{ (phase_cilium_ended | int) - (phase_cilium_started | int) if (phase_cilium_started is defined and phase_cilium_ended is defined) else 'n/a' }}
                   Authentik Phase: {{ (phase_authentik_ended | int) - (phase_authentik_started | int) if (phase_authentik_started is defined and phase_authentik_ended is defined) else 'n/a' }}
+                  Headlamp Phase: {{ (phase_headlamp_ended | int) - (phase_headlamp_started | int) if (phase_headlamp_started is defined and phase_headlamp_ended is defined) else 'n/a' }}
                   Validation Phase: {{ (phase_validation_ended | int) - (phase_validation_started | int) if (phase_validation_started is defined and phase_validation_ended is defined) else 'n/a' }}
-                  Total (Cilium + Authentik + Validation): {{ ((phase_cilium_ended | int) - (phase_cilium_started | int) + (phase_authentik_ended | int) - (phase_authentik_started | int) + (phase_validation_ended | int) - (phase_validation_started | int)) if (phase_cilium_ended is defined and phase_authentik_ended is defined and phase_validation_ended is defined) else 'n/a' }}
+                  Total (Cilium + Authentik + Headlamp + Validation): {{ ((phase_cilium_ended | int) - (phase_cilium_started | int) + (phase_authentik_ended | int) - (phase_authentik_started | int) + (phase_headlamp_ended | int) - (phase_headlamp_started | int) + (phase_validation_ended | int) - (phase_validation_started | int)) if (phase_cilium_ended is defined and phase_authentik_ended is defined and phase_headlamp_ended is defined and phase_validation_ended is defined) else 'n/a' }}
               when: phase_cilium_ended is defined
 
             - name: Fail fast if any phase failed (production)

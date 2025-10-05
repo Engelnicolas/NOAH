@@ -302,6 +302,34 @@ def cilium_cmd(ctx, namespace, domain):
     cilium(ctx, namespace, domain)
 
 @deploy.command()
+@click.option('--namespace', default='kube-system', help='Kubernetes namespace')
+@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service')
+@click.pass_context
+def headlamp(ctx, namespace, domain):
+    """Deploy Headlamp Kubernetes Dashboard with Authentik SSO (individual component)"""
+    # Ensure security is initialized
+    ensure_security_initialized(ctx)
+
+    click.echo(f"[VERBOSE] Deploying Headlamp Kubernetes Dashboard...")
+    click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
+    click.echo(f"💡 For complete stack deployment, use: python noah.py deploy core")
+
+    # Generate secrets for Headlamp before deployment
+    click.echo(f"[VERBOSE] Generating secrets for Headlamp...")
+    ctx.obj['secrets'].generate_service_secrets('headlamp')
+
+    # Get Ansible variables with security configuration
+    ansible_vars = get_ansible_vars_for_service('headlamp', namespace, domain)
+
+    # Deploy Headlamp using Ansible playbook
+    click.echo(f"[VERBOSE] Running Ansible playbook: deploy-headlamp.yml")
+    ctx.obj['ansible'].run_playbook('deploy-headlamp.yml', ansible_vars)
+
+    click.echo(f"✅ Headlamp deployed to namespace {namespace}")
+    click.echo(f"[VERBOSE] Access Kubernetes Dashboard at: https://headlamp.{domain}")
+    click.echo(f"[VERBOSE] SSO authentication via Authentik: https://auth.{domain}")
+
+@deploy.command()
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
 @click.option('--cluster-name', default='noah-cluster', help='Cluster name for deployment')
 @click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')
@@ -309,7 +337,7 @@ def cilium_cmd(ctx, namespace, domain):
 @click.option('--validation-mode', type=click.Choice(['development','production']), default='production', show_default=True, help='Validation strictness for deployment playbook')
 @click.pass_context
 def core(ctx, domain, cluster_name, config_file, regenerate_password, validation_mode):
-    """Deploy complete stack using optimized Ansible playbook (Cilium → Authentik)"""
+    """Deploy complete stack using optimized Ansible playbook (Cilium → Authentik → Headlamp)"""
     # Ensure security is initialized before any deployment
     ensure_security_initialized(ctx)
     
@@ -329,13 +357,14 @@ def core(ctx, domain, cluster_name, config_file, regenerate_password, validation
     click.echo("[VERBOSE] Starting complete NOAH stack deployment using cluster-deploy.yml...")
     click.echo(f"[VERBOSE] Using domain: {domain}")
     click.echo(f"[VERBOSE] Using cluster name: {cluster_name}")
-    click.echo(f"[VERBOSE] Deployment order: Cilium → Authentik")
+    click.echo(f"[VERBOSE] Deployment order: Cilium → Authentik → Headlamp")
     click.echo(f"[VERBOSE] Validation mode: {validation_mode}")
 
-    # Ensure Authentik secrets exist early (mirrors individual authentik deployment)
-    click.echo(f"[VERBOSE] Ensuring Authentik canonical secrets are generated before playbook run...")
+    # Ensure Authentik and Headlamp secrets exist early (mirrors individual deployments)
+    click.echo(f"[VERBOSE] Ensuring canonical secrets are generated before playbook run...")
     try:
         ctx.obj['secrets'].generate_service_secrets('authentik')
+        ctx.obj['secrets'].generate_service_secrets('headlamp')
         # Force persistence in case underlying store deferred save or encryption unavailable
         try:
             from Scripts.security.canonical_store import get_canonical_store  # type: ignore
@@ -344,7 +373,7 @@ def core(ctx, domain, cluster_name, config_file, regenerate_password, validation
         except Exception:
             pass
     except Exception as gen_err:
-        click.echo(f"❌ Failed to generate Authentik secrets prior to deployment: {gen_err}", err=True)
+        click.echo(f"❌ Failed to generate secrets prior to deployment: {gen_err}", err=True)
         sys.exit(1)
 
     # If skipping Ansible (CI fast path), exit early after credential display prerequisites
@@ -450,6 +479,7 @@ def core(ctx, domain, cluster_name, config_file, regenerate_password, validation
         click.echo("="*60)
         click.echo(f"[VERBOSE] Access points:")
         click.echo(f"  - Authentik IAM: https://auth.{domain}")
+        click.echo(f"  - Headlamp Dashboard: https://headlamp.{domain}")
         click.echo(f"  - Hubble UI: https://hubble.{domain}")
         
         # Run post-deployment validation
@@ -642,6 +672,24 @@ def sso(ctx):
     else:
         click.echo("✗ SSO test failed", err=True)
         click.echo("[VERBOSE] SSO test failed - check logs for details")
+        sys.exit(1)
+
+@test.command()
+@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
+@click.pass_context
+def headlamp(ctx, domain):
+    """Test Headlamp Kubernetes Dashboard deployment and SSO integration"""
+    click.echo("[VERBOSE] Starting Headlamp integration test...")
+    click.echo("Testing Headlamp deployment and SSO integration...")
+    from Tests.test_headlamp_sso import HeadlampSSOTester
+    tester = HeadlampSSOTester(domain=domain)
+    click.echo("[VERBOSE] Executing Headlamp tests...")
+    if tester.run_all_tests():
+        click.echo("✓ Headlamp test successful")
+        click.echo("[VERBOSE] All Headlamp tests passed")
+    else:
+        click.echo("✗ Headlamp test failed", err=True)
+        click.echo("[VERBOSE] Headlamp test failed - check logs for details")
         sys.exit(1)
 
 @cli.command()  # type: ignore

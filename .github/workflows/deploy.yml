@@ -104,12 +104,13 @@ jobs:
       - name: Deploy NOAH
         run: |
           if [ "${{ github.event.inputs.environment }}" = "production" ]; then
-            python noah.py deploy all --domain noah-infra.com --validation-mode production
+            python noah.py deploy core --domain noah-infra.com --validation-mode production
           else
-            python noah.py deploy all --domain staging.noah-infra.com --validation-mode development
+            python noah.py deploy core --domain staging.noah-infra.com --validation-mode development
           fi
-      
+
       - name: Test deployment
         run: |
           python noah.py status
           python noah.py test sso || echo "SSO test warnings"
+          python noah.py test headlamp || echo "Headlamp test warnings"

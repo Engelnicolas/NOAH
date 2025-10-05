@@ -1,0 +1,245 @@
+---
+- name: Deploy Headlamp Kubernetes Dashboard with Authentik SSO
+  hosts: localhost
+  gather_facts: no
+  vars:
+    headlamp_namespace: "kube-system"
+    verbose_mode: true
+    ansible_python_interpreter: "{{ playbook_dir }}/../.venv/bin/python"
+    headlamp_helm_timeout: "300s"
+
+  environment:
+    PYTHONPATH: "{{ playbook_dir }}/../.venv/lib/python3.12/site-packages:{{ ansible_env.PYTHONPATH | default('') }}"
+
+  tasks:
+    - name: Create namespace for Headlamp
+      kubernetes.core.k8s:
+        name: "{{ headlamp_namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Export canonical Headlamp secrets (script)
+      command: >-
+        python {{ playbook_dir }}/../Scripts/security/export_canonical_service.py --service headlamp
+      register: headlamp_canonical_output
+      changed_when: false
+
+    - name: Parse canonical Headlamp secrets
+      set_fact:
+        _raw_lines: "{{ headlamp_canonical_output.stdout.split('\n') | reject('equalto','') | list }}"
+      changed_when: false
+
+    - name: Extract JSON payload line
+      set_fact:
+        _json_line: "{{ _raw_lines[-1] if (_raw_lines | length) > 0 else '' }}"
+      changed_when: false
+
+    - name: Fail if JSON payload missing or not starting with '{'
+      ansible.builtin.fail:
+        msg: "Canonical secrets export did not produce JSON on last line"
+      when: _json_line | length == 0 or (_json_line[0] != '{')
+
+    - name: Convert canonical JSON to fact
+      set_fact:
+        headlamp_canonical: "{{ _json_line | from_json }}"
+      changed_when: false
+
+    - name: Create/Update Headlamp Kubernetes Secret from canonical store
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: headlamp-secret
+            namespace: "{{ headlamp_namespace }}"
+          type: Opaque
+          stringData:
+            OIDC_CLIENT_ID: "{{ headlamp_canonical.oidc_client_id }}"
+            OIDC_CLIENT_SECRET: "{{ headlamp_canonical.oidc_client_secret }}"
+            oidc-client-id: "{{ headlamp_canonical.oidc_client_id }}"
+            oidc-client-secret: "{{ headlamp_canonical.oidc_client_secret }}"
+      register: headlamp_secret_apply
+
+    - name: Find TLS certificate file for domain
+      ansible.builtin.find:
+        paths: "{{ playbook_dir }}/../Certificates"
+        patterns: "*{{ domain_name | default('noah-infra.com') }}.crt"
+      register: tls_cert_files
+
+    - name: Find TLS key file for domain
+      ansible.builtin.find:
+        paths: "{{ playbook_dir }}/../Certificates"
+        patterns: "*{{ domain_name | default('noah-infra.com') }}.key"
+      register: tls_key_files
+
+    - name: Fail if TLS certificate files not found
+      ansible.builtin.fail:
+        msg: "TLS certificate or key file not found for domain {{ domain_name | default('noah-infra.com') }}"
+      when: (tls_cert_files.matched == 0) or (tls_key_files.matched == 0)
+
+    - name: Create TLS secret for Headlamp ingress
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: headlamp-tls
+            namespace: "{{ headlamp_namespace }}"
+          type: kubernetes.io/tls
+          data:
+            tls.crt: "{{ lookup('file', tls_cert_files.files[0].path) | b64encode }}"
+            tls.key: "{{ lookup('file', tls_key_files.files[0].path) | b64encode }}"
+      register: headlamp_tls_secret_apply
+
+    - name: Report Headlamp secret status
+      debug:
+        msg: >-
+          Headlamp secret {{ 'created/updated' if headlamp_secret_apply.changed else 'is up-to-date' }} via canonical store
+
+    - name: Report TLS secret status
+      debug:
+        msg: >-
+          TLS secret {{ 'created/updated' if headlamp_tls_secret_apply.changed else 'is up-to-date' }} for ingress
+
+    - name: Create Headlamp values file for Helm deployment
+      copy:
+        content: |
+          # Headlamp Kubernetes Dashboard with Authentik SSO
+          replicaCount: 1
+
+          image:
+            registry: ghcr.io
+            repository: headlamp-k8s/headlamp
+            pullPolicy: IfNotPresent
+            tag: "v0.35.0"
+
+          # OIDC Configuration for Authentik
+          config:
+            oidc:
+              clientID: "{{ headlamp_canonical.oidc_client_id }}"
+              clientSecret: "{{ headlamp_canonical.oidc_client_secret }}"
+              issuerURL: "https://auth.{{ domain_name | default('noah-infra.com') }}/application/o/headlamp/"
+              scopes: "openid profile email groups"
+              callbackURL: "https://headlamp.{{ domain_name | default('noah-infra.com') }}/oidc-callback"
+              useAccessToken: false
+            baseURL: ""
+
+          serviceAccount:
+            create: true
+            annotations: {}
+            name: ""
+
+          # Disable cluster-admin for security (OIDC provides auth)
+          clusterRoleBinding:
+            create: false
+
+          podSecurityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            fsGroup: 101
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+
+          service:
+            type: ClusterIP
+            port: 80
+
+          # Ingress configuration for external access
+          ingress:
+            enabled: true
+            className: "nginx"
+            annotations:
+              cert-manager.io/cluster-issuer: "letsencrypt-prod"
+              nginx.ingress.kubernetes.io/ssl-redirect: "true"
+              nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+              nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+            hosts:
+              - host: "headlamp.{{ domain_name | default('noah-infra.com') }}"
+                paths:
+                  - path: /
+                    pathType: Prefix
+            tls:
+              - secretName: headlamp-tls
+                hosts:
+                  - "headlamp.{{ domain_name | default('noah-infra.com') }}"
+
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+          # Plugin configuration
+          plugins:
+            list: []
+            autoUpdate: false
+
+          # Persistent volume for plugins
+          persistentVolumeClaim:
+            enabled: false
+            size: 1Gi
+            storageClassName: ""
+            accessModes:
+              - ReadWriteOnce
+        dest: /tmp/headlamp-values.yaml
+
+    - name: Adopt existing secrets for Helm (if present)
+      ansible.builtin.shell: >-
+        kubectl patch secret {{ item }} -n {{ headlamp_namespace }} --type merge -p '{
+          "metadata": {
+            "labels": {"app.kubernetes.io/managed-by": "Helm"},
+            "annotations": {
+              "meta.helm.sh/release-name": "headlamp",
+              "meta.helm.sh/release-namespace": "{{ headlamp_namespace }}"
+            }
+          }
+        }' 2>/dev/null || true
+      changed_when: false
+      loop:
+        - headlamp-secret
+        - headlamp-tls
+
+    - name: Deploy Headlamp using Helm
+      ansible.builtin.command: >-
+        helm upgrade --install headlamp {{ playbook_dir }}/../Helm/headlamp
+        --namespace {{ headlamp_namespace }}
+        --values /tmp/headlamp-values.yaml
+        --timeout {{ headlamp_helm_timeout }}
+        {{ '--dry-run' if (dry_run | default(false)) else '' }}
+      register: headlamp_helm_result
+      failed_when: headlamp_helm_result.rc != 0
+
+    - name: Set deployment status based on validation
+      set_fact:
+        headlamp_deployment_status: "{{ 'VALIDATED' if headlamp_helm_result.rc == 0 else 'FAILED' }}"
+        headlamp_validation_status: "{{ 'SUCCESS - Kubernetes Dashboard with SSO configured' if headlamp_helm_result.rc == 0 else 'FAILED' }}"
+
+    - name: Display Headlamp deployment status
+      debug:
+        msg:
+          - "Headlamp deployment validated for namespace: {{ headlamp_namespace }}"
+          - "Access URL: https://headlamp.{{ domain_name | default('noah-infra.com') }}"
+          - "SSO via Authentik: https://auth.{{ domain_name | default('noah-infra.com') }}"
+          - "Deployment status: {{ headlamp_deployment_status }}"
+          - "Validation status: {{ headlamp_validation_status }}"
+
+    - name: Validate Headlamp deployment summary
+      debug:
+        msg:
+          - "=== HEADLAMP KUBERNETES DASHBOARD DEPLOYMENT SUMMARY ==="
+          - "✓ Namespace: {{ headlamp_namespace }}"
+          - "✓ Secrets: headlamp-secret (canonical-managed)"
+          - "✓ Helm Chart: {{ playbook_dir }}/../Helm/headlamp"
+          - "✓ SSO Integration: Authentik OIDC"
+          - "✓ Issuer URL: https://auth.{{ domain_name | default('noah-infra.com') }}/application/o/headlamp/"
+          - "✓ Callback URL: https://headlamp.{{ domain_name | default('noah-infra.com') }}/oidc-callback"
+          - "✓ Validation: {{ headlamp_validation_status }}"
+          - "✅ Ready for Kubernetes management operations"

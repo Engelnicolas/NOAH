@@ -58,9 +58,58 @@ kubectl get svc -A | grep LoadBalancer
 
 # 2. Test DNS (should point to external IP)
 nslookup auth.your-domain.com
+nslookup headlamp.your-domain.com
 
 # 3. Add to /etc/hosts if needed
 echo "EXTERNAL_IP auth.your-domain.com" >> /etc/hosts
+echo "EXTERNAL_IP headlamp.your-domain.com" >> /etc/hosts
+```
+
+## 📊 **Headlamp Dashboard Issues**
+
+### **Can't Access Headlamp**
+```bash
+# Check Headlamp deployment
+kubectl get pods -n kube-system -l app.kubernetes.io/name=headlamp
+
+# Check Headlamp service
+kubectl get svc -n kube-system -l app.kubernetes.io/name=headlamp
+
+# Check Headlamp ingress
+kubectl get ingress -n kube-system -l app.kubernetes.io/name=headlamp
+
+# View Headlamp logs
+kubectl logs deployment/headlamp -n kube-system --tail=50
+
+# Test Headlamp deployment
+python noah.py test headlamp
+```
+
+### **Headlamp SSO Not Working**
+```bash
+# Verify OIDC secret exists
+kubectl get secret headlamp-oidc -n kube-system -o yaml
+kubectl get secret headlamp-secret -n kube-system -o yaml
+
+# Check Authentik provider configuration
+# Log into Authentik and verify the Headlamp OAuth2/OIDC provider exists
+# Issuer URL should be: https://auth.your-domain.com/application/o/headlamp/
+# Callback URL should be: https://headlamp.your-domain.com/oidc-callback
+
+# Restart Headlamp pods
+kubectl delete pod -n kube-system -l app.kubernetes.io/name=headlamp
+```
+
+### **Headlamp Shows "Forbidden" Errors**
+```bash
+# Headlamp uses OIDC for authentication, not service account tokens
+# This is expected - users should authenticate via Authentik SSO
+
+# Check if OIDC is properly configured
+kubectl exec -n kube-system deployment/headlamp -- env | grep OIDC
+
+# Verify Authentik is accessible from Headlamp
+kubectl exec -n kube-system deployment/headlamp -- wget -O- https://auth.your-domain.com/.well-known/openid-configuration
 ```
 
 ## 🔐 **Authentication Problems**
@@ -125,6 +174,7 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```bash
 # Add to /etc/hosts
 echo "EXTERNAL_IP auth.your-domain.com" >> /etc/hosts
+echo "EXTERNAL_IP headlamp.your-domain.com" >> /etc/hosts
 echo "EXTERNAL_IP hubble.your-domain.com" >> /etc/hosts
 ```
 
@@ -167,6 +217,9 @@ kubectl get events --sort-by=.metadata.creationTimestamp
 ```bash
 # Authentik
 kubectl logs deployment/authentik-server --tail=20
+
+# Headlamp
+kubectl logs deployment/headlamp -n kube-system --tail=20
 
 # Cilium
 kubectl logs daemonset/cilium -n kube-system --tail=20

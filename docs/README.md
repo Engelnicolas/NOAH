@@ -9,6 +9,7 @@ NOAH provides a complete infrastructure stack:
 
 - **🔐 Authentik SSO** - Identity and access management
 - **🌐 Cilium CNI** - Advanced networking with ingress
+- **📊 Headlamp Dashboard** - Kubernetes web UI with SSO integration
 - **🔒 Canonical Secrets Store** - Single authoritative encrypted secrets file (Age/SOPS protected)
 - **🔄 Automated Deployment** - Single-command infrastructure setup
 - **🧪 Testing Suite** - Built-in validation and health checks
@@ -112,7 +113,7 @@ python noah.py test sso
 ### Key Architectural Principles
 
 - **Single Source of Truth for Secrets**: All sensitive material lives in a canonical encrypted YAML (metadata: `value`, `version`, `rotated_at`, plus integrity hash).
-- **Deterministic Deployments**: `deploy core` funnels through one optimized Ansible playbook to ensure ordered, validated rollout (Cilium → Authentik → post‑checks).
+- **Deterministic Deployments**: `deploy core` funnels through one optimized Ansible playbook to ensure ordered, validated rollout (Cilium → Authentik → Headlamp → post‑checks).
 - **Separation of Concerns**: Python CLI handles UX + secret prep; Ansible handles orchestration; Helm charts handle workload packaging.
 - **Progressive Validation Modes**: `--validation-mode development|production` toggles depth (shortcuts vs full rollout + DNS/TLS checks + fail‑fast semantics).
 - **Composable Security**: Secret generation and rotation isolated in `NoahSecurityManager` with versioned rotations and integrity verification.
@@ -122,7 +123,7 @@ python noah.py test sso
 ### Runtime Flow (High-Level)
 1. User invokes CLI (e.g., `python noah.py deploy core --domain example.com`).
 2. Canonical secrets ensured (idempotent generation if missing).
-3. Ansible playbook runs phased deployment (network → identity → validation) with timing metrics.
+3. Ansible playbook runs phased deployment (network → identity → dashboard → validation) with timing metrics.
 4. DNS/TLS readiness & health probes surface environment status (production mode retries DNS & fails hard on phase errors).
 5. Credentials displayed using canonical store (never scraped from Kubernetes secrets directly).
 6. Tests / status commands provide post-deploy visibility.
@@ -137,9 +138,12 @@ python noah.py test sso
 After deployment, access services at:
 
 - **Authentik SSO**: `https://auth.your-domain.com`
+- **Headlamp Dashboard**: `https://headlamp.your-domain.com` (SSO via Authentik)
 - **Cilium Hubble**: `https://hubble.your-domain.com`
 
 Retrieve Authentik credentials via: `python noah.py password show`
+
+**Note:** Headlamp uses Authentik for SSO authentication. Log in with your Authentik credentials to access the Kubernetes dashboard.
 
 Rotate Authentik admin password (versioned with metadata):
 ```bash

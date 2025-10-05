@@ -52,10 +52,17 @@ jobs:
           python noah.py --version
           python noah.py status --help
           python noah.py deploy --help
+          python noah.py deploy core --help
+          python noah.py deploy authentik --help
+          python noah.py deploy cilium --help
+          python noah.py deploy headlamp --help
           python noah.py password --help
           python noah.py secrets --help
           python noah.py cluster --help
           python noah.py setup --help
+          python noah.py test --help
+          python noah.py test sso --help
+          python noah.py test headlamp --help
 
       - name: Test canonical secrets (skip ansible mode)
         env:

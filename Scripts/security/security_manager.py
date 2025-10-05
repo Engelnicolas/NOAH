@@ -131,6 +131,11 @@ class NoahSecurityManager:
                 'cluster_mesh_key': lambda: self.generate_secure_password(32, include_special=False),
                 'ca_key_passphrase': lambda: self.generate_secure_password(24)
             }
+        elif service_name == 'headlamp':
+            required = {
+                'oidc_client_id': lambda: 'headlamp',  # Fixed client ID for Authentik provider
+                'oidc_client_secret': lambda: self.generate_secure_password(40, include_special=False),
+            }
         else:
             # Unknown service -> return empty (extensibility point)
             return {}
@@ -188,6 +193,11 @@ class NoahSecurityManager:
                 'hubble_tls_key': lambda: self.generate_secure_password(32, include_special=False),
                 'cluster_mesh_key': lambda: self.generate_secure_password(32, include_special=False),
                 'ca_key_passphrase': lambda: self.generate_secure_password(24)
+            }
+        elif service_name == 'headlamp':
+            gen_mapping = {
+                'oidc_client_id': lambda: 'headlamp',  # Fixed client ID for Authentik provider
+                'oidc_client_secret': lambda: self.generate_secure_password(40, include_special=False),
             }
 
         targets = rotate_keys or list(gen_mapping.keys())

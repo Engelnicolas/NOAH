@@ -20,6 +20,7 @@ class SSONetworkValidator:
             'cluster': [],
             'cilium': [],
             'authentik': [],
+            'headlamp': [],
             'network_policies': [],
             'connectivity': [],
             'hubble': []

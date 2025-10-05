@@ -52,7 +52,7 @@ pip install -r Scripts/requirements.txt
 python noah.py cluster create --name your-cluster --domain your-domain.com
 
 # Complete infrastructure deployment
-python noah.py deploy all --domain your-domain.com
+python noah.py deploy core --domain your-domain.com
 
 # Check status
 python noah.py status
@@ -112,7 +112,7 @@ python noah.py test sso
 ### Key Architectural Principles
 
 - **Single Source of Truth for Secrets**: All sensitive material lives in a canonical encrypted YAML (metadata: `value`, `version`, `rotated_at`, plus integrity hash).
-- **Deterministic Deployments**: `deploy all` funnels through one optimized Ansible playbook to ensure ordered, validated rollout (Cilium → Authentik → post‑checks).
+- **Deterministic Deployments**: `deploy core` funnels through one optimized Ansible playbook to ensure ordered, validated rollout (Cilium → Authentik → post‑checks).
 - **Separation of Concerns**: Python CLI handles UX + secret prep; Ansible handles orchestration; Helm charts handle workload packaging.
 - **Progressive Validation Modes**: `--validation-mode development|production` toggles depth (shortcuts vs full rollout + DNS/TLS checks + fail‑fast semantics).
 - **Composable Security**: Secret generation and rotation isolated in `NoahSecurityManager` with versioned rotations and integrity verification.
@@ -120,7 +120,7 @@ python noah.py test sso
 - **Safety in CI**: `NOAH_SKIP_ANSIBLE=true` allows fast credential/secrets path testing without a cluster.
 
 ### Runtime Flow (High-Level)
-1. User invokes CLI (e.g., `python noah.py deploy all --domain example.com`).
+1. User invokes CLI (e.g., `python noah.py deploy core --domain example.com`).
 2. Canonical secrets ensured (idempotent generation if missing).
 3. Ansible playbook runs phased deployment (network → identity → validation) with timing metrics.
 4. DNS/TLS readiness & health probes surface environment status (production mode retries DNS & fails hard on phase errors).
@@ -166,12 +166,12 @@ python Tests/test_noah.py
 
 Mocked end-to-end secret generation without running real Ansible (useful in CI without Kubernetes):
 ```bash
-NOAH_SKIP_ANSIBLE=true python Tests/test_deploy_all_secrets.py
+NOAH_SKIP_ANSIBLE=true python Tests/test_deploy_core_secrets.py
 ```
 
 Pytest example:
 ```bash
-NOAH_SKIP_ANSIBLE=true python -m pytest Tests/test_deploy_all_secrets.py -q
+NOAH_SKIP_ANSIBLE=true python -m pytest Tests/test_deploy_core_secrets.py -q
 ```
 
 Setting `NOAH_SKIP_ANSIBLE=true` causes the internal runner to skip invoking `ansible-playbook` while still performing canonical secret generation and CLI flow.

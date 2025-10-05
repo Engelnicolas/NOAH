@@ -9,7 +9,7 @@ Quick solutions for NOAH infrastructure issues.
 # Nuclear option - complete reset
 python noah.py cluster destroy --force
 python noah.py cluster create --name noah --domain your-domain.com
-python noah.py deploy all --domain your-domain.com
+python noah.py deploy core --domain your-domain.com
 ```
 
 ### **Quick Health Check:**
@@ -38,7 +38,7 @@ curl -I https://github.com
 python noah.py cluster destroy --force
 rm -rf ~/.kube/ ~/.helm/
 python noah.py cluster create --name noah --domain your-domain.com
-python noah.py deploy all --domain your-domain.com
+python noah.py deploy core --domain your-domain.com
 ```
 
 ### **Services Not Starting**
@@ -143,7 +143,7 @@ kubectl top nodes
 openssl x509 -in Certificates/ca.crt -text -noout
 
 # Redeploy with fresh certificates
-python noah.py deploy all --regenerate-certs
+python noah.py deploy core --regenerate-certs
 ```
 
 ## 📊 **Monitoring & Logs**
@@ -200,7 +200,7 @@ rm -rf ~/.kube/ ~/.helm/
 
 # 3. Fresh install
 python noah.py cluster create --name noah --domain your-domain.com
-python noah.py deploy all --domain your-domain.com
+python noah.py deploy core --domain your-domain.com
 
 # 4. Restore passwords if needed
 # Use backup-passwords.txt to recreate accounts (rotation creates new versioned entry in canonical store)
@@ -271,7 +271,7 @@ python noah.py deploy all --domain your-domain.com
    rm -rf Certificates/
    
    # Redeploy (will create new certs)
-   python noah.py deploy all --domain your-domain.com
+   python noah.py deploy core --domain your-domain.com
    ```
 
 ## 🧪 **Testing & Validation Issues**

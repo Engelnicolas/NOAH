@@ -187,7 +187,7 @@ def new(ctx):
         click.echo("💡 The new password will be active after next deployment:")
         click.echo("   python noah.py deploy authentik")
         click.echo("   # or")
-        click.echo("   python noah.py deploy all")
+        click.echo("   python noah.py deploy core")
         click.echo("")
         click.echo("🔍 To view current credentials after deployment:")
         click.echo("   python noah.py password show")
@@ -198,7 +198,7 @@ def new(ctx):
 @password.command()
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for Authentik (used for URL display)')
 @click.pass_context
-def show(ctx, domain):
+def show_password(ctx, domain):
     """Show current Authentik admin credentials"""
     click.echo("🔍 Current Authentik admin credentials:")
     click.echo("=" * 50)
@@ -225,9 +225,9 @@ def show(ctx, domain):
 @click.pass_context
 def deploy(ctx):
     """Deploy services to Kubernetes
-    
+
     OPTIMIZED: Individual commands (authentik, cilium) are simplified
-    and the 'all' command now uses cluster-deploy.yml Ansible playbook to avoid 
+    and the 'core' command now uses cluster-deploy.yml Ansible playbook to avoid
     code repetition and leverage the optimized deployment order and validation.
     """
     pass
@@ -256,7 +256,7 @@ def authentik(ctx, namespace, domain, regenerate_password):
     
     click.echo(f"[VERBOSE] Deploying Authentik SSO...")
     click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
-    click.echo(f"💡 For complete stack deployment, use: python noah.py deploy all")
+    click.echo(f"💡 For complete stack deployment, use: python noah.py deploy core")
     
     # Generate secrets for Authentik before deployment
     click.echo(f"[VERBOSE] Generating secrets for Authentik...")
@@ -308,7 +308,7 @@ def cilium_cmd(ctx, namespace, domain):
 @click.option('--regenerate-password', is_flag=True, help='Generate new Authentik admin password')
 @click.option('--validation-mode', type=click.Choice(['development','production']), default='production', show_default=True, help='Validation strictness for deployment playbook')
 @click.pass_context
-def all(ctx, domain, cluster_name, config_file, regenerate_password, validation_mode):
+def core(ctx, domain, cluster_name, config_file, regenerate_password, validation_mode):
     """Deploy complete stack using optimized Ansible playbook (Cilium → Authentik)"""
     # Ensure security is initialized before any deployment
     ensure_security_initialized(ctx)

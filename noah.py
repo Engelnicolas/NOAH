@@ -330,6 +330,74 @@ def headlamp(ctx, namespace, domain):
     click.echo(f"[VERBOSE] SSO authentication via Authentik: https://auth.{domain}")
 
 @deploy.command()
+@click.option('--namespace', default='kube-system', help='Kubernetes namespace')
+@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for DNS management')
+@click.option('--provider', default='cloudflare', type=click.Choice(['cloudflare']), help='DNS provider')
+@click.option('--api-token', envvar='CLOUDFLARE_API_TOKEN', help='Cloudflare API token (or set CLOUDFLARE_API_TOKEN env var)')
+@click.option('--policy', default='upsert-only', type=click.Choice(['sync', 'upsert-only']), help='DNS record management policy')
+@click.pass_context
+def dns(ctx, namespace, domain, provider, api_token, policy):
+    """Deploy external-dns for automatic DNS management"""
+
+    click.echo(f"[VERBOSE] Deploying external-dns for automatic DNS management...")
+    click.echo(f"[VERBOSE] Provider: {provider}, Domain: {domain}, Policy: {policy}")
+
+    # Validate configuration
+    config_loader = ctx.obj['config']
+
+    if provider == 'cloudflare':
+        if not api_token:
+            click.echo("❌ Cloudflare API token is required!", err=True)
+            click.echo("", err=True)
+            click.echo("Please provide the API token using one of these methods:", err=True)
+            click.echo("  1. Command line: --api-token YOUR_TOKEN", err=True)
+            click.echo("  2. Environment variable: export CLOUDFLARE_API_TOKEN='YOUR_TOKEN'", err=True)
+            click.echo("", err=True)
+            click.echo("To create a Cloudflare API token:", err=True)
+            click.echo("  1. Log in to https://dash.cloudflare.com", err=True)
+            click.echo("  2. Go to My Profile > API Tokens", err=True)
+            click.echo("  3. Click 'Create Token'", err=True)
+            click.echo("  4. Use 'Edit zone DNS' template or create custom token with:", err=True)
+            click.echo("     - Zone > DNS > Edit", err=True)
+            click.echo("     - Zone > Zone > Read", err=True)
+            click.echo("  5. Select your domain zone", err=True)
+            click.echo("  6. Copy the generated token", err=True)
+            sys.exit(1)
+
+        click.echo(f"[VERBOSE] Using Cloudflare API token: {api_token[:8]}...{api_token[-4:]}")
+
+    # Get Ansible variables
+    ansible_vars = {
+        'external_dns_namespace': namespace,
+        'domain_name': domain,
+        'dns_provider': provider,
+        'dns_policy': policy,
+        'cloudflare_api_token': api_token,
+        'cluster_name': config_loader.get_cluster_name()
+    }
+
+    # Deploy external-dns using Ansible playbook
+    click.echo(f"[VERBOSE] Running Ansible playbook: deploy-external-dns.yml")
+    ctx.obj['ansible'].run_playbook('deploy-external-dns.yml', ansible_vars)
+
+    click.echo(f"✅ External-DNS deployed to namespace {namespace}")
+    click.echo("")
+    click.echo("External-DNS will now automatically manage DNS records for:")
+    click.echo(f"  - Ingress resources with annotation: external-dns.alpha.kubernetes.io/hostname")
+    click.echo(f"  - LoadBalancer services with annotation: external-dns.alpha.kubernetes.io/hostname")
+    click.echo("")
+    click.echo(f"Domain filter: {domain}")
+    click.echo(f"Policy: {policy}")
+    click.echo("")
+    click.echo("Monitor logs:")
+    click.echo(f"  kubectl logs -n {namespace} -l app.kubernetes.io/name=external-dns -f")
+    click.echo("")
+    click.echo("Expected DNS records (will be created automatically):")
+    click.echo(f"  - auth.{domain} → Authentik SSO")
+    click.echo(f"  - hubble.{domain} → Cilium Hubble UI")
+    click.echo(f"  - headlamp.{domain} → Headlamp Dashboard")
+
+@deploy.command()
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
 @click.option('--cluster-name', default='noah-cluster', help='Cluster name for deployment')
 @click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')

@@ -1,0 +1,227 @@
+---
+- name: Deploy external-dns for automatic DNS management
+  hosts: localhost
+  gather_facts: no
+  vars:
+    external_dns_namespace: "{{ external_dns_namespace | default('kube-system') }}"
+    domain_name: "{{ domain_name | default('noah-infra.com') }}"
+    dns_provider: "{{ dns_provider | default('cloudflare') }}"
+    dns_policy: "{{ dns_policy | default('upsert-only') }}"
+    cloudflare_api_token: "{{ cloudflare_api_token | default('') }}"
+    verbose_mode: true
+    ansible_python_interpreter: "{{ playbook_dir }}/../.venv/bin/python"
+    external_dns_helm_timeout: "{{ external_dns_helm_timeout | default('300s') }}"
+
+  environment:
+    PYTHONPATH: "{{ playbook_dir }}/../.venv/lib/python3.12/site-packages:{{ ansible_env.PYTHONPATH | default('') }}"
+
+  tasks:
+    - name: Display external-dns deployment configuration
+      ansible.builtin.debug:
+        msg: |
+          === EXTERNAL-DNS DEPLOYMENT ===
+          Namespace: {{ external_dns_namespace }}
+          Domain: {{ domain_name }}
+          DNS Provider: {{ dns_provider }}
+          Policy: {{ dns_policy }}
+          ================================
+
+    - name: Validate DNS provider configuration
+      ansible.builtin.fail:
+        msg: "DNS provider '{{ dns_provider }}' is not supported. Only 'cloudflare' is currently implemented."
+      when: dns_provider != 'cloudflare'
+
+    - name: Check for Cloudflare API token
+      ansible.builtin.fail:
+        msg: |
+          Cloudflare API token is required but not provided.
+
+          Please set one of:
+          1. Environment variable: export CLOUDFLARE_API_TOKEN='your-token-here'
+          2. Ansible variable: -e cloudflare_api_token='your-token-here'
+
+          To create a Cloudflare API token:
+          1. Log in to https://dash.cloudflare.com
+          2. Go to My Profile > API Tokens
+          3. Click "Create Token"
+          4. Use "Edit zone DNS" template or create custom token with:
+             - Zone > DNS > Edit
+             - Zone > Zone > Read
+          5. Select your domain zone
+          6. Copy the generated token
+      when: cloudflare_api_token == ''
+
+    - name: Create namespace for external-dns
+      kubernetes.core.k8s:
+        name: "{{ external_dns_namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Create Cloudflare API token secret
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: external-dns-cloudflare
+            namespace: "{{ external_dns_namespace }}"
+          type: Opaque
+          stringData:
+            cloudflare_api_token: "{{ cloudflare_api_token }}"
+      register: cloudflare_secret_apply
+
+    - name: Report Cloudflare secret status
+      ansible.builtin.debug:
+        msg: >-
+          Cloudflare API token secret {{ 'created/updated' if cloudflare_secret_apply.changed else 'is up-to-date' }}
+
+    - name: Adopt existing secret for Helm (if present)
+      ansible.builtin.shell: >-
+        kubectl patch secret external-dns-cloudflare -n {{ external_dns_namespace }} --type merge -p '{
+          "metadata": {
+            "labels": {"app.kubernetes.io/managed-by": "Helm"},
+            "annotations": {
+              "meta.helm.sh/release-name": "external-dns",
+              "meta.helm.sh/release-namespace": "{{ external_dns_namespace }}"
+            }
+          }
+        }' 2>/dev/null || true
+      changed_when: false
+
+    - name: Get cluster name for TXT owner ID
+      ansible.builtin.set_fact:
+        cluster_name: "{{ cluster_name | default('noah-cluster') }}"
+
+    - name: Create external-dns values file for Helm deployment
+      ansible.builtin.copy:
+        content: |
+          # External-DNS configuration for NOAH
+          global:
+            domain: "{{ domain_name }}"
+            cluster_name: "{{ cluster_name }}"
+            environment: "production"
+
+          externalDns:
+            image:
+              repository: registry.k8s.io/external-dns/external-dns
+              tag: "v0.14.0"
+              pullPolicy: IfNotPresent
+
+            provider: "{{ dns_provider }}"
+
+            domainFilters:
+              - "{{ domain_name }}"
+
+            policy: "{{ dns_policy }}"
+
+            txtOwnerId: "{{ cluster_name }}"
+            txtPrefix: "_external-dns"
+
+            sources:
+              - ingress
+              - service
+
+            logLevel: info
+            logFormat: text
+
+            interval: "1m"
+            triggerLoopOnEvent: false
+
+            registry: "txt"
+
+            cloudflare:
+              apiToken: "{{ cloudflare_api_token }}"
+              proxied: false
+
+            serviceAccount:
+              create: true
+              name: external-dns
+              annotations: {}
+
+            rbac:
+              create: true
+
+            resources:
+              requests:
+                cpu: "50m"
+                memory: "64Mi"
+              limits:
+                cpu: "100m"
+                memory: "128Mi"
+
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 65534
+              fsGroup: 65534
+              capabilities:
+                drop:
+                  - ALL
+              readOnlyRootFilesystem: true
+
+            strategy:
+              type: Recreate
+        dest: /tmp/external-dns-values.yaml
+
+    - name: Deploy external-dns using Helm
+      ansible.builtin.command: >-
+        helm upgrade --install external-dns {{ playbook_dir }}/../Helm/external-dns
+        --namespace {{ external_dns_namespace }}
+        --values /tmp/external-dns-values.yaml
+        --timeout {{ external_dns_helm_timeout }}
+        {{ '--dry-run' if (dry_run | default(false)) else '' }}
+      register: external_dns_helm_result
+      failed_when: external_dns_helm_result.rc != 0
+
+    - name: Wait for external-dns deployment rollout
+      ansible.builtin.command: >-
+        kubectl rollout status deploy/external-dns -n {{ external_dns_namespace }} --timeout=300s
+      register: external_dns_rollout
+      changed_when: false
+      failed_when: external_dns_rollout.rc != 0
+
+    - name: Check external-dns pod readiness
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ external_dns_namespace }}"
+        label_selectors:
+          - app.kubernetes.io/name=external-dns
+      register: external_dns_pods
+      until: external_dns_pods.resources | length > 0 and (external_dns_pods.resources | map(attribute='status.containerStatuses') | map('first') | selectattr('ready') | list | length) == (external_dns_pods.resources | length)
+      retries: 20
+      delay: 5
+
+    - name: Get external-dns pod logs (last 20 lines)
+      ansible.builtin.shell: |
+        POD=$(kubectl get pods -n {{ external_dns_namespace }} -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        if [ -n "$POD" ]; then
+          kubectl logs -n {{ external_dns_namespace }} "$POD" --tail=20 2>/dev/null || echo "Could not retrieve logs"
+        else
+          echo "No external-dns pod found"
+        fi
+      register: external_dns_logs
+      changed_when: false
+
+    - name: Display external-dns logs
+      ansible.builtin.debug:
+        msg: "{{ external_dns_logs.stdout_lines }}"
+
+    - name: Display external-dns deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "=== EXTERNAL-DNS DEPLOYMENT SUMMARY ==="
+          - "✓ Namespace: {{ external_dns_namespace }}"
+          - "✓ DNS Provider: {{ dns_provider }}"
+          - "✓ Domain Filter: {{ domain_name }}"
+          - "✓ Policy: {{ dns_policy }}"
+          - "✓ TXT Owner ID: {{ cluster_name }}"
+          - "✓ Deployment: {{ 'SUCCESS' if external_dns_helm_result.rc == 0 else 'FAILED' }}"
+          - ""
+          - "External-DNS will now automatically manage DNS records for:"
+          - "  - Ingress resources with external-dns.alpha.kubernetes.io/hostname annotation"
+          - "  - LoadBalancer services with external-dns.alpha.kubernetes.io/hostname annotation"
+          - ""
+          - "Example Ingress annotation:"
+          - "  external-dns.alpha.kubernetes.io/hostname: auth.{{ domain_name }}"
+          - ""
+          - "Monitor logs: kubectl logs -n {{ external_dns_namespace }} -l app.kubernetes.io/name=external-dns -f"

@@ -33,6 +33,51 @@
 
     - name: "Execute complete NOAH stack deployment"
       block:
+        - name: "PHASE 0: Deploy external-dns (DNS Automation)"
+          block:
+            - name: Record external-dns phase start time
+              ansible.builtin.set_fact:
+                phase_external_dns_started: "{{ ansible_date_time.epoch | int }}"
+
+            - name: Check if external-dns deployment is enabled
+              ansible.builtin.set_fact:
+                external_dns_enabled: "{{ lookup('env', 'NOAH_EXTERNAL_DNS_ENABLED') | default('false') }}"
+                cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') | default('') }}"
+
+            - name: Deploy external-dns for automatic DNS management
+              ansible.builtin.command: >-
+                ansible-playbook deploy-external-dns.yml
+                -e external_dns_namespace=kube-system
+                -e domain_name="{{ domain_name }}"
+                -e dns_provider=cloudflare
+                -e cloudflare_api_token="{{ cloudflare_api_token }}"
+                -e external_dns_helm_timeout={{ external_dns_helm_timeout | default('300s') }}
+              args:
+                chdir: "{{ playbook_dir }}"
+              register: external_dns_subplay
+              failed_when: external_dns_subplay.rc != 0
+              when: external_dns_enabled | bool and cloudflare_api_token != ''
+
+            - name: Skip external-dns deployment (not enabled or no API token)
+              ansible.builtin.debug:
+                msg:
+                  - "⚠️  External-DNS deployment skipped"
+                  - "Reason: {{ 'Not enabled (NOAH_EXTERNAL_DNS_ENABLED=false)' if not (external_dns_enabled | bool) else 'No Cloudflare API token provided (CLOUDFLARE_API_TOKEN)' }}"
+                  - ""
+                  - "To enable automatic DNS management:"
+                  - "  1. Set NOAH_EXTERNAL_DNS_ENABLED=true"
+                  - "  2. Set CLOUDFLARE_API_TOKEN='your-token-here'"
+                  - "  3. Re-run deployment"
+                  - ""
+                  - "DNS records will need to be managed manually."
+              when: not (external_dns_enabled | bool and cloudflare_api_token != '')
+
+            - name: Record external-dns phase end time
+              ansible.builtin.set_fact:
+                phase_external_dns_ended: "{{ ansible_date_time.epoch | int }}"
+
+          tags: [external-dns, dns]
+
         - name: "PHASE 1: Deployment validation and preparation"
           block:
             - name: Display deployment configuration
@@ -42,7 +87,7 @@
                   Cluster Name: {{ cluster_name }}
                   Domain: {{ domain_name }}
                   Deployment Mode: Standalone IAM + Dashboard
-                  Order: Cilium → Authentik → Headlamp
+                  Order: External-DNS → Cilium → Authentik → Headlamp
                   ======================================
             
             - name: Validate required variables
@@ -489,11 +534,12 @@
               ansible.builtin.debug:
                 msg: |
                   === PHASE DURATIONS (seconds) ===
+                  External-DNS Phase: {{ (phase_external_dns_ended | int) - (phase_external_dns_started | int) if (phase_external_dns_started is defined and phase_external_dns_ended is defined) else 'skipped' }}
                   Cilium Phase: {{ (phase_cilium_ended | int) - (phase_cilium_started | int) if (phase_cilium_started is defined and phase_cilium_ended is defined) else 'n/a' }}
                   Authentik Phase: {{ (phase_authentik_ended | int) - (phase_authentik_started | int) if (phase_authentik_started is defined and phase_authentik_ended is defined) else 'n/a' }}
                   Headlamp Phase: {{ (phase_headlamp_ended | int) - (phase_headlamp_started | int) if (phase_headlamp_started is defined and phase_headlamp_ended is defined) else 'n/a' }}
                   Validation Phase: {{ (phase_validation_ended | int) - (phase_validation_started | int) if (phase_validation_started is defined and phase_validation_ended is defined) else 'n/a' }}
-                  Total (Cilium + Authentik + Headlamp + Validation): {{ ((phase_cilium_ended | int) - (phase_cilium_started | int) + (phase_authentik_ended | int) - (phase_authentik_started | int) + (phase_headlamp_ended | int) - (phase_headlamp_started | int) + (phase_validation_ended | int) - (phase_validation_started | int)) if (phase_cilium_ended is defined and phase_authentik_ended is defined and phase_headlamp_ended is defined and phase_validation_ended is defined) else 'n/a' }}
+                  Total (All Phases): {{ ((phase_external_dns_ended | default(phase_external_dns_started) | int) - (phase_external_dns_started | default(0) | int) + (phase_cilium_ended | int) - (phase_cilium_started | int) + (phase_authentik_ended | int) - (phase_authentik_started | int) + (phase_headlamp_ended | int) - (phase_headlamp_started | int) + (phase_validation_ended | int) - (phase_validation_started | int)) if (phase_cilium_ended is defined and phase_authentik_ended is defined and phase_headlamp_ended is defined and phase_validation_ended is defined) else 'n/a' }}
               when: phase_cilium_ended is defined
 
             - name: Fail fast if any phase failed (production)

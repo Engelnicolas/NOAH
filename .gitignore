@@ -58,7 +58,6 @@ secrets.yml
 ############################
 # Canonical Secrets & Keys #
 ############################
-Secrets/canonical-secrets.yaml
 Age/
 *.agekey
 .sops.yaml
@@ -113,6 +112,7 @@ Scripts/Certificates/*.crt
 Scripts/Certificates/*.key
 Scripts/Certificates/*.pem
 Scripts/Certificates/*.srl
+Scripts/Secrets/canonical-secrets.enc.yaml
 
 ############################
 # Legacy Encrypted Files (deprecated)

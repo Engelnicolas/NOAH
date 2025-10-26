@@ -1,0 +1,17 @@
+apiVersion: v2
+name: external-dns
+description: Helm chart for external-dns to automatically manage DNS records
+type: application
+version: 1.0.0
+appVersion: "0.14.0"
+keywords:
+  - dns
+  - external-dns
+  - cloudflare
+  - automation
+home: https://github.com/kubernetes-sigs/external-dns
+sources:
+  - https://github.com/kubernetes-sigs/external-dns
+maintainers:
+  - name: NOAH Team
+    email: admin@noah-infra.com

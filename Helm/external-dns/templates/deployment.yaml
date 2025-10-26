@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-dns
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: external-dns
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  strategy:
+    {{- toYaml .Values.externalDns.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: external-dns
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: external-dns
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- with .Values.externalDns.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.externalDns.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ .Values.externalDns.serviceAccount.name }}
+      securityContext:
+        {{- toYaml .Values.externalDns.securityContext | nindent 8 }}
+      containers:
+        - name: external-dns
+          image: "{{ .Values.externalDns.image.repository }}:{{ .Values.externalDns.image.tag }}"
+          imagePullPolicy: {{ .Values.externalDns.image.pullPolicy }}
+          args:
+            - --source=ingress
+            - --source=service
+            - --provider={{ .Values.externalDns.provider }}
+            {{- range .Values.externalDns.domainFilters }}
+            - --domain-filter={{ . }}
+            {{- end }}
+            {{- range .Values.externalDns.zoneIdFilters }}
+            - --zone-id-filter={{ . }}
+            {{- end }}
+            - --policy={{ .Values.externalDns.policy }}
+            - --registry={{ .Values.externalDns.registry }}
+            {{- if .Values.externalDns.txtOwnerId }}
+            - --txt-owner-id={{ .Values.externalDns.txtOwnerId }}
+            {{- else }}
+            - --txt-owner-id={{ .Values.global.cluster_name }}
+            {{- end }}
+            - --txt-prefix={{ .Values.externalDns.txtPrefix }}
+            - --log-level={{ .Values.externalDns.logLevel }}
+            - --log-format={{ .Values.externalDns.logFormat }}
+            - --interval={{ .Values.externalDns.interval }}
+            {{- if .Values.externalDns.triggerLoopOnEvent }}
+            - --events
+            {{- end }}
+            {{- if and (eq .Values.externalDns.provider "cloudflare") .Values.externalDns.cloudflare.proxied }}
+            - --cloudflare-proxied
+            {{- end }}
+            {{- if .Values.externalDns.annotationFilter }}
+            - --annotation-filter={{ .Values.externalDns.annotationFilter }}
+            {{- end }}
+            {{- range .Values.externalDns.extraArgs }}
+            - {{ . }}
+            {{- end }}
+          env:
+            {{- if eq .Values.externalDns.provider "cloudflare" }}
+            {{- if .Values.externalDns.cloudflare.apiToken }}
+            - name: CF_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: external-dns-cloudflare
+                  key: cloudflare_api_token
+            {{- else if and .Values.externalDns.cloudflare.apiKey .Values.externalDns.cloudflare.email }}
+            - name: CF_API_KEY
+              value: {{ .Values.externalDns.cloudflare.apiKey | quote }}
+            - name: CF_API_EMAIL
+              value: {{ .Values.externalDns.cloudflare.email | quote }}
+            {{- end }}
+            {{- end }}
+            {{- range .Values.externalDns.extraEnv }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.externalDns.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      {{- with .Values.externalDns.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.externalDns.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.externalDns.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -41,97 +41,91 @@ NOAH is designed for various infrastructure scenarios:
 
 ### **Single Command Deployment**
 ```bash
-
-# Clone repository
+# 1. Clone repository
 git clone https://github.com/Engelnicolas/NOAH.git
 cd NOAH
 
-# Install Python dependencies
-pip install -r Scripts/requirements.txt
+# 2. Initialize environment
+python noah.py setup initialize
 
-# Create the cluster
-python noah.py cluster create --name your-cluster --domain your-domain.com
+# 3. Configure DNS (choose one option):
 
-# Complete infrastructure deployment
+# Option A: Automatic DNS with Cloudflare (set BEFORE deploy)
+export NOAH_EXTERNAL_DNS_ENABLED=true
+export CLOUDFLARE_API_TOKEN='your-cloudflare-api-token'
+
+# Option B: Manual DNS - Get LoadBalancer IP, then create A records:
+#   kubectl get svc -n kube-system cilium-ingress-lb
+#   Create: auth.your-domain.com → EXTERNAL-IP
+#           headlamp.your-domain.com → EXTERNAL-IP
+#           hubble.your-domain.com → EXTERNAL-IP
+
+# Option C: Local testing - Add to /etc/hosts (after deploy)
+
+# 4. Create cluster
+python noah.py cluster create --name noah-cluster --domain your-domain.com
+
+# 5. Deploy infrastructure
 python noah.py deploy core --domain your-domain.com
 
-# Check status
-python noah.py status
-
-# Get credentials
+# 6. Get credentials & verify
 python noah.py password show
-
-# Test deployment
-python noah.py test sso
+python noah.py status
 ```
 
 ## **Architecture Overview**
 
 ```
-		  +-----------------------------+
-		  |        End Users / Apps     |
-		  +---------------+-------------+
-				    |
-				    v
-			( HTTPS / OIDC / SSO )
-				    |
-	 +-----------------------+-----------------------+
-	 |            Ingress & Network (Cilium)         |
-	 |  - L7 routing  - TLS termination  - eBPF       |
-	 +-----------------------+-----------------------+
-				    |
-				    v
-		     +---------------------------+
-		     |       Authentik SSO       |
-		     |  Identity & Access Layer  |
-		     +-----------+---------------+
-				   |
-		   +-------------+-------------+
-		   |  PostgreSQL |    Redis    |
-		   |  (State)    | (Sessions)  |
-		   +------+------+-----+-------+
-			   |            |
-			   +-----+------+ 
-				  |
-		     +----------v-----------+
-		     |   Kubernetes (K3s)   |
-		     |  API / Scheduling    |
-		     +----------+-----------+
-				  |
-		    Orchestrated Deployment
-				  |
-	 +----------+-----------+--------------+----------------+
-	 |  NOAH CLI | Ansible   | Helm Charts  | Secrets Store  |
-	 |  (Click)  | Playbooks | (Cilium,     | (Canonical)    |
-	 |           |           |  Authentik)  | Age/SOPS YAML  |
-	 +-----------+-----------+--------------+----------------+
-				  |
-			  Validation & Tests
-			    (Health / DNS)
+┌─────────────────────────────────────────────────────────┐
+│                    User Access Layer                    │
+│  https://auth.your-domain.com     (Authentik SSO)       │
+│  https://headlamp.your-domain.com (K8s Dashboard)       │
+│  https://hubble.your-domain.com   (Network Observ.)     │
+└────────────────────────┬────────────────────────────────┘
+                         │ HTTPS/TLS
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│              Cilium Ingress (LoadBalancer)              │
+│  • L7 routing • TLS termination • eBPF datapath         │
+└────────────────────────┬────────────────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        ▼                ▼                ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  Authentik   │  │  Headlamp    │  │  Hubble UI   │
+│  SSO/OIDC    │◄─┤  Dashboard   │  │  Network     │
+│  + Worker    │  │  (OIDC auth) │  │  Flows       │
+└──────┬───────┘  └──────────────┘  └──────────────┘
+       │
+       ├─────────┬──────────┐
+       ▼         ▼          ▼
+┌──────────┐ ┌────────┐ ┌────────────┐
+│PostgreSQL│ │ Redis  │ │   Cilium   │
+│ (state)  │ │(cache) │ │ CNI/Proxy  │
+└──────────┘ └────────┘ └────────────┘
+───────────────────────────────────────────────────────────
+              Kubernetes (K3s) Cluster
+───────────────────────────────────────────────────────────
+Deployment Automation:
+  python noah.py deploy core
+      ↓
+  Ansible Playbook (phased)
+      ├─ Phase 1: Cilium CNI
+      ├─ Phase 2: Authentik SSO
+      ├─ Phase 3: Headlamp Dashboard
+      └─ Phase 4: Validation
+      ↓
+  Helm Charts + Canonical Secrets (Age/SOPS encrypted)
 ```
 
-### Key Architectural Principles
+### Key Principles
 
-- **Single Source of Truth for Secrets**: All sensitive material lives in a canonical encrypted YAML (metadata: `value`, `version`, `rotated_at`, plus integrity hash).
-- **Deterministic Deployments**: `deploy core` funnels through one optimized Ansible playbook to ensure ordered, validated rollout (Cilium → Authentik → Headlamp → post‑checks).
-- **Separation of Concerns**: Python CLI handles UX + secret prep; Ansible handles orchestration; Helm charts handle workload packaging.
-- **Progressive Validation Modes**: `--validation-mode development|production` toggles depth (shortcuts vs full rollout + DNS/TLS checks + fail‑fast semantics).
-- **Composable Security**: Secret generation and rotation isolated in `NoahSecurityManager` with versioned rotations and integrity verification.
-- **Extensibility**: Add new services by defining required secrets, Helm values, and integrating into the playbook phases.
-- **Safety in CI**: `NOAH_SKIP_ANSIBLE=true` allows fast credential/secrets path testing without a cluster.
-
-### Runtime Flow (High-Level)
-1. User invokes CLI (e.g., `python noah.py deploy core --domain example.com`).
-2. Canonical secrets ensured (idempotent generation if missing).
-3. Ansible playbook runs phased deployment (network → identity → dashboard → validation) with timing metrics.
-4. DNS/TLS readiness & health probes surface environment status (production mode retries DNS & fails hard on phase errors).
-5. Credentials displayed using canonical store (never scraped from Kubernetes secrets directly).
-6. Tests / status commands provide post-deploy visibility.
-
-### Future Enhancement Ideas
-- Structured JSON summary artifact for CI pipelines.
-- Ingress HTTP(S) probe with certificate validation.
-- Watch-mode credentials command that waits for external IP + DNS.
+- **Single Source of Truth**: Canonical encrypted YAML for all secrets with metadata (`value`, `version`, `rotated_at`)
+- **Deterministic Deployments**: Ordered rollout (Cilium → Authentik → Headlamp) with validation
+- **Separation of Concerns**: CLI (UX) → Ansible (orchestration) → Helm (packaging)
+- **Validation Modes**: `development` (fast) vs `production` (full DNS/TLS/health checks)
+- **Composable Security**: Isolated secret generation with versioned rotation
+- **CI Safety**: `NOAH_SKIP_ANSIBLE=true` for testing without cluster
 
 ## **Service Access**
 
@@ -141,44 +135,33 @@ After deployment, access services at:
 - **Headlamp Dashboard**: `https://headlamp.your-domain.com` (SSO via Authentik)
 - **Cilium Hubble**: `https://hubble.your-domain.com`
 
-Retrieve Authentik credentials via: `python noah.py password show`
+Get credentials: `python noah.py password show`
 
-**Note:** Headlamp uses Authentik for SSO authentication. Log in with your Authentik credentials to access the Kubernetes dashboard.
-
-Rotate Authentik admin password (versioned with metadata):
+Rotate password:
 ```bash
 python noah.py password new
-# or during deployment
 python noah.py deploy authentik --regenerate-password
 ```
-
-Each secret carries metadata `{ value, version, rotated_at }` and an integrity hash is computed deterministically across services.
 
 ## **Requirements**
 
 ### **System**
-- **OS**: Ubuntu 20.04+ (recommended)
-- **Resources**: 4+ CPU cores, 8GB+ RAM, 50GB+ storage
+- **OS**: Ubuntu 20.04+, Debian 11+, CentOS 8+, RHEL 8+
+- **CPU**: 4 cores minimum (8+ recommended)
+- **RAM**: 8GB minimum (16GB+ recommended)
+- **Storage**: 50GB free disk space (100GB+ recommended)
+- **Kernel**: Linux 5.10+ (for Cilium eBPF support)
 - **Network**: Internet connectivity for component downloads
 
-## **Testing & CI Shortcuts**
+## **Testing**
 
-Lightweight test:
 ```bash
+# Lightweight test
 python Tests/test_noah.py
-```
 
-Mocked end-to-end secret generation without running real Ansible (useful in CI without Kubernetes):
-```bash
-NOAH_SKIP_ANSIBLE=true python Tests/test_deploy_core_secrets.py
-```
-
-Pytest example:
-```bash
+# CI without cluster (skip Ansible, test secrets only)
 NOAH_SKIP_ANSIBLE=true python -m pytest Tests/test_deploy_core_secrets.py -q
 ```
-
-Setting `NOAH_SKIP_ANSIBLE=true` causes the internal runner to skip invoking `ansible-playbook` while still performing canonical secret generation and CLI flow.
 
 ---
 Made with ❤️

@@ -678,10 +678,21 @@
           SOPS_VERSION=$(curl -s https://api.github.com/repos/getsops/sops/releases/latest \
             | grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/' 2>/dev/null || echo "3.9.1")
           SOPS_URL="https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64"
-          if curl -sfL "${SOPS_URL}" -o /usr/local/bin/sops && chmod +x /usr/local/bin/sops; then
-            echo "✅ sops: INSTALLED (v${SOPS_VERSION})"
+          SOPS_TMP=$(mktemp)
+          if curl -sfL "${SOPS_URL}" -o "${SOPS_TMP}"; then
+            chmod +x "${SOPS_TMP}"
+            # Try system-wide first (with sudo), then fall back to user-local bin
+            if sudo mv "${SOPS_TMP}" /usr/local/bin/sops 2>/dev/null; then
+              echo "✅ sops: INSTALLED to /usr/local/bin (v${SOPS_VERSION})"
+            else
+              mkdir -p "${HOME}/.local/bin"
+              mv "${SOPS_TMP}" "${HOME}/.local/bin/sops"
+              export PATH="${HOME}/.local/bin:${PATH}"
+              echo "✅ sops: INSTALLED to ${HOME}/.local/bin (v${SOPS_VERSION})"
+            fi
           else
-            echo "❌ sops: installation failed — run: python3 noah.py setup update-sops"
+            rm -f "${SOPS_TMP}"
+            echo "❌ sops: download failed — run: python3 noah.py setup update-sops"
           fi
         fi
 

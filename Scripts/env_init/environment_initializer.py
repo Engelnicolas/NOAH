@@ -504,14 +504,31 @@ def ensure_bpf_filesystem(print_status):
         response = requests.get(download_url)
         response.raise_for_status()
         
-        # Install to /usr/local/bin
+        # Write to a temp file first, then move into place
+        import tempfile, shutil
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp.write(response.content)
+            tmp_path = tmp.name
+        os.chmod(tmp_path, 0o755)
+
+        # Try system-wide (/usr/local/bin) with sudo fallback, then user-local
         sops_path = "/usr/local/bin/sops"
-        with open(sops_path, 'wb') as f:
-            f.write(response.content)
-        
-        # Make executable
-        os.chmod(sops_path, 0o755)
-        
+        installed = False
+        if os.geteuid() == 0:
+            shutil.move(tmp_path, sops_path)
+            installed = True
+        else:
+            result = subprocess.run(['sudo', 'mv', tmp_path, sops_path], capture_output=True)
+            if result.returncode == 0:
+                subprocess.run(['sudo', 'chmod', '0755', sops_path], capture_output=True)
+                installed = True
+        if not installed:
+            local_bin = Path.home() / '.local' / 'bin'
+            local_bin.mkdir(parents=True, exist_ok=True)
+            sops_path = str(local_bin / 'sops')
+            shutil.move(tmp_path, sops_path)
+            os.chmod(sops_path, 0o755)
+
         print_status(f"[SUCCESS] SOPS {latest_version} installed to {sops_path}", "SUCCESS")
         print_status("[SUCCESS] SOPS update completed successfully", "SUCCESS")
         return True

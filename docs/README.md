@@ -70,7 +70,7 @@ export CLOUDFLARE_API_TOKEN='your-cloudflare-api-token'
 python3 noah.py cluster create --name noah-cluster --domain your-domain.com
 
 # 5. Deploy infrastructure
-python noah.py deploy core --domain your-domain.com
+python3 noah.py deploy core --domain your-domain.com
 
 # 6. Get credentials & verify
 python3 noah.py password show

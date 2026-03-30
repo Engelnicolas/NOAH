@@ -7,7 +7,10 @@ Tests Headlamp Kubernetes Dashboard deployment and Authentik SSO integration
 import subprocess
 import sys
 import json
+from pathlib import Path
 from typing import Tuple, Dict, Any
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 class HeadlampSSOTester:
@@ -266,6 +269,57 @@ class HeadlampSSOTester:
             self.results['oidc'].append(('secret_parse', False, str(e)))
             return False
 
+    def test_authentik_provisioner_import(self) -> bool:
+        """Test that the AuthentikProvisioner module is importable and well-formed."""
+        self.print_status('INFO', 'Testing AuthentikProvisioner module…')
+        try:
+            from Scripts.security.authentik_provisioner import AuthentikProvisioner
+            provisioner = AuthentikProvisioner(
+                authentik_url='https://auth.example.com',
+                api_token='dummy-token',
+            )
+            # Verify key methods exist
+            for method in ('wait_ready', 'provision_oidc_app', 'provision_proxy_app',
+                           'get_or_create_provider', 'get_or_create_application',
+                           'delete_application'):
+                assert hasattr(provisioner, method), f"Missing method: {method}"
+            self.print_status('OK', 'AuthentikProvisioner imported and validated')
+            self.results['oidc'].append(('provisioner_import', True, 'All methods present'))
+            return True
+        except Exception as exc:
+            self.print_status('ERROR', f'AuthentikProvisioner import failed: {exc}')
+            self.results['oidc'].append(('provisioner_import', False, str(exc)))
+            return False
+
+    def test_headlamp_oidc_provisioned_in_authentik(self) -> bool:
+        """Check whether Headlamp OIDC application exists in Authentik (live cluster only)."""
+        import os
+        self.print_status('INFO', 'Checking Headlamp OIDC app in Authentik…')
+
+        authentik_url = os.environ.get('AUTHENTIK_URL', f'https://auth.{self.domain}')
+        token = os.environ.get('AUTHENTIK_BOOTSTRAP_TOKEN', '')
+        if not token:
+            self.print_status('WARN', 'AUTHENTIK_BOOTSTRAP_TOKEN not set — skipping live check')
+            self.results['oidc'].append(('authentik_live_check', False, 'No token'))
+            return False
+
+        try:
+            from Scripts.security.authentik_provisioner import AuthentikProvisioner
+            provisioner = AuthentikProvisioner(authentik_url, token, verify_ssl=False, timeout=10)
+            app = provisioner._list_first('/core/applications/', {'slug': 'headlamp'})
+            if app:
+                self.print_status('OK', f"Headlamp application found in Authentik (slug={app['slug']})")
+                self.results['oidc'].append(('authentik_app_exists', True, app['slug']))
+                return True
+            else:
+                self.print_status('WARN', 'Headlamp application not yet provisioned in Authentik')
+                self.results['oidc'].append(('authentik_app_exists', False, 'Not found'))
+                return False
+        except Exception as exc:
+            self.print_status('WARN', f'Authentik API check skipped: {exc}')
+            self.results['oidc'].append(('authentik_app_exists', False, str(exc)))
+            return False
+
     def run_all_tests(self) -> bool:
         """Run all Headlamp integration tests"""
         print("\n" + "="*60)
@@ -283,6 +337,8 @@ class HeadlampSSOTester:
             ('Service', self.test_headlamp_service),
             ('Ingress', self.test_headlamp_ingress),
             ('OIDC Configuration', self.test_oidc_secret),
+            ('Authentik Provisioner Module', self.test_authentik_provisioner_import),
+            ('Headlamp App in Authentik', self.test_headlamp_oidc_provisioned_in_authentik),
         ]
 
         passed = 0

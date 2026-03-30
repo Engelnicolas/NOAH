@@ -7,10 +7,11 @@
 
 NOAH provides a complete infrastructure stack:
 
-- **🔐 Authentik SSO** - Identity and access management
-- **🌐 Cilium CNI** - Advanced networking with ingress
-- **📊 Headlamp Dashboard** - Kubernetes web UI with SSO integration
+- **🔐 Authentik SSO** - Identity and access management with automatic OIDC app provisioning
+- **🌐 Cilium CNI** - Advanced networking with ingress and Hubble UI (SSO-gated)
+- **📊 Headlamp Dashboard** - Kubernetes web UI with auto-provisioned Authentik SSO
 - **🔒 Canonical Secrets Store** - Single authoritative encrypted secrets file (Age/SOPS protected)
+- **🌍 Cloudflare DNS Wizard** - Interactive DNS automation setup (`setup initialize`)
 - **🔄 Automated Deployment** - Single-command infrastructure setup
 - **🧪 Testing Suite** - Built-in validation and health checks
 - **🚀 CI/CD Ready** - GitHub Actions workflows included
@@ -45,12 +46,15 @@ NOAH is designed for various infrastructure scenarios:
 git clone https://github.com/Engelnicolas/NOAH.git
 cd NOAH
 
-# 2. Initialize environment
+# 2. Initialize environment (runs interactive Cloudflare DNS wizard)
 python noah.py setup initialize
+
+# To skip the DNS wizard:
+python noah.py setup initialize --skip-dns-wizard
 
 # 3. Configure DNS (choose one option):
 
-# Option A: Automatic DNS with Cloudflare (set BEFORE deploy)
+# Option A: Automatic DNS with Cloudflare (configured by wizard, or set manually BEFORE deploy)
 export NOAH_EXTERNAL_DNS_ENABLED=true
 export CLOUDFLARE_API_TOKEN='your-cloudflare-api-token'
 

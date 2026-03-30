@@ -97,13 +97,21 @@ NOAH supports three DNS management approaches:
 
 **Example token:** `vPQP9K4jqZxJ7q6DXxxxxxxxxxxxxxXXXXXXXXXXX`
 
-**4. Store token:**
-```bash
-export CLOUDFLARE_API_TOKEN='your-token-here'
+**4. Configure via the NOAH wizard (recommended, v0.0.7+):**
 
-# Make persistent
-echo "export CLOUDFLARE_API_TOKEN='your-token-here'" >> ~/.bashrc
-source ~/.bashrc
+Running `python noah.py setup initialize` launches the interactive Cloudflare DNS wizard automatically. It:
+- Prompts for your API token and validates it
+- Lists your available DNS zones and lets you select one
+- Persists credentials to `Config/config.enc.yaml` (SOPS-encrypted)
+- Sets `NOAH_EXTERNAL_DNS_ENABLED=true` in the config
+
+To skip the wizard and configure manually:
+```bash
+python noah.py setup initialize --skip-dns-wizard
+
+# Then export manually:
+export CLOUDFLARE_API_TOKEN='your-token-here'
+export NOAH_EXTERNAL_DNS_ENABLED=true
 ```
 
 ---

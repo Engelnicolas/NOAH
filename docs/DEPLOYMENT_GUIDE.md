@@ -1,7 +1,7 @@
 # NOAH Deployment Guide
 
-**Version**: 0.0.6
-**Last Updated**: October 2025
+**Version**: 0.0.7
+**Last Updated**: March 2026
 
 Deploy NOAH (Network Operations & Automation Hub) - a complete Kubernetes infrastructure with SSO authentication and web dashboards.
 
@@ -135,6 +135,12 @@ python noah.py setup initialize
 - Installs system packages (age, kubectl, helm, ansible)
 - Generates Age encryption keys
 - Creates SOPS configuration
+- **Runs the Cloudflare DNS wizard** (interactive — configure API token and DNS zone)
+
+To skip the wizard (e.g. in CI or if you prefer manual DNS):
+```bash
+python noah.py setup initialize --skip-dns-wizard
+```
 
 **Verify:**
 ```bash
@@ -194,12 +200,18 @@ python noah.py deploy core --domain yourdomain.com
   - Authentik Server (IAM)
   - Authentik Worker (background tasks)
 - **Resources**: ~2GB RAM, ~1.1 CPU cores (requests)
+- **Post-deploy**: Bootstrap token verified in canonical secrets store
 
-#### Phase 3: Headlamp Dashboard
+#### Phase 3.5: Hubble UI SSO Provisioning (new in v0.0.7)
+- **Duration**: ~1-2 minutes
+- **What**: Calls `AuthentikProvisioner.provision_proxy_app()` to create a forward-auth proxy application in Authentik for Hubble UI, then applies nginx forward-auth ingress annotations automatically
+
+#### Phase 4: Headlamp Dashboard
 - **Duration**: ~3-5 minutes
 - **Components**: Headlamp web UI with OIDC integration
+- **Post-deploy**: Calls `AuthentikProvisioner.provision_oidc_app()` to register the Headlamp OIDC client in Authentik automatically
 
-#### Phase 4: Validation
+#### Phase 5: Validation
 - **Duration**: ~1-2 minutes
 - **Checks**: Pod readiness, service health, network connectivity
 

@@ -59,13 +59,19 @@ Automated deployment playbook that:
 
 ### 4. Security Manager Updates (`Scripts/security/security_manager.py`)
 
-Added Headlamp secret generation:
+Headlamp secret generation (unchanged) plus new **Hubble UI** service (v0.0.7):
 
 ```python
 elif service_name == 'headlamp':
     required = {
         'oidc_client_id': lambda: 'headlamp',  # Fixed client ID
         'oidc_client_secret': lambda: self.generate_secure_password(40, include_special=False),
+    }
+elif service_name == 'hubble-ui':
+    required = {
+        'proxy_client_id': lambda: 'hubble-ui',
+        'proxy_client_secret': lambda: self.generate_secure_password(40, include_special=False),
+        'cookie_secret': lambda: self.generate_secure_password(32, include_special=False),
     }
 ```
 
@@ -150,19 +156,21 @@ Headlamp uses Authentik for SSO authentication:
 3. Use your Authentik credentials (retrieve with `python noah.py password show`)
 4. After authentication, you'll be redirected back to Headlamp with full cluster access
 
-### Authentik Configuration Required
+### Authentik Configuration — Automatic (v0.0.7+)
 
-For Headlamp SSO to work, you need to create an OAuth2/OIDC provider in Authentik:
+Since v0.0.7 the Headlamp OIDC provider and application are **automatically provisioned** in Authentik at the end of `deploy-headlamp.yml` via `AuthentikProvisioner`:
 
-**Provider Configuration**:
-- **Name**: Headlamp
-- **Client ID**: `headlamp`
-- **Client Secret**: (from canonical secrets)
-- **Redirect URIs**: `https://headlamp.your-domain.com/oidc-callback`
-- **Scopes**: `openid`, `profile`, `email`, `groups`
-- **Issuer URL**: `https://auth.your-domain.com/application/o/headlamp/`
+```bash
+python Scripts/security/authentik_provisioner.py provision-headlamp --domain your-domain.com
+```
 
-**Note**: The NOAH deployment creates the secrets but does NOT automatically create the Authentik provider. This must be done manually in the Authentik admin interface.
+The provisioner creates (idempotently):
+- **OAuth2/OIDC provider** `Headlamp Provider` with `client_id=headlamp`
+- **Redirect URI**: `https://headlamp.your-domain.com/oidc-callback`
+- **Scopes**: `openid profile email offline_access`
+- **Application** `Headlamp` (slug `headlamp`)
+
+If automatic provisioning fails (e.g. Authentik not yet reachable), the deployment continues and you can re-run the provisioner manually once Authentik is up.
 
 ## Testing
 

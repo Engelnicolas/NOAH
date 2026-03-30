@@ -560,6 +560,18 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
             else:
                 print_status("[SUCCESS] python command already available", "SUCCESS")
             
+            # Install python3-venv and python3-pip for the current Python version
+            python_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
+            for venv_pkg in [f"python{python_minor}-venv", f"python{python_minor}-pip", "python3-pip"]:
+                venv_check = subprocess.run(['dpkg', '-l', venv_pkg], capture_output=True, text=True)
+                if venv_check.returncode != 0:
+                    print_status(f"[INFO] Installing {venv_pkg}...", "INFO")
+                    result = subprocess.run(['apt-get', 'install', '-y', venv_pkg], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        print_status(f"[SUCCESS] {venv_pkg} installed", "SUCCESS")
+                else:
+                    print_status(f"[SUCCESS] {venv_pkg} already available", "SUCCESS")
+
             # Install age package if needed
             age_result = subprocess.run(['which', 'age'], capture_output=True, text=True)
             if age_result.returncode != 0:
@@ -624,21 +636,79 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
     # Check virtual environment
     print_status("[INFO] Checking virtual environment...", "INFO")
     venv_path = Path(".venv")
+
+    def _venv_python_path(vp: Path) -> Path:
+        p = vp / "bin" / "python"
+        if not p.exists():
+            p = vp / "Scripts" / "python.exe"  # Windows
+        return p
+
+    def _venv_is_functional(vp: Path) -> bool:
+        """Return True if the venv Python interpreter AND pip both work."""
+        py = _venv_python_path(vp)
+        if not py.exists():
+            return False
+        if subprocess.run([str(py), "-c", "import sys; sys.exit(0)"], capture_output=True).returncode != 0:
+            return False
+        # Also verify pip is importable
+        pip_probe = subprocess.run([str(py), "-m", "pip", "--version"], capture_output=True)
+        return pip_probe.returncode == 0
+
+    def _create_venv(print_status) -> None:
+        """Create .venv, installing python3-venv via apt if needed, then exit on failure."""
+        result = subprocess.run([sys.executable, "-m", "venv", ".venv"], capture_output=True, text=True)
+        if result.returncode == 0:
+            return
+        # python3-venv missing — install it and retry
+        python_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
+        venv_pkg = f"python{python_minor}-venv"
+        print_status(f"[INFO] venv creation failed — installing {venv_pkg}...", "INFO")
+        try:
+            sudo = [] if os.geteuid() == 0 else ["sudo"]
+            subprocess.run(sudo + ["apt-get", "install", "-y", venv_pkg], check=True, capture_output=True)
+            subprocess.run([sys.executable, "-m", "venv", ".venv"], check=True)
+        except subprocess.CalledProcessError:
+            print_status(
+                f"[ERROR] Could not create virtual environment. Run: sudo apt install {venv_pkg}",
+                "ERROR",
+            )
+            sys.exit(1)
+
     if not venv_path.exists():
         print_status("[INFO] Creating Python virtual environment...", "INFO")
-        subprocess.run([sys.executable, "-m", "venv", ".venv"], check=True)
+        _create_venv(print_status)
         print_status("[SUCCESS] Virtual environment created", "SUCCESS")
+    elif not _venv_is_functional(venv_path):
+        # Exists but broken (e.g. created before python3-venv was installed)
+        print_status("[WARNING] Virtual environment is broken — recreating...", "WARNING")
+        import shutil
+        shutil.rmtree(str(venv_path))
+        _create_venv(print_status)
+        print_status("[SUCCESS] Virtual environment recreated", "SUCCESS")
     else:
         print_status("[SUCCESS] Virtual environment already exists", "SUCCESS")
     
     # Install Python dependencies
     print_status("[INFO] Installing Python dependencies...", "INFO")
-    venv_python = venv_path / "bin" / "python"
-    if not venv_python.exists():
-        venv_python = venv_path / "Scripts" / "python.exe"  # Windows
-    
+    venv_python = _venv_python_path(venv_path)
+
+    # Ensure pip is available in the venv; bootstrap via get-pip.py if missing
+    pip_check = subprocess.run([str(venv_python), "-m", "pip", "--version"], capture_output=True)
+    if pip_check.returncode != 0:
+        print_status("[INFO] pip not found in venv — bootstrapping via get-pip.py...", "INFO")
+        try:
+            import urllib.request
+            get_pip_path = "/tmp/get-pip.py"
+            urllib.request.urlretrieve("https://bootstrap.pypa.io/get-pip.py", get_pip_path)
+            subprocess.run([str(venv_python), get_pip_path], check=True, capture_output=True)
+            print_status("[SUCCESS] pip bootstrapped", "SUCCESS")
+        except Exception as e:
+            print_status(f"[ERROR] Could not bootstrap pip: {e}", "ERROR")
+            print_status("[ERROR] Run manually: sudo apt install python3-pip", "ERROR")
+            sys.exit(1)
+
     try:
-        subprocess.run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"], 
+        subprocess.run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
                       check=True, capture_output=True)
         subprocess.run([str(venv_python), "-m", "pip", "install", "-r", "Scripts/utils/requirements.txt"],
                       check=True, capture_output=True)

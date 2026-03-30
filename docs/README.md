@@ -47,10 +47,10 @@ git clone https://github.com/Engelnicolas/NOAH.git
 cd NOAH
 
 # 2. Initialize environment (runs interactive Cloudflare DNS wizard)
-python noah.py setup initialize
+python3 noah.py setup initialize
 
 # To skip the DNS wizard:
-python noah.py setup initialize --skip-dns-wizard
+python3 noah.py setup initialize --skip-dns-wizard
 
 # 3. Configure DNS (choose one option):
 
@@ -67,14 +67,14 @@ export CLOUDFLARE_API_TOKEN='your-cloudflare-api-token'
 # Option C: Local testing - Add to /etc/hosts (after deploy)
 
 # 4. Create cluster
-python noah.py cluster create --name noah-cluster --domain your-domain.com
+python3 noah.py cluster create --name noah-cluster --domain your-domain.com
 
 # 5. Deploy infrastructure
 python noah.py deploy core --domain your-domain.com
 
 # 6. Get credentials & verify
-python noah.py password show
-python noah.py status
+python3 noah.py password show
+python3 noah.py status
 ```
 
 ## **Architecture Overview**
@@ -143,8 +143,8 @@ Get credentials: `python noah.py password show`
 
 Rotate password:
 ```bash
-python noah.py password new
-python noah.py deploy authentik --regenerate-password
+python3 noah.py password new
+python3 noah.py deploy authentik --regenerate-password
 ```
 
 ## **Requirements**
@@ -161,10 +161,10 @@ python noah.py deploy authentik --regenerate-password
 
 ```bash
 # Lightweight test
-python Tests/test_noah.py
+python3 Tests/test_noah.py
 
 # CI without cluster (skip Ansible, test secrets only)
-NOAH_SKIP_ANSIBLE=true python -m pytest Tests/test_deploy_core_secrets.py -q
+NOAH_SKIP_ANSIBLE=true python3 -m pytest Tests/test_deploy_core_secrets.py -q
 ```
 
 ---

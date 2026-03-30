@@ -45,10 +45,13 @@ def diagnose_noah_environment(ctx):
         print_status("✗ Virtual environment missing", "ERROR")
         issues.append("No virtual environment")
     
-    # Check requirements file
-    req_file = Path("Scripts/requirements.txt")
-    if req_file.exists():
-        print_status("✓ Requirements file found", "SUCCESS")
+    # Check requirements file (may live at Scripts/utils/ or Scripts/)
+    req_file = next(
+        (p for p in [Path("Scripts/utils/requirements.txt"), Path("Scripts/requirements.txt")] if p.exists()),
+        None,
+    )
+    if req_file:
+        print_status(f"✓ Requirements file found ({req_file})", "SUCCESS")
     else:
         print_status("✗ Requirements file missing", "ERROR")
         issues.append("Missing requirements.txt")

@@ -110,17 +110,54 @@ class CloudflareWizard:
         raise RuntimeError("Cloudflare API token validation failed after 3 attempts.")
 
     def _validate_token(self, token: str) -> bool:
-        """Return True if the token is valid (Cloudflare /user/tokens/verify)."""
+        """
+        Return True if the token is valid.
+
+        Tries three endpoints in order, accepting the first success:
+        1. /user/tokens/verify  — works for tokens with User:Read scope
+        2. /zones               — works for any token with Zone:Read/DNS scope
+        3. /accounts            — works for account-level tokens
+        """
+        headers = {"Authorization": f"Bearer {token}"}
         try:
+            # Primary: standard token verification
             resp = requests.get(
                 f"{self.CLOUDFLARE_API_BASE}/user/tokens/verify",
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
                 timeout=15,
             )
-            data = resp.json()
-            return resp.status_code == 200 and data.get("success", False)
+            if resp.status_code == 200 and resp.json().get("success", False):
+                return True
         except Exception:
-            return False
+            pass
+
+        try:
+            # Fallback 1: list zones — succeeds if token has Zone:Read or DNS:Edit
+            resp = requests.get(
+                f"{self.CLOUDFLARE_API_BASE}/zones",
+                headers=headers,
+                params={"per_page": 1},
+                timeout=15,
+            )
+            if resp.status_code == 200 and resp.json().get("success", False):
+                return True
+        except Exception:
+            pass
+
+        try:
+            # Fallback 2: list accounts — succeeds for account-scoped tokens
+            resp = requests.get(
+                f"{self.CLOUDFLARE_API_BASE}/accounts",
+                headers=headers,
+                params={"per_page": 1},
+                timeout=15,
+            )
+            if resp.status_code == 200 and resp.json().get("success", False):
+                return True
+        except Exception:
+            pass
+
+        return False
 
     def _list_zones(self, token: str) -> list:
         """Return a list of DNS zones accessible with the given token."""

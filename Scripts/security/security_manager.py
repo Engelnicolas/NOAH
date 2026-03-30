@@ -136,6 +136,12 @@ class NoahSecurityManager:
                 'oidc_client_id': lambda: 'headlamp',  # Fixed client ID for Authentik provider
                 'oidc_client_secret': lambda: self.generate_secure_password(40, include_special=False),
             }
+        elif service_name == 'hubble-ui':
+            required = {
+                'proxy_client_id': lambda: 'hubble-ui',  # Fixed client ID for Authentik proxy provider
+                'proxy_client_secret': lambda: self.generate_secure_password(40, include_special=False),
+                'cookie_secret': lambda: self.generate_secure_password(32, include_special=False),
+            }
         else:
             # Unknown service -> return empty (extensibility point)
             return {}

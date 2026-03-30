@@ -521,7 +521,7 @@ def ensure_bpf_filesystem(print_status):
         return False
 
 
-def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_status=None):
+def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_status=None, skip_dns_wizard=False):
     """Initialize NOAH environment with all dependencies"""
     
     # Default print_status function if none provided
@@ -762,6 +762,14 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
         print_status("[SUCCESS] Security infrastructure initialized", "SUCCESS")
     except Exception as e:
         print_status(f"[WARNING] Security setup incomplete: {e}", "WARNING")
+
+    # Cloudflare DNS wizard
+    if not skip_dns_wizard:
+        try:
+            from Scripts.env_init.cloudflare_wizard import CloudflareWizard
+            CloudflareWizard().run()
+        except Exception as e:
+            print_status(f"[WARNING] Cloudflare DNS wizard failed: {e}", "WARNING")
     
     # Run validation tests
     if not skip_tests:

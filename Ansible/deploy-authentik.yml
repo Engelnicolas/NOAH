@@ -278,12 +278,38 @@
           - "Validation status: {{ authentik_validation_status }}"
           - "Helm dry-run: {{ 'SUCCESS' if authentik_helm_result.rc == 0 else 'FAILED' }}"
 
+    - name: Confirm bootstrap token is present in canonical secrets store
+      ansible.builtin.command: >-
+        python {{ playbook_dir }}/../Scripts/security/export_canonical_service.py --service authentik
+      register: authentik_token_confirm
+      changed_when: false
+      failed_when: authentik_token_confirm.rc != 0
+
+    - name: Verify bootstrap token exported from canonical store
+      ansible.builtin.set_fact:
+        _token_check_line: >-
+          {{ (authentik_token_confirm.stdout.split('\n') | reject('equalto','') | list)[-1] | default('') }}
+      changed_when: false
+
+    - name: Fail if bootstrap token is absent in canonical store
+      ansible.builtin.fail:
+        msg: "AUTHENTIK_BOOTSTRAP_TOKEN is missing from the canonical secrets store. Re-run security initialization."
+      when: >-
+        _token_check_line | length == 0
+        or (_token_check_line[0] != '{')
+        or ((_token_check_line | from_json).get('bootstrap_token', '') == '')
+
+    - name: Report bootstrap token persistence status
+      ansible.builtin.debug:
+        msg: "✓ AUTHENTIK_BOOTSTRAP_TOKEN confirmed in canonical secrets store"
+
     - name: Validate Authentik standalone IAM deployment summary
       debug:
         msg:
           - "=== AUTHENTIK STANDALONE IAM DEPLOYMENT SUMMARY ==="
           - "✓ Namespace: {{ authentik_namespace }}"
           - "✓ Secrets: authentik-secret (canonical-managed)"
+          - "✓ Bootstrap token: confirmed in canonical store"
           - "✓ Helm Chart: {{ playbook_dir }}/../Helm/authentik"
           - "✓ PostgreSQL: External dependency configured"
           - "✓ Redis: External dependency configured"

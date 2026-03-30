@@ -52,7 +52,7 @@ from Scripts.cluster_create.cluster_validation_utils import check_existing_clust
 from Scripts.cluster_create.cluster_create_utils import create_cluster
 from Scripts.cluster_destroy.cluster_destroy_utils import destroy_cluster_command
 
-VERSION = "0.0.4"
+VERSION = "0.0.7"
 # Load default domain from environment, fallback to noah-infra.com
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
 def check_repository_root():
@@ -693,10 +693,11 @@ def canonical_secrets(ctx, show, service, raw):
 @setup.command()
 @click.option('--skip-deps', is_flag=True, help='Skip external dependency checks')
 @click.option('--skip-tests', is_flag=True, help='Skip validation tests')
+@click.option('--skip-dns-wizard', is_flag=True, help='Skip the interactive Cloudflare DNS wizard')
 @click.pass_context
-def initialize(ctx, skip_deps, skip_tests):
+def initialize(ctx, skip_deps, skip_tests, skip_dns_wizard):
     """Initialize NOAH environment with all dependencies"""
-    initialize_noah_environment(ctx, skip_deps, skip_tests, print_status)
+    initialize_noah_environment(ctx, skip_deps, skip_tests, print_status, skip_dns_wizard)
 
 @setup.command()
 def update_sops():

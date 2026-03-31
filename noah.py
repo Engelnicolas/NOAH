@@ -16,9 +16,12 @@ from pathlib import Path
 from Scripts.utils.paths import get_noah_paths, NOAH_PATHS
 from Scripts.security.secure_env_loader import SecureEnvLoader
 
-# Load environment variables from encrypted configuration
+# Load environment variables from encrypted configuration (best-effort on startup;
+# missing file is expected on first run — ensure_security_initialized will create it)
+_CONFIG_ENC = Path("Config/config.enc.yaml")
 secure_loader = SecureEnvLoader()
-secure_loader.load_secure_env(Path("Config/config.enc.yaml"))
+if _CONFIG_ENC.exists():
+    secure_loader.load_secure_env(_CONFIG_ENC)
 
 # Import CLI utilities
 from Scripts.cluster_destroy.kubectl_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected

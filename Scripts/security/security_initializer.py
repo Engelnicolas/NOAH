@@ -145,6 +145,7 @@ def ensure_security_initialized(ctx):
 
     # Check if config.enc.yaml is readable with the current age key; recreate if not
     config_enc = Path("Config/config.enc.yaml")
+    config_was_created = False
     if not _config_enc_readable(config_enc, age_key_file):
         if config_enc.exists():
             click.echo("[VERBOSE] config.enc.yaml exists but cannot be decrypted with current age key — recreating...")
@@ -153,8 +154,14 @@ def ensure_security_initialized(ctx):
         try:
             _create_fresh_config_enc(config_enc, age_key_file, DEFAULT_DOMAIN)
             click.echo("[VERBOSE] config.enc.yaml created and encrypted with current age key")
+            config_was_created = True
         except Exception as exc:
             click.echo(f"[WARNING] Could not create config.enc.yaml: {exc}")
+
+    # Reload config into os.environ if it was just created (startup load was skipped)
+    if config_was_created and config_enc.exists():
+        from Scripts.security.secure_env_loader import SecureEnvLoader
+        SecureEnvLoader().load_secure_env(config_enc)
 
     # Check and generate TLS certificates
     certs_dir = Path("Certificates")

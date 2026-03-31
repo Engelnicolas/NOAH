@@ -51,9 +51,10 @@ config.yaml
 config.yml
 secrets.yaml
 secrets.yml
-# Allow encrypted variants
+# Allow encrypted variants (except machine-specific config tied to local age key)
 !*.enc.yaml
 !*.enc.yml
+Config/config.enc.yaml
 
 ############################
 # Canonical Secrets & Keys #

@@ -46,31 +46,116 @@ def get_security_config(domain=None):
     }
 
 
+def _config_enc_readable(config_path: Path, age_key_file: Path) -> bool:
+    """Return True if config_path exists and can be decrypted with the current age key."""
+    if not config_path.exists():
+        return False
+    import subprocess, os
+    env = os.environ.copy()
+    env['SOPS_AGE_KEY_FILE'] = str(age_key_file)
+    result = subprocess.run(
+        ['sops', '--decrypt', str(config_path)],
+        capture_output=True, env=env
+    )
+    return result.returncode == 0
+
+
+def _create_fresh_config_enc(config_path: Path, age_key_file: Path, domain: str):
+    """Create a new config.enc.yaml encrypted with the current age key."""
+    import subprocess, os, secrets, tempfile, shutil
+    import yaml  # type: ignore
+
+    # Pull authentik secret_key from canonical store if available
+    authentik_secret_key = secrets.token_urlsafe(38)
+    try:
+        from Scripts.security.canonical_store import get_canonical_store
+        store = get_canonical_store()
+        stored = store.get_secret('authentik', 'secret_key')
+        if stored:
+            authentik_secret_key = stored
+    except Exception:
+        pass
+
+    realm = domain.upper().replace('-', '_').replace('.', '-')
+    config_data = {
+        'noah': {'version': '0.0.4', 'domain': domain},
+        'kubernetes': {
+            'cluster_name': 'noah-cluster',
+            'namespace_identity': 'identity',
+            'namespace_network': 'kube-system',
+            'api_version': '1.32',
+        },
+        'authentik': {'secret_key': authentik_secret_key},
+        'samba4': {
+            'admin_password': secrets.token_urlsafe(32),
+            'domain': domain,
+            'realm': realm,
+        },
+        'certificates': {'ca_key_password': secrets.token_urlsafe(24)},
+        'secrets': {'encryption_key': secrets.token_hex(32)},
+        'paths': {'secrets_dir': 'Scripts/Secrets'},
+    }
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    # Write plaintext to a temp file that matches the .enc.yaml pattern so .sops.yaml applies
+    with tempfile.NamedTemporaryFile(
+        mode='w', suffix='.enc.yaml', dir=str(config_path.parent),
+        delete=False, prefix='noah_cfg_tmp_'
+    ) as tmp:
+        yaml.dump(config_data, tmp, default_flow_style=False, allow_unicode=True)
+        tmp_path = Path(tmp.name)
+
+    env = os.environ.copy()
+    env['SOPS_AGE_KEY_FILE'] = str(age_key_file)
+    result = subprocess.run(
+        ['sops', '--encrypt', '--in-place', str(tmp_path)],
+        capture_output=True, env=env
+    )
+    if result.returncode != 0:
+        tmp_path.unlink(missing_ok=True)
+        raise RuntimeError(f"SOPS encryption failed: {result.stderr.decode().strip()}")
+
+    shutil.move(str(tmp_path), str(config_path))
+
+
 def ensure_security_initialized(ctx):
     """Ensure SOPS/Age keys and certificates are initialized"""
     # Get default domain from environment or fallback
     import os
     DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
-    
+
     age_dir = Path("Age")
-    sops_config = Path(".sops.yaml")
-    
+    age_key_file = age_dir / "keys.txt"
+
     # Check if Age keys exist
-    if not age_dir.exists() or not (any(age_dir.glob("*.key")) or (age_dir / "keys.txt").exists()):
+    if not age_dir.exists() or not (any(age_dir.glob("*.key")) or age_key_file.exists()):
         click.echo("[VERBOSE] No Age keys found. Auto-generating SOPS/Age keys...")
         click.echo("Initializing security infrastructure...")
-        
+
         # Create Age directory if it doesn't exist
         age_dir.mkdir(exist_ok=True)
-        
+
         # Initialize Age keys and configure SOPS
         ctx.obj['secrets'].initialize_encryption()
-        
+
         click.echo("[VERBOSE] Age keys generated successfully in Age/ directory")
         click.echo("[VERBOSE] SOPS configuration created")
     else:
         click.echo("[VERBOSE] Age keys found in Age/ directory")
-    
+
+    # Check if config.enc.yaml is readable with the current age key; recreate if not
+    config_enc = Path("Config/config.enc.yaml")
+    if not _config_enc_readable(config_enc, age_key_file):
+        if config_enc.exists():
+            click.echo("[VERBOSE] config.enc.yaml exists but cannot be decrypted with current age key — recreating...")
+        else:
+            click.echo("[VERBOSE] config.enc.yaml not found — creating fresh configuration...")
+        try:
+            _create_fresh_config_enc(config_enc, age_key_file, DEFAULT_DOMAIN)
+            click.echo("[VERBOSE] config.enc.yaml created and encrypted with current age key")
+        except Exception as exc:
+            click.echo(f"[WARNING] Could not create config.enc.yaml: {exc}")
+
     # Check and generate TLS certificates
     certs_dir = Path("Certificates")
     if not certs_dir.exists() or not any(certs_dir.glob("*.crt")):

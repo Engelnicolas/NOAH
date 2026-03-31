@@ -101,10 +101,11 @@ class CanonicalSecretsStore:
         if not self.encrypted:
             return path.read_text(encoding="utf-8")
         env = {**os.environ, "SOPS_AGE_KEY_FILE": str(self.age_key_file)}
-        result = subprocess.run(["sops", "-d", str(path)], capture_output=True, text=True)
+        result = subprocess.run(["sops", "-d", str(path)], capture_output=True, text=True, env=env, check=False)
         if result.returncode != 0:
-            # Corrupt or inaccessible; warn & fallback to empty
-            print(f"[WARNING] Failed to decrypt canonical secrets ({path}): {result.stderr.strip()}")
+            # Stale recipient or corrupt file — remove it so the next save recreates it with the current key
+            print(f"[WARNING] Canonical secrets unreadable (stale key or corrupt), resetting: {path.name}")
+            path.unlink(missing_ok=True)
             return None
         return result.stdout
 

@@ -55,6 +55,7 @@ secrets.yml
 !*.enc.yaml
 !*.enc.yml
 Config/config.enc.yaml
+Secrets/canonical-secrets.enc.yaml
 
 ############################
 # Canonical Secrets & Keys #

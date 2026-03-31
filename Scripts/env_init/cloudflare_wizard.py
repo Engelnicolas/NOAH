@@ -221,12 +221,16 @@ class CloudflareWizard:
         ) as tmp:
             tmp_path = Path(tmp.name)
 
+        age_key_file = self.project_root / "Age" / "keys.txt"
+        sops_env = {**os.environ, "SOPS_AGE_KEY_FILE": str(age_key_file)}
+
         try:
             # Decrypt
             result = subprocess.run(
                 ["sops", "--decrypt", str(self.config_file)],
                 capture_output=True,
                 text=True,
+                env=sops_env,
             )
             if result.returncode != 0:
                 print(f"[WARNING] Could not decrypt config file: {result.stderr.strip()}")
@@ -259,6 +263,7 @@ class CloudflareWizard:
                 ["sops", "--encrypt", "--in-place", str(tmp_path)],
                 capture_output=True,
                 text=True,
+                env=sops_env,
             )
             if enc_result.returncode != 0:
                 print(f"[WARNING] Could not encrypt config: {enc_result.stderr.strip()}")

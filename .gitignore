@@ -154,3 +154,5 @@ Thumbs.db
 # END
 #################################################################
 
+docs/DEPLOYMENT_GUIDE.md
+Config/noah_cfg_tmp_*.enc.yaml

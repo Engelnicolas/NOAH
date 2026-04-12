@@ -100,16 +100,16 @@ git clone https://github.com/Engelnicolas/NOAH.git
 cd NOAH
 
 # 3. Initialize environment
-python noah.py setup initialize
+python3 noah.py setup initialize
 
 # 4. Create cluster
-python noah.py cluster create --name noah-cluster --domain yourdomain.com
+python3 noah.py cluster create --name noah-cluster --domain yourdomain.com
 
 # 5. Deploy stack
-python noah.py deploy core --domain yourdomain.com
+python3 noah.py deploy core --domain yourdomain.com
 
 # 6. Get credentials
-python noah.py password show
+python3 noah.py password show
 ```
 
 **Access services:**

@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Callable
 from datetime import datetime, timezone
 
+from Scripts.security.sops_client import SopsClient
+
 class NoahSecurityManager:
     """Unified security manager for NOAH infrastructure"""
     

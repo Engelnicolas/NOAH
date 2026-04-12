@@ -44,11 +44,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Callable, Optional, Any
+import logging
 import os
-import subprocess
 import yaml
 import hashlib
 from datetime import datetime, timezone
+
+from Scripts.security.sops_client import (
+    SopsClient,
+    SopsDecryptionError,
+    SopsKeyError,
+)
+
+logger = logging.getLogger(__name__)
 
 CANONICAL_FILENAME_ENCRYPTED = "canonical-secrets.enc.yaml"
 CANONICAL_FILENAME_PLAINTEXT = "canonical-secrets.yaml"
@@ -79,12 +87,7 @@ class CanonicalSecretsStore:
             return False
         if not self.age_key_file.exists():
             return False
-        # Check sops availability
-        try:
-            result = subprocess.run(["sops", "--version"], capture_output=True, text=True, timeout=5)
-            return result.returncode == 0
-        except Exception:
-            return False
+        return SopsClient.is_available()
 
     def _encrypted_path(self) -> Path:
         return self.secrets_dir / CANONICAL_FILENAME_ENCRYPTED
@@ -100,14 +103,22 @@ class CanonicalSecretsStore:
             return None
         if not self.encrypted:
             return path.read_text(encoding="utf-8")
-        env = {**os.environ, "SOPS_AGE_KEY_FILE": str(self.age_key_file)}
-        result = subprocess.run(["sops", "-d", str(path)], capture_output=True, text=True, env=env, check=False)
-        if result.returncode != 0:
-            # Stale recipient or corrupt file — remove it so the next save recreates it with the current key
-            print(f"[WARNING] Canonical secrets unreadable (stale key or corrupt), resetting: {path.name}")
+        try:
+            with SopsClient(self.age_key_file) as sops:
+                return sops.decrypt_to_string(path)
+        except SopsKeyError as e:
+            logger.error("Age key unavailable for decryption: %s", e)
+            raise  # blocking -- cannot continue without secrets
+        except SopsDecryptionError as e:
+            # Stale recipient or corrupt file — remove it so the next save
+            # recreates it with the current key.
+            logger.warning(
+                "Canonical secrets corrupted (%s): %s -- resetting file",
+                path.name,
+                e.detail,
+            )
             path.unlink(missing_ok=True)
             return None
-        return result.stdout
 
     def _compute_integrity(self) -> str:
         """Compute SHA256 integrity hash over sorted service secrets.
@@ -163,12 +174,14 @@ class CanonicalSecretsStore:
     def _encrypt_in_place(self, path: Path) -> bool:
         if not self.encrypted:
             return True
-        env = {**os.environ, "SOPS_AGE_KEY_FILE": str(self.age_key_file)}
-        result = subprocess.run(["sops", "-e", "--in-place", str(path)], capture_output=True, text=True, env=env)
-        if result.returncode != 0:
-            print(f"[ERROR] Failed to encrypt canonical secrets: {result.stderr.strip()}")
+        from Scripts.security.sops_client import SopsEncryptionError
+        try:
+            with SopsClient(self.age_key_file) as sops:
+                sops.encrypt_in_place(path)
+            return True
+        except SopsEncryptionError as e:
+            logger.error("Failed to encrypt canonical secrets: %s", e.detail)
             return False
-        return True
 
     # ---------------- Public API ----------------
     def save(self) -> bool:

@@ -5,13 +5,14 @@ Loads environment variables from encrypted .env files using SOPS
 """
 
 import os
-import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 import logging
+import yaml
 
 from Scripts.utils.paths import NOAH_PATHS  # centralized path resolution
 from Scripts.utils.dict_utils import flatten_mapping  # shared flatten helper
+from Scripts.security.sops_client import SopsClient, SopsError
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +41,9 @@ class SecureEnvLoader:
         self.age_key_file = age_key_file or Path(NOAH_PATHS['age_key_file'])
         
     def check_sops_available(self) -> bool:
-        """Check if SOPS is available in the system"""
-        try:
-            result = subprocess.run(['sops', '--version'], 
-                                  capture_output=True, text=True)
-            return result.returncode == 0
-        except (subprocess.SubprocessError, FileNotFoundError):
-            return False
-    
+        """Check if SOPS is available in the system."""
+        return SopsClient.is_available()
+
     def check_age_key_available(self) -> bool:
         """Check if Age key file exists and is readable"""
         return self.age_key_file.exists() and self.age_key_file.is_file()
@@ -55,50 +51,24 @@ class SecureEnvLoader:
     def decrypt_env_file(self, encrypted_file: Path) -> Optional[Dict[str, str]]:
         """Decrypt a SOPS-encrypted YAML env file and return flattened key-value pairs."""
         if not encrypted_file.exists():
-            logger.warning(f"Encrypted file not found: {encrypted_file}")
+            logger.warning("Encrypted file not found: %s", encrypted_file)
             return None
-        
-        if not self.check_sops_available():
-            logger.error("SOPS not available - cannot decrypt environment file")
-            return None
-        
-        if not self.check_age_key_available():
-            logger.error(f"Age key file not found: {self.age_key_file}")
-            return None
-        
+
         try:
-            # Set Age key file for SOPS
-            env = os.environ.copy()
-            env['SOPS_AGE_KEY_FILE'] = str(self.age_key_file)
-            
-            # Decrypt the file
-            result = subprocess.run(
-                ['sops', '--decrypt', str(encrypted_file)],
-                capture_output=True,
-                text=True,
-                env=env
-            )
-            
-            if result.returncode != 0:
-                logger.error(f"SOPS decryption failed: {result.stderr}")
-                return None
-            
-            # Parse decrypted YAML
-            import yaml  # local import to limit global dependency cost
-            config = yaml.safe_load(result.stdout) or {}
-
-            if not isinstance(config, dict):
-                logger.error("Decrypted content is not a mapping; aborting load")
-                return None
-
-            env_vars = flatten_mapping(config)
-            
-            logger.info(f"Successfully loaded {len(env_vars)} environment variables from YAML")
-            return env_vars
-            
-        except Exception as e:
-            logger.error(f"Error decrypting environment file: {e}")
+            with SopsClient(self.age_key_file, self.sops_config) as sops:
+                raw = sops.decrypt_to_string(encrypted_file)
+        except SopsError as e:
+            logger.error("SOPS decryption failed for %s: %s", encrypted_file, e)
             return None
+
+        config = yaml.safe_load(raw) or {}
+        if not isinstance(config, dict):
+            logger.error("Decrypted content is not a mapping")
+            return None
+
+        env_vars = flatten_mapping(config)
+        logger.info("Successfully loaded %d environment variables from YAML", len(env_vars))
+        return env_vars
     
     def read_secure_env(self, encrypted_file: Optional[Path] = None) -> Tuple[Optional[Dict[str, str]], Optional[str]]:
         """Return decrypted environment mapping without mutating os.environ.
@@ -138,37 +108,19 @@ class SecureEnvLoader:
         return True
     
     def create_encrypted_env(self, source_file: Path, target_file: Path) -> bool:
-        """Encrypt a plain .env file using SOPS"""
+        """Encrypt a plain .env file using SOPS."""
         if not source_file.exists():
-            logger.error(f"Source file not found: {source_file}")
+            logger.error("Source file not found: %s", source_file)
             return False
-        
-        if not self.check_sops_available():
-            logger.error("SOPS not available - cannot encrypt environment file")
-            return False
-        
+
+        from Scripts.security.sops_client import SopsEncryptionError
         try:
-            # Set Age key file for SOPS
-            env = os.environ.copy()
-            env['SOPS_AGE_KEY_FILE'] = str(self.age_key_file)
-            
-            # Encrypt the file
-            result = subprocess.run(
-                ['sops', '--encrypt', '--output', str(target_file), str(source_file)],
-                capture_output=True,
-                text=True,
-                env=env
-            )
-            
-            if result.returncode != 0:
-                logger.error(f"SOPS encryption failed: {result.stderr}")
-                return False
-            
-            logger.info(f"Successfully encrypted {source_file} to {target_file}")
+            with SopsClient(self.age_key_file, self.sops_config) as sops:
+                sops.encrypt_to(source_file, target_file)
+            logger.info("Successfully encrypted %s to %s", source_file, target_file)
             return True
-            
-        except Exception as e:
-            logger.error(f"Error encrypting environment file: {e}")
+        except SopsEncryptionError as e:
+            logger.error("SOPS encryption failed: %s", e)
             return False
 
 # Convenience functions for NOAH

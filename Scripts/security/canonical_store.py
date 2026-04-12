@@ -53,6 +53,7 @@ from datetime import datetime, timezone
 from Scripts.security.sops_client import (
     SopsClient,
     SopsDecryptionError,
+    SopsError,
     SopsKeyError,
 )
 
@@ -116,6 +117,18 @@ class CanonicalSecretsStore:
                 "Canonical secrets corrupted (%s): %s -- resetting file",
                 path.name,
                 e.detail,
+            )
+            path.unlink(missing_ok=True)
+            return None
+        except SopsError as e:
+            # Covers SopsConfigError, SopsTimeoutError, SopsBinaryNotFoundError,
+            # and the base-class catch-all (e.g. "File has no SOPS metadata" when
+            # a previous save left a plaintext file with an .enc.yaml name).
+            # Treat every such case as a corrupt/stale file and reset.
+            logger.warning(
+                "Canonical secrets unreadable (%s): %s -- resetting file",
+                path.name,
+                e.detail or str(e),
             )
             path.unlink(missing_ok=True)
             return None
@@ -200,6 +213,12 @@ class CanonicalSecretsStore:
         path.write_text(yaml_str, encoding="utf-8")
         if self.encrypted:
             if not self._encrypt_in_place(path):
+                # Encryption failed — remove the plaintext file so a subsequent
+                # startup does not try (and fail) to SOPS-decrypt a plain YAML.
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
                 return False
         return True
 

@@ -21,7 +21,7 @@
 
     - name: Export canonical Authentik secrets (script)
       command: >-
-        python {{ playbook_dir }}/../Scripts/security/export_canonical_service.py --service authentik
+        python3 {{ playbook_dir }}/../Scripts/security/export_canonical_service.py --service authentik
       register: authentik_canonical_output
       changed_when: false
 
@@ -35,14 +35,14 @@
         _json_line: "{{ _raw_lines[-1] if (_raw_lines | length) > 0 else '' }}"
       changed_when: false
 
-    - name: Fail if JSON payload missing or not starting with '{'
+    - name: Fail if JSON payload missing or not a mapping
       ansible.builtin.fail:
         msg: "Canonical secrets export did not produce JSON on last line"
-      when: _json_line | length == 0 or (_json_line[0] != '{')
+      when: _json_line | length == 0 or not (_json_line is mapping)
 
     - name: Convert canonical JSON to fact
       set_fact:
-        authentik_canonical: "{{ _json_line | from_json }}"
+        authentik_canonical: "{{ _json_line }}"
       changed_when: false
 
     - name: Create/Update Authentik Kubernetes Secret from canonical store
@@ -79,12 +79,15 @@
         patterns: "*{{ domain_name | default('noah-infra.com') }}.key"
       register: tls_key_files
 
-    - name: Fail if TLS certificate files not found
-      ansible.builtin.fail:
-        msg: "TLS certificate or key file not found for domain {{ domain_name | default('noah-infra.com') }}"
+    - name: Warn if TLS certificate files not found (cert-manager will provision TLS)
+      ansible.builtin.debug:
+        msg: >-
+          No local TLS certificate found for {{ domain_name | default('noah-infra.com') }}.
+          cert-manager will provision the authentik-tls secret automatically via the
+          letsencrypt-prod cluster-issuer annotation on the ingress.
       when: (tls_cert_files.matched == 0) or (tls_key_files.matched == 0)
 
-    - name: Create TLS secret for Authentik ingress
+    - name: Create TLS secret for Authentik ingress (local cert)
       kubernetes.core.k8s:
         definition:
           apiVersion: v1
@@ -97,6 +100,7 @@
             tls.crt: "{{ lookup('file', tls_cert_files.files[0].path) | b64encode }}"
             tls.key: "{{ lookup('file', tls_key_files.files[0].path) | b64encode }}"
       register: authentik_tls_secret_apply
+      when: tls_cert_files.matched > 0 and tls_key_files.matched > 0
 
     - name: Report Authentik secret status
       debug:
@@ -107,6 +111,7 @@
       debug:
         msg: >-
           TLS secret {{ 'created/updated' if authentik_tls_secret_apply.changed else 'is up-to-date' }} for ingress
+      when: authentik_tls_secret_apply is defined
 
     - name: Create Authentik values file for Helm deployment
       copy:
@@ -280,7 +285,7 @@
 
     - name: Confirm bootstrap token is present in canonical secrets store
       ansible.builtin.command: >-
-        python {{ playbook_dir }}/../Scripts/security/export_canonical_service.py --service authentik
+        python3 {{ playbook_dir }}/../Scripts/security/export_canonical_service.py --service authentik
       register: authentik_token_confirm
       changed_when: false
       failed_when: authentik_token_confirm.rc != 0
@@ -296,8 +301,8 @@
         msg: "AUTHENTIK_BOOTSTRAP_TOKEN is missing from the canonical secrets store. Re-run security initialization."
       when: >-
         _token_check_line | length == 0
-        or (_token_check_line[0] != '{')
-        or ((_token_check_line | from_json).get('bootstrap_token', '') == '')
+        or not (_token_check_line is mapping)
+        or (_token_check_line.bootstrap_token | default('') == '')
 
     - name: Report bootstrap token persistence status
       ansible.builtin.debug:

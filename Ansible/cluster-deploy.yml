@@ -142,15 +142,15 @@
               when: validation_mode is defined and validation_mode == 'development'
 
             - name: Wait for Cilium pods Ready (production)
-              kubernetes.core.k8s_info:
-                kind: Pod
-                namespace: kube-system
-                label_selectors:
-                  - k8s-app=cilium
-              register: cilium_pods
-              until: cilium_pods.resources | length > 0 and (cilium_pods.resources | map(attribute='status.containerStatuses') | map('first') | selectattr('ready') | list | length) == (cilium_pods.resources | length)
-              retries: "{{ (cilium_wait_timeout | int // 5) | int }}"
-              delay: 5
+              ansible.builtin.command: >-
+                kubectl wait pod
+                -n kube-system
+                -l k8s-app=cilium
+                --for=condition=Ready
+                --timeout={{ cilium_wait_timeout }}s
+              register: cilium_pods_wait
+              changed_when: false
+              failed_when: cilium_pods_wait.rc != 0
               when: validation_mode != 'development'
 
             - name: Check Cilium operator rollout (production)
@@ -168,7 +168,7 @@
               register: cilium_operator_rollout
               changed_when: false
               failed_when: cilium_operator_rollout.rc != 0
-              when: validation_mode != 'development' and (cilium_operator.resources | length) > 0
+              when: validation_mode != 'development' and (cilium_operator.resources | default([]) | length) > 0
 
             - name: Check Hubble UI service presence (production)
               kubernetes.core.k8s_info:
@@ -298,7 +298,7 @@
 
             - name: Export Authentik bootstrap token for Hubble SSO provisioning
               ansible.builtin.command: >-
-                python {{ noah_root_dir }}/Scripts/security/export_canonical_service.py --service authentik
+                python3 {{ noah_root_dir }}/Scripts/security/export_canonical_service.py --service authentik
               register: authentik_for_hubble
               changed_when: false
               failed_when: authentik_for_hubble.rc != 0
@@ -311,7 +311,7 @@
 
             - name: Provision Hubble UI forward-auth proxy app in Authentik
               ansible.builtin.command: >-
-                python {{ noah_root_dir }}/Scripts/security/authentik_provisioner.py provision-hubble
+                python3 {{ noah_root_dir }}/Scripts/security/authentik_provisioner.py provision-hubble
                 --domain {{ domain_name }}
               environment:
                 AUTHENTIK_URL: "https://auth.{{ domain_name }}"
@@ -419,15 +419,14 @@
               when: validation_mode != 'development'
 
             - name: Check Headlamp pod readiness (production)
-              kubernetes.core.k8s_info:
-                kind: Pod
-                namespace: kube-system
-                label_selectors:
-                  - app.kubernetes.io/name=headlamp
-              register: headlamp_pods
-              until: headlamp_pods.resources | length > 0 and (headlamp_pods.resources | map(attribute='status.containerStatuses') | map('first') | selectattr('ready') | list | length) == (headlamp_pods.resources | length)
-              retries: 20
-              delay: 10
+              ansible.builtin.command: >-
+                kubectl wait pod
+                -n kube-system
+                -l app.kubernetes.io/name=headlamp
+                --for=condition=Ready
+                --timeout=200s
+              register: headlamp_pods_wait
+              changed_when: false
               failed_when: false
               when: validation_mode != 'development'
 

@@ -143,6 +143,8 @@
           # External PostgreSQL configuration
           postgresql:
             enabled: true
+            image:
+              tag: latest
             auth:
               postgresPassword: "{{ authentik_canonical.postgresql_password }}"
               username: "authentik"
@@ -163,6 +165,8 @@
           # External Redis configuration
           redis:
             enabled: true
+            image:
+              tag: latest
             auth:
               enabled: true
               password: "{{ authentik_canonical.redis_password }}"

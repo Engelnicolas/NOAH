@@ -103,7 +103,7 @@ cd NOAH
 python3 noah.py setup initialize
 
 # 4. Create cluster
-python3 noah.py cluster create --name noah-cluster --domain yourdomain.com
+python3 noah.py cluster create --name noah-cluster
 
 # 5. Deploy stack
 python3 noah.py deploy core --domain yourdomain.com

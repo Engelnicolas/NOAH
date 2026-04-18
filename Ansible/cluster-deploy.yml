@@ -6,7 +6,7 @@
     cluster_name: "{{ cluster_name | default('noah-cluster') }}"
     domain_name: "{{ domain_name | default('noah-infra.com') }}"
     validation_mode: "{{ validation_mode | default('production') }}"  # validation modes: production (default) or development
-    strict_development_validation: "{{ strict_development_validation | default(false) }}"  # dev-only hard fail toggle
+    strict_development_validation: false  # dev-only hard fail toggle (override with -e strict_development_validation=true)
     verbose_mode: true  # Enable verbose output by default
     # Use raw numbers to avoid self-referential recursion; allow override via --extra-vars
     cilium_wait_timeout: 300   # seconds (override with -e cilium_wait_timeout=900)
@@ -267,7 +267,7 @@
             - name: Report TLS secret status (production)
               ansible.builtin.debug:
                 msg: >-
-                  {{ '✓ TLS secret authentik-tls present' if (authentik_tls_secret.resources | length) > 0 else '⚠️  TLS secret authentik-tls not found yet' }}
+                  {{ '✓ TLS secret authentik-tls present' if (authentik_tls_secret.resources | default([]) | length) > 0 else '⚠️  TLS secret authentik-tls not found yet' }}
               when: validation_mode != 'development'
 
             - name: DNS resolution for auth.<domain> with retry (production)
@@ -447,7 +447,7 @@
             - name: Report Headlamp TLS secret status (production)
               ansible.builtin.debug:
                 msg: >-
-                  {{ '✓ TLS secret headlamp-tls present' if (headlamp_tls_secret.resources | length) > 0 else '⚠️  TLS secret headlamp-tls not found yet' }}
+                  {{ '✓ TLS secret headlamp-tls present' if (headlamp_tls_secret.resources | default([]) | length) > 0 else '⚠️  TLS secret headlamp-tls not found yet' }}
               when: validation_mode != 'development'
 
           tags: [headlamp, dashboard]

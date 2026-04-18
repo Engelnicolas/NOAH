@@ -173,7 +173,8 @@ class SopsClient:
         tmp_path: Optional[Path] = None
         try:
             # 1. Copy plaintext to a temp file in the same directory.
-            fd, tmp_str = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+            # Suffix must match a .sops.yaml creation rule so SOPS can find the key.
+            fd, tmp_str = tempfile.mkstemp(dir=path.parent, suffix=".enc.yaml")
             tmp_path = Path(tmp_str)
             os.close(fd)
             tmp_path.write_bytes(path.read_bytes())

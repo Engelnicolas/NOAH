@@ -32,7 +32,7 @@ class NoahSecurityManager:
             config_loader: Optional configuration loader (for backward compatibility)
             project_root: Project root directory (auto-detected if not provided)
         """
-        self.project_root = Path(project_root) if project_root else Path(__file__).parent.parent
+        self.project_root = Path(project_root) if project_root else Path(__file__).parent.parent.parent
         self.config = config_loader
         
         # Directory structure

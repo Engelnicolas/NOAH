@@ -13,7 +13,7 @@
   tasks:
     - name: Record nginx-ingress deployment start
       ansible.builtin.set_fact:
-        nginx_ingress_start: "{{ ansible_date_time.epoch | int }}"
+        nginx_ingress_start: "{{ lookup('pipe', 'date +%s') | int }}"
 
     - name: Add ingress-nginx Helm repository
       kubernetes.core.helm_repository:
@@ -156,7 +156,7 @@
 
     - name: Record nginx-ingress deployment end
       ansible.builtin.set_fact:
-        nginx_ingress_end: "{{ ansible_date_time.epoch | int }}"
+        nginx_ingress_end: "{{ lookup('pipe', 'date +%s') | int }}"
 
     - name: Display nginx-ingress deployment summary
       ansible.builtin.debug:

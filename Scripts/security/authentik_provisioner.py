@@ -92,6 +92,16 @@ class AuthentikProvisioner:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _raise_for_status(self, resp: requests.Response) -> None:
+        if resp.status_code in (401, 403):
+            raise RuntimeError(
+                f"Authentik API returned {resp.status_code}: the bootstrap token is invalid or "
+                "does not match the token stored in the Authentik database. "
+                "Ensure AUTHENTIK_BOOTSTRAP_TOKEN matches the 'bootstrap-token' key in the "
+                "'authentik-secret' Kubernetes secret (namespace: identity)."
+            )
+        resp.raise_for_status()
+
     def _get(self, path: str, params: Optional[dict] = None) -> requests.Response:
         url = f"{self.api_url}{path}"
         return self.session.get(url, params=params, timeout=self.timeout, verify=self.verify_ssl)
@@ -111,7 +121,7 @@ class AuthentikProvisioner:
     def _list_first(self, path: str, params: dict) -> Optional[dict]:
         """Return the first result from a paginated list endpoint, or None."""
         resp = self._get(path, params=params)
-        resp.raise_for_status()
+        self._raise_for_status(resp)
         results = resp.json().get("results", [])
         return results[0] if results else None
 
@@ -125,7 +135,7 @@ class AuthentikProvisioner:
         if not flow:
             # Fall back to the first available authorization flow
             resp = self._get("/flows/instances/", params={"designation": "authorization"})
-            resp.raise_for_status()
+            self._raise_for_status(resp)
             results = resp.json().get("results", [])
             if not results:
                 raise RuntimeError("No authorization flows found in Authentik.")
@@ -157,7 +167,7 @@ class AuthentikProvisioner:
         if not outpost:
             # Fall back to first proxy outpost
             resp = self._get("/outposts/instances/", params={"type": "proxy"})
-            resp.raise_for_status()
+            self._raise_for_status(resp)
             results = resp.json().get("results", [])
             outpost = results[0] if results else None
         return outpost
@@ -206,7 +216,7 @@ class AuthentikProvisioner:
             payload["property_mappings"] = property_mapping_pks
 
         resp = self._post("/providers/oauth2/", payload)
-        resp.raise_for_status()
+        self._raise_for_status(resp)
         provider = resp.json()
         logger.info("Created OIDC provider '%s' (pk=%s).", name, provider["pk"])
         return provider
@@ -249,7 +259,7 @@ class AuthentikProvisioner:
             "refresh_token_validity": "days=30",
         }
         resp = self._post("/providers/proxy/", payload)
-        resp.raise_for_status()
+        self._raise_for_status(resp)
         provider = resp.json()
         logger.info("Created proxy provider '%s' (pk=%s).", name, provider["pk"])
         return provider
@@ -288,7 +298,7 @@ class AuthentikProvisioner:
             payload["group"] = group
 
         resp = self._post("/core/applications/", payload)
-        resp.raise_for_status()
+        self._raise_for_status(resp)
         app = resp.json()
         logger.info("Created application '%s'.", slug)
         return app
@@ -306,7 +316,7 @@ class AuthentikProvisioner:
 
         updated = list(current_providers) + [provider_pk]
         resp = self._patch(f"/outposts/instances/{outpost['pk']}/", {"providers": updated})
-        resp.raise_for_status()
+        self._raise_for_status(resp)
         logger.info("Added provider %s to outpost '%s'.", provider_pk, outpost.get("name"))
 
     # ------------------------------------------------------------------
@@ -414,7 +424,7 @@ class AuthentikProvisioner:
 
         provider_pk = app.get("provider")
         resp = self._delete(f"/core/applications/{app['pk']}/")
-        resp.raise_for_status()
+        self._raise_for_status(resp)
         logger.info("Deleted application '%s'.", slug)
 
         if provider_pk:

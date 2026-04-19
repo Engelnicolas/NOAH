@@ -224,16 +224,15 @@
 
     - name: Provision Headlamp OIDC application in Authentik
       block:
-        - name: Export Authentik bootstrap token for provisioner
+        - name: Read Authentik bootstrap token from Kubernetes secret
           ansible.builtin.command: >-
-            python3 {{ playbook_dir }}/../Scripts/security/export_canonical_service.py --service authentik
-          register: authentik_for_headlamp
+            kubectl get secret authentik-secret -n identity -o jsonpath={.data.bootstrap-token}
+          register: authentik_token_b64_headlamp
           changed_when: false
 
-        - name: Parse Authentik secrets for provisioner
+        - name: Decode Authentik bootstrap token for Headlamp OIDC provisioning
           ansible.builtin.set_fact:
-            _authentik_json: >-
-              {{ (authentik_for_headlamp.stdout.split('\n') | reject('equalto','') | list)[-1] | default('{}') | from_json }}
+            _authentik_bootstrap_token_headlamp: "{{ authentik_token_b64_headlamp.stdout | b64decode }}"
           changed_when: false
 
         - name: Start Authentik port-forward for Headlamp OIDC provisioning
@@ -255,7 +254,7 @@
             --domain {{ domain_name | default('noah-infra.com') }}
           environment:
             AUTHENTIK_URL: "http://localhost:19001"
-            AUTHENTIK_BOOTSTRAP_TOKEN: "{{ _authentik_json.bootstrap_token | default('') }}"
+            AUTHENTIK_BOOTSTRAP_TOKEN: "{{ _authentik_bootstrap_token_headlamp }}"
             HEADLAMP_OIDC_CLIENT_ID: "{{ headlamp_canonical.oidc_client_id }}"
             HEADLAMP_OIDC_CLIENT_SECRET: "{{ headlamp_canonical.oidc_client_secret }}"
             AUTHENTIK_VERIFY_SSL: "false"

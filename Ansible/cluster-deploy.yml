@@ -346,17 +346,16 @@
               ansible.builtin.set_fact:
                 phase_hubble_sso_started: "{{ ansible_date_time.epoch | int }}"
 
-            - name: Export Authentik bootstrap token for Hubble SSO provisioning
+            - name: Read Authentik bootstrap token from Kubernetes secret
               ansible.builtin.command: >-
-                python3 {{ noah_root_dir }}/Scripts/security/export_canonical_service.py --service authentik
-              register: authentik_for_hubble
+                kubectl get secret authentik-secret -n identity -o jsonpath={.data.bootstrap-token}
+              register: authentik_token_b64_hubble
               changed_when: false
-              failed_when: authentik_for_hubble.rc != 0
+              failed_when: authentik_token_b64_hubble.rc != 0
 
-            - name: Parse Authentik secrets for Hubble SSO provisioning
+            - name: Decode Authentik bootstrap token for Hubble SSO provisioning
               ansible.builtin.set_fact:
-                _authentik_hubble_json: >-
-                  {{ (authentik_for_hubble.stdout.split('\n') | reject('equalto','') | list)[-1] | default('{}') | from_json }}
+                _authentik_bootstrap_token_hubble: "{{ authentik_token_b64_hubble.stdout | b64decode }}"
               changed_when: false
 
             - name: Start Authentik port-forward for Hubble SSO provisioning
@@ -378,7 +377,7 @@
                 --domain {{ domain_name }}
               environment:
                 AUTHENTIK_URL: "http://localhost:19000"
-                AUTHENTIK_BOOTSTRAP_TOKEN: "{{ _authentik_hubble_json.bootstrap_token | default('') }}"
+                AUTHENTIK_BOOTSTRAP_TOKEN: "{{ _authentik_bootstrap_token_hubble }}"
                 AUTHENTIK_VERIFY_SSL: "false"
               register: hubble_provision_result
               changed_when: hubble_provision_result.rc == 0

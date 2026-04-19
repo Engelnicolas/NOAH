@@ -236,19 +236,37 @@
               {{ (authentik_for_headlamp.stdout.split('\n') | reject('equalto','') | list)[-1] | default('{}') | from_json }}
           changed_when: false
 
+        - name: Start Authentik port-forward for Headlamp OIDC provisioning
+          ansible.builtin.shell: >-
+            kubectl port-forward -n identity svc/authentik-server 19001:9000 &
+            echo $!
+          register: authentik_pf_headlamp
+          changed_when: false
+
+        - name: Wait for Authentik port-forward to be ready
+          ansible.builtin.wait_for:
+            host: localhost
+            port: 19001
+            timeout: 30
+
         - name: Run Authentik provisioner for Headlamp OIDC app
           ansible.builtin.command: >-
             python3 {{ playbook_dir }}/../Scripts/security/authentik_provisioner.py provision-headlamp
             --domain {{ domain_name | default('noah-infra.com') }}
           environment:
-            AUTHENTIK_URL: "https://auth.{{ domain_name | default('noah-infra.com') }}"
+            AUTHENTIK_URL: "http://localhost:19001"
             AUTHENTIK_BOOTSTRAP_TOKEN: "{{ _authentik_json.bootstrap_token | default('') }}"
             HEADLAMP_OIDC_CLIENT_ID: "{{ headlamp_canonical.oidc_client_id }}"
             HEADLAMP_OIDC_CLIENT_SECRET: "{{ headlamp_canonical.oidc_client_secret }}"
-            AUTHENTIK_VERIFY_SSL: "true"
+            AUTHENTIK_VERIFY_SSL: "false"
           register: headlamp_provision_result
           changed_when: headlamp_provision_result.rc == 0
           failed_when: headlamp_provision_result.rc != 0
+
+        - name: Stop Authentik port-forward for Headlamp OIDC provisioning
+          ansible.builtin.shell: "kill {{ authentik_pf_headlamp.stdout_lines[-1] }} 2>/dev/null || true"
+          changed_when: false
+          when: authentik_pf_headlamp is defined
 
         - name: Display Headlamp OIDC provisioning result
           ansible.builtin.debug:

@@ -44,18 +44,15 @@ tls:
 
 ingress:
   enabled: true                 # Enable ingress for OIDC endpoints
-  className: cilium             # Options: "nginx", "cilium", or "traefik"
+  className: nginx
   annotations:
-    # Common annotations for all ingress controllers
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    # Nginx-specific (when className: nginx)
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    # OIDC-specific headers
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      more_set_headers "Access-Control-Allow-Origin: *";
-      more_set_headers "Access-Control-Allow-Methods: GET, POST, OPTIONS";
-      more_set_headers "Access-Control-Allow-Headers: Authorization, Content-Type";
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type"
   
   # Static host configuration (used when ConfigLoader values are not provided)
   # These will be ignored if service.fqdn or computed FQDN is available

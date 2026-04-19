@@ -359,18 +359,36 @@
                   {{ (authentik_for_hubble.stdout.split('\n') | reject('equalto','') | list)[-1] | default('{}') | from_json }}
               changed_when: false
 
+            - name: Start Authentik port-forward for Hubble SSO provisioning
+              ansible.builtin.shell: >-
+                kubectl port-forward -n identity svc/authentik-server 19000:9000 &
+                echo $!
+              register: authentik_pf_hubble
+              changed_when: false
+
+            - name: Wait for Authentik port-forward to be ready
+              ansible.builtin.wait_for:
+                host: localhost
+                port: 19000
+                timeout: 30
+
             - name: Provision Hubble UI forward-auth proxy app in Authentik
               ansible.builtin.command: >-
                 python3 {{ noah_root_dir }}/Scripts/security/authentik_provisioner.py provision-hubble
                 --domain {{ domain_name }}
               environment:
-                AUTHENTIK_URL: "https://auth.{{ domain_name }}"
+                AUTHENTIK_URL: "http://localhost:19000"
                 AUTHENTIK_BOOTSTRAP_TOKEN: "{{ _authentik_hubble_json.bootstrap_token | default('') }}"
-                AUTHENTIK_VERIFY_SSL: "true"
+                AUTHENTIK_VERIFY_SSL: "false"
               register: hubble_provision_result
               changed_when: hubble_provision_result.rc == 0
               failed_when: hubble_provision_result.rc != 0
               when: enable_hubble | bool
+
+            - name: Stop Authentik port-forward for Hubble SSO provisioning
+              ansible.builtin.shell: "kill {{ authentik_pf_hubble.stdout_lines[-1] }} 2>/dev/null || true"
+              changed_when: false
+              when: authentik_pf_hubble is defined
 
             - name: Display Hubble UI SSO provisioning result
               ansible.builtin.debug:

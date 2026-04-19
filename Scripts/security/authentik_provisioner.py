@@ -64,16 +64,16 @@ class AuthentikProvisioner:
 
     def wait_ready(self, max_retries: int = 30, delay: int = 10) -> bool:
         """
-        Poll Authentik's /api/v3/-/health/ready/ until it responds 200.
+        Poll Authentik's /-/health/ready/ until it responds 200 or 204.
 
         Returns:
             True when ready, False if max_retries exceeded.
         """
-        url = f"{self.api_url}/-/health/ready/"
+        url = f"{self.base_url}/-/health/ready/"
         for attempt in range(1, max_retries + 1):
             try:
                 resp = self.session.get(url, timeout=self.timeout, verify=self.verify_ssl)
-                if resp.status_code == 200:
+                if resp.status_code in (200, 204):
                     logger.info("Authentik is ready.")
                     return True
                 logger.debug(

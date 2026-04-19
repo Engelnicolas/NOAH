@@ -144,6 +144,11 @@ class NoahSecurityManager:
                 'proxy_client_secret': lambda: self.generate_secure_password(40, include_special=False),
                 'cookie_secret': lambda: self.generate_secure_password(32, include_special=False),
             }
+        elif service_name == 'cloudflare':
+            # api_token cannot be auto-generated — stored empty until set via set-cloudflare-token
+            required = {
+                'api_token': lambda: '',
+            }
         else:
             # Unknown service -> return empty (extensibility point)
             return {}

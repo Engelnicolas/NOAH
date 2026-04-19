@@ -93,6 +93,24 @@
       ansible.builtin.set_fact:
         cluster_name: "{{ cluster_name | default('noah-cluster') }}"
 
+    - name: Get node public IP for external-dns default target (AWS EC2 IMDS)
+      ansible.builtin.shell: |
+        PUBLIC_IP=$(curl -sf --max-time 3 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)
+        if [ -z "$PUBLIC_IP" ]; then
+          PUBLIC_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}' 2>/dev/null || true)
+        fi
+        if [ -z "$PUBLIC_IP" ]; then
+          PUBLIC_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+        fi
+        echo "$PUBLIC_IP"
+      register: external_dns_target_ip_raw
+      changed_when: false
+      failed_when: false
+
+    - name: Set external-dns default target IP
+      ansible.builtin.set_fact:
+        external_dns_target_ip: "{{ external_dns_target_ip_raw.stdout | trim }}"
+
     - name: Create external-dns values file for Helm deployment
       ansible.builtin.copy:
         content: |
@@ -121,6 +139,11 @@
             sources:
               - ingress
               - service
+
+            # defaultTargets ensures the correct public IP is used even when
+            # nginx-ingress runs as ClusterIP+hostNetwork (no LoadBalancer status IP).
+            defaultTargets:
+              - "{{ external_dns_target_ip }}"
 
             logLevel: info
             logFormat: text

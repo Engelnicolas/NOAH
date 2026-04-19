@@ -42,8 +42,26 @@
 
             - name: Check if external-dns deployment is enabled
               ansible.builtin.set_fact:
-                external_dns_enabled: "{{ lookup('env', 'NOAH_EXTERNAL_DNS_ENABLED') | default('false') }}"
-                cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') | default('') }}"
+                external_dns_enabled: "{{ lookup('env', 'NOAH_EXTERNAL_DNS_ENABLED') | default('true') }}"
+
+            - name: Resolve Cloudflare API token (env var → canonical store)
+              ansible.builtin.shell: |
+                TOKEN="{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
+                if [ -z "$TOKEN" ]; then
+                  TOKEN=$(python3 {{ noah_root_dir }}/Scripts/security/export_canonical_service.py \
+                    --service cloudflare 2>/dev/null \
+                    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('api_token',''))" \
+                    2>/dev/null || true)
+                fi
+                echo "$TOKEN"
+              register: _cloudflare_token_result
+              changed_when: false
+              no_log: true
+
+            - name: Set Cloudflare API token fact
+              ansible.builtin.set_fact:
+                cloudflare_api_token: "{{ _cloudflare_token_result.stdout | trim }}"
+              no_log: true
 
             - name: Deploy external-dns for automatic DNS management
               ansible.builtin.command: >-
@@ -63,14 +81,15 @@
               ansible.builtin.debug:
                 msg:
                   - "⚠️  External-DNS deployment skipped"
-                  - "Reason: {{ 'Not enabled (NOAH_EXTERNAL_DNS_ENABLED=false)' if not (external_dns_enabled | bool) else 'No Cloudflare API token provided (CLOUDFLARE_API_TOKEN)' }}"
+                  - "Reason: {{ 'Disabled (NOAH_EXTERNAL_DNS_ENABLED=false)' if not (external_dns_enabled | bool) else 'Cloudflare API token not found' }}"
                   - ""
-                  - "To enable automatic DNS management:"
-                  - "  1. Set NOAH_EXTERNAL_DNS_ENABLED=true"
-                  - "  2. Set CLOUDFLARE_API_TOKEN='your-token-here'"
-                  - "  3. Re-run deployment"
+                  - "To enable automatic DNS management, store the token once:"
+                  - "  python3 Scripts/security/set_cloudflare_token.py <your-token>"
                   - ""
-                  - "DNS records will need to be managed manually."
+                  - "Or pass it via environment variable:"
+                  - "  export CLOUDFLARE_API_TOKEN='your-token-here'"
+                  - ""
+                  - "DNS records will need to be managed manually until then."
               when: not (external_dns_enabled | bool and cloudflare_api_token != '')
 
             - name: Record external-dns phase end time
@@ -109,7 +128,29 @@
               failed_when: cluster_check.rc != 0
           
           tags: [validation]
-        
+
+        - name: "PHASE 1.5: Deploy cert-manager (TLS Certificate Management)"
+          block:
+            - name: Record cert-manager phase start time
+              ansible.builtin.set_fact:
+                phase_certmgr_started: "{{ ansible_date_time.epoch | int }}"
+
+            - name: Deploy cert-manager and ClusterIssuers
+              ansible.builtin.command: >-
+                ansible-playbook deploy-cert-manager.yml
+                -e domain_name="{{ domain_name }}"
+                -e letsencrypt_email="{{ letsencrypt_email | default('admin@' + domain_name) }}"
+              args:
+                chdir: "{{ playbook_dir }}"
+              register: certmgr_subplay
+              failed_when: certmgr_subplay.rc != 0
+
+            - name: Record cert-manager phase end time
+              ansible.builtin.set_fact:
+                phase_certmgr_ended: "{{ ansible_date_time.epoch | int }}"
+
+          tags: [cert-manager, tls]
+
         - name: "PHASE 2: Deploy Cilium CNI (Network Foundation)"
           block:
             - name: Record Cilium phase start time
@@ -346,54 +387,66 @@
               ansible.builtin.set_fact:
                 phase_hubble_sso_started: "{{ ansible_date_time.epoch | int }}"
 
-            - name: Read Authentik bootstrap token from Kubernetes secret
-              ansible.builtin.command: >-
-                kubectl get secret authentik-secret -n identity -o jsonpath={.data.bootstrap-token}
-              register: authentik_token_b64_hubble
-              changed_when: false
-              failed_when: authentik_token_b64_hubble.rc != 0
+            # ── Sub-block: Authentik provisioning (non-fatal on failure) ──────
+            - name: Provision Hubble UI app in Authentik
+              block:
+                - name: Read Authentik bootstrap token from Kubernetes secret
+                  ansible.builtin.command: >-
+                    kubectl get secret authentik-secret -n identity -o jsonpath={.data.bootstrap-token}
+                  register: authentik_token_b64_hubble
+                  changed_when: false
+                  failed_when: authentik_token_b64_hubble.rc != 0
 
-            - name: Decode Authentik bootstrap token for Hubble SSO provisioning
-              ansible.builtin.set_fact:
-                _authentik_bootstrap_token_hubble: "{{ authentik_token_b64_hubble.stdout | b64decode }}"
-              changed_when: false
+                - name: Decode Authentik bootstrap token for Hubble SSO provisioning
+                  ansible.builtin.set_fact:
+                    _authentik_bootstrap_token_hubble: "{{ authentik_token_b64_hubble.stdout | b64decode }}"
+                  changed_when: false
 
-            - name: Start Authentik port-forward for Hubble SSO provisioning
-              ansible.builtin.command: kubectl port-forward -n identity svc/authentik-server 19000:9000
-              async: 120
-              poll: 0
-              register: authentik_pf_hubble
-              changed_when: false
+                - name: Start Authentik port-forward for Hubble SSO provisioning
+                  ansible.builtin.command: kubectl port-forward -n identity svc/authentik-server 19000:9000
+                  async: 120
+                  poll: 0
+                  register: authentik_pf_hubble
+                  changed_when: false
 
-            - name: Wait for Authentik port-forward to be ready
-              ansible.builtin.wait_for:
-                host: localhost
-                port: 19000
-                timeout: 30
+                - name: Wait for Authentik port-forward to be ready
+                  ansible.builtin.wait_for:
+                    host: localhost
+                    port: 19000
+                    timeout: 30
 
-            - name: Provision Hubble UI forward-auth proxy app in Authentik
-              ansible.builtin.command: >-
-                python3 {{ noah_root_dir }}/Scripts/security/authentik_provisioner.py provision-hubble
-                --domain {{ domain_name }}
-              environment:
-                AUTHENTIK_URL: "http://localhost:19000"
-                AUTHENTIK_BOOTSTRAP_TOKEN: "{{ _authentik_bootstrap_token_hubble }}"
-                AUTHENTIK_VERIFY_SSL: "false"
-              register: hubble_provision_result
-              changed_when: hubble_provision_result.rc == 0
-              failed_when: hubble_provision_result.rc != 0
+                - name: Provision Hubble UI forward-auth proxy app in Authentik
+                  ansible.builtin.command: >-
+                    python3 {{ noah_root_dir }}/Scripts/security/authentik_provisioner.py provision-hubble
+                    --domain {{ domain_name }}
+                  environment:
+                    AUTHENTIK_URL: "http://localhost:19000"
+                    AUTHENTIK_BOOTSTRAP_TOKEN: "{{ _authentik_bootstrap_token_hubble }}"
+                    AUTHENTIK_VERIFY_SSL: "false"
+                  register: hubble_provision_result
+                  changed_when: hubble_provision_result.rc == 0
+                  failed_when: hubble_provision_result.rc != 0
+
+                - name: Display Hubble UI SSO provisioning result
+                  ansible.builtin.debug:
+                    msg: "✓ Hubble UI forward-auth app provisioned in Authentik: {{ hubble_provision_result.stdout }}"
+
+              rescue:
+                - name: Warn on Hubble SSO provisioning failure (non-fatal)
+                  ansible.builtin.debug:
+                    msg:
+                      - "⚠️  Hubble UI Authentik provisioning failed (non-fatal — ingress will still be created)"
+                      - "Run manually: python Scripts/security/authentik_provisioner.py provision-hubble --domain {{ domain_name }}"
+
+              always:
+                - name: Stop Authentik port-forward for Hubble SSO provisioning
+                  ansible.builtin.shell: "pkill -f 'kubectl port-forward.*19000' || true"
+                  changed_when: false
+
               when: enable_hubble | bool
 
-            - name: Stop Authentik port-forward for Hubble SSO provisioning
-              ansible.builtin.shell: "pkill -f 'kubectl port-forward.*19000' || true"
-              changed_when: false
-
-            - name: Display Hubble UI SSO provisioning result
-              ansible.builtin.debug:
-                msg: "✓ Hubble UI forward-auth app provisioned in Authentik: {{ hubble_provision_result.stdout }}"
-              when: enable_hubble | bool and hubble_provision_result is defined
-
-            - name: Apply Hubble UI forward-auth ingress annotations
+            # ── Ingress creation — always runs regardless of provisioning result ─
+            - name: Create Hubble UI forward-auth ingress
               kubernetes.core.k8s:
                 definition:
                   apiVersion: networking.k8s.io/v1
@@ -426,8 +479,6 @@
                       - secretName: hubble-ui-tls
                         hosts:
                           - "hubble.{{ domain_name }}"
-              register: hubble_ingress_result
-              failed_when: false
               when: enable_hubble | bool and validation_mode != 'development'
 
             - name: Skip Hubble SSO (Hubble disabled)
@@ -438,14 +489,6 @@
             - name: Record Hubble SSO phase end time
               ansible.builtin.set_fact:
                 phase_hubble_sso_ended: "{{ ansible_date_time.epoch | int }}"
-
-          rescue:
-            - name: Warn on Hubble SSO provisioning failure (non-fatal)
-              ansible.builtin.debug:
-                msg:
-                  - "⚠️  Hubble UI SSO provisioning failed (non-fatal — Cilium still operational)"
-                  - "Authentik may not be reachable yet; SSO can be provisioned manually."
-                  - "Run: python Scripts/security/authentik_provisioner.py provision-hubble --domain {{ domain_name }}"
 
           tags: [hubble, sso, networking]
 

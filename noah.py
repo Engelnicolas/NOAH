@@ -422,7 +422,7 @@ def dns(ctx, namespace, domain, provider, api_token, policy):
         'dns_provider': provider,
         'dns_policy': policy,
         'cloudflare_api_token': api_token,
-        'cluster_name': config_loader.get_cluster_name()
+        'cluster_name': config_loader.get_cluster_name(domain=domain)
     }
 
     # Deploy external-dns using Ansible playbook
@@ -448,7 +448,7 @@ def dns(ctx, namespace, domain, provider, api_token, policy):
 
 @deploy.command()
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
-@click.option('--cluster-name', default='noah-cluster', help='Cluster name for deployment')
+@click.option('--cluster-name', default=None, help='Cluster name (default: derived from domain)')
 @click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')
 @click.option('--regenerate-password', is_flag=True, help='Generate new Authentik admin password')
 @click.option('--validation-mode', type=click.Choice(['development','production']), default='production', show_default=True, help='Validation strictness for deployment playbook')
@@ -457,7 +457,12 @@ def core(ctx, domain, cluster_name, config_file, regenerate_password, validation
     """Deploy complete stack using optimized Ansible playbook (Cilium → Authentik → Headlamp)"""
     # Ensure security is initialized before any deployment
     ensure_security_initialized(ctx)
-    
+
+    # Derive cluster name from domain when not explicitly provided.
+    # This gives each deployment a unique external-dns txtOwnerId automatically.
+    if not cluster_name:
+        cluster_name = ctx.obj['config'].get_cluster_name(domain=domain)
+
     # Regenerate Authentik password if requested
     if regenerate_password:
         click.echo("🔄 Regenerating Authentik admin password...")
@@ -470,7 +475,7 @@ def core(ctx, domain, cluster_name, config_file, regenerate_password, validation
         else:
             click.echo(f"❌ Failed to regenerate password: {error}", err=True)
             sys.exit(1)
-    
+
     click.echo("[VERBOSE] Starting complete NOAH stack deployment using cluster-deploy.yml...")
     click.echo(f"[VERBOSE] Using domain: {domain}")
     click.echo(f"[VERBOSE] Using cluster name: {cluster_name}")

@@ -133,9 +133,22 @@ class ConfigLoader:
         """Get the global configured domain"""
         return self.get('NOAH_DOMAIN', 'noah-infra.com')
     
-    def get_cluster_name(self) -> str:
-        """Get the configured cluster name"""
-        return self.get('KUBERNETES_CLUSTER_NAME', 'noah-cluster')
+    def get_cluster_name(self, domain: str = None) -> str:
+        """Get the configured cluster name.
+
+        Priority: KUBERNETES_CLUSTER_NAME env var → derived from domain → 'noah-cluster'.
+        Deriving from domain ensures each deployment on a distinct domain gets a unique
+        txtOwnerId for external-dns, preventing record ownership collisions.
+        """
+        explicit = self.get('KUBERNETES_CLUSTER_NAME', '')
+        if explicit:
+            return explicit
+        if domain:
+            return 'noah-' + domain.replace('.', '-')
+        fallback_domain = self.get_domain()
+        if fallback_domain and fallback_domain != 'noah-infra.com':
+            return 'noah-' + fallback_domain.replace('.', '-')
+        return 'noah-cluster'
     
     def get_environment(self) -> str:
         """Get the deployment environment"""

@@ -6,7 +6,7 @@
     external_dns_namespace: "{{ external_dns_namespace | default('kube-system') }}"
     domain_name: "{{ domain_name | default('noah-infra.com') }}"
     dns_provider: "{{ dns_provider | default('cloudflare') }}"
-    dns_policy: "{{ dns_policy | default('upsert-only') }}"
+    dns_policy: "{{ dns_policy | default('sync') }}"
     cloudflare_api_token: "{{ cloudflare_api_token | default('') }}"
     verbose_mode: true
     ansible_python_interpreter: "{{ playbook_dir }}/../.venv/bin/python"
@@ -90,8 +90,22 @@
       changed_when: false
 
     - name: Get cluster name for TXT owner ID
+      ansible.builtin.shell: |
+        # Priority: explicit var → k8s node hostname → fallback with domain suffix
+        NAME="{{ cluster_name | default('') }}"
+        if [ -z "$NAME" ]; then
+          NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+        fi
+        if [ -z "$NAME" ]; then
+          NAME="noah-$(echo '{{ domain_name }}' | tr '.' '-')"
+        fi
+        echo "$NAME"
+      register: _cluster_name_result
+      changed_when: false
+
+    - name: Set cluster name fact
       ansible.builtin.set_fact:
-        cluster_name: "{{ cluster_name | default('noah-cluster') }}"
+        cluster_name: "{{ _cluster_name_result.stdout | trim }}"
 
     - name: Get node public IP for external-dns default target (AWS EC2 IMDS)
       ansible.builtin.shell: |
@@ -240,11 +254,8 @@
           - "✓ TXT Owner ID: {{ cluster_name }}"
           - "✓ Deployment: {{ 'SUCCESS' if external_dns_helm_result.rc == 0 else 'FAILED' }}"
           - ""
-          - "External-DNS will now automatically manage DNS records for:"
-          - "  - Ingress resources with external-dns.alpha.kubernetes.io/hostname annotation"
-          - "  - LoadBalancer services with external-dns.alpha.kubernetes.io/hostname annotation"
-          - ""
-          - "Example Ingress annotation:"
-          - "  external-dns.alpha.kubernetes.io/hostname: auth.{{ domain_name }}"
+          - "Policy 'sync': A records are created, updated, and deleted automatically."
+          - "TXT owner ID '{{ cluster_name }}' ensures this instance only manages its own records."
+          - "Multiple instances on the same domain are safe as long as cluster_name differs."
           - ""
           - "Monitor logs: kubectl logs -n {{ external_dns_namespace }} -l app.kubernetes.io/name=external-dns -f"

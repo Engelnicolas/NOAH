@@ -237,9 +237,9 @@
           changed_when: false
 
         - name: Start Authentik port-forward for Headlamp OIDC provisioning
-          ansible.builtin.shell: >-
-            kubectl port-forward -n identity svc/authentik-server 19001:9000 &
-            echo $!
+          ansible.builtin.command: kubectl port-forward -n identity svc/authentik-server 19001:9000
+          async: 120
+          poll: 0
           register: authentik_pf_headlamp
           changed_when: false
 
@@ -264,9 +264,8 @@
           failed_when: headlamp_provision_result.rc != 0
 
         - name: Stop Authentik port-forward for Headlamp OIDC provisioning
-          ansible.builtin.shell: "kill {{ authentik_pf_headlamp.stdout_lines[-1] }} 2>/dev/null || true"
+          ansible.builtin.shell: "pkill -f 'kubectl port-forward.*19001' || true"
           changed_when: false
-          when: authentik_pf_headlamp is defined
 
         - name: Display Headlamp OIDC provisioning result
           ansible.builtin.debug:

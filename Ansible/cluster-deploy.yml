@@ -360,9 +360,9 @@
               changed_when: false
 
             - name: Start Authentik port-forward for Hubble SSO provisioning
-              ansible.builtin.shell: >-
-                kubectl port-forward -n identity svc/authentik-server 19000:9000 &
-                echo $!
+              ansible.builtin.command: kubectl port-forward -n identity svc/authentik-server 19000:9000
+              async: 120
+              poll: 0
               register: authentik_pf_hubble
               changed_when: false
 
@@ -386,9 +386,8 @@
               when: enable_hubble | bool
 
             - name: Stop Authentik port-forward for Hubble SSO provisioning
-              ansible.builtin.shell: "kill {{ authentik_pf_hubble.stdout_lines[-1] }} 2>/dev/null || true"
+              ansible.builtin.shell: "pkill -f 'kubectl port-forward.*19000' || true"
               changed_when: false
-              when: authentik_pf_hubble is defined
 
             - name: Display Hubble UI SSO provisioning result
               ansible.builtin.debug:

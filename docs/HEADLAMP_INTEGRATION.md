@@ -342,10 +342,9 @@ Headlamp deployment receives:
 
 ## Future Enhancements
 
-1. **Automatic Authentik Provider Creation**: Script to automatically create the Headlamp provider in Authentik during deployment
-2. **Plugin Management**: Add support for Headlamp plugins via the deployment
-3. **Multi-Tenancy**: Support for multiple Headlamp instances with different RBAC configurations
-4. **Monitoring Integration**: Prometheus metrics and Grafana dashboards for Headlamp usage
+1. **Plugin Management**: Add support for Headlamp plugins via the deployment
+2. **Multi-Tenancy**: Support for multiple Headlamp instances with different RBAC configurations
+3. **Monitoring Integration**: Prometheus metrics and Grafana dashboards for Headlamp usage
 
 ## References
 

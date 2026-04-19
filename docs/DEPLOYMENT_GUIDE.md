@@ -1,7 +1,7 @@
 # NOAH Deployment Guide
 
-**Version**: 0.0.7
-**Last Updated**: March 2026
+**Version**: 0.0.8
+**Last Updated**: April 2026
 
 Deploy NOAH (Network Operations & Automation Hub) - a complete Kubernetes infrastructure with SSO authentication and web dashboards.
 
@@ -89,9 +89,8 @@ NOAH deploys a complete Kubernetes stack:
 
 ```bash
 # 1. Configure DNS (choose one):
-# Option A: Automatic (Cloudflare) - set BEFORE deploy
-export NOAH_EXTERNAL_DNS_ENABLED=true
-export CLOUDFLARE_API_TOKEN='your-cloudflare-api-token'
+# Option A: Automatic (Cloudflare) - store token once, enabled by default
+python3 noah.py setup set-cloudflare-token 'your-cloudflare-api-token'
 # Option B: Manual - configure AFTER deploy (see DNS Configuration section)
 # Option C: Local - add to /etc/hosts AFTER deploy
 
@@ -179,20 +178,25 @@ python noah.py deploy core --domain yourdomain.com
 
 **Deployment phases:**
 
-#### Phase 0: External-DNS (Optional)
-- **When**: If `NOAH_EXTERNAL_DNS_ENABLED=true` and `CLOUDFLARE_API_TOKEN` set
+#### Phase 0: External-DNS
+- **When**: `NOAH_EXTERNAL_DNS_ENABLED=true` (default) and Cloudflare token present in canonical store or `CLOUDFLARE_API_TOKEN` env var
 - **Duration**: ~2-3 minutes
-- **What**: Deploys external-dns for automatic DNS record management
+- **What**: Deploys external-dns (`sync` policy) — creates, updates, and removes A records in Cloudflare automatically. Each deployment is isolated via a unique `txtOwnerId` derived from the domain name.
 
-#### Phase 1: Cilium CNI
+#### Phase 1: cert-manager
+- **Duration**: ~2-3 minutes
+- **What**: Deploys cert-manager with `letsencrypt-prod` and `letsencrypt-staging` ClusterIssuers. Required for TLS certificate provisioning on all ingresses.
+
+#### Phase 2: Cilium CNI
 - **Duration**: ~5-7 minutes
-- **Components**:
-  - Cilium DaemonSet (eBPF networking)
-  - Cilium Operator
-  - Hubble Relay + UI
+- **Components**: Cilium DaemonSet (eBPF networking), Cilium Operator, Hubble Relay + UI
+
+#### Phase 2.5: nginx-ingress
+- **Duration**: ~2-3 minutes
+- **What**: DaemonSet with `hostNetwork: true` — binds ports 80/443 directly on the node's public IP. The service reports the public IP via `externalIPs` so external-dns can resolve the correct target.
   - Cilium Ingress LoadBalancer
 
-#### Phase 2: Authentik SSO
+#### Phase 3: Authentik SSO
 - **Duration**: ~7-10 minutes
 - **Components**:
   - PostgreSQL (database)
@@ -202,7 +206,7 @@ python noah.py deploy core --domain yourdomain.com
 - **Resources**: ~2GB RAM, ~1.1 CPU cores (requests)
 - **Post-deploy**: Bootstrap token verified in canonical secrets store
 
-#### Phase 3.5: Hubble UI SSO Provisioning (new in v0.0.7)
+#### Phase 3.5: Hubble UI SSO Provisioning
 - **Duration**: ~1-2 minutes
 - **What**: Calls `AuthentikProvisioner.provision_proxy_app()` to create a forward-auth proxy application in Authentik for Hubble UI, then applies nginx forward-auth ingress annotations automatically
 
@@ -221,16 +225,14 @@ python noah.py deploy core --domain yourdomain.com
 
 ### Option A: Automatic (Cloudflare)
 
-**Prerequisites:**
-- Domain on Cloudflare
-- Cloudflare API token
+**Prerequisites:** Domain on Cloudflare + API token (Zone → DNS → Edit, Zone → Zone → Read)
 
-**Configure BEFORE deployment:**
+**Store token once (persisted encrypted in canonical store):**
 ```bash
-export NOAH_EXTERNAL_DNS_ENABLED=true
-export CLOUDFLARE_API_TOKEN='your-cloudflare-api-token'
-python noah.py deploy core --domain yourdomain.com
+python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
 ```
+
+`NOAH_EXTERNAL_DNS_ENABLED` defaults to `true` — no env var needed after this.
 
 **Verify:**
 ```bash
@@ -244,18 +246,18 @@ nslookup auth.yourdomain.com
 
 **Configure AFTER deployment:**
 
-**1. Get LoadBalancer IP:**
+**1. Get the node public IP:**
 ```bash
-kubectl get svc -n kube-system cilium-ingress-lb
-# Copy EXTERNAL-IP (e.g., 65.21.238.126)
+kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.externalIPs[0]}'
+# e.g., 15.237.252.242
 ```
 
 **2. Create A records at your DNS provider:**
 | Hostname | Type | Value |
 |----------|------|-------|
-| `auth.yourdomain.com` | A | `65.21.238.126` |
-| `headlamp.yourdomain.com` | A | `65.21.238.126` |
-| `hubble.yourdomain.com` | A | `65.21.238.126` |
+| `auth.yourdomain.com` | A | `<node-public-ip>` |
+| `headlamp.yourdomain.com` | A | `<node-public-ip>` |
+| `hubble.yourdomain.com` | A | `<node-public-ip>` |
 
 **3. Verify:**
 ```bash
@@ -268,13 +270,11 @@ nslookup auth.yourdomain.com  # Should return LoadBalancer IP
 
 **Configure AFTER deployment:**
 ```bash
-# Get LoadBalancer IP
-EXTERNAL_IP=$(kubectl get svc -n kube-system cilium-ingress-lb -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+# Get node public IP
+EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.externalIPs[0]}')
 
 # Add to /etc/hosts
-echo "$EXTERNAL_IP auth.yourdomain.com" | sudo tee -a /etc/hosts
-echo "$EXTERNAL_IP headlamp.yourdomain.com" | sudo tee -a /etc/hosts
-echo "$EXTERNAL_IP hubble.yourdomain.com" | sudo tee -a /etc/hosts
+echo "$EXTERNAL_IP auth.yourdomain.com headlamp.yourdomain.com hubble.yourdomain.com" | sudo tee -a /etc/hosts
 ```
 
 ---
@@ -336,15 +336,15 @@ python noah.py deploy authentik --regenerate-password
 # Check pods
 kubectl get pods -A
 
-# Check LoadBalancer IP
-kubectl get svc -n kube-system cilium-ingress-lb
+# Check node public IP
+kubectl get svc ingress-nginx-controller -n ingress-nginx
 
 # Check DNS
 nslookup auth.yourdomain.com
 
 # Add to /etc/hosts if DNS not working
-EXTERNAL_IP=<your-lb-ip>
-echo "$EXTERNAL_IP auth.yourdomain.com" | sudo tee -a /etc/hosts
+EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.externalIPs[0]}')
+echo "$EXTERNAL_IP auth.yourdomain.com headlamp.yourdomain.com hubble.yourdomain.com" | sudo tee -a /etc/hosts
 ```
 
 **Pods not starting?**
@@ -362,9 +362,11 @@ kubectl delete pod -n identity <pod-name>
 
 **Certificate errors?**
 ```bash
-# Accept self-signed cert in browser, or install CA:
-sudo cp Certificates/ca.crt /usr/local/share/ca-certificates/noah-ca.crt
-sudo update-ca-certificates
+# Check certificate status
+kubectl get certificate -A
+kubectl describe challenge -A  # shows ACME HTTP-01 status
+
+# Certificates require valid DNS records — ensure A records resolve before expecting TLS
 ```
 
 **Insufficient resources?**

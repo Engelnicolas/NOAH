@@ -54,12 +54,11 @@ python3 noah.py setup initialize --skip-dns-wizard
 
 # 3. Configure DNS (choose one option):
 
-# Option A: Automatic DNS with Cloudflare (configured by wizard, or set manually BEFORE deploy)
-export NOAH_EXTERNAL_DNS_ENABLED=true
-export CLOUDFLARE_API_TOKEN='your-cloudflare-api-token'
+# Option A: Automatic DNS with Cloudflare — store token once, enabled by default
+python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
 
-# Option B: Manual DNS - Get LoadBalancer IP, then create A records:
-#   kubectl get svc -n kube-system cilium-ingress-lb
+# Option B: Manual DNS - Get node public IP, then create A records:
+#   kubectl get svc ingress-nginx-controller -n ingress-nginx
 #   Create: auth.your-domain.com → EXTERNAL-IP
 #           headlamp.your-domain.com → EXTERNAL-IP
 #           hubble.your-domain.com → EXTERNAL-IP
@@ -89,8 +88,8 @@ python3 noah.py status
                          │ HTTPS/TLS
                          ▼
 ┌─────────────────────────────────────────────────────────┐
-│              Cilium Ingress (LoadBalancer)              │
-│  • L7 routing • TLS termination • eBPF datapath         │
+│         nginx-ingress (hostNetwork, ports 80/443)       │
+│  • L7 routing • TLS via cert-manager/Let's Encrypt      │
 └────────────────────────┬────────────────────────────────┘
                          │
         ┌────────────────┼────────────────┐
@@ -114,10 +113,14 @@ Deployment Automation:
   python noah.py deploy core
       ↓
   Ansible Playbook (phased)
-      ├─ Phase 1: Cilium CNI
-      ├─ Phase 2: Authentik SSO
-      ├─ Phase 3: Headlamp Dashboard
-      └─ Phase 4: Validation
+      ├─ Phase 0:   External-DNS (Cloudflare, sync policy)
+      ├─ Phase 1:   cert-manager + ClusterIssuers
+      ├─ Phase 2:   Cilium CNI
+      ├─ Phase 2.5: nginx-ingress (hostNetwork)
+      ├─ Phase 3:   Authentik SSO
+      ├─ Phase 3.5: Hubble UI SSO provisioning
+      ├─ Phase 4:   Headlamp Dashboard
+      └─ Phase 5:   Validation
       ↓
   Helm Charts + Canonical Secrets (Age/SOPS encrypted)
 ```

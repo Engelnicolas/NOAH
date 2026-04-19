@@ -97,21 +97,17 @@ NOAH supports three DNS management approaches:
 
 **Example token:** `vPQP9K4jqZxJ7q6DXxxxxxxxxxxxxxXXXXXXXXXXX`
 
-**4. Configure via the NOAH wizard (recommended, v0.0.7+):**
+**4. Store token in NOAH canonical store (recommended):**
 
-Running `python noah.py setup initialize` launches the interactive Cloudflare DNS wizard automatically. It:
-- Prompts for your API token and validates it
-- Lists your available DNS zones and lets you select one
-- Persists credentials to `Config/config.enc.yaml` (SOPS-encrypted)
-- Sets `NOAH_EXTERNAL_DNS_ENABLED=true` in the config
-
-To skip the wizard and configure manually:
 ```bash
-python noah.py setup initialize --skip-dns-wizard
+python3 Scripts/security/set_cloudflare_token.py 'your-token-here'
+```
 
-# Then export manually:
+The token is stored encrypted (SOPS/Age) and reused automatically by every deployment. `NOAH_EXTERNAL_DNS_ENABLED` defaults to `true` — no environment variables needed after this step.
+
+To use an environment variable instead:
+```bash
 export CLOUDFLARE_API_TOKEN='your-token-here'
-export NOAH_EXTERNAL_DNS_ENABLED=true
 ```
 
 ---
@@ -127,19 +123,16 @@ External-DNS deploys in **Phase 0** (before Cilium, Authentik, Headlamp).
 ### Deploy with Core Stack
 
 ```bash
-# Set BEFORE deployment
-export NOAH_EXTERNAL_DNS_ENABLED=true
-export CLOUDFLARE_API_TOKEN='your-token-here'
+# Store token once (if not already done)
+python3 Scripts/security/set_cloudflare_token.py 'your-token-here'
 
-# Deploy (External-DNS will be deployed in Phase 0)
+# Deploy — external-dns runs in Phase 0 automatically
 python noah.py deploy core --domain yourdomain.com
 ```
 
 ### Deploy Standalone
 
 ```bash
-# Deploy external-dns separately
-export CLOUDFLARE_API_TOKEN='your-token-here'
 python noah.py deploy dns --domain yourdomain.com
 ```
 
@@ -179,11 +172,15 @@ dig auth.yourdomain.com +short
 
 ### DNS Policy
 
-**upsert-only** (Default - Recommended):
-- Creates new DNS records
-- Updates existing DNS records
-- **Never deletes** DNS records
-- Safe for production
+**sync** (Default):
+- Creates, updates, **and deletes** DNS records automatically
+- Safe because external-dns uses a TXT registry: each deployment only manages records it owns, identified by a unique `txtOwnerId` derived from the domain (e.g. `noah-yourdomain-com`)
+- Multiple deployments on the same Cloudflare zone coexist without interfering — each manages only its own records
+
+To override:
+```bash
+python noah.py deploy dns --domain yourdomain.com --policy upsert-only
+```
 
 ---
 
@@ -193,14 +190,14 @@ dig auth.yourdomain.com +short
 
 **Configure AFTER deployment completes** (needs LoadBalancer IP).
 
-### Step 1: Get LoadBalancer IP
+### Step 1: Get Node Public IP
 
 ```bash
-kubectl get svc -n kube-system cilium-ingress-lb
+kubectl get svc ingress-nginx-controller -n ingress-nginx
 
 # Example output:
-# NAME                TYPE           EXTERNAL-IP
-# cilium-ingress-lb   LoadBalancer   65.21.238.126
+# NAME                       TYPE        EXTERNAL-IP      PORT(S)
+# ingress-nginx-controller   ClusterIP   15.237.252.242   80/TCP,443/TCP
 ```
 
 ### Step 2: Create DNS Records
@@ -228,13 +225,11 @@ curl -I https://auth.yourdomain.com
 For development without real DNS:
 
 ```bash
-# Get IP
-EXTERNAL_IP=$(kubectl get svc -n kube-system cilium-ingress-lb -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+# Get node public IP
+EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.externalIPs[0]}')
 
 # Add to /etc/hosts
-echo "$EXTERNAL_IP auth.yourdomain.com" | sudo tee -a /etc/hosts
-echo "$EXTERNAL_IP headlamp.yourdomain.com" | sudo tee -a /etc/hosts
-echo "$EXTERNAL_IP hubble.yourdomain.com" | sudo tee -a /etc/hosts
+echo "$EXTERNAL_IP auth.yourdomain.com headlamp.yourdomain.com hubble.yourdomain.com" | sudo tee -a /etc/hosts
 
 # Test
 curl -I https://auth.yourdomain.com
@@ -388,9 +383,10 @@ export NOAH_AUTHENTIK_DOMAIN="auth.external.com"
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NOAH_DOMAIN` | `noah-infra.com` | Global domain for all services |
-| `NOAH_EXTERNAL_DNS_ENABLED` | `false` | Enable automatic DNS |
-| `NOAH_EXTERNAL_DNS_POLICY` | `upsert-only` | DNS policy |
-| `CLOUDFLARE_API_TOKEN` | - | Cloudflare API token |
+| `NOAH_EXTERNAL_DNS_ENABLED` | `true` | Enable automatic DNS |
+| `NOAH_EXTERNAL_DNS_POLICY` | `sync` | DNS policy (`sync` or `upsert-only`) |
+| `CLOUDFLARE_API_TOKEN` | *(canonical store)* | Cloudflare API token — prefer `set_cloudflare_token.py` |
+| `KUBERNETES_CLUSTER_NAME` | *(derived from domain)* | external-dns TXT owner ID — set to differentiate instances |
 | `NOAH_AUTHENTIK_SUBDOMAIN` | `auth` | Authentik subdomain |
 | `NOAH_HEADLAMP_SUBDOMAIN` | `headlamp` | Headlamp subdomain |
 | `NOAH_CILIUM_SUBDOMAIN` | `hubble` | Hubble subdomain |
@@ -399,11 +395,11 @@ export NOAH_AUTHENTIK_DOMAIN="auth.external.com"
 
 ## Migration from Manual to Automatic
 
-### Step 1: Deploy External-DNS (Safe)
+### Step 1: Deploy External-DNS
 
 ```bash
-# Deploy with upsert-only (won't delete existing records)
-export CLOUDFLARE_API_TOKEN='your-token-here'
+# Use upsert-only during migration to avoid touching existing records
+python3 Scripts/security/set_cloudflare_token.py 'your-token-here'
 python noah.py deploy dns --domain yourdomain.com --policy upsert-only
 ```
 
@@ -433,8 +429,8 @@ Once confident external-dns works:
 
 ## Best Practices
 
-1. ✅ Use **upsert-only** policy (prevents deletions)
-2. ✅ Store API tokens securely (environment variables)
+1. ✅ Use **sync** policy — TXT registry ensures only owned records are deleted
+2. ✅ Store API token via `set_cloudflare_token.py` (SOPS-encrypted, not env var)
 3. ✅ Use **scoped tokens** (never Global API keys)
 4. ✅ Monitor external-dns logs
 5. ✅ Test in staging first

@@ -1,0 +1,186 @@
+---
+- name: Deploy nginx-ingress Controller for NOAH
+  hosts: localhost
+  gather_facts: no
+  vars:
+    nginx_ingress_namespace: ingress-nginx
+    nginx_ingress_helm_timeout: "{{ nginx_ingress_helm_timeout | default('300s') }}"
+    domain_name: "{{ domain_name | default('noah-infra.com') }}"
+    noah_root_dir: "{{ playbook_dir | dirname }}"
+    # Set NOAH_LB_IP_POOL_CIDR env var to enable Cilium LB IPAM pool (bare-metal only)
+    lb_ip_pool_cidr: "{{ lookup('env', 'NOAH_LB_IP_POOL_CIDR') | default('') }}"
+
+  tasks:
+    - name: Record nginx-ingress deployment start
+      ansible.builtin.set_fact:
+        nginx_ingress_start: "{{ ansible_date_time.epoch | int }}"
+
+    - name: Add ingress-nginx Helm repository
+      kubernetes.core.helm_repository:
+        name: ingress-nginx
+        repo_url: https://kubernetes.github.io/ingress-nginx
+      vars:
+        ansible_python_interpreter: "../.venv/bin/python"
+      environment:
+        PYTHONPATH: "../.venv/lib/python3.12/site-packages"
+      failed_when: false
+
+    - name: Update Helm repositories
+      ansible.builtin.command: helm repo update ingress-nginx
+      changed_when: false
+      failed_when: false
+
+    - name: Create ingress-nginx namespace
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ nginx_ingress_namespace }}"
+            labels:
+              name: "{{ nginx_ingress_namespace }}"
+              app.kubernetes.io/managed-by: noah
+        state: present
+      vars:
+        ansible_python_interpreter: "../.venv/bin/python"
+      environment:
+        PYTHONPATH: "../.venv/lib/python3.12/site-packages"
+
+    - name: Deploy ingress-nginx via Helm (DaemonSet + hostNetwork)
+      kubernetes.core.helm:
+        name: ingress-nginx
+        chart_ref: ingress-nginx/ingress-nginx
+        release_namespace: "{{ nginx_ingress_namespace }}"
+        create_namespace: true
+        values:
+          controller:
+            kind: DaemonSet
+            hostNetwork: true
+            dnsPolicy: ClusterFirstWithHostNet
+            hostPort:
+              enabled: true
+              ports:
+                http: 80
+                https: 443
+            ingressClassResource:
+              name: nginx
+              enabled: true
+              default: true
+            service:
+              type: LoadBalancer
+              nodePorts:
+                http: 30080
+                https: 30443
+            updateStrategy:
+              type: RollingUpdate
+              rollingUpdate:
+                maxUnavailable: 1
+            config:
+              use-forwarded-headers: "true"
+              compute-full-forwarded-for: "true"
+            admissionWebhooks:
+              enabled: true
+            metrics:
+              enabled: true
+              serviceMonitor:
+                enabled: false
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+        wait: true
+        wait_timeout: "{{ nginx_ingress_helm_timeout }}"
+      vars:
+        ansible_python_interpreter: "../.venv/bin/python"
+      environment:
+        PYTHONPATH: "../.venv/lib/python3.12/site-packages"
+      register: nginx_helm_result
+      failed_when: nginx_helm_result.failed | default(false)
+
+    - name: Wait for nginx-ingress DaemonSet pods Ready
+      ansible.builtin.command: >-
+        kubectl rollout status daemonset/ingress-nginx-controller
+        -n {{ nginx_ingress_namespace }}
+        --timeout=300s
+      register: nginx_rollout
+      changed_when: false
+      failed_when: nginx_rollout.rc != 0
+
+    - name: Verify IngressClass 'nginx' registered
+      ansible.builtin.command: kubectl get ingressclass nginx
+      changed_when: false
+      register: ingressclass_check
+      retries: 5
+      delay: 10
+      until: ingressclass_check.rc == 0
+      failed_when: ingressclass_check.rc != 0
+
+    # ── Cilium LB IPAM Pool (bare-metal only) ───────────────────────────────
+    # On AWS bare-metal without secondary ENI IPs, skip this step.
+    # Set NOAH_LB_IP_POOL_CIDR=192.168.x.y/z to enable on your network.
+
+    - name: Apply Cilium LB IP Pool (bare-metal — requires NOAH_LB_IP_POOL_CIDR)
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: cilium.io/v2alpha1
+          kind: CiliumLoadBalancerIPPool
+          metadata:
+            name: noah-lb-pool
+            namespace: kube-system
+            labels:
+              app.kubernetes.io/managed-by: noah
+              app.kubernetes.io/component: networking
+          spec:
+            blocks:
+              - cidr: "{{ lb_ip_pool_cidr }}"
+            allowFirstLastIPs: "Yes"
+        state: present
+      vars:
+        ansible_python_interpreter: "../.venv/bin/python"
+      environment:
+        PYTHONPATH: "../.venv/lib/python3.12/site-packages"
+      when: lb_ip_pool_cidr | length > 0
+      register: lb_pool_result
+
+    - name: Skip LB IP Pool (NOAH_LB_IP_POOL_CIDR not set)
+      ansible.builtin.debug:
+        msg:
+          - "⚠️  Cilium LB IPAM pool not created (NOAH_LB_IP_POOL_CIDR is unset)"
+          - "LoadBalancer services will stay <pending> on AWS without secondary ENI IPs."
+          - "External access works via nginx-ingress hostNetwork on ports 80/443."
+          - "To enable LB IPAM on bare-metal: export NOAH_LB_IP_POOL_CIDR='192.168.x.y/z'"
+      when: lb_ip_pool_cidr | length == 0
+
+    - name: Record nginx-ingress deployment end
+      ansible.builtin.set_fact:
+        nginx_ingress_end: "{{ ansible_date_time.epoch | int }}"
+
+    - name: Display nginx-ingress deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "✓ ingress-nginx deployed (DaemonSet + hostNetwork)"
+          - "✓ IngressClass 'nginx' registered as cluster default"
+          - "✓ Ports 80/443 bound on host — access via node IP"
+          - "Duration: {{ (nginx_ingress_end | int) - (nginx_ingress_start | int) }}s"
+          - "{{ '✓ Cilium LB pool created: ' + lb_ip_pool_cidr if lb_ip_pool_cidr | length > 0 else '— LB pool skipped (hostNetwork is primary access path)' }}"
+
+    - name: Show node IP for DNS configuration
+      ansible.builtin.shell: |
+        NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+        EXTERNAL_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+        echo "Node Internal IP: ${NODE_IP}"
+        echo "Node External IP: ${EXTERNAL_IP:-<none>}"
+        echo ""
+        echo "Add to /etc/hosts on each client machine:"
+        echo "  ${NODE_IP}  auth.{{ domain_name }}  headlamp.{{ domain_name }}  hubble.{{ domain_name }}"
+      register: node_ip_info
+      changed_when: false
+      failed_when: false
+
+    - name: Display node IP info
+      ansible.builtin.debug:
+        msg: "{{ node_ip_info.stdout_lines }}"
+      when: node_ip_info.stdout_lines is defined

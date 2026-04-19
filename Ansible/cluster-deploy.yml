@@ -10,6 +10,7 @@
     verbose_mode: true  # Enable verbose output by default
     # Use raw numbers to avoid self-referential recursion; allow override via --extra-vars
     cilium_wait_timeout: 300   # seconds (override with -e cilium_wait_timeout=900)
+    nginx_ingress_helm_timeout: "300s"  # override with -e nginx_ingress_helm_timeout=600s
     authentik_rollout_timeout: 300  # seconds (override with -e authentik_rollout_timeout=900)
     enable_hubble: true  # default enable Hubble in production
     hubble_tls_enabled: true
@@ -87,7 +88,7 @@
                   Cluster Name: {{ cluster_name }}
                   Domain: {{ domain_name }}
                   Deployment Mode: Standalone IAM + Dashboard
-                  Order: External-DNS → Cilium → Authentik → Headlamp
+                  Order: External-DNS → Cilium → nginx-ingress → Authentik → Headlamp
                   ======================================
             
             - name: Validate required variables
@@ -185,7 +186,56 @@
                 phase_cilium_ended: "{{ ansible_date_time.epoch | int }}"
           
           tags: [cilium, networking]
-        
+
+        - name: "PHASE 2.5: Deploy nginx-ingress Controller (Ingress Layer)"
+          block:
+            - name: Record nginx-ingress phase start time
+              ansible.builtin.set_fact:
+                phase_nginx_started: "{{ ansible_date_time.epoch | int }}"
+
+            - name: Deploy nginx-ingress (DaemonSet + hostNetwork)
+              ansible.builtin.command: >-
+                ansible-playbook deploy-nginx-ingress.yml
+                -e nginx_ingress_namespace=ingress-nginx
+                -e domain_name="{{ domain_name }}"
+                -e nginx_ingress_helm_timeout={{ nginx_ingress_helm_timeout }}
+              args:
+                chdir: "{{ playbook_dir }}"
+              environment:
+                NOAH_LB_IP_POOL_CIDR: "{{ lookup('env', 'NOAH_LB_IP_POOL_CIDR') | default('') }}"
+              register: nginx_subplay
+              failed_when: nginx_subplay.rc != 0
+
+            - name: Validate nginx-ingress deployment (development shortcut)
+              ansible.builtin.debug:
+                msg:
+                  - "✓ Development mode: Skipping nginx-ingress rollout validation"
+                  - "✓ IngressClass 'nginx' registered (simulated)"
+              when: validation_mode is defined and validation_mode == 'development'
+
+            - name: Verify IngressClass 'nginx' present (production)
+              ansible.builtin.command: kubectl get ingressclass nginx
+              register: ingressclass_verify
+              changed_when: false
+              failed_when: ingressclass_verify.rc != 0
+              when: validation_mode != 'development'
+
+            - name: Wait for nginx-ingress DaemonSet pods Ready (production)
+              ansible.builtin.command: >-
+                kubectl rollout status daemonset/ingress-nginx-controller
+                -n ingress-nginx
+                --timeout=300s
+              register: nginx_rollout_verify
+              changed_when: false
+              failed_when: nginx_rollout_verify.rc != 0
+              when: validation_mode != 'development'
+
+            - name: Record nginx-ingress phase end time
+              ansible.builtin.set_fact:
+                phase_nginx_ended: "{{ ansible_date_time.epoch | int }}"
+
+          tags: [nginx-ingress, ingress, networking]
+
         - name: "PHASE 3: Deploy Authentik SSO (Standalone IAM)"
           block:
             - name: Record Authentik phase start time
@@ -628,6 +678,7 @@
                   === PHASE DURATIONS (seconds) ===
                   External-DNS Phase: {{ (phase_external_dns_ended | int) - (phase_external_dns_started | int) if (phase_external_dns_started is defined and phase_external_dns_ended is defined) else 'skipped' }}
                   Cilium Phase: {{ (phase_cilium_ended | int) - (phase_cilium_started | int) if (phase_cilium_started is defined and phase_cilium_ended is defined) else 'n/a' }}
+                  nginx-ingress Phase: {{ (phase_nginx_ended | int) - (phase_nginx_started | int) if (phase_nginx_started is defined and phase_nginx_ended is defined) else 'n/a' }}
                   Authentik Phase: {{ (phase_authentik_ended | int) - (phase_authentik_started | int) if (phase_authentik_started is defined and phase_authentik_ended is defined) else 'n/a' }}
                   Headlamp Phase: {{ (phase_headlamp_ended | int) - (phase_headlamp_started | int) if (phase_headlamp_started is defined and phase_headlamp_ended is defined) else 'n/a' }}
                   Validation Phase: {{ (phase_validation_ended | int) - (phase_validation_started | int) if (phase_validation_started is defined and phase_validation_ended is defined) else 'n/a' }}

@@ -21,6 +21,10 @@ def get_helm_values_for_service(service: str, namespace: str, domain: str):
     """
     config_loader = ConfigLoader()
 
+    # nginx-ingress: dedicated values generation (not a standard ingress-backed service)
+    if service == 'nginx-ingress':
+        return config_loader.get_nginx_ingress_helm_values()
+
     # Preferred dynamic path via ConfigLoader
     if service in config_loader.service_configs:
         return config_loader.generate_helm_values(service)

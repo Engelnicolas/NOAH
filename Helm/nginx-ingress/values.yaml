@@ -1,0 +1,82 @@
+# NOAH nginx-ingress Controller Configuration
+# Installs from: https://kubernetes.github.io/ingress-nginx (ingress-nginx/ingress-nginx)
+#
+# Design: DaemonSet + hostNetwork for AWS bare-metal compatibility.
+# Ports 80/443 are bound directly on the host IP — no cloud LoadBalancer required.
+# On bare-metal with Cilium LB IPAM: set lbIpPool.cidr to get a proper external IP.
+
+# ConfigLoader integration
+global:
+  domain: ""
+  cluster_name: ""
+  environment: ""
+
+# Cilium LB IP Pool — create a CiliumLoadBalancerIPPool for bare-metal deployments.
+# Leave cidr empty on AWS (unless secondary ENI IPs are allocated).
+# Override via env: NOAH_LB_IP_POOL_CIDR=192.168.1.200/29
+lbIpPool:
+  enabled: false
+  cidr: ""
+
+# ── ingress-nginx controller values ─────────────────────────────────────────
+# These keys are passed directly to the ingress-nginx/ingress-nginx Helm chart.
+
+controller:
+  # DaemonSet ensures one controller per node (correct for single/multi-node).
+  kind: DaemonSet
+
+  # hostNetwork binds ports 80 and 443 directly on the host network interface.
+  # This is the primary external access path on AWS bare-metal k3s.
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
+
+  hostPort:
+    enabled: true
+    ports:
+      http: 80
+      https: 443
+
+  # IngressClass registered as cluster default — all Ingress objects without
+  # an explicit ingressClassName will be handled by this controller.
+  ingressClassResource:
+    name: nginx
+    enabled: true
+    default: true
+
+  # Service of type LoadBalancer is used when Cilium LB IPAM allocates an IP
+  # (bare-metal). On AWS without secondary ENI IPs the service stays <pending>
+  # but external access still works via hostNetwork on ports 80/443.
+  service:
+    type: LoadBalancer
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: ""  # populated by ConfigLoader
+    nodePorts:
+      http: 30080
+      https: 30443
+
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+
+  # Preserve source IP for accurate access logs and rate-limiting.
+  config:
+    use-forwarded-headers: "true"
+    compute-full-forwarded-for: "true"
+    use-proxy-protocol: "false"
+
+  admissionWebhooks:
+    enabled: true
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false  # enable when Prometheus Operator is present
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

@@ -39,29 +39,44 @@ hubbleUI:
   subdomain: hubble             # Subdomain for Hubble UI
   # Full domain will be: {subdomain}.{domain or global.domain}
 
-# MetalLB load balancer (disabled by default)
+# MetalLB load balancer (disabled — Cilium LB IPAM is used instead)
 metallb:
   enabled: false
+
+# Cilium LB IPAM — native LoadBalancer IP allocation without MetalLB.
+# Set poolCidr to a free IP range on your network segment.
+# Override via env: NOAH_LB_IP_POOL_CIDR=192.168.1.200/29
+# On AWS bare-metal: assign secondary private IPs to the ENI then set poolCidr.
+# Leave poolCidr empty to skip pool creation (use nginx-ingress hostNetwork instead).
+lbIpam:
+  enabled: true
+  poolCidr: ""  # e.g. "192.168.1.200/29" — populated by ConfigLoader or NOAH_LB_IP_POOL_CIDR
 
 # Enable/disable the Cilium dependency
 cilium:
   enabled: true
 
-  # Core Cilium configuration 
+  # Core Cilium configuration
   kubeProxyReplacement: true
   k8sServiceHost: 127.0.0.1
   k8sServicePort: 6443
 
-  # IPAM configuration
+  # IPAM configuration (pod IPs — separate from LB IPAM above)
   ipam:
     mode: kubernetes
-    
+
   # Operator configuration
   operator:
     replicas: 1
 
   # Enable network policy support
   policyEnforcement: default
+
+  # L2 announcements — ARP-based advertisement of LB IPs on the local segment.
+  # Works on bare-metal LAN. On AWS VPC, ARP is not propagated across subnets;
+  # hostNetwork on nginx-ingress is the primary access path there.
+  l2announcements:
+    enabled: true
 
   # Disable features that might cause conflicts
   l7Proxy: false

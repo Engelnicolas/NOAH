@@ -332,6 +332,52 @@ def headlamp(ctx, namespace, domain):
     click.echo(f"[VERBOSE] Access Kubernetes Dashboard at: https://headlamp.{domain}")
     click.echo(f"[VERBOSE] SSO authentication via Authentik: https://auth.{domain}")
 
+@deploy.command(name='nginx-ingress')
+@click.option('--namespace', default='ingress-nginx', help='Kubernetes namespace')
+@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain (for DNS hints)')
+@click.option('--lb-pool-cidr', envvar='NOAH_LB_IP_POOL_CIDR', default='',
+              help='Cilium LB IPAM pool CIDR for bare-metal (e.g. 192.168.1.200/29). '
+                   'Leave empty on AWS without secondary ENI IPs.')
+@click.pass_context
+def nginx_ingress(ctx, namespace, domain, lb_pool_cidr):
+    """Deploy nginx-ingress Controller (DaemonSet + hostNetwork, AWS bare-metal compatible)"""
+    click.echo("[VERBOSE] Deploying nginx-ingress controller...")
+    click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
+    if lb_pool_cidr:
+        click.echo(f"[VERBOSE] Cilium LB IPAM pool: {lb_pool_cidr}")
+    else:
+        click.echo("[VERBOSE] No LB pool configured — hostNetwork is primary access path")
+
+    ansible_vars = {
+        'nginx_ingress_namespace': namespace,
+        'domain_name': domain,
+        'nginx_ingress_helm_timeout': '300s'
+    }
+
+    env_override = {}
+    if lb_pool_cidr:
+        env_override['NOAH_LB_IP_POOL_CIDR'] = lb_pool_cidr
+
+    # Temporarily set env var so AnsibleRunner passes it through
+    if env_override:
+        for k, v in env_override.items():
+            os.environ[k] = v
+
+    click.echo("[VERBOSE] Running Ansible playbook: deploy-nginx-ingress.yml")
+    ctx.obj['ansible'].run_playbook('deploy-nginx-ingress.yml', ansible_vars)
+
+    click.echo(f"✅ nginx-ingress deployed to namespace {namespace}")
+    click.echo("✓ IngressClass 'nginx' registered as cluster default")
+    click.echo("✓ Ports 80/443 bound on host via hostNetwork")
+    if lb_pool_cidr:
+        click.echo(f"✓ Cilium LB IPAM pool created: {lb_pool_cidr}")
+    else:
+        click.echo("")
+        click.echo("💡 To enable Cilium LB IPAM on bare-metal:")
+        click.echo(f"   python noah.py deploy nginx-ingress --lb-pool-cidr 192.168.x.y/z")
+        click.echo("   or: export NOAH_LB_IP_POOL_CIDR=192.168.x.y/z")
+
+
 @deploy.command()
 @click.option('--namespace', default='kube-system', help='Kubernetes namespace')
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for DNS management')

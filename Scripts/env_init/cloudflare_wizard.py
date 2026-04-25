@@ -182,10 +182,16 @@ class CloudflareWizard:
     def _prompt_zone(self, zones: list) -> tuple:
         """
         Display available zones and prompt the user to select one.
+        Auto-selects when only one zone is available.
 
         Returns:
             (zone_id, domain) tuple.
         """
+        if len(zones) == 1:
+            selected = zones[0]
+            print(f"\n[INFO] Only one DNS zone found — auto-selecting: {selected['name']}")
+            return selected["id"], selected["name"]
+
         print("\nAvailable DNS zones:")
         for i, zone in enumerate(zones, start=1):
             status = zone.get("status", "unknown")

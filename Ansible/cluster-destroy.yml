@@ -178,7 +178,6 @@
           echo "[VERBOSE] No K3s processes found to terminate"
         fi
       ignore_errors: yes
-      when: ansible_verbosity >= 1
 
     - name: Unmount K3s filesystems
       ansible.builtin.shell: |
@@ -334,7 +333,6 @@
         echo "[VERBOSE] Network interface cleanup completed"
       become: yes
       ignore_errors: yes
-      when: ansible_verbosity >= 1
 
     - name: Clean container images (optional)
       ansible.builtin.shell: |

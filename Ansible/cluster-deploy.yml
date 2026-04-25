@@ -126,32 +126,33 @@
                 exit 0
               register: cluster_check
               failed_when: cluster_check.rc != 0
-          
+
+            - name: Check local-path provisioner deployment
+              kubernetes.core.k8s_info:
+                api_version: apps/v1
+                kind: Deployment
+                name: local-path-provisioner
+                namespace: local-path-storage
+              register: local_path_deployment
+              failed_when: false
+
+            - name: Install local-path provisioner (missing from cluster)
+              ansible.builtin.command: >-
+                kubectl apply -f
+                https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.30/deploy/local-path-storage.yaml
+              when: local_path_deployment.resources | default([]) | length == 0
+              register: local_path_install
+
+            - name: Wait for local-path provisioner to be ready
+              ansible.builtin.command: >-
+                kubectl wait --for=condition=available deployment/local-path-provisioner
+                -n local-path-storage --timeout=120s
+              when: local_path_install is not skipped
+              changed_when: false
+
           tags: [validation]
 
-        - name: "PHASE 1.5: Deploy cert-manager (TLS Certificate Management)"
-          block:
-            - name: Record cert-manager phase start time
-              ansible.builtin.set_fact:
-                phase_certmgr_started: "{{ ansible_date_time.epoch | int }}"
-
-            - name: Deploy cert-manager and ClusterIssuers
-              ansible.builtin.command: >-
-                ansible-playbook deploy-cert-manager.yml
-                -e domain_name="{{ domain_name }}"
-                -e letsencrypt_email="{{ letsencrypt_email | default('admin@' + domain_name) }}"
-              args:
-                chdir: "{{ playbook_dir }}"
-              register: certmgr_subplay
-              failed_when: certmgr_subplay.rc != 0
-
-            - name: Record cert-manager phase end time
-              ansible.builtin.set_fact:
-                phase_certmgr_ended: "{{ ansible_date_time.epoch | int }}"
-
-          tags: [cert-manager, tls]
-
-        - name: "PHASE 2: Deploy Cilium CNI (Network Foundation)"
+        - name: "PHASE 1.5: Deploy Cilium CNI (Network Foundation)"
           block:
             - name: Record Cilium phase start time
               ansible.builtin.set_fact:
@@ -227,6 +228,28 @@
                 phase_cilium_ended: "{{ ansible_date_time.epoch | int }}"
           
           tags: [cilium, networking]
+
+        - name: "PHASE 2: Deploy cert-manager (TLS Certificate Management)"
+          block:
+            - name: Record cert-manager phase start time
+              ansible.builtin.set_fact:
+                phase_certmgr_started: "{{ ansible_date_time.epoch | int }}"
+
+            - name: Deploy cert-manager and ClusterIssuers
+              ansible.builtin.command: >-
+                ansible-playbook deploy-cert-manager.yml
+                -e domain_name="{{ domain_name }}"
+                -e letsencrypt_email="{{ letsencrypt_email | default('admin@' + domain_name) }}"
+              args:
+                chdir: "{{ playbook_dir }}"
+              register: certmgr_subplay
+              failed_when: certmgr_subplay.rc != 0
+
+            - name: Record cert-manager phase end time
+              ansible.builtin.set_fact:
+                phase_certmgr_ended: "{{ ansible_date_time.epoch | int }}"
+
+          tags: [cert-manager, tls]
 
         - name: "PHASE 2.5: Deploy nginx-ingress Controller (Ingress Layer)"
           block:

@@ -14,7 +14,7 @@ from Scripts.utils.paths import get_noah_paths  # reuse centralized implementati
 def get_security_config(domain=None):
     """Get security configuration for Helm and Ansible"""
     if domain is None:
-        domain = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
+        domain = os.environ.get('NOAH_DOMAIN', '')
     
     paths = get_noah_paths()
     
@@ -122,7 +122,7 @@ def ensure_security_initialized(ctx):
     """Ensure SOPS/Age keys and certificates are initialized"""
     # Get default domain from environment or fallback
     import os
-    DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
+    DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', '')
 
     age_dir = Path("Age")
     age_key_file = age_dir / "keys.txt"
@@ -184,7 +184,7 @@ def initialize_security_environment():
     import os
     from pathlib import Path
     
-    DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
+    DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', '')
     
     age_dir = Path("Age")
     certs_dir = Path("Certificates")

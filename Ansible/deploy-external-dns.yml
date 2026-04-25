@@ -4,7 +4,7 @@
   gather_facts: no
   vars:
     external_dns_namespace: "{{ external_dns_namespace | default('kube-system') }}"
-    domain_name: "{{ domain_name | default('noah-infra.com') }}"
+    domain_name: "{{ domain_name | default('') }}"
     dns_provider: "{{ dns_provider | default('cloudflare') }}"
     dns_policy: "{{ dns_policy | default('sync') }}"
     cloudflare_api_token: "{{ cloudflare_api_token | default('') }}"

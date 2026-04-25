@@ -131,7 +131,7 @@ class ConfigLoader:
     
     def get_global_domain(self) -> str:
         """Get the global configured domain"""
-        return self.get('NOAH_DOMAIN', 'noah-infra.com')
+        return self.get('NOAH_DOMAIN', '')
     
     def get_cluster_name(self, domain: str = None) -> str:
         """Get the configured cluster name.
@@ -146,7 +146,7 @@ class ConfigLoader:
         if domain:
             return 'noah-' + domain.replace('.', '-')
         fallback_domain = self.get_domain()
-        if fallback_domain and fallback_domain != 'noah-infra.com':
+        if fallback_domain:
             return 'noah-' + fallback_domain.replace('.', '-')
         return 'noah-cluster'
     
@@ -407,8 +407,8 @@ class ConfigLoader:
         
         # Check domain configuration
         domain = self.get_service_domain(service)
-        if not domain or domain == 'noah-infra.com':
-            issues.append(f"Service {service} using default domain. Consider setting NOAH_{service.upper()}_DOMAIN")
+        if not domain:
+            issues.append(f"Service {service} has no domain configured. Set NOAH_{service.upper()}_DOMAIN or NOAH_DOMAIN.")
         
         # Check namespace exists in environment
         namespace = self.get_namespace(service)
@@ -538,10 +538,9 @@ class ConfigLoader:
 
         # Check domain configuration
         domain = self.get_global_domain()
-        if domain == 'noah-infra.com':
+        if not domain:
             issues.append(
-                "Using default domain 'noah-infra.com'. "
-                "Set NOAH_DOMAIN to your actual domain for external-dns to work."
+                "No domain configured. Set NOAH_DOMAIN to your actual domain for external-dns to work."
             )
 
         return issues

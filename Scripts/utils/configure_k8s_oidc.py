@@ -16,7 +16,7 @@ class KubernetesOIDCConfigurator:
     def __init__(self, authentik_domain=None, client_id=None, username_claim=None, 
                  groups_claim=None, signing_algs=None):
         """Initialize OIDC configurator with customizable parameters"""
-        self.authentik_domain = authentik_domain or os.getenv('AUTHENTIK_DOMAIN', 'auth.noah-infra.com')
+        self.authentik_domain = authentik_domain or os.getenv('AUTHENTIK_DOMAIN', '')
         self.oidc_issuer_url = f"https://{self.authentik_domain}/application/o/kubernetes/"
         self.oidc_client_id = client_id or os.getenv('OIDC_CLIENT_ID', 'kubernetes-cluster')
         self.oidc_username_claim = username_claim or os.getenv('OIDC_USERNAME_CLAIM', 'preferred_username')
@@ -142,7 +142,7 @@ class KubernetesOIDCConfigurator:
                 'subjects': [
                     {
                         'kind': 'User',
-                        'name': f'{self.oidc_username_claim}:admin@noah-infra.com',
+                        'name': f'{self.oidc_username_claim}:admin@{".".join(self.authentik_domain.split(".")[1:]) if self.authentik_domain else ""}',
                         'apiGroup': 'rbac.authorization.k8s.io'
                     },
                     {
@@ -237,8 +237,8 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Generate Kubernetes OIDC configuration for Authentik')
-    parser.add_argument('--domain', default='auth.noah-infra.com', 
-                       help='Authentik domain (default: auth.noah-infra.com)')
+    parser.add_argument('--domain', default='',
+                       help='Authentik domain')
     parser.add_argument('--client-id', default='kubernetes-cluster',
                        help='OIDC client ID (default: kubernetes-cluster)')
     parser.add_argument('--username-claim', default='preferred_username',

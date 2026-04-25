@@ -64,19 +64,19 @@
     - name: Find TLS certificate file for domain
       ansible.builtin.find:
         paths: "{{ playbook_dir }}/../Certificates"
-        patterns: "*{{ domain_name | default('noah-infra.com') }}.crt"
+        patterns: "*{{ domain_name | default('') }}.crt"
       register: tls_cert_files
 
     - name: Find TLS key file for domain
       ansible.builtin.find:
         paths: "{{ playbook_dir }}/../Certificates"
-        patterns: "*{{ domain_name | default('noah-infra.com') }}.key"
+        patterns: "*{{ domain_name | default('') }}.key"
       register: tls_key_files
 
     - name: Warn if TLS certificate files not found (cert-manager will provision TLS)
       ansible.builtin.debug:
         msg: >-
-          No local TLS certificate found for {{ domain_name | default('noah-infra.com') }}.
+          No local TLS certificate found for {{ domain_name | default('') }}.
           cert-manager will provision the headlamp-tls secret automatically via the
           letsencrypt-prod cluster-issuer annotation on the ingress.
       when: (tls_cert_files.matched == 0) or (tls_key_files.matched == 0)
@@ -124,9 +124,9 @@
             oidc:
               clientID: "{{ headlamp_canonical.oidc_client_id }}"
               clientSecret: "{{ headlamp_canonical.oidc_client_secret }}"
-              issuerURL: "https://auth.{{ domain_name | default('noah-infra.com') }}/application/o/headlamp/"
+              issuerURL: "https://auth.{{ domain_name | default('') }}/application/o/headlamp/"
               scopes: "openid profile email groups"
-              callbackURL: "https://headlamp.{{ domain_name | default('noah-infra.com') }}/oidc-callback"
+              callbackURL: "https://headlamp.{{ domain_name | default('') }}/oidc-callback"
               useAccessToken: false
             baseURL: ""
 
@@ -165,14 +165,14 @@
               nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
               nginx.ingress.kubernetes.io/proxy-body-size: "50m"
             hosts:
-              - host: "headlamp.{{ domain_name | default('noah-infra.com') }}"
+              - host: "headlamp.{{ domain_name | default('') }}"
                 paths:
                   - path: /
                     pathType: Prefix
             tls:
               - secretName: headlamp-tls
                 hosts:
-                  - "headlamp.{{ domain_name | default('noah-infra.com') }}"
+                  - "headlamp.{{ domain_name | default('') }}"
 
           resources:
             limits:
@@ -251,7 +251,7 @@
         - name: Run Authentik provisioner for Headlamp OIDC app
           ansible.builtin.command: >-
             python3 {{ playbook_dir }}/../Scripts/security/authentik_provisioner.py provision-headlamp
-            --domain {{ domain_name | default('noah-infra.com') }}
+            --domain {{ domain_name | default('') }}
           environment:
             AUTHENTIK_URL: "http://localhost:19001"
             AUTHENTIK_BOOTSTRAP_TOKEN: "{{ _authentik_bootstrap_token_headlamp }}"
@@ -286,8 +286,8 @@
       debug:
         msg:
           - "Headlamp deployment validated for namespace: {{ headlamp_namespace }}"
-          - "Access URL: https://headlamp.{{ domain_name | default('noah-infra.com') }}"
-          - "SSO via Authentik: https://auth.{{ domain_name | default('noah-infra.com') }}"
+          - "Access URL: https://headlamp.{{ domain_name | default('') }}"
+          - "SSO via Authentik: https://auth.{{ domain_name | default('') }}"
           - "Deployment status: {{ headlamp_deployment_status }}"
           - "Validation status: {{ headlamp_validation_status }}"
 
@@ -299,7 +299,7 @@
           - "✓ Secrets: headlamp-secret (canonical-managed)"
           - "✓ Helm Chart: {{ playbook_dir }}/../Helm/headlamp"
           - "✓ SSO Integration: Authentik OIDC"
-          - "✓ Issuer URL: https://auth.{{ domain_name | default('noah-infra.com') }}/application/o/headlamp/"
-          - "✓ Callback URL: https://headlamp.{{ domain_name | default('noah-infra.com') }}/oidc-callback"
+          - "✓ Issuer URL: https://auth.{{ domain_name | default('') }}/application/o/headlamp/"
+          - "✓ Callback URL: https://headlamp.{{ domain_name | default('') }}/oidc-callback"
           - "✓ Validation: {{ headlamp_validation_status }}"
           - "✅ Ready for Kubernetes management operations"

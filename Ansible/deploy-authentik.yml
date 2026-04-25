@@ -70,19 +70,19 @@
     - name: Find TLS certificate file for domain
       ansible.builtin.find:
         paths: "{{ playbook_dir }}/../Certificates"
-        patterns: "*{{ domain_name | default('noah-infra.com') }}.crt"
+        patterns: "*{{ domain_name | default('') }}.crt"
       register: tls_cert_files
 
     - name: Find TLS key file for domain
       ansible.builtin.find:
         paths: "{{ playbook_dir }}/../Certificates"
-        patterns: "*{{ domain_name | default('noah-infra.com') }}.key"
+        patterns: "*{{ domain_name | default('') }}.key"
       register: tls_key_files
 
     - name: Warn if TLS certificate files not found (cert-manager will provision TLS)
       ansible.builtin.debug:
         msg: >-
-          No local TLS certificate found for {{ domain_name | default('noah-infra.com') }}.
+          No local TLS certificate found for {{ domain_name | default('') }}.
           cert-manager will provision the authentik-tls secret automatically via the
           letsencrypt-prod cluster-issuer annotation on the ingress.
       when: (tls_cert_files.matched == 0) or (tls_key_files.matched == 0)
@@ -207,7 +207,7 @@
               nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
               nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type"
             hosts:
-              - host: "auth.{{ domain_name | default('noah-infra.com') }}"
+              - host: "auth.{{ domain_name | default('') }}"
                 paths:
                   - path: /
                     pathType: Prefix
@@ -218,7 +218,7 @@
             tls:
               - secretName: authentik-tls
                 hosts:
-                  - "auth.{{ domain_name | default('noah-infra.com') }}"
+                  - "auth.{{ domain_name | default('') }}"
           
           # TLS configuration
           tls:
@@ -227,12 +227,12 @@
           
           # Global domain configuration for dynamic FQDN
           global:
-            domain: "{{ domain_name | default('noah-infra.com') }}"
+            domain: "{{ domain_name | default('') }}"
           
           # Service configuration  
           service:
             subdomain: "auth"
-            fqdn: "auth.{{ domain_name | default('noah-infra.com') }}"
+            fqdn: "auth.{{ domain_name | default('') }}"
             port: 9000
           
           # Server configuration

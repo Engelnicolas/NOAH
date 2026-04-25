@@ -59,7 +59,7 @@ spec:
             from authentik.core.models import Group
             import os
             
-            admin_email = os.environ.get('AUTHENTIK_BOOTSTRAP_EMAIL', 'admin@noah-infra.com')
+            admin_email = os.environ.get('AUTHENTIK_BOOTSTRAP_EMAIL', '')
             admin_username = os.environ.get('AUTHENTIK_BOOTSTRAP_USER', 'akadmin')
             bootstrap_password = os.environ.get('AUTHENTIK_BOOTSTRAP_PASSWORD', '')
             

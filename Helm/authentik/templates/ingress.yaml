@@ -6,7 +6,7 @@ Current: {{ .Values.ingress.className | default "nginx" }}
 Dynamic domain management via ConfigLoader integration
 */}}
 {{- $serviceFqdn := .Values.service.fqdn -}}
-{{- $globalDomain := .Values.global.domain | default "noah-infra.com" -}}
+{{- $globalDomain := .Values.global.domain | default "" -}}
 {{- $serviceSubdomain := .Values.service.subdomain | default "auth" -}}
 {{- $computedFqdn := printf "%s.%s" $serviceSubdomain $globalDomain -}}
 {{- $finalFqdn := $serviceFqdn | default $computedFqdn -}}

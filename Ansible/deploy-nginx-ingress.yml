@@ -5,7 +5,7 @@
   vars:
     nginx_ingress_namespace: ingress-nginx
     nginx_ingress_helm_timeout: "{{ nginx_ingress_helm_timeout | default('300s') }}"
-    domain_name: "{{ domain_name | default('noah-infra.com') }}"
+    domain_name: "{{ domain_name | default('') }}"
     noah_root_dir: "{{ playbook_dir | dirname }}"
     # Set NOAH_LB_IP_POOL_CIDR env var to enable Cilium LB IPAM pool (bare-metal only)
     lb_ip_pool_cidr: "{{ lookup('env', 'NOAH_LB_IP_POOL_CIDR') | default('') }}"

@@ -633,7 +633,7 @@ class NoahSecurityManager:
         # Clean up generated certificates (keep CA certificates)
         cert_dir = self.project_root / "Certificates"
         if cert_dir.exists():
-            for cert_file in cert_dir.glob("*.noah-infra.com.*"):
+            for cert_file in cert_dir.glob("*.*.*"):
                 if cert_file.is_file():
                     cert_file.unlink()
                     cleaned_files.append(str(cert_file))

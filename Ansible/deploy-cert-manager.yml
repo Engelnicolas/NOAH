@@ -6,8 +6,8 @@
     cert_manager_namespace: cert-manager
     cert_manager_version: "v1.17.2"
     cert_manager_helm_timeout: "300s"
-    letsencrypt_email: "{{ letsencrypt_email | default('admin@noah-infra.com') }}"
-    domain_name: "{{ domain_name | default('noah-infra.com') }}"
+    letsencrypt_email: "{{ letsencrypt_email | default('admin@' ~ domain_name) }}"
+    domain_name: "{{ domain_name | default('') }}"
     ansible_python_interpreter: "{{ playbook_dir }}/../.venv/bin/python"
 
   environment:

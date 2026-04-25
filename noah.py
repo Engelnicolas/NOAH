@@ -56,8 +56,7 @@ from Scripts.cluster_create.cluster_create_utils import create_cluster
 from Scripts.cluster_destroy.cluster_destroy_utils import destroy_cluster_command
 
 VERSION = "0.0.7"
-# Load default domain from environment, fallback to noah-infra.com
-DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', 'noah-infra.com')
+DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', '')
 def check_repository_root():
     """Check if the current directory is the root of the NOAH repository"""
     current_dir = Path.cwd()

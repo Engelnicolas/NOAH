@@ -25,7 +25,7 @@ def get_authentik_credentials(domain: str | None = None) -> tuple[Optional[dict[
         if not password:
             return None, "Bootstrap password not present in canonical store"
 
-        admin_email = 'admin@noah-infra.com'
+        admin_email = ''
         admin_username = 'akadmin'
 
         external_ip = None

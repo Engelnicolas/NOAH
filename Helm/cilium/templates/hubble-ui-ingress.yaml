@@ -4,11 +4,11 @@ Cilium Hubble UI Ingress with dynamic domain support
 Supports ConfigLoader dynamic domain management
 */}}
 {{- $serviceFqdn := .Values.service.fqdn -}}
-{{- $globalDomain := .Values.global.domain | default "noah-infra.com" -}}
+{{- $globalDomain := .Values.global.domain | default "" -}}
 {{- $serviceSubdomain := .Values.service.subdomain | default "hubble" -}}
 {{- $computedFqdn := printf "%s.%s" $serviceSubdomain $globalDomain -}}
 {{- $finalFqdn := $serviceFqdn | default $computedFqdn -}}
-{{- $authFqdn := printf "auth.%s" (.Values.global.domain | default "noah-infra.com") -}}
+{{- $authFqdn := printf "auth.%s" (.Values.global.domain | default "") -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

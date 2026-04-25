@@ -4,7 +4,7 @@
   gather_facts: yes
   vars:
     cluster_name: "{{ cluster_name | default('noah-cluster') }}"
-    domain_name: "{{ domain_name | default('noah-infra.com') }}"
+    domain_name: "{{ domain_name | default('') }}"
     validation_mode: "{{ validation_mode | default('production') }}"  # validation modes: production (default) or development
     strict_development_validation: false  # dev-only hard fail toggle (override with -e strict_development_validation=true)
     verbose_mode: true  # Enable verbose output by default

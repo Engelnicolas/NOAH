@@ -508,7 +508,7 @@ if __name__ == "__main__":
         choices=["provision-headlamp", "provision-hubble", "wait-ready"],
         help="Action to perform",
     )
-    parser.add_argument("--domain", default="noah-infra.com", help="Base domain (e.g. noah-infra.com)")
+    parser.add_argument("--domain", default="", help="Base domain")
     args = parser.parse_args()
 
     if args.command == "provision-headlamp":

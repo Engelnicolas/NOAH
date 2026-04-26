@@ -1,0 +1,44 @@
+---
+# NOAH role: k3s-validate
+# Sanity checks that block the bootstrap if the control plane is not
+# in a usable state. Failing here is preferable to failing later when
+# FluxCD tries to reconcile against a half-broken cluster.
+
+- name: Wait for kube-apiserver to accept requests
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get --raw=/healthz
+  register: apiserver_health
+  retries: 30
+  delay: 5
+  until: apiserver_health.rc == 0
+  changed_when: false
+
+- name: Count Ready nodes
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+      kubectl get nodes --no-headers | awk '$2=="Ready"{c++} END{print c+0}'
+  register: ready_nodes
+  changed_when: false
+
+- name: Fail if Ready node count is below expectation
+  fail:
+    msg: >-
+      Expected at least {{ expected_node_count }} Ready node(s),
+      got {{ ready_nodes.stdout | trim }}.
+  when: (ready_nodes.stdout | trim | int) < (expected_node_count | int)
+
+- name: List etcd members (HA only — non-fatal in single-node)
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+      kubectl -n kube-system get pods -l component=etcd \
+        -o jsonpath='{.items[*].metadata.name}'
+  register: etcd_pods
+  changed_when: false
+  failed_when: false
+
+- name: Show validation summary
+  debug:
+    msg:
+      - "API server: healthy"
+      - "Ready nodes: {{ ready_nodes.stdout | trim }} / {{ expected_node_count }}"
+      - "etcd pods:  {{ etcd_pods.stdout | default('(none — single-node embedded etcd is in-process)') }}"

@@ -1,9 +1,12 @@
 # NOAH Deployment Guide
 
-**Version**: 0.0.8
+**Version**: 0.0.9
 **Last Updated**: April 2026
 
 Deploy NOAH (Network Operations & Automation Hub) - a complete Kubernetes infrastructure with SSO authentication and web dashboards.
+
+> **What's new in v0.0.9** — K3s now uses embedded etcd (no more SQLite SPOF), and application services are reconciled by **FluxCD** from a Git repository. The legacy `noah deploy <service>` commands are deprecated; use `noah cluster bootstrap` to provision and `noah flux ...` to operate.
+> See [`MIGRATION_GUIDE.md`](MIGRATION_GUIDE.md) for the v0.0.8 → v0.0.9 upgrade and [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) for the day-to-day GitOps workflow.
 
 ---
 
@@ -85,30 +88,43 @@ NOAH deploys a complete Kubernetes stack:
 
 ---
 
-## Quick Start
+## Quick Start (v0.0.9, GitOps)
 
 ```bash
-# 1. Configure DNS (choose one):
-# Option A: Automatic (Cloudflare) - store token once, enabled by default
+# 1. One-time setup (DNS token, dependency check, Age key generation).
 python3 noah.py setup set-cloudflare-token 'your-cloudflare-api-token'
-# Option B: Manual - configure AFTER deploy (see DNS Configuration section)
-# Option C: Local - add to /etc/hosts AFTER deploy
-
-# 2. Clone repository
-git clone https://github.com/Engelnicolas/NOAH.git
-cd NOAH
-
-# 3. Initialize environment
+git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
 python3 noah.py setup initialize
 
-# 4. Create cluster
-python3 noah.py cluster create --name noah-cluster
+# 2. Fork the GitOps tree and replace placeholders.
+#    Detailed instructions: docs/MIGRATION_GUIDE.md §4.1
+cp -R flux-repo/* /tmp/your-noah-gitops/
+# (edit *.enc.yaml + .sops.yaml, encrypt, push to GitHub)
 
-# 5. Deploy stack
-python3 noah.py deploy core --domain yourdomain.com
+# 3. Bootstrap K3s (single-node embedded etcd) + FluxCD.
+export GITHUB_TOKEN=ghp_xxx
+python3 noah.py cluster bootstrap \
+  --node 192.168.1.10 \
+  --domain yourdomain.com \
+  --flux-repo https://github.com/yourorg/your-noah-gitops \
+  --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
 
-# 6. Get credentials
+# 4. Watch FluxCD reconcile the stack.
+python3 noah.py flux status
+python3 noah.py flux logs -f          # live tail (Ctrl-C to stop)
+
+# 5. Get Authentik admin credentials.
 python3 noah.py password show
+```
+
+> For a 3-node HA cluster, replace step 3 with:
+> `python3 noah.py cluster bootstrap --ha --nodes n1,n2,n3 --domain ... --flux-repo ...`
+
+### Legacy quick start (v0.0.8, deprecated)
+
+```bash
+python3 noah.py cluster create --name noah-cluster      # DEPRECATED
+python3 noah.py deploy core --domain yourdomain.com     # DEPRECATED — see MIGRATION_GUIDE.md
 ```
 
 **Access services:**

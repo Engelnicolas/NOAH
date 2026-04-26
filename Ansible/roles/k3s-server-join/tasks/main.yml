@@ -1,0 +1,53 @@
+---
+# NOAH role: k3s-server-join
+# Joins additional K3s server nodes to the embedded-etcd cluster.
+# Skipped entirely when ha_mode is false. The join token is read from
+# the k3s-primary host (set as a fact by k3s-server-init).
+
+- name: Skip when running in single-node mode
+  meta: end_play
+  when: not (ha_mode | bool)
+
+- name: Pull the join token from the primary node fact
+  set_fact:
+    k3s_join_token: "{{ hostvars[groups['k3s_primary'][0]]['k3s_join_token'] }}"
+  when: k3s_join_token is not defined
+
+- name: Check whether K3s is already installed on this joiner
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Install K3s server (join existing etcd quorum)
+  shell: |
+    set -euo pipefail
+    curl -sfL https://get.k3s.io | \
+      INSTALL_K3S_VERSION="{{ k3s_version }}" \
+      K3S_TOKEN="{{ k3s_join_token }}" \
+      INSTALL_K3S_EXEC="server" \
+      sh -s - \
+        --server "https://{{ node1_ip }}:6443" \
+        --disable traefik \
+        --disable servicelb \
+        --disable local-storage \
+        --disable-network-policy \
+        --flannel-backend=none \
+        --tls-san "{{ node1_ip }}" \
+        --node-ip "{{ ansible_default_ipv4.address }}" \
+        --write-kubeconfig-mode 644
+  args:
+    executable: /bin/bash
+  when: not k3s_binary.stat.exists
+
+- name: Ensure K3s service is enabled and running on joiner
+  systemd:
+    name: k3s
+    enabled: yes
+    state: started
+
+- name: Wait for joiner API server to respond on :6443
+  wait_for:
+    port: 6443
+    host: "{{ ansible_default_ipv4.address }}"
+    delay: 5
+    timeout: 300

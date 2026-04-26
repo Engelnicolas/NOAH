@@ -1,0 +1,38 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: authentik
+  namespace: authentik
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: authentik
+      version: '>=2024.6.0 <2025.0.0'
+      sourceRef:
+        kind: HelmRepository
+        name: authentik
+        namespace: flux-system
+      interval: 1h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  valuesFrom:
+    - kind: Secret
+      name: authentik-values
+      valuesKey: values.yaml
+  values:
+    # Non-secret defaults; secrets (admin password, postgres password,
+    # bootstrap token, secret_key) are provided by authentik-values.
+    server:
+      replicas: 1
+    worker:
+      replicas: 1
+    postgresql:
+      enabled: true
+    redis:
+      enabled: true

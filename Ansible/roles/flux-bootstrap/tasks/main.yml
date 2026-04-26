@@ -1,0 +1,80 @@
+---
+# NOAH role: flux-bootstrap
+# Installs the FluxCD CLI on the primary node, creates the flux-system
+# namespace, seeds the SOPS Age key as a Secret (so the kustomize
+# controller can decrypt .enc.yaml manifests in the GitOps repo), then
+# runs `flux bootstrap` to wire the cluster to the GitOps repository.
+#
+# Re-runnable: `flux bootstrap` is idempotent and updates an existing
+# install in-place.
+
+- name: Check whether the flux CLI is already installed
+  stat:
+    path: /usr/local/bin/flux
+  register: flux_binary
+
+- name: Install flux CLI
+  shell: |
+    set -euo pipefail
+    curl -s https://fluxcd.io/install.sh | bash
+  args:
+    executable: /bin/bash
+  when: not flux_binary.stat.exists
+
+- name: Wait for the cluster to accept kubectl from this node
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes
+  register: k3s_kubectl_check
+  retries: 10
+  delay: 6
+  until: k3s_kubectl_check.rc == 0
+  changed_when: false
+
+- name: Create flux-system namespace
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+      kubectl create namespace flux-system \
+        --dry-run=client -o yaml | \
+      KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Seed sops-age secret in flux-system namespace
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+      kubectl create secret generic sops-age \
+        --namespace=flux-system \
+        --from-literal=age.agekey="{{ age_private_key }}" \
+        --dry-run=client -o yaml | \
+      KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
+  args:
+    executable: /bin/bash
+  no_log: true
+  changed_when: false
+
+- name: Derive GitHub owner / repo from flux_repo if not provided
+  set_fact:
+    _flux_owner: "{{ github_owner | default(flux_repo.split('/')[-2]) }}"
+    _flux_repo_name: "{{ (flux_repo.split('/')[-1]) | regex_replace('\\.git$', '') }}"
+
+- name: Run flux bootstrap against GitHub
+  shell: |
+    set -euo pipefail
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+    GITHUB_TOKEN="{{ github_token }}" \
+      flux bootstrap github \
+        --owner="{{ _flux_owner }}" \
+        --repository="{{ _flux_repo_name }}" \
+        --branch="{{ flux_branch }}" \
+        --path="{{ flux_path }}" \
+        --personal \
+        --components-extra=image-reflector-controller,image-automation-controller
+  args:
+    executable: /bin/bash
+  no_log: true
+  register: flux_bootstrap_result
+
+- name: Show flux bootstrap result tail
+  debug:
+    msg: "{{ flux_bootstrap_result.stdout_lines[-15:] | default([]) }}"

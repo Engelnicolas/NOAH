@@ -12,9 +12,14 @@ NOAH provides a complete infrastructure stack:
 - **📊 Headlamp Dashboard** - Kubernetes web UI with auto-provisioned Authentik SSO
 - **🔒 Canonical Secrets Store** - Single authoritative encrypted secrets file (Age/SOPS protected)
 - **🌍 Cloudflare DNS Wizard** - Interactive DNS automation setup (`setup initialize`)
-- **🔄 Automated Deployment** - Single-command infrastructure setup
+- **🚢 GitOps with FluxCD (v0.0.9+)** - Continuous reconciliation from a Git repo with SOPS-encrypted secrets
 - **🧪 Testing Suite** - Built-in validation and health checks
 - **🚀 CI/CD Ready** - GitHub Actions workflows included
+
+### v0.0.9 documentation
+- [`MIGRATION_GUIDE.md`](MIGRATION_GUIDE.md) - upgrade from v0.0.8 (greenfield re-deploy)
+- [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) - day-to-day FluxCD workflow
+- [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) - end-to-end install (updated for v0.0.9)
 
 ## **Use Cases**
 

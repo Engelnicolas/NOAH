@@ -1,0 +1,82 @@
+---
+# NOAH v0.0.9 — Unified K3s + FluxCD bootstrap
+#
+# This playbook is the SINGLE entry point for cluster provisioning.
+# It supersedes cluster-create.yml + the deploy-*.yml service playbooks
+# (which were imperative). Application services are now reconciled by
+# FluxCD from a Git repository — see docs/GITOPS_GUIDE.md.
+#
+# Modes:
+#   ha_mode=false (default) — single-node K3s with embedded etcd
+#                              (--cluster-init, single-member etcd)
+#   ha_mode=true            — 3-node K3s server cluster, embedded etcd
+#                              quorum (first node --cluster-init,
+#                              remaining nodes --server <node1>:6443)
+#
+# Required extra-vars (passed by the noah CLI):
+#   k3s_nodes        list of node IPs (length 1 for single, >=3 odd for HA)
+#   ha_mode          bool
+#   domain           primary domain
+#   flux_repo        GitOps repository URL (or owner/repo for --personal)
+#   age_private_key  Age private key payload, used to seed sops-age secret
+#   github_token     PAT with repo:write, used by `flux bootstrap github`
+#
+# Optional extra-vars:
+#   k3s_version      defaults to v1.30.5+k3s1
+#   k3s_token        cluster join token (auto-generated if absent)
+#   flux_branch      defaults to main
+#   flux_path        defaults to clusters/production
+#   github_owner     overrides the owner inferred from flux_repo
+
+- name: NOAH bootstrap — phase 1, OS prerequisites on all nodes
+  hosts: k3s_nodes
+  become: yes
+  gather_facts: yes
+  vars:
+    k3s_version: "{{ k3s_version | default('v1.30.5+k3s1') }}"
+    ha_mode: "{{ ha_mode | default(false) | bool }}"
+  roles:
+    - role: common
+
+- name: NOAH bootstrap — phase 2, install primary K3s server (cluster-init)
+  hosts: k3s_primary
+  become: yes
+  gather_facts: yes
+  vars:
+    k3s_version: "{{ k3s_version | default('v1.30.5+k3s1') }}"
+    ha_mode: "{{ ha_mode | default(false) | bool }}"
+    node1_ip: "{{ groups['k3s_primary'][0] }}"
+  roles:
+    - role: k3s-server-init
+
+- name: NOAH bootstrap — phase 3, join additional servers (HA only)
+  hosts: k3s_joiners
+  become: yes
+  gather_facts: yes
+  vars:
+    k3s_version: "{{ k3s_version | default('v1.30.5+k3s1') }}"
+    ha_mode: "{{ ha_mode | default(false) | bool }}"
+    node1_ip: "{{ groups['k3s_primary'][0] }}"
+  roles:
+    - role: k3s-server-join
+
+- name: NOAH bootstrap — phase 4, validate cluster + fetch kubeconfig
+  hosts: k3s_primary
+  become: yes
+  gather_facts: no
+  vars:
+    ha_mode: "{{ ha_mode | default(false) | bool }}"
+    expected_node_count: "{{ (groups['k3s_nodes'] | length) if ha_mode else 1 }}"
+  roles:
+    - role: k3s-validate
+    - role: kubeconfig
+
+- name: NOAH bootstrap — phase 5, FluxCD bootstrap on primary
+  hosts: k3s_primary
+  become: yes
+  gather_facts: no
+  vars:
+    flux_branch: "{{ flux_branch | default('main') }}"
+    flux_path: "{{ flux_path | default('clusters/production') }}"
+  roles:
+    - role: flux-bootstrap

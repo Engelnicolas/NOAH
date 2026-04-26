@@ -53,9 +53,19 @@ from Scripts.core_helm import (
 from Scripts.cluster_create.status_utils import show_cluster_status
 from Scripts.cluster_create.cluster_validation_utils import check_existing_cluster
 from Scripts.cluster_create.cluster_create_utils import create_cluster
+from Scripts.cluster_create.bootstrap_utils import (
+    run_bootstrap as cluster_bootstrap,
+    run_add_nodes as cluster_add_nodes,
+    show_cluster_status_v2,
+)
+from Scripts.cluster_create.flux_utils import (
+    cmd_sync as flux_cmd_sync,
+    cmd_status as flux_cmd_status,
+    cmd_logs as flux_cmd_logs,
+)
 from Scripts.cluster_destroy.cluster_destroy_utils import destroy_cluster_command
 
-VERSION = "0.0.7"
+VERSION = "0.0.9"
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', '')
 def check_repository_root():
     """Check if the current directory is the root of the NOAH repository"""
@@ -125,6 +135,112 @@ def create(ctx, name, domain):
 def destroy(ctx, name, force, keep_secrets):
     """Destroy Kubernetes cluster and clean up resources"""
     destroy_cluster_command(ctx, name, force, keep_secrets, get_security_config)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# v0.0.9 — GitOps bootstrap commands
+# ──────────────────────────────────────────────────────────────────────
+
+@cluster.command()
+@click.option('--node', default=None, help='Single node IP (default single-node mode)')
+@click.option('--nodes', default=None, help='Comma-separated IPs for HA mode (>=3, odd)')
+@click.option('--ha', is_flag=True, default=False, help='Enable 3-node embedded-etcd HA mode')
+@click.option('--domain', required=True, help='Primary domain for the cluster')
+@click.option('--flux-repo', required=True, help='GitOps repository URL or owner/repo')
+@click.option('--flux-branch', default='main', show_default=True, help='GitOps branch')
+@click.option('--flux-path', default='clusters/production', show_default=True,
+              help='Path inside the GitOps repo Flux will reconcile')
+@click.option('--github-token', envvar='GITHUB_TOKEN',
+              help='GitHub PAT with repo:write (or env GITHUB_TOKEN)')
+@click.option('--ssh-user', default='ubuntu', show_default=True, help='SSH user on target nodes')
+@click.option('--ssh-key', default=None, help='SSH private key path (optional)')
+@click.option('--age-key-file', default='Age/keys.txt', show_default=True,
+              help='Path to the Age private key file')
+@click.option('--k3s-version', default=None,
+              help='Override K3s version (default: pinned in the role)')
+@click.option('--force-reset', is_flag=True, default=False,
+              help='Allow bootstrap on top of an existing K3s install (DESTRUCTIVE)')
+@click.pass_context
+def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
+              github_token, ssh_user, ssh_key, age_key_file,
+              k3s_version, force_reset):
+    """Provision K3s + bootstrap FluxCD against a GitOps repo (v0.0.9)."""
+    rc = cluster_bootstrap(
+        node=node,
+        nodes=nodes,
+        ha=ha,
+        domain=domain,
+        flux_repo=flux_repo,
+        github_token=github_token,
+        ssh_user=ssh_user,
+        ssh_key=ssh_key,
+        age_key_file=Path(age_key_file),
+        k3s_version=k3s_version,
+        flux_branch=flux_branch,
+        flux_path=flux_path,
+        force_reset=force_reset,
+        ansible_dir=Path('Ansible').resolve(),
+    )
+    sys.exit(rc)
+
+
+@cluster.command('add-nodes')
+@click.option('--primary', required=True, help='IP of the existing primary node')
+@click.option('--nodes', required=True, help='Comma-separated IPs of NEW joiner nodes')
+@click.option('--ssh-user', default='ubuntu', show_default=True)
+@click.option('--ssh-key', default=None, help='SSH private key path (optional)')
+@click.option('--k3s-version', default=None)
+@click.pass_context
+def add_nodes(ctx, primary, nodes, ssh_user, ssh_key, k3s_version):
+    """Scale a single-node cluster to HA by joining new server nodes."""
+    new_nodes = [n.strip() for n in nodes.split(',') if n.strip()]
+    rc = cluster_add_nodes(
+        primary=primary,
+        new_nodes=new_nodes,
+        ssh_user=ssh_user,
+        ssh_key=ssh_key,
+        ansible_dir=Path('Ansible').resolve(),
+        k3s_version=k3s_version,
+    )
+    sys.exit(rc)
+
+
+@cluster.command('status')
+@click.pass_context
+def cluster_status(ctx):
+    """Show node, etcd quorum, and FluxCD reconciliation state."""
+    sys.exit(show_cluster_status_v2())
+
+
+@cli.group()  # type: ignore
+@click.pass_context
+def flux(ctx):
+    """Interact with the FluxCD GitOps controller (v0.0.9+)."""
+    pass
+
+
+@flux.command('sync')
+@click.pass_context
+def flux_sync(ctx):
+    """Force immediate reconciliation of every Kustomization + HelmRelease."""
+    sys.exit(flux_cmd_sync())
+
+
+@flux.command('status')
+@click.pass_context
+def flux_status_cmd(ctx):
+    """Show the state of every Flux resource in the cluster."""
+    sys.exit(flux_cmd_status())
+
+
+@flux.command('logs')
+@click.option('-f', '--follow', is_flag=True, default=False, help='Stream new log lines')
+@click.option('--tail', type=int, default=100, show_default=True, help='Lines per controller')
+@click.pass_context
+def flux_logs(ctx, follow, tail):
+    """Aggregate logs from the Flux controllers."""
+    sys.exit(flux_cmd_logs(follow=follow, tail=tail))
+
 
 @cli.group()  # type: ignore
 @click.pass_context
@@ -226,13 +342,25 @@ def show_password(ctx, domain):
 @cli.group()  # type: ignore
 @click.pass_context
 def deploy(ctx):
-    """Deploy services to Kubernetes
+    """[DEPRECATED in v0.0.9] Imperative service deployment.
 
-    OPTIMIZED: Individual commands (authentik, cilium) are simplified
-    and the 'core' command now uses cluster-deploy.yml Ansible playbook to avoid
-    code repetition and leverage the optimized deployment order and validation.
+    Application services are now reconciled by FluxCD from the GitOps
+    repository (see docs/GITOPS_GUIDE.md). These commands are kept for
+    one release to ease migration from v0.0.8 and will be removed in
+    v0.1.0. Use:
+
+        noah cluster bootstrap   # provision K3s + bootstrap FluxCD
+        noah flux sync           # force reconciliation
+        noah flux status         # inspect reconciliation state
+
+    Edit flux-repo/ and `git push` to change a service.
     """
-    pass
+    click.echo(
+        "⚠️  `noah deploy ...` is deprecated since v0.0.9. "
+        "FluxCD reconciles services from your GitOps repo — see "
+        "docs/MIGRATION_GUIDE.md for the new workflow.",
+        err=True,
+    )
 
 @deploy.command()
 @click.option('--namespace', default='identity', help='Kubernetes namespace')

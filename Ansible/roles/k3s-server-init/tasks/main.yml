@@ -1,0 +1,68 @@
+---
+# NOAH role: k3s-server-init
+# Installs the FIRST K3s server (control plane bootstrap).
+# Uses --cluster-init in BOTH single-node and HA mode so the datastore
+# is always embedded etcd (single-member when ha_mode=false, joined by
+# the k3s-server-join role when ha_mode=true).
+#
+# Cilium replaces flannel and kube-proxy; Cilium itself is installed
+# later by FluxCD (HelmRelease). Until Cilium is reconciled, in-cluster
+# pod-to-pod networking is unavailable — this is expected.
+
+- name: Generate K3s join token if not provided
+  set_fact:
+    k3s_token: "{{ k3s_token | default(lookup('password', '/dev/null length=48 chars=ascii_letters,digits')) }}"
+  run_once: true
+
+- name: Check whether K3s is already installed
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Install K3s server (cluster-init, embedded etcd)
+  shell: |
+    set -euo pipefail
+    curl -sfL https://get.k3s.io | \
+      INSTALL_K3S_VERSION="{{ k3s_version }}" \
+      K3S_TOKEN="{{ k3s_token }}" \
+      INSTALL_K3S_EXEC="server" \
+      sh -s - \
+        --cluster-init \
+        --disable traefik \
+        --disable servicelb \
+        --disable local-storage \
+        --disable-network-policy \
+        --flannel-backend=none \
+        --tls-san "{{ node1_ip }}" \
+        --node-ip "{{ ansible_default_ipv4.address }}" \
+        --write-kubeconfig-mode 644
+  args:
+    executable: /bin/bash
+  when: not k3s_binary.stat.exists
+
+- name: Ensure K3s service is enabled and running
+  systemd:
+    name: k3s
+    enabled: yes
+    state: started
+
+- name: Wait for the K3s API server to respond on :6443
+  wait_for:
+    port: 6443
+    host: "{{ ansible_default_ipv4.address }}"
+    delay: 5
+    timeout: 300
+
+- name: Wait for kubeconfig to be written
+  wait_for:
+    path: /etc/rancher/k3s/k3s.yaml
+    timeout: 120
+
+- name: Capture K3s join token for downstream nodes
+  slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_node_token
+
+- name: Publish join token as a host fact
+  set_fact:
+    k3s_join_token: "{{ k3s_node_token['content'] | b64decode | trim }}"

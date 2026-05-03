@@ -897,6 +897,53 @@ def initialize(ctx, skip_deps, skip_tests, skip_dns_wizard):
     initialize_noah_environment(ctx, skip_deps, skip_tests, print_status, skip_dns_wizard)
 
 @setup.command()
+@click.option('--force', is_flag=True, help='Skip confirmation prompt')
+def reset(force):
+    """Remove everything created by setup initialize (venv, Age keys, secrets store, SOPS config)."""
+    targets = [
+        (Path(".venv"),      "Python virtual environment"),
+        (Path("Age"),        "Age encryption keys"),
+        (Path("Secrets"),    "Canonical secrets store"),
+        (Path(".sops.yaml"), "SOPS configuration"),
+    ]
+
+    existing = [(p, desc) for p, desc in targets if p.exists()]
+    if not existing:
+        click.echo("Nothing to remove — environment is already clean.")
+        return
+
+    click.echo("The following will be permanently deleted:")
+    for p, desc in existing:
+        click.echo(f"  {str(p):<20} ({desc})")
+    click.echo("")
+
+    if not force and not click.confirm("Proceed?", default=False):
+        click.echo("Aborted.")
+        return
+
+    removed, failed = [], []
+    for p, desc in existing:
+        try:
+            if p.is_dir():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+            removed.append(str(p))
+            print_status(f"Removed {p}", "SUCCESS")
+        except Exception as e:
+            failed.append(str(p))
+            print_status(f"Failed to remove {p}: {e}", "ERROR")
+
+    click.echo("")
+    if removed:
+        click.echo(f"Removed: {', '.join(removed)}")
+    if failed:
+        click.echo(f"Failed:  {', '.join(failed)}")
+        sys.exit(1)
+    else:
+        click.echo("Environment reset. Run 'python3 noah.py setup initialize' to start fresh.")
+
+@setup.command()
 def update_sops():
     """Update SOPS to the latest version"""
     click.echo("🔄 SOPS Version Update")

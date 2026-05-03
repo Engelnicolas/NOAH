@@ -599,11 +599,7 @@ class NoahSecurityManager:
         for file in self.secrets_dir.glob("*.yaml"):
             print(f"     - {file.name}")
             
-        print(f"   Encrypted secrets:")
-        for service_dir in self.helm_dir.glob("*/secrets"):
-            print(f"     {service_dir.parent.name}:")
-            for enc_file in service_dir.glob("*.enc.yaml"):
-                print(f"       - {enc_file.name}")
+        print(f"   Canonical secrets store: {self.project_root / 'Secrets'}")
     
     def cleanup_temp_files(self):
         """Clean up temporary files"""
@@ -640,9 +636,8 @@ class NoahSecurityManager:
                     print(f"   Removed: {cert_file.name}")
         
         # Clean up temporary encrypted files
-        for service_dir in self.helm_dir.glob("*/secrets"):
-            for temp_file in service_dir.glob("*.temp.*"):
-                if temp_file.is_file():
+        for temp_file in self.project_root.rglob("*.temp.*"):
+            if temp_file.is_file():
                     temp_file.unlink()
                     cleaned_files.append(str(temp_file))
                     print(f"   Removed: {temp_file.name}")

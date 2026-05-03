@@ -96,17 +96,18 @@ git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
 python3 noah.py setup initialize
 python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
 
-# 2. Fork the GitOps tree and replace placeholders.
-#    Detailed instructions: docs/MIGRATION_GUIDE.md §4.1
-cp -R flux-repo/* /tmp/your-noah-gitops/
-# (edit *.enc.yaml + .sops.yaml, encrypt, push to GitHub)
+# 2. Prepare the GitOps repository automatically.
+export GITHUB_TOKEN=ghp_xxx
+python3 noah.py setup gitops \
+  --domain yourdomain.com \
+  --github-repo yourorg/noah-gitops \
+  --push
 
 # 3. Bootstrap K3s (single-node embedded etcd) + FluxCD.
-export GITHUB_TOKEN=ghp_xxx
 python3 noah.py cluster bootstrap \
   --node 192.168.1.10 \
   --domain yourdomain.com \
-  --flux-repo https://github.com/yourorg/your-noah-gitops \
+  --flux-repo https://github.com/yourorg/noah-gitops \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
 
 # 4. Watch FluxCD reconcile the stack.
@@ -139,7 +140,7 @@ python3 noah.py deploy core --domain yourdomain.com     # DEPRECATED — see MIG
 ### Step 1: Initialize Environment
 
 ```bash
-python noah.py setup initialize
+python3 noah.py setup initialize
 ```
 
 **What it does:**
@@ -171,21 +172,26 @@ python3 noah.py setup reset
 
 ### Step 2: Prepare the GitOps Repository
 
-NOAH uses FluxCD to reconcile all services from a Git repository. You need your own copy of the `flux-repo/` tree with your secrets encrypted in it.
+The `setup gitops` command automates everything: it copies the `flux-repo/` template, substitutes your domain, fills all secrets from the canonical store, SOPS-encrypts the secret files, and optionally creates and pushes to a GitHub repository.
 
 ```bash
-# Copy the template tree into a new directory (or a new GitHub repo)
-cp -R flux-repo/* /path/to/your-noah-gitops/
+# Local only (no push) — repo written to ./gitops-yourdomain.com
+python3 noah.py setup gitops --domain yourdomain.com
 
-# Edit the placeholder values in *.enc.yaml and .sops.yaml,
-# encrypt them with SOPS/Age, then push to GitHub.
-# Detailed instructions: docs/MIGRATION_GUIDE.md §4.1
+# With automatic GitHub push (recommended)
+export GITHUB_TOKEN=ghp_xxx
+python3 noah.py setup gitops \
+  --domain yourdomain.com \
+  --github-repo yourorg/noah-gitops \
+  --push
 ```
 
-**Required before bootstrap:**
-- A GitHub repository containing the configured flux-repo tree
-- A GitHub personal access token with `repo` scope (`GITHUB_TOKEN`)
-- Your Cloudflare token stored: `python3 Scripts/security/set_cloudflare_token.py 'token'`
+The command prints the exact `cluster bootstrap` invocation to run next.
+
+**Prerequisites:**
+- `setup initialize` completed (Age keys + canonical secrets store present)
+- Cloudflare token stored: `python3 Scripts/security/set_cloudflare_token.py 'token'`
+- GitHub personal access token with `repo` scope (only needed with `--push`)
 
 ---
 

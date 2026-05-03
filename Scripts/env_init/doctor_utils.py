@@ -100,7 +100,7 @@ def diagnose_noah_environment(ctx):
         issues.append("Missing SOPS")
     
     # Check NOAH files
-    noah_files = ['noah.py', 'Scripts/', 'Helm/', 'Ansible/']
+    noah_files = ['noah.py', 'Scripts/', 'Ansible/', 'flux-repo/']
     for file_path in noah_files:
         if Path(file_path).exists():
             print_status(f"✓ {file_path} exists", "SUCCESS")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test the specific modifications we made to noah.py
+Tests for noah.py CLI commands.
 """
 
 import sys
@@ -8,129 +8,106 @@ import os
 from unittest.mock import Mock, patch
 from click.testing import CliRunner
 
-# Add project root to sys.path for module resolution
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import noah
 
+
 def test_cluster_create_with_destroy():
-    """Test that cluster create runs destroy first"""
-    print("Testing cluster create with pre-destroy...")
-    
+    """Test that cluster create runs with expected verbose output."""
+    print("Testing cluster create verbose output...")
+
     runner = CliRunner()
-    
+
     with patch('noah.ConfigLoader'), \
          patch('noah.ClusterManager'), \
          patch('noah.SecretManager'), \
-         patch('noah.HelmDeployer'), \
          patch('noah.AnsibleRunner') as mock_ansible, \
          patch('noah.check_existing_cluster') as mock_check_cluster, \
          patch('noah.ensure_security_initialized'), \
          patch('noah.get_security_config') as mock_security_config:
-        
-        # Set up mocks
+
         mock_ansible_instance = Mock()
         mock_ansible.return_value = mock_ansible_instance
-        mock_check_cluster.return_value = False  # No existing cluster
+        mock_check_cluster.return_value = False
         mock_security_config.return_value = {'test': 'config'}
-        
+
         result = runner.invoke(noah.cli, ['cluster', 'create', '--name', 'test-cluster'])
-        
-        # Check that verbose output is present
+
         output = result.output
         print(f"Actual output: {output}")
-        
-        # Test the basic verbose messages that should always appear
+
         assert '[VERBOSE] Starting cluster creation process...' in output
         assert '[VERBOSE] Checking for existing cluster components...' in output
         assert '[VERBOSE] Running Ansible playbook: cluster-create.yml' in output
-        
+
     print("✓ Cluster create correctly shows verbose output")
 
-def test_authentik_standalone_deployment():
-    """Test that authentik deployment works in standalone mode"""
-    print("Testing Authentik standalone deployment...")
-    
+
+def test_deploy_group_removed():
+    """Verify the deprecated deploy group no longer exists."""
+    print("Testing deploy group is removed...")
+
     runner = CliRunner()
-    
+
     with patch('noah.ConfigLoader'), \
+         patch('noah.ClusterManager'), \
          patch('noah.SecretManager'), \
-         patch('noah.HelmDeployer'), \
          patch('noah.AnsibleRunner'):
-        
-        result = runner.invoke(noah.cli, ['deploy', 'authentik'])
-        
-        # Check that it deploys directly without dependencies
-        output = result.output
-        assert '[VERBOSE] Deploying Authentik SSO...' in output
-        assert '[VERBOSE] Generating secrets for Authentik...' in output
-        assert '[VERBOSE] Running Ansible playbook: deploy-authentik.yml' in output
-        
-    print("✓ Authentik deployment works in standalone mode")
+
+        result = runner.invoke(noah.cli, ['deploy', '--help'])
+        assert result.exit_code != 0, "deploy group should not exist"
+
+    print("✓ Deploy group correctly removed")
+
 
 def test_verbose_output_presence():
-    """Test that verbose output is present in all commands"""
+    """Test that verbose output is present in active commands."""
     print("Testing verbose output presence...")
-    
+
     runner = CliRunner()
-    
-    # Test various commands for verbose output
+
     commands_to_test = [
         (['secrets', 'init'], '[VERBOSE] Starting secret management initialization...'),
-        (['deploy', 'authentik'], '[VERBOSE] Deploying Authentik SSO...'),
-        (['deploy', 'cilium'], '[VERBOSE] Deploying Cilium CNI with SSO integration...'),
+        (['secrets', 'generate', '--service', 'authentik'],
+         '[VERBOSE] Starting secret generation process...'),
     ]
-    
+
     for cmd, expected_verbose in commands_to_test:
         with patch('noah.ConfigLoader'), \
              patch('noah.ClusterManager'), \
              patch('noah.SecretManager'), \
-             patch('noah.HelmDeployer'), \
              patch('noah.AnsibleRunner'), \
-             patch('noah.ensure_security_initialized'), \
-             patch('noah.get_ansible_vars_for_service') as mock_vars:
-            
-            # Set up mocks
-            mock_vars.return_value = {'test': 'vars'}
-            
+             patch('noah.ensure_security_initialized'):
+
             result = runner.invoke(noah.cli, cmd)
-            
-            assert expected_verbose in result.output, f"Verbose output missing in {' '.join(cmd)}"
+
+            assert expected_verbose in result.output, \
+                f"Verbose output missing in {' '.join(cmd)}: {result.output}"
             print(f"✓ Verbose output found in: {' '.join(cmd)}")
 
+
 def main():
-    """Run modification-specific tests"""
-    print("=" * 60)
-    print("NOAH Modification Tests")
-    print("=" * 60)
-    
+    """Run all tests."""
     tests = [
         test_cluster_create_with_destroy,
-        test_authentik_standalone_deployment,
-        test_verbose_output_presence
+        test_deploy_group_removed,
+        test_verbose_output_presence,
     ]
-    
-    passed = 0
-    total = len(tests)
-    
-    for test in tests:
-        print(f"\n{'-' * 40}")
-        try:
-            if test():
-                passed += 1
-        except Exception as e:
-            print(f"✗ Test failed with error: {e}")
-        print(f"{'-' * 40}")
-    
-    print(f"\n{'=' * 60}")
-    print(f"Test Results: {passed}/{total} tests passed")
-    
-    if passed == total:
-        print("🎉 All modification tests passed!")
-        return 0
-    else:
-        print("❌ Some modification tests failed.")
-        return 1
+
+    passed = sum(1 for t in tests if _run(t))
+    print(f"\nTest Results: {passed}/{len(tests)} passed")
+    return 0 if passed == len(tests) else 1
+
+
+def _run(test_fn):
+    try:
+        test_fn()
+        return True
+    except Exception as e:
+        print(f"✗ {test_fn.__name__} failed: {e}")
+        return False
+
 
 if __name__ == '__main__':
     sys.exit(main())

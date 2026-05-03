@@ -51,15 +51,18 @@ git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
 python3 noah.py setup initialize
 python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
 
-# 2. Prepare your GitOps repository (fork flux-repo/, encrypt secrets, push)
-#    See docs/DEPLOYMENT_GUIDE.md — Step 2 for details
+# 2. Prepare and push the GitOps repository (one command)
+export GITHUB_TOKEN=ghp_xxx
+python3 noah.py setup gitops \
+  --domain your-domain.com \
+  --github-repo yourorg/noah-gitops \
+  --push
 
 # 3. Bootstrap K3s + FluxCD
-export GITHUB_TOKEN=ghp_xxx
 python3 noah.py cluster bootstrap \
   --node 192.168.1.10 \
   --domain your-domain.com \
-  --flux-repo https://github.com/yourorg/your-noah-gitops \
+  --flux-repo https://github.com/yourorg/noah-gitops \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
 
 # 4. Watch FluxCD reconcile the stack (~25-45 min)

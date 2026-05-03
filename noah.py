@@ -46,25 +46,20 @@ from Scripts.cluster_destroy.kubectl_utils import cleanup_kubectl_cache, display
 
 from Scripts.core_helm.cluster_manager import ClusterManager
 from Scripts.security.security_manager import NoahSecurityManager as SecretManager
-from Scripts.utils.helm_deployer import HelmDeployer
 from Scripts.utils.ansible_runner import AnsibleRunner
 from Scripts.utils.config_loader import ConfigLoader
 from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists, update_sops_version
 from Scripts.env_init.doctor_utils import print_status, diagnose_noah_environment
 from Scripts.utils import (
     config_show_command,
-    config_domains_command, 
-    config_helm_values_command,
+    config_domains_command,
     config_override_command
 )
 from Scripts.security import ensure_security_initialized, get_security_config
 from Scripts.security.rotate_cli import register_rotate_command  # type: ignore
 from Scripts.core_helm import (
-    cilium,
-    get_ansible_vars_for_service,
     get_authentik_credentials,
     regenerate_authentik_password,
-    get_helm_values_for_service
 )
 from Scripts.cluster_create.status_utils import show_cluster_status
 from Scripts.cluster_create.cluster_validation_utils import check_existing_cluster
@@ -90,7 +85,6 @@ def check_repository_root():
     # Check for key repository files/directories that should exist in the root
     required_items = [
         'Scripts',
-        'Helm', 
         'Ansible',
         'noah.py'
     ]
@@ -126,7 +120,6 @@ def cli(ctx: click.Context) -> None:
     ctx.obj['config'] = ConfigLoader()
     ctx.obj['cluster'] = ClusterManager(ctx.obj['config'])
     ctx.obj['secrets'] = SecretManager(ctx.obj['config'])
-    ctx.obj['helm'] = HelmDeployer(ctx.obj['config'])
     ctx.obj['ansible'] = AnsibleRunner(ctx.obj['config'])
 
 @cli.group()  # type: ignore
@@ -292,8 +285,7 @@ def list(ctx):
 @click.pass_context
 def deploy_manager(ctx, namespace):
     """Deploy cert-manager for automatic certificate management"""
-    click.echo(f"[VERBOSE] Deploying cert-manager to namespace {namespace}")
-    ctx.obj['helm'].deploy_chart('cert-manager', namespace)
+    click.echo("cert-manager is now managed by FluxCD. Run 'python3 noah.py flux sync' to reconcile.")
 
 @cli.group()  # type: ignore
 @click.pass_context
@@ -352,414 +344,9 @@ def show_password(ctx, domain):
             click.echo("💡 External IP not ready yet; ensure LoadBalancer/Ingress and DNS are configured.")
     else:
         click.echo(f"⚠️  Could not retrieve credentials: {error}")
-        click.echo("💡 Try running a deployment first: python noah.py deploy authentik")
+        click.echo("💡 Check FluxCD reconciliation: python3 noah.py flux status")
     click.echo("=" * 50)
 
-@cli.group()  # type: ignore
-@click.pass_context
-def deploy(ctx):
-    """[DEPRECATED in v0.0.9] Imperative service deployment.
-
-    Application services are now reconciled by FluxCD from the GitOps
-    repository (see docs/GITOPS_GUIDE.md). These commands are kept for
-    one release to ease migration from v0.0.8 and will be removed in
-    v0.1.0. Use:
-
-        noah cluster bootstrap   # provision K3s + bootstrap FluxCD
-        noah flux sync           # force reconciliation
-        noah flux status         # inspect reconciliation state
-
-    Edit flux-repo/ and `git push` to change a service.
-    """
-    click.echo(
-        "⚠️  `noah deploy ...` is deprecated since v0.0.9. "
-        "FluxCD reconciles services from your GitOps repo — see "
-        "docs/MIGRATION_GUIDE.md for the new workflow.",
-        err=True,
-    )
-
-@deploy.command()
-@click.option('--namespace', default='identity', help='Kubernetes namespace')
-@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service')
-@click.option('--regenerate-password', is_flag=True, help='Generate new Authentik admin password')
-@click.pass_context
-def authentik(ctx, namespace, domain, regenerate_password):
-    """Deploy Authentik SSO (individual component)"""
-    # Ensure security is initialized
-    ensure_security_initialized(ctx)
-    
-    # Regenerate Authentik password if requested
-    if regenerate_password:
-        click.echo("🔄 Regenerating Authentik admin password...")
-        result, error = regenerate_authentik_password()
-        if result:
-            click.echo(f"✅ Password updated successfully!")
-            click.echo(f"   Old password: {result['old_password']}")
-            click.echo(f"   New password: {result['new_password']}")
-        else:
-            click.echo(f"❌ Failed to regenerate password: {error}", err=True)
-            sys.exit(1)
-    
-    click.echo(f"[VERBOSE] Deploying Authentik SSO...")
-    click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
-    click.echo(f"💡 For complete stack deployment, use: python noah.py deploy core")
-    
-    # Generate secrets for Authentik before deployment
-    click.echo(f"[VERBOSE] Generating secrets for Authentik...")
-    ctx.obj['secrets'].generate_service_secrets('authentik')
-    
-    # Get Ansible variables with security configuration
-    ansible_vars = get_ansible_vars_for_service('authentik', namespace, domain)
-    
-    # Deploy Authentik using Ansible playbook
-    click.echo(f"[VERBOSE] Running Ansible playbook: deploy-authentik.yml")
-    ctx.obj['ansible'].run_playbook('deploy-authentik.yml', ansible_vars)
-    
-    click.echo(f"✅ Authentik deployed to namespace {namespace}")
-    click.echo(f"[VERBOSE] Access SSO at: https://auth.{domain}")
-    
-    # Display Authentik credentials
-    click.echo("\n" + "="*50)
-    click.echo("🔐 AUTHENTIK ADMIN ACCESS")
-    click.echo("="*50)
-    
-    credentials, error = get_authentik_credentials(domain=domain)
-    if credentials:
-        click.echo(f"📍 URL (HTTP):  {credentials['http_url']}")
-        click.echo(f"📍 URL (HTTPS): {credentials['https_url']}")
-        if credentials.get('external_ip'):
-            click.echo(f"🌐 External IP: {credentials['external_ip']}")
-        click.echo(f"📶 Resolution:  {credentials.get('resolution_status','unknown')}")
-        click.echo(f"👤 Username:    {credentials['admin_username']}")
-        click.echo(f"📧 Email:       {credentials['admin_email']}")
-        click.echo(f"🔑 Password:    {credentials['admin_password']}")
-        click.echo("")
-        click.echo("💡 You can log in using either the username or email address")
-    else:
-        click.echo(f"⚠️  Could not retrieve credentials: {error}")
-    click.echo("="*50)
-
-@deploy.command(name='cilium')
-@click.option('--namespace', default='kube-system', help='Kubernetes namespace')
-@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service')
-@click.pass_context
-def cilium_cmd(ctx, namespace, domain):
-    """Deploy Cilium CNI with SSO integration (individual component)"""
-    cilium(ctx, namespace, domain)
-
-@deploy.command()
-@click.option('--namespace', default='kube-system', help='Kubernetes namespace')
-@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service')
-@click.pass_context
-def headlamp(ctx, namespace, domain):
-    """Deploy Headlamp Kubernetes Dashboard with Authentik SSO (individual component)"""
-    # Ensure security is initialized
-    ensure_security_initialized(ctx)
-
-    click.echo(f"[VERBOSE] Deploying Headlamp Kubernetes Dashboard...")
-    click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
-    click.echo(f"💡 For complete stack deployment, use: python noah.py deploy core")
-
-    # Generate secrets for Headlamp before deployment
-    click.echo(f"[VERBOSE] Generating secrets for Headlamp...")
-    ctx.obj['secrets'].generate_service_secrets('headlamp')
-
-    # Get Ansible variables with security configuration
-    ansible_vars = get_ansible_vars_for_service('headlamp', namespace, domain)
-
-    # Deploy Headlamp using Ansible playbook
-    click.echo(f"[VERBOSE] Running Ansible playbook: deploy-headlamp.yml")
-    ctx.obj['ansible'].run_playbook('deploy-headlamp.yml', ansible_vars)
-
-    click.echo(f"✅ Headlamp deployed to namespace {namespace}")
-    click.echo(f"[VERBOSE] Access Kubernetes Dashboard at: https://headlamp.{domain}")
-    click.echo(f"[VERBOSE] SSO authentication via Authentik: https://auth.{domain}")
-
-@deploy.command(name='nginx-ingress')
-@click.option('--namespace', default='ingress-nginx', help='Kubernetes namespace')
-@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain (for DNS hints)')
-@click.option('--lb-pool-cidr', envvar='NOAH_LB_IP_POOL_CIDR', default='',
-              help='Cilium LB IPAM pool CIDR for bare-metal (e.g. 192.168.1.200/29). '
-                   'Leave empty on AWS without secondary ENI IPs.')
-@click.pass_context
-def nginx_ingress(ctx, namespace, domain, lb_pool_cidr):
-    """Deploy nginx-ingress Controller (DaemonSet + hostNetwork, AWS bare-metal compatible)"""
-    click.echo("[VERBOSE] Deploying nginx-ingress controller...")
-    click.echo(f"[VERBOSE] Namespace: {namespace}, Domain: {domain}")
-    if lb_pool_cidr:
-        click.echo(f"[VERBOSE] Cilium LB IPAM pool: {lb_pool_cidr}")
-    else:
-        click.echo("[VERBOSE] No LB pool configured — hostNetwork is primary access path")
-
-    ansible_vars = {
-        'nginx_ingress_namespace': namespace,
-        'domain_name': domain,
-        'nginx_ingress_helm_timeout': '300s'
-    }
-
-    env_override = {}
-    if lb_pool_cidr:
-        env_override['NOAH_LB_IP_POOL_CIDR'] = lb_pool_cidr
-
-    # Temporarily set env var so AnsibleRunner passes it through
-    if env_override:
-        for k, v in env_override.items():
-            os.environ[k] = v
-
-    click.echo("[VERBOSE] Running Ansible playbook: deploy-nginx-ingress.yml")
-    ctx.obj['ansible'].run_playbook('deploy-nginx-ingress.yml', ansible_vars)
-
-    click.echo(f"✅ nginx-ingress deployed to namespace {namespace}")
-    click.echo("✓ IngressClass 'nginx' registered as cluster default")
-    click.echo("✓ Ports 80/443 bound on host via hostNetwork")
-    if lb_pool_cidr:
-        click.echo(f"✓ Cilium LB IPAM pool created: {lb_pool_cidr}")
-    else:
-        click.echo("")
-        click.echo("💡 To enable Cilium LB IPAM on bare-metal:")
-        click.echo(f"   python noah.py deploy nginx-ingress --lb-pool-cidr 192.168.x.y/z")
-        click.echo("   or: export NOAH_LB_IP_POOL_CIDR=192.168.x.y/z")
-
-
-@deploy.command()
-@click.option('--namespace', default='kube-system', help='Kubernetes namespace')
-@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for DNS management')
-@click.option('--provider', default='cloudflare', type=click.Choice(['cloudflare']), help='DNS provider')
-@click.option('--api-token', envvar='CLOUDFLARE_API_TOKEN', help='Cloudflare API token (or set CLOUDFLARE_API_TOKEN env var)')
-@click.option('--policy', default='upsert-only', type=click.Choice(['sync', 'upsert-only']), help='DNS record management policy')
-@click.pass_context
-def dns(ctx, namespace, domain, provider, api_token, policy):
-    """Deploy external-dns for automatic DNS management"""
-
-    click.echo(f"[VERBOSE] Deploying external-dns for automatic DNS management...")
-    click.echo(f"[VERBOSE] Provider: {provider}, Domain: {domain}, Policy: {policy}")
-
-    # Validate configuration
-    config_loader = ctx.obj['config']
-
-    if provider == 'cloudflare':
-        if not api_token:
-            click.echo("❌ Cloudflare API token is required!", err=True)
-            click.echo("", err=True)
-            click.echo("Please provide the API token using one of these methods:", err=True)
-            click.echo("  1. Command line: --api-token YOUR_TOKEN", err=True)
-            click.echo("  2. Environment variable: export CLOUDFLARE_API_TOKEN='YOUR_TOKEN'", err=True)
-            click.echo("", err=True)
-            click.echo("To create a Cloudflare API token:", err=True)
-            click.echo("  1. Log in to https://dash.cloudflare.com", err=True)
-            click.echo("  2. Go to My Profile > API Tokens", err=True)
-            click.echo("  3. Click 'Create Token'", err=True)
-            click.echo("  4. Use 'Edit zone DNS' template or create custom token with:", err=True)
-            click.echo("     - Zone > DNS > Edit", err=True)
-            click.echo("     - Zone > Zone > Read", err=True)
-            click.echo("  5. Select your domain zone", err=True)
-            click.echo("  6. Copy the generated token", err=True)
-            sys.exit(1)
-
-        click.echo(f"[VERBOSE] Using Cloudflare API token: {api_token[:8]}...{api_token[-4:]}")
-
-    # Get Ansible variables
-    ansible_vars = {
-        'external_dns_namespace': namespace,
-        'domain_name': domain,
-        'dns_provider': provider,
-        'dns_policy': policy,
-        'cloudflare_api_token': api_token,
-        'cluster_name': config_loader.get_cluster_name(domain=domain)
-    }
-
-    # Deploy external-dns using Ansible playbook
-    click.echo(f"[VERBOSE] Running Ansible playbook: deploy-external-dns.yml")
-    ctx.obj['ansible'].run_playbook('deploy-external-dns.yml', ansible_vars)
-
-    click.echo(f"✅ External-DNS deployed to namespace {namespace}")
-    click.echo("")
-    click.echo("External-DNS will now automatically manage DNS records for:")
-    click.echo(f"  - Ingress resources with annotation: external-dns.alpha.kubernetes.io/hostname")
-    click.echo(f"  - LoadBalancer services with annotation: external-dns.alpha.kubernetes.io/hostname")
-    click.echo("")
-    click.echo(f"Domain filter: {domain}")
-    click.echo(f"Policy: {policy}")
-    click.echo("")
-    click.echo("Monitor logs:")
-    click.echo(f"  kubectl logs -n {namespace} -l app.kubernetes.io/name=external-dns -f")
-    click.echo("")
-    click.echo("Expected DNS records (will be created automatically):")
-    click.echo(f"  - auth.{domain} → Authentik SSO")
-    click.echo(f"  - hubble.{domain} → Cilium Hubble UI")
-    click.echo(f"  - headlamp.{domain} → Headlamp Dashboard")
-
-@deploy.command()
-@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
-@click.option('--cluster-name', default=None, help='Cluster name (default: derived from domain)')
-@click.option('--config-file', type=click.Path(exists=False), help='Export configuration to file')
-@click.option('--regenerate-password', is_flag=True, help='Generate new Authentik admin password')
-@click.option('--validation-mode', type=click.Choice(['development','production']), default='production', show_default=True, help='Validation strictness for deployment playbook')
-@click.pass_context
-def core(ctx, domain, cluster_name, config_file, regenerate_password, validation_mode):
-    """Deploy complete stack using optimized Ansible playbook (Cilium → Authentik → Headlamp)"""
-    # Ensure security is initialized before any deployment
-    ensure_security_initialized(ctx)
-
-    # Derive cluster name from domain when not explicitly provided.
-    # This gives each deployment a unique external-dns txtOwnerId automatically.
-    if not cluster_name:
-        cluster_name = ctx.obj['config'].get_cluster_name(domain=domain)
-
-    # Regenerate Authentik password if requested
-    if regenerate_password:
-        click.echo("🔄 Regenerating Authentik admin password...")
-        result, error = regenerate_authentik_password()
-        if result:
-            click.echo(f"✅ Password updated successfully!")
-            click.echo(f"   Old password: {result['old_password']}")
-            click.echo(f"   New password: {result['new_password']}")
-            click.echo(f"   Updated file: {result['updated_file']}")
-        else:
-            click.echo(f"❌ Failed to regenerate password: {error}", err=True)
-            sys.exit(1)
-
-    click.echo("[VERBOSE] Starting complete NOAH stack deployment using cluster-deploy.yml...")
-    click.echo(f"[VERBOSE] Using domain: {domain}")
-    click.echo(f"[VERBOSE] Using cluster name: {cluster_name}")
-    click.echo(f"[VERBOSE] Deployment order: Cilium → Authentik → Headlamp")
-    click.echo(f"[VERBOSE] Validation mode: {validation_mode}")
-
-    # Ensure Authentik and Headlamp secrets exist early (mirrors individual deployments)
-    click.echo(f"[VERBOSE] Ensuring canonical secrets are generated before playbook run...")
-    try:
-        ctx.obj['secrets'].generate_service_secrets('authentik')
-        ctx.obj['secrets'].generate_service_secrets('headlamp')
-        # Force persistence in case underlying store deferred save or encryption unavailable
-        try:
-            from Scripts.security.canonical_store import get_canonical_store  # type: ignore
-            store = get_canonical_store()
-            store.save()
-        except Exception:
-            pass
-    except Exception as gen_err:
-        click.echo(f"❌ Failed to generate secrets prior to deployment: {gen_err}", err=True)
-        sys.exit(1)
-
-    # If skipping Ansible (CI fast path), exit early after credential display prerequisites
-    if os.environ.get('NOAH_SKIP_ANSIBLE', '').lower() in ('1','true','yes'):  # fast path for tests
-        click.echo("[VERBOSE] NOAH_SKIP_ANSIBLE active - skipping Ansible playbook execution.")
-        # Minimal success output to align with test expectations
-        credentials, error = get_authentik_credentials(domain=domain)
-        if credentials:
-            click.echo("\n" + "="*60)
-            click.echo("🔐 AUTHENTIK ADMIN ACCESS")
-            click.echo("="*60)
-            click.echo(f"📍 URL (HTTP):  {credentials['http_url']}")
-            click.echo(f"📍 URL (HTTPS): {credentials['https_url']}")
-            click.echo(f"👤 Username:    {credentials['admin_username']}")
-            click.echo(f"📧 Email:       {credentials['admin_email']}")
-            click.echo(f"🔑 Password:    {credentials['admin_password']}")
-            click.echo("="*60)
-        else:
-            click.echo(f"⚠️  Could not retrieve credentials: {error}")
-        return
-    
-    # Export configuration if requested
-    if config_file:
-        click.echo(f"[VERBOSE] Exporting configuration to {config_file}")
-        full_config = {
-            'cluster_name': cluster_name,
-            'domain_name': domain,
-            'security': get_security_config(domain),
-            'deployment_method': 'cluster-deploy.yml',
-            'services': {
-                'authentik': {
-                    'helm_values': get_helm_values_for_service('authentik', 'identity', domain),
-                    'ansible_vars': get_ansible_vars_for_service('authentik', 'identity', domain)
-                },
-                'cilium': {
-                    'helm_values': get_helm_values_for_service('cilium', 'kube-system', domain),
-                    'ansible_vars': get_ansible_vars_for_service('cilium', 'kube-system', domain)
-                }
-            }
-        }
-        with open(config_file, 'w') as f:
-            yaml.dump(full_config, f, default_flow_style=False)
-        click.echo(f"[VERBOSE] Configuration exported to {config_file}")
-    
-    # Use the optimized cluster-deploy.yml playbook
-    click.echo("Deploying complete NOAH stack using optimized playbook...")
-    
-    # Prepare variables for cluster-deploy.yml
-    ansible_vars = {
-        'cluster_name': cluster_name,
-        'domain_name': domain,
-        'validation_mode': validation_mode
-    }
-    
-    click.echo(f"[VERBOSE] Running optimized deployment playbook: cluster-deploy.yml")
-    click.echo(f"[VERBOSE] This will deploy in optimal order with comprehensive validation")
-    # Production mode preflight: verify cluster connectivity (lightweight)
-    if validation_mode == 'production':
-        try:
-            import subprocess
-            preflight = subprocess.run(['kubectl','cluster-info'], capture_output=True, text=True)
-            if preflight.returncode != 0:
-                click.echo("❌ kubectl cluster-info failed; cluster not reachable. Aborting production deployment.", err=True)
-                click.echo(preflight.stderr.strip(), err=True)
-                sys.exit(1)
-            else:
-                click.echo("[VERBOSE] kubectl cluster-info succeeded – proceeding with production deployment")
-        except FileNotFoundError:
-            click.echo("❌ kubectl not found in PATH. Install kubectl or switch to --validation-mode development.", err=True)
-            sys.exit(1)
-    
-    try:
-        play_success = ctx.obj['ansible'].run_playbook('cluster-deploy.yml', ansible_vars)
-        if not play_success:
-            raise RuntimeError("Ansible playbook cluster-deploy.yml reported failure (non-zero exit code)")
-        click.echo("🎉 NOAH standalone IAM deployment successful!")
-        click.echo(f"[VERBOSE] All components deployed and validated")
-        
-        # Get and display Authentik credentials
-        click.echo("\n" + "="*60)
-        click.echo("🔐 AUTHENTIK ADMIN ACCESS")
-        click.echo("="*60)
-        
-        credentials, error = get_authentik_credentials(domain=domain)
-        if credentials:
-            click_echo_http = credentials['http_url']
-            click_echo_https = credentials['https_url']
-            click.echo(f"📍 URL (HTTP):  {click_echo_http}")
-            click.echo(f"📍 URL (HTTPS): {click_echo_https}")
-            if credentials.get('external_ip'):
-                click.echo(f"🌐 External IP: {credentials['external_ip']}")
-            click.echo(f"📶 Resolution:  {credentials.get('resolution_status','unknown')}")
-            click.echo(f"👤 Username:    {credentials['admin_username']}")
-            click.echo(f"📧 Email:       {credentials['admin_email']}")
-            click.echo(f"🔑 Password:    {credentials['admin_password']}")
-            click.echo("")
-            click.echo("💡 You can log in using either the username or email address")
-        else:
-            click.echo(f"⚠️  Could not retrieve credentials from canonical store: {error}")
-            click.echo("💡 Ensure playbook created Kubernetes secret 'authentik-secret' and canonical-secrets.yaml contains authentik.admin_password")
-            click.echo("💡 You can inspect secret: kubectl get secret -n identity authentik-secret -o yaml")
-        
-        click.echo("="*60)
-        click.echo(f"[VERBOSE] Access points:")
-        click.echo(f"  - Authentik IAM: https://auth.{domain}")
-        click.echo(f"  - Headlamp Dashboard: https://headlamp.{domain}")
-        click.echo(f"  - Hubble UI: https://hubble.{domain}")
-        
-        # Run post-deployment validation
-        click.echo("[VERBOSE] Running post-deployment validation...")
-        click.echo("💡 Run 'python noah.py test sso' to validate IAM integration")
-        click.echo("💡 Run 'python noah.py status --all' to check overall status")
-        
-    except Exception as e:
-        click.echo(f"❌ Deployment failed: {str(e)}", err=True)
-        click.echo("[VERBOSE] For troubleshooting:")
-        click.echo("  - Check cluster connectivity: kubectl cluster-info")
-        click.echo("  - Check pod status: kubectl get pods --all-namespaces")
-        click.echo("  - Check events: kubectl get events --sort-by=.metadata.creationTimestamp")
-        click.echo("  - Run status check: python noah.py status --all")
-        sys.exit(1)
 
 @cli.group()  # type: ignore
 @click.pass_context
@@ -831,10 +418,8 @@ def validate(ctx, service, namespace, fix):
             
             # Re-deploy with synchronized secrets
             if service == 'authentik':
-                # Force regeneration with existing passwords
                 ctx.obj['secrets'].generate_service_secrets(service)
-                ctx.obj['helm'].deploy_chart(service, namespace)
-                click.echo(f"✅ Secrets fixed and {service} deployed")
+                click.echo(f"✅ Secrets regenerated for {service}. Run 'python3 noah.py flux sync' to apply.")
             else:
                 click.echo(f"❌ Auto-fix not implemented for {service}")
         else:
@@ -942,6 +527,53 @@ def reset(force):
         sys.exit(1)
     else:
         click.echo("Environment reset. Run 'python3 noah.py setup initialize' to start fresh.")
+
+@setup.command()
+@click.option('--domain',       required=True,  help='Your domain (replaces example.com throughout the repo)')
+@click.option('--target-dir',   default=None,   help='Where to write the prepared repo (default: ./gitops-<domain>)')
+@click.option('--github-repo',  default=None,   help='GitHub repo to create/push to, e.g. yourorg/noah-gitops')
+@click.option('--github-token', default=None,   envvar='GITHUB_TOKEN', help='GitHub personal access token (or set GITHUB_TOKEN)')
+@click.option('--push/--no-push', default=False, help='Push to GitHub after preparation (requires --github-repo)')
+@click.pass_context
+def gitops(ctx, domain, target_dir, github_repo, github_token, push):
+    """Prepare the GitOps repository: copy template, fill secrets, encrypt, and optionally push to GitHub."""
+    from Scripts.gitops.gitops_init import setup_gitops
+
+    project_root = Path(__file__).parent
+    resolved_target = Path(target_dir) if target_dir else project_root / f"gitops-{domain}"
+
+    click.echo("🚀 NOAH GitOps Repository Setup")
+    click.echo("=" * 35)
+    click.echo(f"  Domain     : {domain}")
+    click.echo(f"  Target dir : {resolved_target}")
+    if github_repo:
+        click.echo(f"  GitHub repo: {github_repo}")
+    click.echo("")
+
+    try:
+        repo_url = setup_gitops(
+            domain=domain,
+            target_dir=resolved_target,
+            github_repo=github_repo,
+            github_token=github_token,
+            push=push,
+            project_root=project_root,
+            print_status=print_status,
+        )
+    except Exception as e:
+        print_status(f"[ERROR] {e}", "ERROR")
+        sys.exit(1)
+
+    click.echo("")
+    click.echo("✅ GitOps repository ready.")
+    click.echo("")
+    click.echo("Next step — bootstrap the cluster:")
+    click.echo(f"  export GITHUB_TOKEN=<token>")
+    click.echo(f"  python3 noah.py cluster bootstrap \\")
+    click.echo(f"    --node <NODE-IP> \\")
+    click.echo(f"    --domain {domain} \\")
+    click.echo(f"    --flux-repo {repo_url} \\")
+    click.echo(f"    --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519")
 
 @setup.command()
 def update_sops():

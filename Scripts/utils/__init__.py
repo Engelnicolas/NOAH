@@ -17,7 +17,6 @@ from .config_utils import (
     # Click command decorators
     config_show_command,
     config_domains_command,
-    config_helm_values_command,
     config_override_command
 )
 
@@ -28,12 +27,11 @@ from . import config_loader
 from . import config_cli
 from . import configure_k8s_oidc
 from . import ansible_runner
-from . import helm_deployer
 
 __all__ = [
     # Core utility functions
     'show_configuration',
-    'show_domains', 
+    'show_domains',
     'generate_helm_values',
     'validate_service_configuration',
     'get_service_fqdn',
@@ -45,7 +43,6 @@ __all__ = [
     # Click command decorators
     'config_show_command',
     'config_domains_command',
-    'config_helm_values_command',
     'config_override_command',
     # OIDC Configuration
     'KubernetesOIDCConfigurator',
@@ -54,5 +51,4 @@ __all__ = [
     'config_cli',
     'configure_k8s_oidc',
     'ansible_runner',
-    'helm_deployer'
 ]

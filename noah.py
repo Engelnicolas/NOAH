@@ -62,8 +62,6 @@ from Scripts.core_helm import (
     regenerate_authentik_password,
 )
 from Scripts.cluster_create.status_utils import show_cluster_status
-from Scripts.cluster_create.cluster_validation_utils import check_existing_cluster
-from Scripts.cluster_create.cluster_create_utils import create_cluster
 from Scripts.cluster_create.bootstrap_utils import (
     run_bootstrap as cluster_bootstrap,
     run_add_nodes as cluster_add_nodes,
@@ -127,14 +125,6 @@ def cli(ctx: click.Context) -> None:
 def cluster(ctx):
     """Manage Kubernetes cluster lifecycle"""
     pass
-
-@cluster.command()
-@click.option('--name', default='noah-cluster', help='Cluster name')
-@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for TLS certificates')
-@click.pass_context
-def create(ctx, name, domain):
-    """Create a new Kubernetes cluster"""
-    create_cluster(ctx, name, domain, ensure_security_initialized, get_security_config, DEFAULT_DOMAIN)
 
 @cluster.command()
 @click.option('--name', default='noah-cluster', help='Cluster name')

@@ -13,35 +13,21 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import noah
 
 
-def test_cluster_create_with_destroy():
-    """Test that cluster create runs with expected verbose output."""
-    print("Testing cluster create verbose output...")
+def test_cluster_create_removed():
+    """Verify the deprecated cluster create command no longer exists."""
+    print("Testing cluster create is removed...")
 
     runner = CliRunner()
 
     with patch('noah.ConfigLoader'), \
          patch('noah.ClusterManager'), \
          patch('noah.SecretManager'), \
-         patch('noah.AnsibleRunner') as mock_ansible, \
-         patch('noah.check_existing_cluster') as mock_check_cluster, \
-         patch('noah.ensure_security_initialized'), \
-         patch('noah.get_security_config') as mock_security_config:
+         patch('noah.AnsibleRunner'):
 
-        mock_ansible_instance = Mock()
-        mock_ansible.return_value = mock_ansible_instance
-        mock_check_cluster.return_value = False
-        mock_security_config.return_value = {'test': 'config'}
+        result = runner.invoke(noah.cli, ['cluster', 'create', '--help'])
+        assert result.exit_code != 0, "cluster create should not exist"
 
-        result = runner.invoke(noah.cli, ['cluster', 'create', '--name', 'test-cluster'])
-
-        output = result.output
-        print(f"Actual output: {output}")
-
-        assert '[VERBOSE] Starting cluster creation process...' in output
-        assert '[VERBOSE] Checking for existing cluster components...' in output
-        assert '[VERBOSE] Running Ansible playbook: cluster-create.yml' in output
-
-    print("✓ Cluster create correctly shows verbose output")
+    print("✓ Cluster create correctly removed")
 
 
 def test_deploy_group_removed():
@@ -90,7 +76,7 @@ def test_verbose_output_presence():
 def main():
     """Run all tests."""
     tests = [
-        test_cluster_create_with_destroy,
+        test_cluster_create_removed,
         test_deploy_group_removed,
         test_verbose_output_presence,
     ]

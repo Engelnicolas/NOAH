@@ -23,13 +23,13 @@ def test_python_syntax():
     print("📍 Testing Python syntax...")
     
     # Test main noah.py file
-    run_command("python -m py_compile noah.py", "noah.py syntax validation")
+    run_command("python3 -m py_compile noah.py", "noah.py syntax validation")
     
     # Test all Scripts/*.py files
     scripts_dir = Path("Scripts")
     if scripts_dir.exists():
         for script_file in scripts_dir.glob("*.py"):
-            run_command(f"python -m py_compile {script_file}", f"{script_file.name} syntax validation")
+            run_command(f"python3 -m py_compile {script_file}", f"{script_file.name} syntax validation")
     
         # Always succeed
 
@@ -37,7 +37,7 @@ def test_python_syntax():
 def test_noah_cli():
     """Test NOAH CLI functionality."""
     print("\n📍 Testing NOAH CLI...")
-    run_command("python noah.py --help > /dev/null 2>&1", "NOAH CLI functionality")
+    run_command("python3 noah.py --help > /dev/null 2>&1", "NOAH CLI functionality")
         # Always succeed
 
 
@@ -49,8 +49,8 @@ def test_module_imports():
         from Scripts.utils.config_loader import ConfigLoader  # noqa: F401
         from Scripts.security.security_manager import NoahSecurityManager  # noqa: F401
         from Scripts.core_helm.cluster_manager import ClusterManager  # noqa: F401
-        from Scripts.utils.helm_deployer import HelmDeployer  # noqa: F401
         from Scripts.utils.ansible_runner import AnsibleRunner  # noqa: F401
+        from Scripts.gitops.gitops_init import setup_gitops  # noqa: F401
         print("✅ Module imports successful")
     except Exception as e:
         assert False, f"Module import errors: {e}"
@@ -136,7 +136,7 @@ def check_directory_structure():
     """Check required directory structure."""
     print("\n📍 Checking directory structure...")
     
-    required_dirs = ["Scripts", "Ansible", "Helm", "Docs", "Tests", ".github/workflows"]
+    required_dirs = ["Scripts", "Ansible", "flux-repo", "Tests", ".github/workflows"]
     
     for directory in required_dirs:
         dir_path = Path(directory)

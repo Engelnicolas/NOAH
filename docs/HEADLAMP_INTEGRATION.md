@@ -79,18 +79,18 @@ Secrets are stored in the canonical encrypted secrets store with versioning and 
 
 ### 5. CLI Commands (`noah.py`)
 
-**New deployment command**:
+**Bootstrap full stack (GitOps — recommended)**:
+```bash
+python3 noah.py cluster bootstrap --node <IP> --domain your-domain.com --flux-repo <url> ...
+```
+FluxCD reconciles: Cilium → Authentik → Headlamp
+
+**Redeploy Headlamp standalone**:
 ```bash
 python noah.py deploy headlamp --namespace kube-system --domain your-domain.com
 ```
 
-**Updated core deployment**:
-```bash
-python noah.py deploy core --domain your-domain.com
-```
-Now deploys: Cilium → Authentik → Headlamp
-
-**New test command**:
+**Test command**:
 ```bash
 python noah.py test headlamp --domain your-domain.com
 ```
@@ -122,7 +122,7 @@ python noah.py test headlamp
 - Tests `deploy headlamp` and `test headlamp` commands
 
 **Updated `.github/workflows/deploy.yml`**:
-- Changed `deploy all` to `deploy core`
+- Updated deployment workflow to use `cluster bootstrap`
 - Added Headlamp test to deployment validation
 
 ### 8. Documentation
@@ -156,9 +156,9 @@ Headlamp uses Authentik for SSO authentication:
 3. Use your Authentik credentials (retrieve with `python noah.py password show-password`)
 4. After authentication, you'll be redirected back to Headlamp with full cluster access
 
-### Authentik Configuration — Automatic (v0.0.7+)
+### Authentik Configuration — Automatic
 
-Since v0.0.7 the Headlamp OIDC provider and application are **automatically provisioned** in Authentik at the end of `deploy-headlamp.yml` via `AuthentikProvisioner`:
+The Headlamp OIDC provider and application are **automatically provisioned** in Authentik at the end of `deploy-headlamp.yml` via `AuthentikProvisioner`:
 
 ```bash
 python Scripts/security/authentik_provisioner.py provision-headlamp --domain your-domain.com
@@ -179,8 +179,8 @@ If automatic provisioning fails (e.g. Authentik not yet reachable), the deployme
 # Test Headlamp deployment
 python noah.py test headlamp --domain your-domain.com
 
-# Test full stack including Headlamp
-python noah.py deploy core --domain your-domain.com --validation-mode development
+# Test full stack including Headlamp (after cluster bootstrap)
+python noah.py flux status
 python noah.py test sso
 python noah.py test headlamp
 ```
@@ -258,11 +258,15 @@ This is expected behavior. Headlamp uses OIDC for authentication, not service ac
 ### Deployment Flow
 
 ```
-1. Cilium CNI deployed (network foundation)
+python3 noah.py cluster bootstrap
    ↓
-2. Authentik SSO deployed (identity provider)
+FluxCD reconciles GitOps repository
    ↓
-3. Headlamp Dashboard deployed (with OIDC config pointing to Authentik)
+1. Cilium CNI (network foundation)
+   ↓
+2. Authentik SSO (identity provider)
+   ↓
+3. Headlamp Dashboard (OIDC config pointing to Authentik)
    ↓
 4. Validation (all components checked)
 ```

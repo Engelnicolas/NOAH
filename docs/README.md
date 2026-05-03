@@ -12,14 +12,14 @@ NOAH provides a complete infrastructure stack:
 - **📊 Headlamp Dashboard** - Kubernetes web UI with auto-provisioned Authentik SSO
 - **🔒 Canonical Secrets Store** - Single authoritative encrypted secrets file (Age/SOPS protected)
 - **🌍 Cloudflare DNS Wizard** - Interactive DNS automation setup (`setup initialize`)
-- **🚢 GitOps with FluxCD (v0.0.9+)** - Continuous reconciliation from a Git repo with SOPS-encrypted secrets
+- **🚢 GitOps with FluxCD** - Continuous reconciliation from a Git repo with SOPS-encrypted secrets
 - **🧪 Testing Suite** - Built-in validation and health checks
 - **🚀 CI/CD Ready** - GitHub Actions workflows included
 
-### v0.0.9 documentation
-- [`MIGRATION_GUIDE.md`](MIGRATION_GUIDE.md) - upgrade from v0.0.8 (greenfield re-deploy)
+### Documentation
+- [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) - end-to-end install
 - [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) - day-to-day FluxCD workflow
-- [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) - end-to-end install (updated for v0.0.9)
+- [`MIGRATION_GUIDE.md`](MIGRATION_GUIDE.md) - upgrade from v0.0.7 (greenfield re-deploy)
 
 ## **Use Cases**
 
@@ -45,41 +45,33 @@ NOAH is designed for various infrastructure scenarios:
 
 ## **Quick Start**
 
-### **Single Command Deployment**
 ```bash
-# 1. Clone repository
-git clone https://github.com/Engelnicolas/NOAH.git
-cd NOAH
-
-# 2. Initialize environment (runs interactive Cloudflare DNS wizard)
+# 1. Clone and initialize
+git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
 python3 noah.py setup initialize
-
-# To skip the DNS wizard:
-python3 noah.py setup initialize --skip-dns-wizard
-
-# 3. Configure DNS (choose one option):
-
-# Option A: Automatic DNS with Cloudflare — store token once, enabled by default
 python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
 
-# Option B: Manual DNS - Get node public IP, then create A records:
-#   kubectl get svc ingress-nginx-controller -n ingress-nginx
-#   Create: auth.your-domain.com → EXTERNAL-IP
-#           headlamp.your-domain.com → EXTERNAL-IP
-#           hubble.your-domain.com → EXTERNAL-IP
+# 2. Prepare your GitOps repository (fork flux-repo/, encrypt secrets, push)
+#    See docs/DEPLOYMENT_GUIDE.md — Step 2 for details
 
-# Option C: Local testing - Add to /etc/hosts (after deploy)
+# 3. Bootstrap K3s + FluxCD
+export GITHUB_TOKEN=ghp_xxx
+python3 noah.py cluster bootstrap \
+  --node 192.168.1.10 \
+  --domain your-domain.com \
+  --flux-repo https://github.com/yourorg/your-noah-gitops \
+  --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
 
-# 4. Create cluster
-python3 noah.py cluster create --name noah-cluster --domain your-domain.com
+# 4. Watch FluxCD reconcile the stack (~25-45 min)
+python3 noah.py flux status
+python3 noah.py flux logs -f
 
-# 5. Deploy infrastructure
-python3 noah.py deploy core --domain your-domain.com
-
-# 6. Get credentials & verify
+# 5. Get credentials
 python3 noah.py password show-password
-python3 noah.py status
 ```
+
+> For a 3-node HA cluster add `--ha --nodes node1,node2,node3` to step 3.
+> To wipe the local environment and start over: `python3 noah.py setup reset`
 
 ## **Architecture Overview**
 
@@ -115,10 +107,12 @@ python3 noah.py status
               Kubernetes (K3s) Cluster
 ───────────────────────────────────────────────────────────
 Deployment Automation:
-  python noah.py deploy core
+  python3 noah.py cluster bootstrap
       ↓
-  Ansible Playbook (phased)
-      ├─ Phase 0:   External-DNS (Cloudflare, sync policy)
+  K3s + FluxCD bootstrap
+      ↓
+  FluxCD reconciles GitOps repo (phased)
+      ├─ Phase 0:   External-DNS (Cloudflare, upsert-only)
       ├─ Phase 1:   cert-manager + ClusterIssuers
       ├─ Phase 2:   Cilium CNI
       ├─ Phase 2.5: nginx-ingress (hostNetwork)
@@ -134,7 +128,7 @@ Deployment Automation:
 
 - **Single Source of Truth**: Canonical encrypted YAML for all secrets with metadata (`value`, `version`, `rotated_at`)
 - **Deterministic Deployments**: Ordered rollout (Cilium → Authentik → Headlamp) with validation
-- **Separation of Concerns**: CLI (UX) → Ansible (orchestration) → Helm (packaging)
+- **Separation of Concerns**: CLI (UX) → FluxCD (reconciliation) → Helm (packaging)
 - **Validation Modes**: `development` (fast) vs `production` (full DNS/TLS/health checks)
 - **Composable Security**: Isolated secret generation with versioned rotation
 - **CI Safety**: `NOAH_SKIP_ANSIBLE=true` for testing without cluster

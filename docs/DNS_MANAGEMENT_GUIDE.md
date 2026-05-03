@@ -116,21 +116,18 @@ export CLOUDFLARE_API_TOKEN='your-token-here'
 
 ### Deployment Timing
 
-**⚠️ IMPORTANT:** Set environment variables **BEFORE** running `deploy core`
+External-DNS is reconciled by FluxCD in **Phase 0** — before Cilium, Authentik, and Headlamp.
 
-External-DNS deploys in **Phase 0** (before Cilium, Authentik, Headlamp).
-
-### Deploy with Core Stack
+**⚠️ IMPORTANT:** Store your Cloudflare token **before** running `cluster bootstrap` so FluxCD can read it from the canonical secrets store on first reconciliation.
 
 ```bash
-# Store token once (if not already done)
 python3 Scripts/security/set_cloudflare_token.py 'your-token-here'
-
-# Deploy — external-dns runs in Phase 0 automatically
-python noah.py deploy core --domain yourdomain.com
+python3 noah.py cluster bootstrap --node <IP> --domain yourdomain.com --flux-repo <url> ...
 ```
 
 ### Deploy Standalone
+
+To update external-dns independently of the full stack:
 
 ```bash
 python noah.py deploy dns --domain yourdomain.com
@@ -357,12 +354,12 @@ external-dns.alpha.kubernetes.io/hostname: "auth.otherdomain.com"
 
 ### Custom Subdomains
 
-```bash
-export NOAH_DOMAIN="yourdomain.com"
-export NOAH_AUTHENTIK_SUBDOMAIN="sso"      # Default: auth
-export NOAH_HEADLAMP_SUBDOMAIN="k8s"       # Default: headlamp
+Set subdomain overrides in your GitOps repository's HelmRelease values before bootstrapping:
 
-python noah.py deploy core --domain yourdomain.com
+```yaml
+# In your flux-repo HelmRelease values:
+# NOAH_AUTHENTIK_SUBDOMAIN: "sso"      # Default: auth
+# NOAH_HEADLAMP_SUBDOMAIN: "k8s"       # Default: headlamp
 
 # Results:
 # sso.yourdomain.com → Authentik
@@ -433,7 +430,7 @@ Once confident external-dns works:
 
 ## Best Practices
 
-1. ✅ Use **sync** policy — TXT registry ensures only owned records are deleted
+1. ✅ Consider **sync** policy for clean environments — TXT registry ensures only owned records are deleted; use `upsert-only` (default) when sharing a Cloudflare zone with other systems
 2. ✅ Store API token via `set_cloudflare_token.py` (SOPS-encrypted, not env var)
 3. ✅ Use **scoped tokens** (never Global API keys)
 4. ✅ Monitor external-dns logs

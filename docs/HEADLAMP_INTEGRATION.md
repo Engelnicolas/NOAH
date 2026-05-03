@@ -153,7 +153,7 @@ Headlamp uses Authentik for SSO authentication:
 
 1. Navigate to `https://headlamp.your-domain.com`
 2. You'll be redirected to Authentik for login
-3. Use your Authentik credentials (retrieve with `python noah.py password show`)
+3. Use your Authentik credentials (retrieve with `python noah.py password show-password`)
 4. After authentication, you'll be redirected back to Headlamp with full cluster access
 
 ### Authentik Configuration — Automatic (v0.0.7+)

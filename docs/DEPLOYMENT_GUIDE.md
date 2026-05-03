@@ -88,13 +88,13 @@ NOAH deploys a complete Kubernetes stack:
 
 ---
 
-## Quick Start (v0.0.9, GitOps)
+## Quick Start (v0.0.8, GitOps)
 
 ```bash
-# 1. One-time setup (DNS token, dependency check, Age key generation).
-python3 noah.py setup set-cloudflare-token 'your-cloudflare-api-token'
+# 1. One-time setup (dependency check, Age key generation, DNS token).
 git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
 python3 noah.py setup initialize
+python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
 
 # 2. Fork the GitOps tree and replace placeholders.
 #    Detailed instructions: docs/MIGRATION_GUIDE.md §4.1
@@ -114,7 +114,7 @@ python3 noah.py flux status
 python3 noah.py flux logs -f          # live tail (Ctrl-C to stop)
 
 # 5. Get Authentik admin credentials.
-python3 noah.py password show
+python3 noah.py password show-password
 ```
 
 > For a 3-node HA cluster, replace step 3 with:
@@ -197,7 +197,7 @@ python noah.py deploy core --domain yourdomain.com
 #### Phase 0: External-DNS
 - **When**: `NOAH_EXTERNAL_DNS_ENABLED=true` (default) and Cloudflare token present in canonical store or `CLOUDFLARE_API_TOKEN` env var
 - **Duration**: ~2-3 minutes
-- **What**: Deploys external-dns (`sync` policy) — creates, updates, and removes A records in Cloudflare automatically. Each deployment is isolated via a unique `txtOwnerId` derived from the domain name.
+- **What**: Deploys external-dns (`upsert-only` policy by default) — creates and updates A records in Cloudflare automatically. Each deployment is isolated via a unique `txtOwnerId` derived from the domain name. Use `--policy sync` to also remove stale records.
 
 #### Phase 1: cert-manager
 - **Duration**: ~2-3 minutes
@@ -300,7 +300,7 @@ echo "$EXTERNAL_IP auth.yourdomain.com headlamp.yourdomain.com hubble.yourdomain
 ### Get Credentials
 
 ```bash
-python noah.py password show
+python noah.py password show-password
 ```
 
 **Example output:**
@@ -398,7 +398,7 @@ kubectl top pods -A
 
 ```bash
 # Backup credentials
-python noah.py password show > backup-passwords.txt
+python noah.py password show-password > backup-passwords.txt
 
 # Destroy and recreate
 python noah.py cluster destroy --force
@@ -497,7 +497,7 @@ python noah.py deploy core --domain yourdomain.com --validation-mode development
 python noah.py status
 
 # View credentials
-python noah.py password show
+python noah.py password show-password
 
 # Rotate password
 python noah.py password new

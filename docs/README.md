@@ -77,7 +77,7 @@ python3 noah.py cluster create --name noah-cluster --domain your-domain.com
 python3 noah.py deploy core --domain your-domain.com
 
 # 6. Get credentials & verify
-python3 noah.py password show
+python3 noah.py password show-password
 python3 noah.py status
 ```
 
@@ -147,7 +147,7 @@ After deployment, access services at:
 - **Headlamp Dashboard**: `https://headlamp.your-domain.com` (SSO via Authentik)
 - **Cilium Hubble**: `https://hubble.your-domain.com`
 
-Get credentials: `python noah.py password show`
+Get credentials: `python noah.py password show-password`
 
 Rotate password:
 ```bash

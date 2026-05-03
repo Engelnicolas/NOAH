@@ -172,14 +172,18 @@ dig auth.yourdomain.com +short
 
 ### DNS Policy
 
-**sync** (Default):
+**upsert-only** (Default):
+- Creates and updates DNS records automatically, but **never deletes** them
+- Safe for most deployments — stale records must be removed manually
+
+**sync** (opt-in):
 - Creates, updates, **and deletes** DNS records automatically
 - Safe because external-dns uses a TXT registry: each deployment only manages records it owns, identified by a unique `txtOwnerId` derived from the domain (e.g. `noah-yourdomain-com`)
 - Multiple deployments on the same Cloudflare zone coexist without interfering — each manages only its own records
 
-To override:
+To use sync policy:
 ```bash
-python noah.py deploy dns --domain yourdomain.com --policy upsert-only
+python noah.py deploy dns --domain yourdomain.com --policy sync
 ```
 
 ---
@@ -384,7 +388,7 @@ export NOAH_AUTHENTIK_DOMAIN="auth.external.com"
 |----------|---------|-------------|
 | `NOAH_DOMAIN` | `noah-infra.com` | Global domain for all services |
 | `NOAH_EXTERNAL_DNS_ENABLED` | `true` | Enable automatic DNS |
-| `NOAH_EXTERNAL_DNS_POLICY` | `sync` | DNS policy (`sync` or `upsert-only`) |
+| `NOAH_EXTERNAL_DNS_POLICY` | `upsert-only` | DNS policy (`sync` or `upsert-only`) |
 | `CLOUDFLARE_API_TOKEN` | *(canonical store)* | Cloudflare API token — prefer `set_cloudflare_token.py` |
 | `KUBERNETES_CLUSTER_NAME` | *(derived from domain)* | external-dns TXT owner ID — set to differentiate instances |
 | `NOAH_AUTHENTIK_SUBDOMAIN` | `auth` | Authentik subdomain |

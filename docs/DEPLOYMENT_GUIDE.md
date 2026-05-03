@@ -159,7 +159,7 @@ python3 noah.py setup initialize --skip-dns-wizard
 python3 noah.py setup doctor
 ```
 
-**Start over (removes venv, Age keys, secrets store, SOPS config):**
+**Start over (removes venv, Age keys, secrets store, SOPS config, FluxCD deploy key):**
 ```bash
 python3 noah.py setup reset
 ```

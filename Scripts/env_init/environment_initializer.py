@@ -20,9 +20,41 @@ def check_command_exists(command):
         return False
 
 
+def _apt_lock_held() -> bool:
+    """Return True if the dpkg frontend lock is currently held by another process."""
+    locks = [
+        "/var/lib/dpkg/lock-frontend",
+        "/var/lib/dpkg/lock",
+        "/var/cache/apt/archives/lock",
+    ]
+    for lock in locks:
+        result = subprocess.run(
+            ["fuser", lock], capture_output=True
+        )
+        if result.returncode == 0:
+            return True
+    return False
+
+
+def _wait_for_apt_lock(print_status=None, timeout: int = 120) -> None:
+    """Block until all dpkg/apt locks are free, printing a one-time notice."""
+    import time
+    if not _apt_lock_held():
+        return
+    if print_status:
+        print_status("[INFO] Waiting for apt lock to be released (another process is using apt)...", "INFO")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        time.sleep(3)
+        if not _apt_lock_held():
+            return
+    # Timed out — proceed anyway; apt-get will fail with its own message if still locked.
+
+
 def _sudo_apt_install(packages: list, print_status=None) -> bool:
     """Install apt packages, prefixing with sudo when not root.
 
+    Waits for any held dpkg lock before running.
     stdout is suppressed to keep output clean; stderr and the TTY are left
     open so sudo can prompt for a password interactively.
     Returns True on success, False on failure.
@@ -30,6 +62,7 @@ def _sudo_apt_install(packages: list, print_status=None) -> bool:
     if isinstance(packages, str):
         packages = [packages]
     sudo = [] if os.geteuid() == 0 else ["sudo"]
+    _wait_for_apt_lock(print_status)
     try:
         subprocess.run(
             sudo + ["apt-get", "install", "-y"] + packages,
@@ -41,8 +74,9 @@ def _sudo_apt_install(packages: list, print_status=None) -> bool:
         return False
 
 
-def _sudo_apt_update() -> None:
+def _sudo_apt_update(print_status=None) -> None:
     sudo = [] if os.geteuid() == 0 else ["sudo"]
+    _wait_for_apt_lock(print_status)
     subprocess.run(sudo + ["apt-get", "update"], check=True, stdout=subprocess.DEVNULL)
 
 
@@ -578,7 +612,7 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
     # Install required system packages (uses sudo automatically when not root)
     print_status("[INFO] Installing required system packages...", "INFO")
     try:
-        _sudo_apt_update()
+        _sudo_apt_update(print_status)
 
         # python-is-python3
         if subprocess.run(['which', 'python'], capture_output=True).returncode != 0:

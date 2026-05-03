@@ -52,13 +52,16 @@ python3 noah.py setup initialize
 python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
 
 # 2. Prepare and push the GitOps repository (one command)
-export GITHUB_TOKEN=ghp_xxx
+#    A GitHub token is only needed here to create/push the repo.
+#    If you push manually, skip --push and --github-repo entirely.
+export GITHUB_TOKEN=ghp_xxx   # only needed for --push
 python3 noah.py setup gitops \
   --domain your-domain.com \
   --github-repo yourorg/noah-gitops \
   --push
 
-# 3. Bootstrap K3s + FluxCD
+# 3. Bootstrap K3s + FluxCD (no token — uses SSH deploy key)
+#    NOAH will pause and display a public key to add to your repo.
 python3 noah.py cluster bootstrap \
   --node 192.168.1.10 \
   --domain your-domain.com \

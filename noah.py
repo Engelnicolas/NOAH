@@ -145,14 +145,12 @@ def destroy(ctx, name, force, keep_secrets):
 @click.option('--nodes', default=None, help='Comma-separated IPs for HA mode (>=3, odd)')
 @click.option('--ha', is_flag=True, default=False, help='Enable 3-node embedded-etcd HA mode')
 @click.option('--domain', required=True, help='Primary domain for the cluster')
-@click.option('--flux-repo', required=True, help='GitOps repository URL or owner/repo')
+@click.option('--flux-repo', required=True, help='GitOps repository URL (HTTPS or SSH)')
 @click.option('--flux-branch', default='main', show_default=True, help='GitOps branch')
 @click.option('--flux-path', default='clusters/production', show_default=True,
               help='Path inside the GitOps repo Flux will reconcile')
-@click.option('--github-token', envvar='GITHUB_TOKEN',
-              help='GitHub PAT with repo:write (or env GITHUB_TOKEN)')
 @click.option('--ssh-user', default='ubuntu', show_default=True, help='SSH user on target nodes')
-@click.option('--ssh-key', default=None, help='SSH private key path (optional)')
+@click.option('--ssh-key', default=None, help='SSH private key path for Ansible (optional)')
 @click.option('--age-key-file', default='Age/keys.txt', show_default=True,
               help='Path to the Age private key file')
 @click.option('--k3s-version', default=None,
@@ -161,16 +159,14 @@ def destroy(ctx, name, force, keep_secrets):
               help='Allow bootstrap on top of an existing K3s install (DESTRUCTIVE)')
 @click.pass_context
 def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
-              github_token, ssh_user, ssh_key, age_key_file,
-              k3s_version, force_reset):
-    """Provision K3s + bootstrap FluxCD against a GitOps repo (v0.0.9)."""
+              ssh_user, ssh_key, age_key_file, k3s_version, force_reset):
+    """Provision K3s + bootstrap FluxCD against a GitOps repo (SSH, no token needed)."""
     rc = cluster_bootstrap(
         node=node,
         nodes=nodes,
         ha=ha,
         domain=domain,
         flux_repo=flux_repo,
-        github_token=github_token,
         ssh_user=ssh_user,
         ssh_key=ssh_key,
         age_key_file=Path(age_key_file),

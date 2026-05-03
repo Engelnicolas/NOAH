@@ -97,13 +97,15 @@ python3 noah.py setup initialize
 python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
 
 # 2. Prepare the GitOps repository automatically.
-export GITHUB_TOKEN=ghp_xxx
+#    The token is only needed to create and push to GitHub.
+export GITHUB_TOKEN=ghp_xxx   # only needed for --push
 python3 noah.py setup gitops \
   --domain yourdomain.com \
   --github-repo yourorg/noah-gitops \
   --push
 
-# 3. Bootstrap K3s (single-node embedded etcd) + FluxCD.
+# 3. Bootstrap K3s (single-node embedded etcd) + FluxCD (no token).
+#    NOAH generates an SSH deploy key and pauses for you to add it.
 python3 noah.py cluster bootstrap \
   --node 192.168.1.10 \
   --domain yourdomain.com \
@@ -121,12 +123,6 @@ python3 noah.py password show-password
 > For a 3-node HA cluster, replace step 3 with:
 > `python3 noah.py cluster bootstrap --ha --nodes n1,n2,n3 --domain ... --flux-repo ...`
 
-### Legacy quick start (v0.0.8, deprecated)
-
-```bash
-python3 noah.py cluster create --name noah-cluster      # DEPRECATED
-python3 noah.py deploy core --domain yourdomain.com     # DEPRECATED — see MIGRATION_GUIDE.md
-```
 
 **Access services:**
 - Authentik: `https://auth.yourdomain.com`
@@ -197,16 +193,17 @@ The command prints the exact `cluster bootstrap` invocation to run next.
 
 ### Step 3: Bootstrap Cluster
 
-A single command provisions K3s, installs FluxCD, and points it at your GitOps repository.
+A single command provisions K3s, installs FluxCD, and points it at your GitOps repository. No GitHub token is required — NOAH uses an SSH deploy key.
 
 ```bash
-export GITHUB_TOKEN=ghp_xxx
 python3 noah.py cluster bootstrap \
   --node 192.168.1.10 \
   --domain yourdomain.com \
   --flux-repo https://github.com/yourorg/your-noah-gitops \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
 ```
+
+During the run, NOAH will pause and display an SSH public key. Add it as a **read-only deploy key** to your GitOps repository, then press Enter to continue. The key is saved to `Age/flux-deploy-key.pub` and reused on subsequent bootstraps — you only add it once.
 
 **What it does:**
 - Installs K3s with embedded etcd on the target node
@@ -419,7 +416,6 @@ python noah.py password show-password > backup-passwords.txt
 
 # Destroy and re-bootstrap
 python noah.py cluster destroy --force
-export GITHUB_TOKEN=ghp_xxx
 python3 noah.py cluster bootstrap \
   --node 192.168.1.10 \
   --domain yourdomain.com \

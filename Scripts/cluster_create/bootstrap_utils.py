@@ -144,6 +144,52 @@ def _check_existing_cluster(force_reset: bool) -> None:
     # which keeps re-runs idempotent without --force-reset).
 
 
+def _flux_ssh_url(flux_repo: str) -> str:
+    """Normalise a GitOps repo URL to SSH format for flux bootstrap git.
+
+    Accepts:
+      https://github.com/org/repo[.git]  →  ssh://git@github.com/org/repo
+      git@github.com:org/repo[.git]      →  ssh://git@github.com/org/repo
+      ssh://git@github.com/org/repo      →  unchanged
+    """
+    repo = flux_repo.rstrip("/")
+    if repo.startswith("ssh://"):
+        return repo
+    if repo.startswith("git@"):
+        # git@github.com:org/repo  →  ssh://git@github.com/org/repo
+        repo = repo.replace(":", "/", 1)
+        return "ssh://" + repo
+    if repo.startswith("https://"):
+        repo = repo.replace("https://", "ssh://git@", 1)
+        if not repo.endswith(".git"):
+            repo += ""  # .git suffix optional for flux
+        return repo
+    return repo
+
+
+def _get_or_create_flux_deploy_key(key_file: Path) -> Tuple[str, str]:
+    """Return (private_key_content, public_key_content), generating if needed.
+
+    The key is an ed25519 keypair stored under Age/ alongside the Age key so
+    it persists across re-runs — re-bootstrapping an existing cluster won't
+    ask the operator to re-add a deploy key to GitHub.
+    """
+    pub_file = key_file.with_suffix(".pub")
+    if key_file.exists() and pub_file.exists():
+        return key_file.read_text(), pub_file.read_text()
+
+    key_file.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ["ssh-keygen", "-t", "ed25519", "-C", "fluxcd@noah",
+         "-f", str(key_file), "-N", ""],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise click.UsageError(f"ssh-keygen failed: {result.stderr.strip()}")
+    os.chmod(key_file, 0o600)
+    return key_file.read_text(), pub_file.read_text()
+
+
 def run_bootstrap(
     *,
     node: Optional[str],
@@ -151,7 +197,6 @@ def run_bootstrap(
     ha: bool,
     domain: str,
     flux_repo: str,
-    github_token: Optional[str],
     ssh_user: str,
     ssh_key: Optional[str],
     age_key_file: Path,
@@ -163,26 +208,29 @@ def run_bootstrap(
 ) -> int:
     """Drive the bootstrap end-to-end. Returns the Ansible exit code."""
 
-    if not github_token:
-        raise click.UsageError(
-            "A GitHub token is required for `flux bootstrap`. "
-            "Pass --github-token or set GITHUB_TOKEN."
-        )
-
     node_list = _resolve_nodes(node, nodes, ha)
     _check_existing_cluster(force_reset)
 
     age_payload = _load_age_private_key(age_key_file)
+
+    # SSH deploy key — generated once and reused across re-runs.
+    deploy_key_file = age_key_file.parent / "flux-deploy-key"
+    private_key, public_key = _get_or_create_flux_deploy_key(deploy_key_file)
+
+    ssh_url = _flux_ssh_url(flux_repo)
     inventory = _build_inventory(node_list, ha, ssh_user, ssh_key)
 
     extra_vars = {
         "ha_mode": bool(ha),
         "domain": domain,
-        "flux_repo": flux_repo,
+        "flux_repo": ssh_url,
         "flux_branch": flux_branch,
         "flux_path": flux_path,
         "age_private_key": age_payload,
-        "github_token": github_token,
+        "flux_deploy_private_key": private_key,
+        "flux_deploy_public_key": public_key,
+        "deploy_key_is_new": not (deploy_key_file.exists() and
+                                   deploy_key_file.with_suffix(".pub").exists()),
     }
     if k3s_version:
         extra_vars["k3s_version"] = k3s_version
@@ -191,20 +239,16 @@ def run_bootstrap(
     click.echo(f"🚀 NOAH bootstrap — mode: {mode_label}")
     click.echo(f"   nodes:     {', '.join(node_list)}")
     click.echo(f"   domain:    {domain}")
-    click.echo(f"   flux repo: {flux_repo} (branch {flux_branch}, path {flux_path})")
+    click.echo(f"   flux repo: {ssh_url} (branch {flux_branch}, path {flux_path})")
     click.echo("")
 
-    # Write inventory + extra-vars to short-lived files. We use a
-    # tempdir rather than the Ansible/inventory/ tree to keep the
-    # checked-in inventory pristine.
     with tempfile.TemporaryDirectory(prefix="noah-bootstrap-") as tmpdir:
         tmp = Path(tmpdir)
         inv_path = tmp / "inventory.yml"
         vars_path = tmp / "extra-vars.yml"
         inv_path.write_text(yaml.safe_dump(inventory, sort_keys=False))
         vars_path.write_text(yaml.safe_dump(extra_vars, sort_keys=False))
-        # Restrict perms — the extra-vars file holds the GitHub token
-        # and the Age private key.
+        # 0600 — file contains Age private key and SSH deploy private key.
         os.chmod(vars_path, 0o600)
 
         if os.environ.get("NOAH_SKIP_ANSIBLE", "false").lower() in ("1", "true", "yes"):
@@ -215,11 +259,9 @@ def run_bootstrap(
 
         cmd = [
             "ansible-playbook",
-            "-i",
-            str(inv_path),
+            "-i", str(inv_path),
             "bootstrap-k3s.yml",
-            "--extra-vars",
-            f"@{vars_path}",
+            "--extra-vars", f"@{vars_path}",
         ]
         env = os.environ.copy()
         env.setdefault("ANSIBLE_HOST_KEY_CHECKING", "False")

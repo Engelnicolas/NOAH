@@ -36,7 +36,6 @@ Run through this **before** you start the maintenance window.
 - [ ] SSDs available for `/var/lib/rancher/k3s` (etcd is write-heavy).
 - [ ] **HA only:** inter-node latency < 10 ms (verified by `ping`).
 - [ ] GitOps repository created on GitHub (or GitLab) — empty is fine.
-- [ ] PAT with `repo:write` available (`export GITHUB_TOKEN=...`).
 - [ ] `Age/keys.txt` backed up to **two** locations.
 - [ ] **New in v0.0.9:** generate a backup Age key and add it to
       `flux-repo/.sops.yaml` as a second recipient (see §"Age key
@@ -95,7 +94,6 @@ git add -A && git commit -m 'Initial NOAH GitOps tree' && git push -u origin mai
 ### 4.2 Bootstrap a single-node cluster (default)
 
 ```bash
-export GITHUB_TOKEN=ghp_xxx
 python noah.py cluster bootstrap \
   --node 192.168.1.10 \
   --domain example.com \

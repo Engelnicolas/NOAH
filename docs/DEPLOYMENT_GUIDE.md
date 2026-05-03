@@ -1,6 +1,6 @@
 # NOAH Deployment Guide
 
-**Version**: 0.0.9
+**Version**: 0.0.8
 **Last Updated**: April 2026
 
 Deploy NOAH (Network Operations & Automation Hub) - a complete Kubernetes infrastructure with SSO authentication and web dashboards.

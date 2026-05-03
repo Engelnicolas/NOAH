@@ -65,7 +65,7 @@ from Scripts.cluster_create.flux_utils import (
 )
 from Scripts.cluster_destroy.cluster_destroy_utils import destroy_cluster_command
 
-VERSION = "0.0.9"
+VERSION = "0.0.8"
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', '')
 def check_repository_root():
     """Check if the current directory is the root of the NOAH repository"""

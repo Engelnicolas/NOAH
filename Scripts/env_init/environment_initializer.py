@@ -20,6 +20,32 @@ def check_command_exists(command):
         return False
 
 
+def _sudo_apt_install(packages: list, print_status=None) -> bool:
+    """Install apt packages, prefixing with sudo when not root.
+
+    stdout is suppressed to keep output clean; stderr and the TTY are left
+    open so sudo can prompt for a password interactively.
+    Returns True on success, False on failure.
+    """
+    if isinstance(packages, str):
+        packages = [packages]
+    sudo = [] if os.geteuid() == 0 else ["sudo"]
+    try:
+        subprocess.run(
+            sudo + ["apt-get", "install", "-y"] + packages,
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def _sudo_apt_update() -> None:
+    sudo = [] if os.geteuid() == 0 else ["sudo"]
+    subprocess.run(sudo + ["apt-get", "update"], check=True, stdout=subprocess.DEVNULL)
+
+
 def install_external_dependency(package_name, print_status):
     """Install external dependency using appropriate method"""
     try:
@@ -549,88 +575,66 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
     click.echo("Initializing NOAH environment...")
     click.echo("")
     
-    # Check if running as root (sudo) and install system packages
-    is_root = os.geteuid() == 0 if hasattr(os, 'geteuid') else False
-    if is_root:
-        print_status("[INFO] Running with elevated privileges", "INFO")
-        
-        # Install required system packages
-        print_status("[INFO] Installing required system packages...", "INFO")
-        try:
-            subprocess.run(['apt-get', 'update'], check=True, capture_output=True)
-            
-            # Install python-is-python3 package if needed
-            result = subprocess.run(['which', 'python'], capture_output=True, text=True)
-            if result.returncode != 0:
-                print_status("[INFO] Installing python-is-python3...", "INFO")
-                subprocess.run(['apt-get', 'install', '-y', 'python-is-python3'], check=True, capture_output=True)
-                print_status("[SUCCESS] python-is-python3 installed", "SUCCESS")
-            else:
-                print_status("[SUCCESS] python command already available", "SUCCESS")
-            
-            # Install python3-venv and python3-pip for the current Python version
-            python_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
-            for venv_pkg in [f"python{python_minor}-venv", f"python{python_minor}-pip", "python3-pip"]:
-                venv_check = subprocess.run(['dpkg', '-l', venv_pkg], capture_output=True, text=True)
-                if venv_check.returncode != 0:
-                    print_status(f"[INFO] Installing {venv_pkg}...", "INFO")
-                    result = subprocess.run(['apt-get', 'install', '-y', venv_pkg], capture_output=True, text=True)
-                    if result.returncode == 0:
-                        print_status(f"[SUCCESS] {venv_pkg} installed", "SUCCESS")
-                else:
-                    print_status(f"[SUCCESS] {venv_pkg} already available", "SUCCESS")
+    # Install required system packages (uses sudo automatically when not root)
+    print_status("[INFO] Installing required system packages...", "INFO")
+    try:
+        _sudo_apt_update()
 
-            # Install age package if needed
-            age_result = subprocess.run(['which', 'age'], capture_output=True, text=True)
-            if age_result.returncode != 0:
-                print_status("[INFO] Installing age encryption tool...", "INFO")
-                subprocess.run(['apt-get', 'install', '-y', 'age'], check=True, capture_output=True)
-                print_status("[SUCCESS] age encryption tool installed", "SUCCESS")
+        # python-is-python3
+        if subprocess.run(['which', 'python'], capture_output=True).returncode != 0:
+            print_status("[INFO] Installing python-is-python3...", "INFO")
+            _sudo_apt_install(['python-is-python3'], print_status)
+            print_status("[SUCCESS] python-is-python3 installed", "SUCCESS")
+        else:
+            print_status("[SUCCESS] python command already available", "SUCCESS")
+
+        # python3-venv and python3-pip for the running Python version
+        python_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
+        for venv_pkg in [f"python{python_minor}-venv", f"python{python_minor}-pip", "python3-pip"]:
+            already = subprocess.run(['dpkg', '-l', venv_pkg], capture_output=True).returncode == 0
+            if not already:
+                print_status(f"[INFO] Installing {venv_pkg}...", "INFO")
+                if _sudo_apt_install([venv_pkg], print_status):
+                    print_status(f"[SUCCESS] {venv_pkg} installed", "SUCCESS")
             else:
-                print_status("[SUCCESS] age encryption tool already available", "SUCCESS")
-            
-            # Install kernel headers for BPF compilation (required for Cilium)
-            print_status("[INFO] Installing kernel headers for BPF compilation...", "INFO")
-            kernel_version = subprocess.run(['uname', '-r'], capture_output=True, text=True).stdout.strip()
-            subprocess.run(['apt-get', 'install', '-y', f'linux-headers-{kernel_version}'], check=True, capture_output=True)
-            print_status("[SUCCESS] Kernel headers installed", "SUCCESS")
-            
-            # Install clang and llvm for BPF compilation
-            clang_result = subprocess.run(['which', 'clang'], capture_output=True, text=True)
-            if clang_result.returncode != 0:
-                print_status("[INFO] Installing clang and llvm for BPF compilation...", "INFO")
-                subprocess.run(['apt-get', 'install', '-y', 'clang', 'llvm'], check=True, capture_output=True)
-                print_status("[SUCCESS] clang and llvm installed", "SUCCESS")
-            else:
-                print_status("[SUCCESS] clang and llvm already available", "SUCCESS")
-            
-            # Install essential Cilium runtime dependencies
-            print_status("[INFO] Installing Cilium runtime dependencies...", "INFO")
-            cilium_runtime_packages = [
-                'iproute2',       # Network interface management
-                'iptables',       # Netfilter rules (for non-BPF masquerading)
-                'ipset',          # IP set management
-                'kmod',           # Kernel module loading
-                'ca-certificates' # TLS/SSL operations
-            ]
-            
-            packages_to_install = []
-            for package in cilium_runtime_packages:
-                # Check if package is already installed
-                result = subprocess.run(['dpkg', '-l', package], capture_output=True, text=True)
-                if result.returncode != 0:
-                    packages_to_install.append(package)
-            
-            if packages_to_install:
-                print_status(f"[INFO] Installing missing packages: {', '.join(packages_to_install)}", "INFO")
-                subprocess.run(['apt-get', 'install', '-y'] + packages_to_install, check=True, capture_output=True)
-                print_status("[SUCCESS] Cilium runtime dependencies installed", "SUCCESS")
-            else:
-                print_status("[SUCCESS] All Cilium runtime dependencies already available", "SUCCESS")
-                
-        except subprocess.CalledProcessError as e:
-            print_status(f"[WARNING] Could not install system packages: {e}", "WARNING")
-            print_status("[INFO] Continuing without system package installation...", "INFO")
+                print_status(f"[SUCCESS] {venv_pkg} already available", "SUCCESS")
+
+        # age encryption tool
+        if subprocess.run(['which', 'age'], capture_output=True).returncode != 0:
+            print_status("[INFO] Installing age encryption tool...", "INFO")
+            _sudo_apt_install(['age'], print_status)
+            print_status("[SUCCESS] age encryption tool installed", "SUCCESS")
+        else:
+            print_status("[SUCCESS] age encryption tool already available", "SUCCESS")
+
+        # Kernel headers for Cilium BPF
+        print_status("[INFO] Installing kernel headers for BPF compilation...", "INFO")
+        kernel_version = subprocess.run(['uname', '-r'], capture_output=True, text=True).stdout.strip()
+        _sudo_apt_install([f'linux-headers-{kernel_version}'], print_status)
+        print_status("[SUCCESS] Kernel headers installed", "SUCCESS")
+
+        # clang / llvm for BPF compilation
+        if subprocess.run(['which', 'clang'], capture_output=True).returncode != 0:
+            print_status("[INFO] Installing clang and llvm for BPF compilation...", "INFO")
+            _sudo_apt_install(['clang', 'llvm'], print_status)
+            print_status("[SUCCESS] clang and llvm installed", "SUCCESS")
+        else:
+            print_status("[SUCCESS] clang and llvm already available", "SUCCESS")
+
+        # Essential Cilium runtime dependencies
+        cilium_runtime_packages = ['iproute2', 'iptables', 'ipset', 'kmod', 'ca-certificates']
+        missing = [p for p in cilium_runtime_packages
+                   if subprocess.run(['dpkg', '-l', p], capture_output=True).returncode != 0]
+        if missing:
+            print_status(f"[INFO] Installing missing packages: {', '.join(missing)}", "INFO")
+            _sudo_apt_install(missing, print_status)
+            print_status("[SUCCESS] Cilium runtime dependencies installed", "SUCCESS")
+        else:
+            print_status("[SUCCESS] All Cilium runtime dependencies already available", "SUCCESS")
+
+    except subprocess.CalledProcessError as e:
+        print_status(f"[WARNING] Could not install system packages: {e}", "WARNING")
+        print_status("[INFO] Continuing without system package installation...", "INFO")
     
     # Check Python version
     print_status("[INFO] Checking Python installation...", "INFO")
@@ -667,17 +671,21 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
         result = subprocess.run([sys.executable, "-m", "venv", ".venv"], capture_output=True, text=True)
         if result.returncode == 0:
             return
-        # python3-venv missing — install it and retry
+        # python3-venv missing — install it (with sudo when not root) and retry
         python_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
         venv_pkg = f"python{python_minor}-venv"
         print_status(f"[INFO] venv creation failed — installing {venv_pkg}...", "INFO")
+        if not _sudo_apt_install([venv_pkg], print_status):
+            print_status(
+                f"[ERROR] Could not install {venv_pkg}. Try: sudo apt install {venv_pkg}",
+                "ERROR",
+            )
+            sys.exit(1)
         try:
-            sudo = [] if os.geteuid() == 0 else ["sudo"]
-            subprocess.run(sudo + ["apt-get", "install", "-y", venv_pkg], check=True, capture_output=True)
             subprocess.run([sys.executable, "-m", "venv", ".venv"], check=True)
         except subprocess.CalledProcessError:
             print_status(
-                f"[ERROR] Could not create virtual environment. Run: sudo apt install {venv_pkg}",
+                f"[ERROR] Could not create virtual environment after installing {venv_pkg}.",
                 "ERROR",
             )
             sys.exit(1)

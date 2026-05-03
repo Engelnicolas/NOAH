@@ -553,13 +553,14 @@ def gitops(ctx, domain, target_dir, github_repo, github_token, push):
     click.echo("")
     click.echo("✅ GitOps repository ready.")
     click.echo("")
-    click.echo("Next step — bootstrap the cluster:")
-    click.echo(f"  export GITHUB_TOKEN=<token>")
+    click.echo("Next step — bootstrap the cluster (no GitHub token needed):")
     click.echo(f"  python3 noah.py cluster bootstrap \\")
     click.echo(f"    --node <NODE-IP> \\")
     click.echo(f"    --domain {domain} \\")
     click.echo(f"    --flux-repo {repo_url} \\")
     click.echo(f"    --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519")
+    click.echo(f"")
+    click.echo(f"NOAH will generate an SSH deploy key and pause for you to add it to your repo.")
 
 @setup.command()
 def update_sops():

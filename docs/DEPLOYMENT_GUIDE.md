@@ -175,7 +175,7 @@ The `setup gitops` command automates everything: it copies the `flux-repo/` temp
 python3 noah.py setup gitops --domain yourdomain.com
 
 # With automatic GitHub push (recommended)
-export GITHUB_TOKEN=ghp_xxx
+export GITHUB_TOKEN=ghp_xxx   # only needed for --push
 python3 noah.py setup gitops \
   --domain yourdomain.com \
   --github-repo yourorg/noah-gitops \
@@ -187,7 +187,7 @@ The command prints the exact `cluster bootstrap` invocation to run next.
 **Prerequisites:**
 - `setup initialize` completed (Age keys + canonical secrets store present)
 - Cloudflare token stored: `python3 Scripts/security/set_cloudflare_token.py 'token'`
-- GitHub personal access token with `repo` scope (only needed with `--push`)
+- GitHub personal access token with `repo` scope — **optional**, only needed if using `--push` to auto-create/push the repo to GitHub
 
 ---
 

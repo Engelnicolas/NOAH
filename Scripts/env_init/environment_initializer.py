@@ -160,7 +160,7 @@ def install_docker(print_status):
 
 def update_sops_version(print_status=None):
     """Update SOPS to the latest version"""
-    
+
     # Default print_status function if none provided
     if print_status is None:
         def print_status(message, status_type="INFO"):
@@ -172,6 +172,91 @@ def update_sops_version(print_status=None):
             }
             icon = icons.get(status_type, "[INFO]")
             print(f"{icon} {message}")
+
+    try:
+        print_status("[INFO] Checking current SOPS version...", "INFO")
+
+        current_version = None
+        try:
+            if check_command_exists('sops'):
+                result = subprocess.run(['sops', '--version'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    output_lines = result.stdout.strip().split('\n')
+                    for line in output_lines:
+                        if 'sops' in line.lower():
+                            parts = line.split()
+                            for i, part in enumerate(parts):
+                                if part.lower() == 'sops' and i + 1 < len(parts):
+                                    current_version = parts[i + 1]
+                                    break
+                            break
+        except Exception:
+            pass
+
+        if current_version:
+            print_status(f"[INFO] Current SOPS version: {current_version}", "INFO")
+        else:
+            print_status("[INFO] SOPS not found or version not detected", "INFO")
+
+        print_status("[INFO] Fetching latest SOPS version...", "INFO")
+        import urllib.request, json as _json
+        with urllib.request.urlopen(
+            'https://api.github.com/repos/getsops/sops/releases/latest', timeout=30
+        ) as resp:
+            latest_release = _json.loads(resp.read().decode())
+        latest_version = latest_release['tag_name'].lstrip('v')
+
+        print_status(f"[INFO] Latest SOPS version: {latest_version}", "INFO")
+
+        if current_version and current_version == latest_version:
+            print_status("[SUCCESS] SOPS is already up to date", "SUCCESS")
+            return True
+
+        print_status(f"[INFO] Updating SOPS from {current_version or 'not installed'} to {latest_version}...", "INFO")
+
+        import platform
+        arch_map = {'x86_64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}
+        arch = arch_map.get(platform.machine(), 'amd64')
+
+        download_url = (
+            f"https://github.com/getsops/sops/releases/download/v{latest_version}"
+            f"/sops-v{latest_version}.linux.{arch}"
+        )
+
+        print_status(f"[INFO] Downloading SOPS {latest_version}...", "INFO")
+        with urllib.request.urlopen(download_url, timeout=120) as resp:
+            content = resp.read()
+
+        import tempfile, shutil
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        os.chmod(tmp_path, 0o755)
+
+        sops_path = "/usr/local/bin/sops"
+        installed = False
+        if os.geteuid() == 0:
+            shutil.move(tmp_path, sops_path)
+            installed = True
+        else:
+            result = subprocess.run(['sudo', 'mv', tmp_path, sops_path], capture_output=True)
+            if result.returncode == 0:
+                subprocess.run(['sudo', 'chmod', '0755', sops_path], capture_output=True)
+                installed = True
+        if not installed:
+            local_bin = Path.home() / '.local' / 'bin'
+            local_bin.mkdir(parents=True, exist_ok=True)
+            sops_path = str(local_bin / 'sops')
+            shutil.move(tmp_path, sops_path)
+            os.chmod(sops_path, 0o755)
+
+        print_status(f"[SUCCESS] SOPS {latest_version} installed to {sops_path}", "SUCCESS")
+        print_status("[SUCCESS] SOPS update completed successfully", "SUCCESS")
+        return True
+
+    except Exception as e:
+        print_status(f"[ERROR] Failed to update SOPS: {e}", "ERROR")
+        return False
 
 
 def check_kernel_config(config_name, required_value='y'):
@@ -441,100 +526,6 @@ def ensure_bpf_filesystem(print_status):
             
     except Exception as e:
         print_status(f"[ERROR] BPF filesystem setup failed: {e}", "ERROR")
-        return False
-    
-    try:
-        print_status("[INFO] Checking current SOPS version...", "INFO")
-        
-        # Get current version
-        current_version = None
-        try:
-            if check_command_exists('sops'):
-                result = subprocess.run(['sops', '--version'], capture_output=True, text=True)
-                if result.returncode == 0:
-                    # Extract version from output like "sops 3.8.1 (latest)"
-                    output_lines = result.stdout.strip().split('\n')
-                    for line in output_lines:
-                        if 'sops' in line.lower():
-                            parts = line.split()
-                            for i, part in enumerate(parts):
-                                if part.lower() == 'sops' and i + 1 < len(parts):
-                                    current_version = parts[i + 1]
-                                    break
-                            break
-        except Exception:
-            pass
-        
-        if current_version:
-            print_status(f"[INFO] Current SOPS version: {current_version}", "INFO")
-        else:
-            print_status("[INFO] SOPS not found or version not detected", "INFO")
-        
-        # Get latest version from GitHub API
-        print_status("[INFO] Fetching latest SOPS version...", "INFO")
-        import requests
-        response = requests.get('https://api.github.com/repos/getsops/sops/releases/latest')
-        response.raise_for_status()
-        latest_release = response.json()
-        latest_version = latest_release['tag_name'].lstrip('v')
-        
-        print_status(f"[INFO] Latest SOPS version: {latest_version}", "INFO")
-        
-        # Check if update is needed
-        if current_version and current_version == latest_version:
-            print_status("[SUCCESS] SOPS is already up to date", "SUCCESS")
-            return True
-        
-        # Download and install SOPS
-        print_status(f"[INFO] Updating SOPS from {current_version or 'not installed'} to {latest_version}...", "INFO")
-        
-        # Determine architecture
-        import platform
-        arch_map = {
-            'x86_64': 'amd64',
-            'aarch64': 'arm64',
-            'arm64': 'arm64'
-        }
-        arch = arch_map.get(platform.machine(), 'amd64')
-        
-        # Download URL
-        download_url = f"https://github.com/getsops/sops/releases/download/v{latest_version}/sops-v{latest_version}.linux.{arch}"
-        
-        print_status(f"[INFO] Downloading SOPS {latest_version}...", "INFO")
-        response = requests.get(download_url)
-        response.raise_for_status()
-        
-        # Write to a temp file first, then move into place
-        import tempfile, shutil
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
-            tmp.write(response.content)
-            tmp_path = tmp.name
-        os.chmod(tmp_path, 0o755)
-
-        # Try system-wide (/usr/local/bin) with sudo fallback, then user-local
-        sops_path = "/usr/local/bin/sops"
-        installed = False
-        if os.geteuid() == 0:
-            shutil.move(tmp_path, sops_path)
-            installed = True
-        else:
-            result = subprocess.run(['sudo', 'mv', tmp_path, sops_path], capture_output=True)
-            if result.returncode == 0:
-                subprocess.run(['sudo', 'chmod', '0755', sops_path], capture_output=True)
-                installed = True
-        if not installed:
-            local_bin = Path.home() / '.local' / 'bin'
-            local_bin.mkdir(parents=True, exist_ok=True)
-            sops_path = str(local_bin / 'sops')
-            shutil.move(tmp_path, sops_path)
-            os.chmod(sops_path, 0o755)
-
-        print_status(f"[SUCCESS] SOPS {latest_version} installed to {sops_path}", "SUCCESS")
-        print_status("[SUCCESS] SOPS update completed successfully", "SUCCESS")
-        return True
-        
-    except Exception as e:
-        print_status(f"[ERROR] Failed to update SOPS: {e}", "ERROR")
         return False
 
 
@@ -885,11 +876,10 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
     click.echo("=" * 25)
     click.echo("")
     click.echo("To use NOAH:")
-    click.echo("1. Activate virtual environment: source .venv/bin/activate")
-    click.echo("2. Use NOAH: python noah.py --help")
+    click.echo("  python3 noah.py --help")
     click.echo("")
-    click.echo("Quick start:")
-    click.echo("  python noah.py cluster create --name my-cluster")
-    click.echo("  python noah.py deploy all --domain my-domain.com")
+    click.echo("Quick start (GitOps):")
+    click.echo("  python3 noah.py cluster bootstrap --node <IP> --domain <domain> --flux-repo <url>")
+    click.echo("  python3 noah.py flux status")
     click.echo("")
     print_status("[SUCCESS] Setup completed successfully!", "SUCCESS")

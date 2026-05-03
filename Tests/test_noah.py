@@ -49,7 +49,7 @@ def test_cli_structure():
         # Test deploy help
         result = runner.invoke(noah.cli, ['deploy', '--help'])
         assert result.exit_code == 0
-        assert 'Deploy services to Kubernetes' in result.output
+        assert 'Imperative service deployment' in result.output
         print("✓ Deploy command help works")
         
     except Exception as e:

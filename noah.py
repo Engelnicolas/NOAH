@@ -4,9 +4,25 @@ NOAH - Network Operations & Automation Hub
 Main CLI for deploying and managing Kubernetes-based information systems
 """
 
-import click  # type: ignore
 import sys
 import os
+
+# Re-exec under the venv interpreter as soon as possible so all subsequent
+# imports see the venv's packages.  Skip when:
+#   - the venv doesn't exist yet (first run / setup initialize)
+#   - we're already running inside it (avoid infinite loop)
+def _bootstrap_venv():
+    from pathlib import Path
+    venv_python = Path(__file__).parent / ".venv" / "bin" / "python3"
+    if not venv_python.exists():
+        return
+    if os.path.realpath(sys.executable) == os.path.realpath(str(venv_python)):
+        return
+    os.execv(str(venv_python), [str(venv_python)] + sys.argv)
+
+_bootstrap_venv()
+
+import click  # type: ignore
 import json
 import yaml  # type: ignore
 import subprocess

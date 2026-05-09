@@ -13,19 +13,30 @@
   until: apiserver_health.rc == 0
   changed_when: false
 
-- name: Count Ready nodes
+- name: Wait for nodes to register with the API server
   shell: |
     KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
-      kubectl get nodes --no-headers | awk '$2=="Ready"{c++} END{print c+0}'
-  register: ready_nodes
+      kubectl get nodes --no-headers | wc -l
+  register: registered_nodes
+  retries: 24
+  delay: 10
+  until: (registered_nodes.stdout | trim | int) >= (expected_node_count | int)
   changed_when: false
 
-- name: Fail if Ready node count is below expectation
+- name: Fail if registered node count is below expectation
   fail:
     msg: >-
-      Expected at least {{ expected_node_count }} Ready node(s),
-      got {{ ready_nodes.stdout | trim }}.
-  when: (ready_nodes.stdout | trim | int) < (expected_node_count | int)
+      Expected at least {{ expected_node_count }} registered node(s),
+      got {{ registered_nodes.stdout | trim }}.
+      Check that K3s started correctly: journalctl -u k3s -n 50
+  when: (registered_nodes.stdout | trim | int) < (expected_node_count | int)
+
+- name: Show node readiness state (informational — nodes become Ready after Cilium is deployed by Flux)
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes --no-headers
+  register: node_list
+  changed_when: false
+  failed_when: false
 
 - name: List etcd members (HA only — non-fatal in single-node)
   shell: |
@@ -40,5 +51,7 @@
   debug:
     msg:
       - "API server: healthy"
-      - "Ready nodes: {{ ready_nodes.stdout | trim }} / {{ expected_node_count }}"
+      - "Registered nodes: {{ registered_nodes.stdout | trim }} / {{ expected_node_count }}"
+      - "Node status (NotReady is expected until Cilium is deployed by Flux):"
+      - "{{ node_list.stdout }}"
       - "etcd pods:  {{ etcd_pods.stdout | default('(none — single-node embedded etcd is in-process)') }}"

@@ -1,15 +1,11 @@
 #################################################################
-# NOAH .gitignore (refactored)
-#  - Consolidated duplicates
-#  - Added canonical secrets protection
-#  - Preserved encrypted/packaged artifacts ignore patterns
+# NOAH .gitignore
 #################################################################
 
 ############################
 # Python / Build Artifacts #
 ############################
 __pycache__/
-**/__pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
@@ -45,20 +41,27 @@ ENV/
 .envrc
 
 ############################
-# Configuration (unencrypted)
+# Configuration            #
+# Keep plaintext out;      #
+# re-allow encrypted ones, #
+# then block machine-      #
+# specific enc.yaml files. #
 ############################
 config.yaml
 config.yml
 secrets.yaml
 secrets.yml
-# Allow encrypted variants (except machine-specific config tied to local age key)
 !*.enc.yaml
 !*.enc.yml
 Config/config.enc.yaml
+Config/noah_cfg_tmp_*.enc.yaml
 Secrets/canonical-secrets.enc.yaml
 
 ############################
 # Canonical Secrets & Keys #
+# .sops.yaml is machine-   #
+# specific (tied to local  #
+# Age key) — not committed.#
 ############################
 Age/
 *.agekey
@@ -68,7 +71,6 @@ Age/
 # Ansible / Deployment     #
 ############################
 *.retry
-*.log
 .secret*
 vault_pass.txt
 Helm/*/secrets/
@@ -91,11 +93,6 @@ tmpcharts/
 *.dec.yaml
 *.dec.json
 *.dec.env
-Helm/samba4/secrets/*.yaml
-Helm/samba4/secrets/*.json
-Helm/samba4/secrets/*.env
-Helm/samba4/secrets/samba4-secrets.temp.yaml
-Helm/samba4/secrets/.temp-values.yaml
 Scripts/Secrets/canonical-secrets.yaml
 Scripts/Secrets/*.dec.yaml
 Scripts/Secrets/*.dec.json
@@ -105,7 +102,7 @@ Scripts/Secrets/temp-*
 Scripts/Secrets/secret-*.yaml
 Scripts/Secrets/secret-*.json
 Scripts/Secrets/secret-*.env
-Scripts/Secrets/*.log
+Scripts/Secrets/canonical-secrets.enc.yaml
 Scripts/Certificates/ca.srl
 Scripts/Certificates/ca.key
 Scripts/Certificates/ca.pem
@@ -114,15 +111,22 @@ Scripts/Certificates/*.crt
 Scripts/Certificates/*.key
 Scripts/Certificates/*.pem
 Scripts/Certificates/*.srl
-Scripts/Secrets/canonical-secrets.enc.yaml
 
 ############################
-# Legacy Encrypted Files (deprecated)
+# Kubeconfig (plaintext)   #
+# Commit the .enc.yaml     #
+# copy produced by         #
+# cluster bootstrap.       #
 ############################
-Helm/authentik/secrets/authentik-secret.enc.yaml
-Helm/authentik/secrets/authentik-secrets.enc.yaml
-Helm/cilium/secrets/cilium-secrets.enc.yaml
-Helm/samba4/secrets/samba4-secrets.enc.yaml
+Kube/noah-cluster.yaml
+
+############################
+# Generated GitOps output  #
+# Each gitops-<domain>/    #
+# dir is pushed to its own #
+# GitHub repo — not here.  #
+############################
+gitops-*/
 
 ############################
 # Certificates (private)   #
@@ -147,12 +151,7 @@ Thumbs.db
 *.bak
 *.tmp
 .claude/
-.claude/CLAUDE.md
-.claude/*
 
 #################################################################
 # END
 #################################################################
-
-docs/DEPLOYMENT_GUIDE.md
-Config/noah_cfg_tmp_*.enc.yaml

@@ -97,15 +97,11 @@ NOAH supports three DNS management approaches:
 
 **Example token:** `vPQP9K4jqZxJ7q6DXxxxxxxxxxxxxxXXXXXXXXXXX`
 
-**4. Store token in NOAH canonical store (recommended):**
+**4. Store token in NOAH canonical store:**
 
-```bash
-python3 Scripts/security/set_cloudflare_token.py 'your-token-here'
-```
+The token is configured interactively by the Cloudflare DNS wizard, which runs during `python3 noah.py setup initialize`. It is stored SOPS/Age-encrypted and reused automatically. `NOAH_EXTERNAL_DNS_ENABLED` defaults to `true` — no extra step needed after the wizard.
 
-The token is stored encrypted (SOPS/Age) and reused automatically by every deployment. `NOAH_EXTERNAL_DNS_ENABLED` defaults to `true` — no environment variables needed after this step.
-
-To use an environment variable instead:
+If you skipped the wizard (`--skip-dns-wizard`), export the token as an environment variable:
 ```bash
 export CLOUDFLARE_API_TOKEN='your-token-here'
 ```
@@ -118,11 +114,11 @@ export CLOUDFLARE_API_TOKEN='your-token-here'
 
 External-DNS is reconciled by FluxCD in **Phase 0** — before Cilium, Authentik, and Headlamp.
 
-**⚠️ IMPORTANT:** Store your Cloudflare token **before** running `cluster bootstrap` so FluxCD can read it from the canonical secrets store on first reconciliation.
+**⚠️ IMPORTANT:** Configure your Cloudflare token **before** running `cluster bootstrap`. It is set via the interactive wizard during `python3 noah.py setup initialize`. If you skipped the wizard, export `CLOUDFLARE_API_TOKEN` before bootstrapping:
 
 ```bash
-python3 Scripts/security/set_cloudflare_token.py 'your-token-here'
-python3 noah.py cluster bootstrap --node <IP> --domain yourdomain.com --flux-repo <url> ...
+export CLOUDFLARE_API_TOKEN='your-token-here'
+python3 noah.py cluster bootstrap --node 127.0.0.1 --domain yourdomain.com --flux-repo <url> ...
 ```
 
 ### Deploy Standalone
@@ -386,7 +382,7 @@ export NOAH_AUTHENTIK_DOMAIN="auth.external.com"
 | `NOAH_DOMAIN` | `noah-infra.com` | Global domain for all services |
 | `NOAH_EXTERNAL_DNS_ENABLED` | `true` | Enable automatic DNS |
 | `NOAH_EXTERNAL_DNS_POLICY` | `upsert-only` | DNS policy (`sync` or `upsert-only`) |
-| `CLOUDFLARE_API_TOKEN` | *(canonical store)* | Cloudflare API token — prefer `set_cloudflare_token.py` |
+| `CLOUDFLARE_API_TOKEN` | *(canonical store)* | Cloudflare API token — configured via wizard in `setup initialize` |
 | `KUBERNETES_CLUSTER_NAME` | *(derived from domain)* | external-dns TXT owner ID — set to differentiate instances |
 | `NOAH_AUTHENTIK_SUBDOMAIN` | `auth` | Authentik subdomain |
 | `NOAH_HEADLAMP_SUBDOMAIN` | `headlamp` | Headlamp subdomain |
@@ -400,7 +396,8 @@ export NOAH_AUTHENTIK_DOMAIN="auth.external.com"
 
 ```bash
 # Use upsert-only during migration to avoid touching existing records
-python3 Scripts/security/set_cloudflare_token.py 'your-token-here'
+# Token is configured via the Cloudflare wizard (setup initialize).
+# If skipped, export: export CLOUDFLARE_API_TOKEN='your-token-here'
 python noah.py deploy dns --domain yourdomain.com --policy upsert-only
 ```
 
@@ -431,7 +428,7 @@ Once confident external-dns works:
 ## Best Practices
 
 1. ✅ Consider **sync** policy for clean environments — TXT registry ensures only owned records are deleted; use `upsert-only` (default) when sharing a Cloudflare zone with other systems
-2. ✅ Store API token via `set_cloudflare_token.py` (SOPS-encrypted, not env var)
+2. ✅ Configure API token via the wizard in `setup initialize` (SOPS-encrypted, not env var)
 3. ✅ Use **scoped tokens** (never Global API keys)
 4. ✅ Monitor external-dns logs
 5. ✅ Test in staging first

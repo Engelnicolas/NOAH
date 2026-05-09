@@ -93,8 +93,7 @@ NOAH deploys a complete Kubernetes stack:
 ```bash
 # 1. One-time setup (dependency check, Age key generation, DNS token).
 git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
-python3 noah.py setup initialize
-python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
+python3 noah.py setup initialize   # interactive wizard configures Cloudflare token
 
 # 2. Prepare the GitOps repository automatically.
 #    The token is only needed to create and push to GitHub.
@@ -107,7 +106,7 @@ python3 noah.py setup gitops \
 # 3. Bootstrap K3s (single-node embedded etcd) + FluxCD (no token).
 #    NOAH generates an SSH deploy key and pauses for you to add it.
 python3 noah.py cluster bootstrap \
-  --node 192.168.1.10 \
+  --node 127.0.0.1 \
   --domain yourdomain.com \
   --flux-repo https://github.com/yourorg/noah-gitops \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
@@ -185,8 +184,7 @@ python3 noah.py setup gitops \
 The command prints the exact `cluster bootstrap` invocation to run next.
 
 **Prerequisites:**
-- `setup initialize` completed (Age keys + canonical secrets store present)
-- Cloudflare token stored: `python3 Scripts/security/set_cloudflare_token.py 'token'`
+- `setup initialize` completed (Age keys + canonical secrets store present; Cloudflare token configured via the wizard)
 - GitHub personal access token with `repo` scope — **optional**, only needed if using `--push` to auto-create/push the repo to GitHub
 
 ---
@@ -258,12 +256,12 @@ python3 noah.py password show-password
 
 **Prerequisites:** Domain on Cloudflare + API token (Zone → DNS → Edit, Zone → Zone → Read)
 
-**Store token once (persisted encrypted in canonical store):**
+**Configure token:** The Cloudflare DNS wizard runs interactively during `python3 noah.py setup initialize` and stores the token encrypted in the canonical store. If you skipped the wizard (`--skip-dns-wizard`), export the token as an environment variable before bootstrapping:
 ```bash
-python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
+export CLOUDFLARE_API_TOKEN='your-cloudflare-api-token'
 ```
 
-`NOAH_EXTERNAL_DNS_ENABLED` defaults to `true` — no env var needed after this.
+`NOAH_EXTERNAL_DNS_ENABLED` defaults to `true` — no extra step needed after the wizard.
 
 **Verify:**
 ```bash
@@ -350,10 +348,11 @@ python noah.py password show-password
 
 ### Password Management
 
-**Rotate password:**
+**Rotate password** (see [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) for the full workflow):
 ```bash
-python noah.py password new
-python noah.py deploy authentik --regenerate-password
+python3 noah.py password new
+python3 noah.py setup gitops --domain yourdomain.com --github-repo yourorg/noah-gitops --push
+python3 noah.py flux sync
 ```
 
 ---
@@ -418,7 +417,7 @@ python noah.py password show-password > backup-passwords.txt
 # Destroy and re-bootstrap
 python noah.py cluster destroy --force
 python3 noah.py cluster bootstrap \
-  --node 192.168.1.10 \
+  --node 127.0.0.1 \
   --domain yourdomain.com \
   --flux-repo https://github.com/yourorg/your-noah-gitops \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
@@ -442,7 +441,7 @@ python3 noah.py cluster bootstrap \
 ### Check Status
 
 ```bash
-python noah.py status
+python3 noah.py cluster status
 ```
 
 ### Manual Verification
@@ -470,7 +469,7 @@ kubectl top pods -A
 - ✅ Can login to Authentik
 - ✅ Headlamp shows cluster resources
 - ✅ Hubble UI shows network flows
-- ✅ `python noah.py status` shows healthy
+- ✅ `python3 noah.py cluster status` shows healthy
 
 ---
 
@@ -493,7 +492,7 @@ Pass `--validation-mode development` to skip some checks during bootstrap:
 
 ```bash
 python3 noah.py cluster bootstrap \
-  --node 192.168.1.10 \
+  --node 127.0.0.1 \
   --domain yourdomain.com \
   --flux-repo https://github.com/yourorg/your-noah-gitops \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \
@@ -520,14 +519,15 @@ python3 noah.py cluster bootstrap \
 
 ```bash
 # Check status
-python noah.py status
+python3 noah.py cluster status
 
 # View credentials
-python noah.py password show-password
+python3 noah.py password show-password
 
-# Rotate password
-python noah.py password new
-python noah.py deploy authentik --regenerate-password
+# Rotate password (see GITOPS_GUIDE.md)
+python3 noah.py password new
+python3 noah.py setup gitops --domain yourdomain.com --github-repo yourorg/noah-gitops --push
+python3 noah.py flux sync
 
 # Update NOAH
 git pull origin main

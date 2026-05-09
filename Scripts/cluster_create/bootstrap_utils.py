@@ -190,6 +190,34 @@ def _get_or_create_flux_deploy_key(key_file: Path) -> Tuple[str, str]:
     return key_file.read_text(), pub_file.read_text()
 
 
+def _encrypt_kubeconfig(project_root: Path, age_key_file: Path) -> None:
+    """SOPS-encrypt Kube/noah-cluster.yaml → Kube/noah-cluster.enc.yaml.
+
+    The plaintext file contains an EC private key and must not be committed.
+    The encrypted copy matches the .*\.enc\.yaml$ SOPS rule and the
+    !*.enc.yaml gitignore exception, so it is safe to commit.
+    """
+    import shutil
+    plain = project_root / "Kube" / "noah-cluster.yaml"
+    enc = project_root / "Kube" / "noah-cluster.enc.yaml"
+    if not plain.exists():
+        click.echo("[WARNING] Kube/noah-cluster.yaml not found — skipping kubeconfig encryption.", err=True)
+        return
+    shutil.copy2(plain, enc)
+    env = {**os.environ, "SOPS_AGE_KEY_FILE": str(age_key_file)}
+    result = subprocess.run(
+        ["sops", "--encrypt", "--in-place", str(enc)],
+        env=env, capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        click.echo("[SUCCESS] Kubeconfig encrypted → Kube/noah-cluster.enc.yaml (safe to commit)")
+        click.echo("[INFO]    Decrypt when needed:")
+        click.echo("          sops -d Kube/noah-cluster.enc.yaml > ~/.kube/config")
+    else:
+        enc.unlink(missing_ok=True)
+        click.echo(f"[WARNING] Could not encrypt kubeconfig: {result.stderr.strip()}", err=True)
+
+
 def run_bootstrap(
     *,
     node: Optional[str],
@@ -268,6 +296,8 @@ def run_bootstrap(
         env.setdefault("SOPS_AGE_KEY_FILE", str(age_key_file))
 
         result = subprocess.run(cmd, cwd=ansible_dir, env=env)
+        if result.returncode == 0:
+            _encrypt_kubeconfig(ansible_dir.parent, age_key_file)
         return result.returncode
 
 

@@ -48,8 +48,7 @@ NOAH is designed for various infrastructure scenarios:
 ```bash
 # 1. Clone and initialize
 git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
-python3 noah.py setup initialize
-python3 Scripts/security/set_cloudflare_token.py 'your-cloudflare-api-token'
+python3 noah.py setup initialize   # interactive wizard configures Cloudflare token
 
 # 2. Prepare and push the GitOps repository (one command)
 #    A GitHub token is only needed here to create/push the repo.
@@ -63,7 +62,7 @@ python3 noah.py setup gitops \
 # 3. Bootstrap K3s + FluxCD (no token — uses SSH deploy key)
 #    NOAH will pause and display a public key to add to your repo.
 python3 noah.py cluster bootstrap \
-  --node 192.168.1.10 \
+  --node 127.0.0.1 \
   --domain your-domain.com \
   --flux-repo https://github.com/yourorg/noah-gitops \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
@@ -149,10 +148,11 @@ After deployment, access services at:
 
 Get credentials: `python noah.py password show-password`
 
-Rotate password:
+Rotate password (GitOps — see [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) for details):
 ```bash
 python3 noah.py password new
-python3 noah.py deploy authentik --regenerate-password
+python3 noah.py setup gitops --domain your-domain.com --github-repo yourorg/noah-gitops --push
+python3 noah.py flux sync
 ```
 
 ## **Requirements**

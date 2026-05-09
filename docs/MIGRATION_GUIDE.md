@@ -95,7 +95,7 @@ git add -A && git commit -m 'Initial NOAH GitOps tree' && git push -u origin mai
 
 ```bash
 python noah.py cluster bootstrap \
-  --node 192.168.1.10 \
+  --node 127.0.0.1 \
   --domain example.com \
   --flux-repo https://github.com/acme-corp/noah-gitops \
   --ssh-user ubuntu \

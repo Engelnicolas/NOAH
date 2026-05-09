@@ -20,6 +20,39 @@ def check_command_exists(command):
         return False
 
 
+def ensure_ssh_key(print_status):
+    """Ensure ~/.ssh/id_ed25519 exists and is authorized for localhost SSH (idempotent)."""
+    ssh_dir = Path.home() / ".ssh"
+    key_path = ssh_dir / "id_ed25519"
+    pub_path = ssh_dir / "id_ed25519.pub"
+    authorized_keys = ssh_dir / "authorized_keys"
+
+    ssh_dir.mkdir(mode=0o700, exist_ok=True)
+
+    if not key_path.exists():
+        print_status("[INFO] No SSH key found at ~/.ssh/id_ed25519 — generating one...", "INFO")
+        result = subprocess.run(
+            ["ssh-keygen", "-t", "ed25519", "-f", str(key_path), "-N", "", "-C", "noah-localhost"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print_status(f"[ERROR] Failed to generate SSH key: {result.stderr.strip()}", "ERROR")
+            return
+        print_status("[SUCCESS] SSH key generated at ~/.ssh/id_ed25519", "SUCCESS")
+
+    pub_key = pub_path.read_text().strip()
+
+    existing = authorized_keys.read_text() if authorized_keys.exists() else ""
+    if pub_key not in existing:
+        with authorized_keys.open("a") as f:
+            f.write(pub_key + "\n")
+        print_status("[SUCCESS] SSH public key added to ~/.ssh/authorized_keys", "SUCCESS")
+    else:
+        print_status("[INFO] SSH key already authorized for localhost", "INFO")
+
+    authorized_keys.chmod(0o600)
+
+
 def _apt_lock_held() -> bool:
     """Return True if the dpkg frontend lock is currently held by another process."""
     locks = [
@@ -858,6 +891,9 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
             click.echo(f"  macOS:         brew install {' '.join(missing_deps)}")
             click.echo("")
     
+    # Ensure SSH key exists and is authorized for localhost (required for cluster bootstrap)
+    ensure_ssh_key(print_status)
+
     # Initialize NOAH
     print_status("[INFO] Initializing NOAH CLI...", "INFO")
     os.environ['PYTHONPATH'] = f"{os.getcwd()}:{os.environ.get('PYTHONPATH', '')}"

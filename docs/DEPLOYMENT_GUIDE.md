@@ -197,10 +197,11 @@ A single command provisions K3s, installs FluxCD, and points it at your GitOps r
 
 ```bash
 python3 noah.py cluster bootstrap \
-  --node 192.168.1.10 \
-  --domain yourdomain.com \
-  --flux-repo https://github.com/yourorg/your-noah-gitops \
-  --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
+  --node 127.0.0.1 \
+  --domain noah-infra.com \
+  --flux-repo https://github.com/Engelnicolas/noah-gitops.git \
+  --ssh-user ubuntu \
+  --ssh-key ~/.ssh/id_ed25519
 ```
 
 During the run, NOAH will pause and display an SSH public key. Add it as a **read-only deploy key** to your GitOps repository, then press Enter to continue. The key is saved to `Age/flux-deploy-key.pub` and reused on subsequent bootstraps — you only add it once.

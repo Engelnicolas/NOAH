@@ -798,6 +798,7 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
                 print_status(f"[WARNING]   - {warning}", "WARNING")
         
         # Ensure BPF filesystem is mounted (try to mount if needed)
+        is_root = os.getuid() == 0
         if is_root:
             ensure_bpf_filesystem(print_status)
         else:
@@ -815,7 +816,6 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
         print_status("[INFO] Checking external dependencies...", "INFO")
         external_deps = {
             'kubectl': 'Kubernetes CLI',
-            'helm': 'Helm package manager',
             'ansible': 'Infrastructure automation',
             'age': 'Encryption tool'
         }

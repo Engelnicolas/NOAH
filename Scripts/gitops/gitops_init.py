@@ -112,6 +112,7 @@ def _github_push(target_dir: Path, github_repo: str, github_token: str, print_st
     authed_url = f"https://x-access-token:{github_token}@github.com/{github_repo}.git"
 
     # Create repo via gh CLI if available and repo doesn't exist yet
+    repo_already_existed = False
     if shutil.which("gh"):
         check = subprocess.run(
             ["gh", "repo", "view", github_repo],
@@ -136,15 +137,25 @@ def _github_push(target_dir: Path, github_repo: str, github_token: str, print_st
                 raise RuntimeError(f"Failed to create GitHub repo:\n{result.stderr}")
             print_status(f"[SUCCESS] Repository {github_repo} created", "SUCCESS")
         else:
-            print_status(f"[INFO] Repository {github_repo} already exists", "INFO")
+            print_status(f"[INFO] Repository {github_repo} already exists — keeping it, updating content", "INFO")
+            repo_already_existed = True
     else:
         print_status("[WARNING] gh CLI not found — assuming repo already exists", "WARNING")
+        repo_already_existed = True
 
     _run(["git", "init", "-b", "main"], cwd=target_dir)
     _run(["git", "add", "."], cwd=target_dir)
-    _run(["git", "commit", "-m", "chore: initial NOAH GitOps configuration"], cwd=target_dir)
+    _run(["git", "commit", "-m", "chore: update NOAH GitOps configuration"], cwd=target_dir)
     _run(["git", "remote", "add", "origin", authed_url], cwd=target_dir)
-    _run(["git", "push", "-u", "origin", "main"], cwd=target_dir)
+
+    # When the remote already has commits, a regular push will be rejected as
+    # non-fast-forward. Force-push intentionally: the local tree (freshly built
+    # from the flux-repo template with updated secrets/key) is authoritative.
+    if repo_already_existed:
+        print_status("[INFO] Force-pushing updated configuration to existing repo...", "INFO")
+        _run(["git", "push", "-u", "--force", "origin", "main"], cwd=target_dir)
+    else:
+        _run(["git", "push", "-u", "origin", "main"], cwd=target_dir)
 
     return repo_url
 
@@ -172,7 +183,7 @@ def setup_gitops(
 
     # 1. Copy template
     if target_dir.exists():
-        print_status(f"[WARNING] {target_dir} already exists — removing and recreating", "WARNING")
+        print_status(f"[INFO] {target_dir} already exists — recreating from template", "INFO")
         shutil.rmtree(target_dir)
     shutil.copytree(flux_template, target_dir)
     print_status(f"[SUCCESS] Copied flux-repo template to {target_dir}", "SUCCESS")

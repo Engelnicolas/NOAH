@@ -80,6 +80,7 @@ class CloudflareWizard:
 
             self._zone_id, self._domain = self._prompt_zone(zones)
             self._persist()
+            self._persist_to_canonical_store()
             self._enable_external_dns()
             self._print_success()
             return True
@@ -286,6 +287,26 @@ class CloudflareWizard:
         finally:
             if tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
+
+    def _persist_to_canonical_store(self) -> None:
+        """Write the validated token into the canonical secrets store (same as set_cloudflare_token.py)."""
+        try:
+            from Scripts.security.canonical_store import get_canonical_store
+            from datetime import datetime, timezone
+
+            store = get_canonical_store(self.project_root)
+            store.ensure_service("cloudflare")
+            svc = store.data["services"]["cloudflare"]
+            svc["api_token"] = {
+                "value": self._token,
+                "version": (svc["api_token"]["version"] + 1) if isinstance(svc.get("api_token"), dict) else 1,
+                "rotated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            store.save()
+            print("[SUCCESS] Cloudflare token stored in canonical secrets store.")
+        except Exception as exc:
+            print(f"[WARNING] Could not write to canonical store: {exc}")
+            print("[INFO] Run 'python3 Scripts/security/set_cloudflare_token.py <token>' manually if needed.")
 
     def _persist_to_env(self) -> None:
         """Fall-back: export credentials as environment variables for the current process."""

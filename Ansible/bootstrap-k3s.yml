@@ -33,7 +33,7 @@
   become: yes
   gather_facts: yes
   vars:
-    k3s_version: "{{ k3s_version | default('v1.30.5+k3s1') }}"
+    k3s_version: "v1.30.5+k3s1"
     ha_mode: "{{ ha_mode | default(false) | bool }}"
   roles:
     - role: common
@@ -43,7 +43,7 @@
   become: yes
   gather_facts: yes
   vars:
-    k3s_version: "{{ k3s_version | default('v1.30.5+k3s1') }}"
+    k3s_version: "v1.30.5+k3s1"
     ha_mode: "{{ ha_mode | default(false) | bool }}"
     node1_ip: "{{ groups['k3s_primary'][0] }}"
   roles:
@@ -54,7 +54,7 @@
   become: yes
   gather_facts: yes
   vars:
-    k3s_version: "{{ k3s_version | default('v1.30.5+k3s1') }}"
+    k3s_version: "v1.30.5+k3s1"
     ha_mode: "{{ ha_mode | default(false) | bool }}"
     node1_ip: "{{ groups['k3s_primary'][0] }}"
   roles:

@@ -32,6 +32,7 @@
         --disable servicelb \
         --disable local-storage \
         --disable-network-policy \
+        --disable-kube-proxy \
         --flannel-backend=none \
         --tls-san "{{ node1_ip }}" \
         --node-ip "{{ ansible_default_ipv4.address }}" \

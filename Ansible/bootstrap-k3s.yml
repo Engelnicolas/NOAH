@@ -71,7 +71,16 @@
     - role: k3s-validate
     - role: kubeconfig
 
-- name: NOAH bootstrap — phase 5, FluxCD bootstrap on primary
+- name: NOAH bootstrap — phase 5, Cilium CNI pre-install (breaks Flux chicken-and-egg)
+  hosts: k3s_primary
+  become: yes
+  gather_facts: yes
+  vars:
+    node1_ip: "{{ groups['k3s_primary'][0] }}"
+  roles:
+    - role: cilium-preflight
+
+- name: NOAH bootstrap — phase 6, FluxCD bootstrap on primary
   hosts: k3s_primary
   become: yes
   gather_facts: no

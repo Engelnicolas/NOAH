@@ -84,6 +84,15 @@ def _wait_for_apt_lock(print_status=None, timeout: int = 120) -> None:
     # Timed out — proceed anyway; apt-get will fail with its own message if still locked.
 
 
+def _is_apt_package_installed(package_name: str) -> bool:
+    """Return True if the apt package is already installed at any version."""
+    result = subprocess.run(
+        ['dpkg-query', '-W', '-f=${Status}', package_name],
+        capture_output=True, text=True
+    )
+    return result.returncode == 0 and 'install ok installed' in result.stdout
+
+
 def _sudo_apt_install(packages: list, print_status=None) -> bool:
     """Install apt packages, prefixing with sudo when not root.
 
@@ -135,18 +144,19 @@ def install_external_dependency(package_name, print_status):
 
 
 def install_via_apt(package_name, print_status):
-    """Install package using apt package manager"""
+    """Install package using apt package manager, skipping if already installed."""
+    if _is_apt_package_installed(package_name):
+        print_status(f"[SUCCESS] {package_name} is already installed — skipping", "SUCCESS")
+        return True
+
     try:
-        # Check if running with sudo privileges
         if os.geteuid() != 0:
-            cmd = ['sudo', 'apt', 'update']
-            subprocess.run(cmd, check=True, capture_output=True)
+            subprocess.run(['sudo', 'apt', 'update'], check=True, capture_output=True)
             cmd = ['sudo', 'apt', 'install', '-y', package_name]
         else:
-            cmd = ['apt', 'update']
-            subprocess.run(cmd, check=True, capture_output=True)
+            subprocess.run(['apt', 'update'], check=True, capture_output=True)
             cmd = ['apt', 'install', '-y', package_name]
-        
+
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode == 0:
             print_status(f"[SUCCESS] {package_name} installed successfully", "SUCCESS")
@@ -154,7 +164,7 @@ def install_via_apt(package_name, print_status):
         else:
             print_status(f"[WARNING] Failed to install {package_name}: {result.stderr}", "WARNING")
             return False
-            
+
     except subprocess.CalledProcessError as e:
         print_status(f"[WARNING] Failed to install {package_name}: {e}", "WARNING")
         return False
@@ -675,10 +685,14 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
             print_status("[SUCCESS] age encryption tool already available", "SUCCESS")
 
         # Kernel headers for Cilium BPF
-        print_status("[INFO] Installing kernel headers for BPF compilation...", "INFO")
         kernel_version = subprocess.run(['uname', '-r'], capture_output=True, text=True).stdout.strip()
-        _sudo_apt_install([f'linux-headers-{kernel_version}'], print_status)
-        print_status("[SUCCESS] Kernel headers installed", "SUCCESS")
+        kernel_headers_pkg = f'linux-headers-{kernel_version}'
+        if _is_apt_package_installed(kernel_headers_pkg):
+            print_status(f"[SUCCESS] {kernel_headers_pkg} already installed — skipping", "SUCCESS")
+        else:
+            print_status("[INFO] Installing kernel headers for BPF compilation...", "INFO")
+            _sudo_apt_install([kernel_headers_pkg], print_status)
+            print_status("[SUCCESS] Kernel headers installed", "SUCCESS")
 
         # clang / llvm for BPF compilation
         if subprocess.run(['which', 'clang'], capture_output=True).returncode != 0:

@@ -69,7 +69,7 @@
        Add the following public key to your Git repository as a
        read-only deploy key, then press ENTER to continue.
 
-       GitHub:  {{ flux_repo | regex_replace('^ssh://git@github.com/', 'https://github.com/') | regex_replace('\\.git$', '') }}/settings/keys
+       GitHub:  {{ flux_repo | regex_replace('^ssh://git@github.com/', 'https://github.com/') | regex_replace('\.git$', '') }}/settings/keys
        GitLab:  repository → Settings → Repository → Deploy keys
 
       {{ flux_deploy_public_key }}
@@ -77,41 +77,25 @@
        Press ENTER once the deploy key has been added.
   when: deploy_key_is_new | default(true)
 
-- name: Extract SSH host from flux_repo
-  set_fact:
-    flux_ssh_host: "{{ flux_repo | regex_replace('^ssh://git@([^/]+)/.*', '\\1') }}"
-
-- name: Verify deploy key is accepted by the Git host (retry until confirmed)
+- name: Verify deploy key can access the Git repository (provider-agnostic)
   shell: |
-    ssh -i /tmp/flux-deploy-key \
-        -o StrictHostKeyChecking=no \
-        -o BatchMode=yes \
-        -o ConnectTimeout=10 \
-        git@{{ flux_ssh_host }} 2>&1 | grep -q "successfully authenticated" || \
-    ssh -i /tmp/flux-deploy-key \
-        -o StrictHostKeyChecking=no \
-        -o BatchMode=yes \
-        -o ConnectTimeout=10 \
-        git@{{ flux_ssh_host }} 2>&1; true
-  register: ssh_auth_check
+    GIT_SSH_COMMAND="ssh -i /tmp/flux-deploy-key -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10" \
+      git ls-remote --exit-code "{{ flux_repo }}" HEAD
+  register: git_auth_check
   retries: 10
   delay: 15
-  until: "'successfully authenticated' in ssh_auth_check.stdout or 'successfully authenticated' in ssh_auth_check.stderr"
+  until: git_auth_check.rc == 0
   changed_when: false
   failed_when: false
 
 - name: Fail if deploy key was never accepted after retries
   fail:
     msg: |
-      The deploy key was not accepted by {{ flux_ssh_host }} after multiple attempts.
-      Please add this public key to your repository deploy keys and re-run bootstrap:
+      Could not access {{ flux_repo }} with the deploy key after multiple attempts.
+      Please add this public key to your repository as a read-only deploy key, then re-run bootstrap:
 
       {{ flux_deploy_public_key }}
-
-      GitHub: {{ flux_repo | regex_replace('^ssh://git@github.com/', 'https://github.com/') | regex_replace('\\.git$', '') }}/settings/keys
-  when: >
-    'successfully authenticated' not in (ssh_auth_check.stdout | default('')) and
-    'successfully authenticated' not in (ssh_auth_check.stderr | default(''))
+  when: git_auth_check.rc != 0
 
 - name: Run flux bootstrap git (SSH, no token required)
   shell: |

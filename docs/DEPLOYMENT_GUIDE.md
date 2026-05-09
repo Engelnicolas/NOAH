@@ -5,8 +5,8 @@
 
 Deploy NOAH (Network Operations & Automation Hub) - a complete Kubernetes infrastructure with SSO authentication and web dashboards.
 
-> **What's new in v0.0.9** — K3s now uses embedded etcd (no more SQLite SPOF), and application services are reconciled by **FluxCD** from a Git repository. The legacy `noah deploy <service>` commands are deprecated; use `noah cluster bootstrap` to provision and `noah flux ...` to operate.
-> See [`MIGRATION_GUIDE.md`](MIGRATION_GUIDE.md) for the v0.0.8 → v0.0.9 upgrade and [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) for the day-to-day GitOps workflow.
+> **What's new in v0.0.8** — K3s now uses embedded etcd (no more SQLite SPOF), and application services are reconciled by **FluxCD** from a Git repository. The legacy `noah deploy <service>` commands are deprecated; use `noah cluster bootstrap` to provision and `noah flux ...` to operate.
+> See [`MIGRATION_GUIDE.md`](MIGRATION_GUIDE.md) for the v0.0.8 upgrade and [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) for the day-to-day GitOps workflow.
 
 ---
 
@@ -78,7 +78,7 @@ NOAH deploys a complete Kubernetes stack:
 
 ### Tools (auto-installed)
 - Python 3.8+
-- kubectl, helm, ansible
+- kubectl, FluxCD,ansible
 - age, sops (encryption)
 
 ### DNS Options

@@ -167,6 +167,160 @@ def _flux_ssh_url(flux_repo: str) -> str:
     return repo
 
 
+def _parse_git_url(flux_repo: str) -> Tuple[str, str, str]:
+    """Extract (host, owner, repo) from any common Git URL format.
+
+    Supports:
+      https://host/owner/repo[.git]
+      ssh://git@host/owner/repo[.git]
+      git@host:owner/repo[.git]
+    """
+    import re
+    repo = flux_repo.rstrip("/")
+    for pattern in [
+        r"(?:https?|ssh)://[^@]*@?([^/]+)/([^/]+)/([^/]+?)(?:\.git)?$",
+        r"git@([^:]+):([^/]+)/(.+?)(?:\.git)?$",
+    ]:
+        m = re.match(pattern, repo)
+        if m:
+            return m.group(1), m.group(2), m.group(3)
+    raise ValueError(f"Cannot parse host/owner/repo from git URL: {flux_repo!r}")
+
+
+def _detect_provider(host: str, hint: Optional[str] = None) -> str:
+    """Return the git provider name for a given host.
+
+    Known providers are detected automatically; pass *hint* to override
+    (useful for self-hosted GitLab or Gitea instances whose hostname does
+    not contain 'gitlab' or 'gitea').
+
+    Supported values: 'github', 'gitlab', 'gitea' (covers Forgejo too).
+    Unknown hosts default to 'gitea' because the Gitea/Forgejo API is a
+    superset of GitHub's repo-keys API and works for many self-hosted setups.
+    """
+    if hint:
+        return hint.lower().strip()
+    h = host.lower()
+    if "github.com" in h:
+        return "github"
+    if "gitlab.com" in h or "gitlab." in h:
+        return "gitlab"
+    if "bitbucket.org" in h:
+        return "bitbucket"
+    # Default: Gitea/Forgejo-compatible API (same shape as GitHub's for deploy keys)
+    return "gitea"
+
+
+def _register_deploy_key(
+    flux_repo: str,
+    git_token: str,
+    public_key: str,
+    provider_hint: Optional[str] = None,
+) -> bool:
+    """Register the SSH deploy key with any supported git provider.
+
+    Provider is auto-detected from the URL; pass *provider_hint* to force
+    a specific one ('github', 'gitlab', 'gitea') for self-hosted instances.
+
+    Returns True when the key is confirmed present (added or already there),
+    False on failure (caller falls back to the interactive manual prompt).
+    """
+    import json
+    import urllib.request
+    import urllib.error
+
+    KEY_TITLE = "NOAH FluxCD deploy key"
+    key_body = public_key.strip().split()[1]   # base64 portion for duplicate check
+
+    try:
+        host, owner, repo = _parse_git_url(flux_repo)
+    except ValueError as exc:
+        click.echo(f"[WARNING] {exc} — falling back to manual deploy-key prompt.", err=True)
+        return False
+
+    provider = _detect_provider(host, provider_hint)
+
+    # ── Build provider-specific API parameters ────────────────────────────
+    if provider == "github":
+        list_url   = f"https://api.github.com/repos/{owner}/{repo}/keys"
+        create_url = list_url
+        req_headers = {
+            "Authorization": f"token {git_token}",
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+        }
+        create_body = {"title": KEY_TITLE, "key": public_key.strip(), "read_only": True}
+        existing_key_field = "key"
+
+    elif provider == "gitlab":
+        encoded_path = f"{owner}%2F{repo}"
+        base = f"https://{host}/api/v4/projects/{encoded_path}/deploy_keys"
+        list_url = create_url = base
+        req_headers = {
+            "PRIVATE-TOKEN": git_token,
+            "Content-Type": "application/json",
+        }
+        create_body = {"title": KEY_TITLE, "key": public_key.strip(), "can_push": False}
+        existing_key_field = "key"
+
+    elif provider in ("gitea", "forgejo"):
+        base = f"https://{host}/api/v1/repos/{owner}/{repo}/keys"
+        list_url = create_url = base
+        req_headers = {
+            "Authorization": f"token {git_token}",
+            "Content-Type": "application/json",
+        }
+        create_body = {"title": KEY_TITLE, "key": public_key.strip(), "read_only": True}
+        existing_key_field = "key"
+
+    else:
+        click.echo(
+            f"[WARNING] Unsupported git provider '{provider}' — falling back to manual prompt.",
+            err=True,
+        )
+        return False
+
+    click.echo(f"[INFO] Registering deploy key via {provider} API ({host})…")
+
+    # ── Check for an existing identical key (idempotent re-runs) ─────────
+    try:
+        req = urllib.request.Request(list_url, headers=req_headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            existing = json.loads(resp.read())
+        if any(key_body in k.get(existing_key_field, "") for k in existing):
+            click.echo(f"[INFO] SSH deploy key already registered in {provider}.")
+            return True
+    except urllib.error.HTTPError as exc:
+        click.echo(
+            f"[WARNING] {provider} API list-keys returned {exc.code} — will attempt to add anyway.",
+            err=True,
+        )
+    except Exception as exc:
+        click.echo(f"[WARNING] {provider} API unreachable: {exc} — falling back to manual prompt.", err=True)
+        return False
+
+    # ── Register the key ──────────────────────────────────────────────────
+    try:
+        payload = json.dumps(create_body).encode()
+        req = urllib.request.Request(create_url, data=payload, headers=req_headers, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read())
+        click.echo(f"[SUCCESS] Deploy key registered in {provider} (id={result.get('id')}).")
+        return True
+    except urllib.error.HTTPError as exc:
+        if exc.code == 422:
+            click.echo(f"[INFO] Deploy key already present in {provider} (duplicate title).")
+            return True
+        click.echo(
+            f"[WARNING] {provider} API create-key returned {exc.code} — falling back to manual prompt.",
+            err=True,
+        )
+        return False
+    except Exception as exc:
+        click.echo(f"[WARNING] Could not register deploy key automatically: {exc}", err=True)
+        return False
+
+
 def _get_or_create_flux_deploy_key(key_file: Path) -> Tuple[str, str]:
     """Return (private_key_content, public_key_content), generating if needed.
 
@@ -233,6 +387,8 @@ def run_bootstrap(
     flux_path: str,
     force_reset: bool,
     ansible_dir: Path,
+    git_token: Optional[str] = None,
+    git_provider: Optional[str] = None,
 ) -> int:
     """Drive the bootstrap end-to-end. Returns the Ansible exit code."""
 
@@ -241,11 +397,26 @@ def run_bootstrap(
 
     age_payload = _load_age_private_key(age_key_file)
 
-    # SSH deploy key — generated once and reused across re-runs.
+    # Capture whether the key already exists BEFORE generating it so that
+    # deploy_key_is_new accurately reflects "the operator has never seen
+    # this key" rather than always being False (the key is created by
+    # _get_or_create_flux_deploy_key, so checking after generation is too late).
     deploy_key_file = age_key_file.parent / "flux-deploy-key"
+    key_was_new = not (deploy_key_file.exists() and
+                       deploy_key_file.with_suffix(".pub").exists())
     private_key, public_key = _get_or_create_flux_deploy_key(deploy_key_file)
 
+    # When a GitHub token is provided, register the deploy key automatically
+    # so the Ansible prompt can be skipped entirely.
     ssh_url = _flux_ssh_url(flux_repo)
+    if git_token:
+        registered = _register_deploy_key(flux_repo, git_token, public_key, git_provider)
+        # If registration succeeded the key is already in the provider — no prompt needed.
+        deploy_key_is_new = not registered
+    else:
+        # No token: show the manual prompt only when the key is genuinely new.
+        deploy_key_is_new = key_was_new
+
     inventory = _build_inventory(node_list, ha, ssh_user, ssh_key)
 
     extra_vars = {
@@ -257,8 +428,7 @@ def run_bootstrap(
         "age_private_key": age_payload,
         "flux_deploy_private_key": private_key,
         "flux_deploy_public_key": public_key,
-        "deploy_key_is_new": not (deploy_key_file.exists() and
-                                   deploy_key_file.with_suffix(".pub").exists()),
+        "deploy_key_is_new": deploy_key_is_new,
     }
     if k3s_version:
         extra_vars["k3s_version"] = k3s_version

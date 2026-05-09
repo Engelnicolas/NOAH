@@ -157,10 +157,19 @@ def destroy(ctx, name, force, keep_secrets):
               help='Override K3s version (default: pinned in the role)')
 @click.option('--force-reset', is_flag=True, default=False,
               help='Allow bootstrap on top of an existing K3s install (DESTRUCTIVE)')
+@click.option('--git-token', default=None, envvar=['GIT_TOKEN', 'GITHUB_TOKEN'],
+              help='API token for your git provider (GitHub/GitLab/Gitea) — '
+                   'auto-registers the SSH deploy key and skips the manual prompt. '
+                   'Also read from $GIT_TOKEN or $GITHUB_TOKEN.')
+@click.option('--git-provider', default=None,
+              type=click.Choice(['github', 'gitlab', 'gitea'], case_sensitive=False),
+              help='Force git provider for deploy-key API (auto-detected from URL by default). '
+                   'Use for self-hosted GitLab or Gitea instances.')
 @click.pass_context
 def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
-              ssh_user, ssh_key, age_key_file, k3s_version, force_reset):
-    """Provision K3s + bootstrap FluxCD against a GitOps repo (SSH, no token needed)."""
+              ssh_user, ssh_key, age_key_file, k3s_version, force_reset,
+              git_token, git_provider):
+    """Provision K3s + bootstrap FluxCD against a GitOps repo (SSH deploy key)."""
     rc = cluster_bootstrap(
         node=node,
         nodes=nodes,
@@ -175,6 +184,8 @@ def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
         flux_path=flux_path,
         force_reset=force_reset,
         ansible_dir=Path('Ansible').resolve(),
+        git_token=git_token,
+        git_provider=git_provider,
     )
     sys.exit(rc)
 

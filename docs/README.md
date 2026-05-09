@@ -59,13 +59,13 @@ python3 noah.py setup gitops \
   --github-repo yourorg/noah-gitops \
   --push
 
-# 3. Bootstrap K3s + FluxCD (no token — uses SSH deploy key)
-#    NOAH will pause and display a public key to add to your repo.
+# 3. Bootstrap K3s + FluxCD. GIT_TOKEN auto-registers the SSH deploy key.
 python3 noah.py cluster bootstrap \
   --node 127.0.0.1 \
   --domain your-domain.com \
   --flux-repo https://github.com/yourorg/noah-gitops \
-  --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
+  --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \
+  --git-token $GIT_TOKEN
 
 # 4. Watch FluxCD reconcile the stack (~25-45 min)
 python3 noah.py flux status

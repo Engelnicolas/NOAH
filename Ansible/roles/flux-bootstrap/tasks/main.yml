@@ -69,8 +69,14 @@
        Add the following public key to your Git repository as a
        read-only deploy key, then press ENTER to continue.
 
-       GitHub:  {{ flux_repo | regex_replace('^ssh://git@github.com/', 'https://github.com/') | regex_replace('\.git$', '') }}/settings/keys
-       GitLab:  repository → Settings → Repository → Deploy keys
+       GitHub   → {{ flux_repo | regex_replace('^ssh://git@github\.com/', 'https://github.com/') | regex_replace('\.git$', '') }}/settings/keys
+       GitLab   → repository ▸ Settings ▸ Repository ▸ Deploy keys
+       Gitea    → repository ▸ Settings ▸ Deploy Keys
+       Forgejo  → repository ▸ Settings ▸ Deploy Keys
+       Bitbucket→ repository ▸ Repository settings ▸ Access keys
+
+       Tip: pass --git-token to 'noah cluster bootstrap' next time
+            to register this key automatically.
 
       {{ flux_deploy_public_key }}
       ──────────────────────────────────────────────────────────────

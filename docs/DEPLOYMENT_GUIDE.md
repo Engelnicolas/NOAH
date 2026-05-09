@@ -103,13 +103,13 @@ python3 noah.py setup gitops \
   --github-repo yourorg/noah-gitops \
   --push
 
-# 3. Bootstrap K3s (single-node embedded etcd) + FluxCD (no token).
-#    NOAH generates an SSH deploy key and pauses for you to add it.
+# 3. Bootstrap K3s + FluxCD. GIT_TOKEN auto-registers the SSH deploy key.
 python3 noah.py cluster bootstrap \
   --node 127.0.0.1 \
   --domain yourdomain.com \
   --flux-repo https://github.com/yourorg/noah-gitops \
-  --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
+  --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \
+  --git-token $GIT_TOKEN
 
 # 4. Watch FluxCD reconcile the stack.
 python3 noah.py flux status
@@ -191,8 +191,22 @@ The command prints the exact `cluster bootstrap` invocation to run next.
 
 ### Step 3: Bootstrap Cluster
 
-A single command provisions K3s, installs FluxCD, and points it at your GitOps repository. No GitHub token is required — NOAH uses an SSH deploy key.
+A single command provisions K3s, installs FluxCD, and points it at your GitOps repository.
 
+**Recommended — automatic deploy key registration (no manual step):**
+```bash
+python3 noah.py cluster bootstrap \
+  --node 127.0.0.1 \
+  --domain noah-infra.com \
+  --flux-repo https://github.com/Engelnicolas/noah-gitops.git \
+  --ssh-user ubuntu \
+  --ssh-key ~/.ssh/id_ed25519 \
+  --git-token $GIT_TOKEN
+```
+
+When `--git-token` is provided (or `$GIT_TOKEN` / `$GITHUB_TOKEN` env var is set), NOAH registers the SSH deploy key automatically via the provider API and skips the interactive prompt. The provider is auto-detected from the URL (GitHub, GitLab, Gitea/Forgejo). For self-hosted instances use `--git-provider gitlab` or `--git-provider gitea` to force the correct API.
+
+**Without a token — manual deploy key step:**
 ```bash
 python3 noah.py cluster bootstrap \
   --node 127.0.0.1 \
@@ -202,7 +216,7 @@ python3 noah.py cluster bootstrap \
   --ssh-key ~/.ssh/id_ed25519
 ```
 
-During the run, NOAH will pause and display an SSH public key. Add it as a **read-only deploy key** to your GitOps repository, then press Enter to continue. The key is saved to `Age/flux-deploy-key.pub` and reused on subsequent bootstraps — you only add it once.
+NOAH will pause and display the SSH public key. Add it as a **read-only deploy key** at `https://github.com/<org>/<repo>/settings/keys`, then press Enter to continue. The key is saved to `Age/flux-deploy-key.pub` and reused on subsequent bootstraps.
 
 **What it does:**
 - Installs K3s with embedded etcd on the target node

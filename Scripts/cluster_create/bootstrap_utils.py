@@ -249,7 +249,7 @@ def _register_deploy_key(
             "Accept": "application/vnd.github.v3+json",
             "Content-Type": "application/json",
         }
-        create_body = {"title": KEY_TITLE, "key": public_key.strip(), "read_only": True}
+        create_body = {"title": KEY_TITLE, "key": public_key.strip(), "read_only": False}
         existing_key_field = "key"
 
     elif provider == "gitlab":
@@ -260,7 +260,7 @@ def _register_deploy_key(
             "PRIVATE-TOKEN": git_token,
             "Content-Type": "application/json",
         }
-        create_body = {"title": KEY_TITLE, "key": public_key.strip(), "can_push": False}
+        create_body = {"title": KEY_TITLE, "key": public_key.strip(), "can_push": True}
         existing_key_field = "key"
 
     elif provider in ("gitea", "forgejo"):
@@ -270,7 +270,7 @@ def _register_deploy_key(
             "Authorization": f"token {git_token}",
             "Content-Type": "application/json",
         }
-        create_body = {"title": KEY_TITLE, "key": public_key.strip(), "read_only": True}
+        create_body = {"title": KEY_TITLE, "key": public_key.strip(), "read_only": False}
         existing_key_field = "key"
 
     else:

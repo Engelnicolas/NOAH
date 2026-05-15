@@ -12,9 +12,31 @@ NOAH provides a complete infrastructure stack:
 - **📊 Headlamp Dashboard** - Kubernetes web UI with auto-provisioned Authentik SSO
 - **🔒 Canonical Secrets Store** - Single authoritative encrypted secrets file (Age/SOPS protected)
 - **🌍 Cloudflare DNS Wizard** - Interactive DNS automation setup (`setup initialize`)
-- **🚢 GitOps with FluxCD** - Continuous reconciliation from a Git repo with SOPS-encrypted secrets
+- **🚢 GitOps with FluxCD** - Continuous reconciliation from `gitops/` in this repo with SOPS-encrypted secrets
 - **🧪 Testing Suite** - Built-in validation and health checks
-- **🚀 CI/CD Ready** - GitHub Actions workflows included
+- **🚀 CI/CD Ready** - GitHub Actions workflows for Python (`ci-python.yml`) and GitOps (`ci-gitops.yml`)
+
+### Repository structure
+
+```
+NOAH/
+├── .github/workflows/
+│   ├── ci-python.yml       # lint, test, security scan (Python/Ansible)
+│   └── ci-gitops.yml       # YAML lint, kubeconform, Helm dry-run
+├── Scripts/                # Python orchestration modules
+├── Tests/                  # pytest test suite
+├── Ansible/                # K3s bootstrap roles
+├── docs/                   # documentation
+├── gitops/                 # FluxCD manifests (former noah-gitops repo)
+│   ├── clusters/production/
+│   │   ├── flux-system/    # Flux bootstrap manifests (gotk-sync, gotk-components)
+│   │   ├── apps.yaml
+│   │   ├── cert-manager-issuers.yaml
+│   │   └── infrastructure.yaml
+│   ├── apps/               # Authentik, Headlamp, Hubble
+│   └── infrastructure/     # cert-manager, Cilium, external-dns
+└── noah.py                 # NOAH CLI entry point
+```
 
 ### Documentation
 - [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) - end-to-end install
@@ -50,20 +72,12 @@ NOAH is designed for various infrastructure scenarios:
 git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
 python3 noah.py setup initialize   # interactive wizard configures Cloudflare token
 
-# 2. Prepare and push the GitOps repository (one command)
-#    A GitHub token is only needed here to create/push the repo.
-#    If you push manually, skip --push and --github-repo entirely.
-export GITHUB_TOKEN=ghp_xxx   # only needed for --push
-python3 noah.py setup gitops \
-  --domain your-domain.com \
-  --github-repo yourorg/noah-gitops \
-  --push
-
-# 3. Bootstrap K3s + FluxCD. GIT_TOKEN auto-registers the SSH deploy key.
+# 2. Bootstrap K3s + FluxCD — Flux is pointed at gitops/ in this repo.
+#    GIT_TOKEN auto-registers the SSH deploy key on Engelnicolas/NOAH.
 python3 noah.py cluster bootstrap \
   --node 127.0.0.1 \
   --domain your-domain.com \
-  --flux-repo https://github.com/yourorg/noah-gitops \
+  --flux-repo https://github.com/Engelnicolas/NOAH \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \
   --git-token $GIT_TOKEN
 
@@ -151,7 +165,7 @@ Get credentials: `python noah.py password show-password`
 Rotate password (GitOps — see [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) for details):
 ```bash
 python3 noah.py password new
-python3 noah.py setup gitops --domain your-domain.com --github-repo yourorg/noah-gitops --push
+# Commit & push updated gitops/ manifests, FluxCD reconciles automatically
 python3 noah.py flux sync
 ```
 

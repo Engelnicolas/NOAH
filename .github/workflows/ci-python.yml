@@ -1,0 +1,76 @@
+name: CI - Python
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'Scripts/**'
+      - 'Tests/**'
+      - 'noah.py'
+      - 'Scripts/utils/requirements.txt'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'Scripts/**'
+      - 'Tests/**'
+      - 'noah.py'
+      - 'Scripts/utils/requirements.txt'
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  lint-and-test:
+    name: Lint, security scan, and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install ruff bandit pytest pytest-cov -r Scripts/utils/requirements.txt
+
+      - name: Ruff lint
+        run: ruff check Scripts/ noah.py
+
+      - name: Security scan
+        run: bandit -r Scripts/ noah.py -ll
+
+      - name: Syntax check
+        run: |
+          python -m py_compile noah.py
+          find Scripts/ -name '*.py' -exec python -m py_compile {} \;
+
+      - name: Unit tests
+        run: pytest Tests/ -v --cov=Scripts --ignore=Tests/test_sso_network.py
+
+      - name: NOAH CLI smoke test
+        run: |
+          python noah.py --help
+          python noah.py --version
+          python noah.py setup --help
+
+  ansible-lint:
+    name: Ansible lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Ansible
+        run: pip install ansible ansible-lint
+
+      - name: Syntax check playbooks
+        run: |
+          for playbook in Ansible/*.yml; do
+            ansible-playbook --syntax-check "$playbook"
+          done
+
+      - name: Ansible lint
+        run: ansible-lint Ansible/ || true

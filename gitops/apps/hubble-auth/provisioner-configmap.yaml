@@ -1,0 +1,181 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-provisioner-script
+  namespace: authentik
+data:
+  authentik_provisioner.py: |
+    #!/usr/bin/env python3
+    """
+    Authentik SSO Provisioner for NOAH
+    Idempotently provisions OIDC providers and proxy applications in Authentik
+    via the REST API. Supports both Headlamp (OIDC) and Hubble UI (forward-auth proxy).
+    """
+
+    import os
+    import sys
+    import time
+    import json
+    import logging
+    from typing import Optional
+
+    try:
+        import requests
+    except ImportError:
+        print("[ERROR] 'requests' package not installed. Run: pip install requests", file=sys.stderr)
+        sys.exit(1)
+
+    logger = logging.getLogger(__name__)
+
+
+    class AuthentikProvisioner:
+        def __init__(self, authentik_url, api_token, verify_ssl=True, timeout=30):
+            self.base_url = authentik_url.rstrip("/")
+            self.api_url = f"{self.base_url}/api/v3"
+            self.timeout = timeout
+            self.verify_ssl = verify_ssl
+            self.session = requests.Session()
+            self.session.headers.update({
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            })
+
+        def wait_ready(self, max_retries=30, delay=10):
+            url = f"{self.base_url}/-/health/ready/"
+            for attempt in range(1, max_retries + 1):
+                try:
+                    resp = self.session.get(url, timeout=self.timeout, verify=self.verify_ssl)
+                    if resp.status_code in (200, 204):
+                        return True
+                except requests.RequestException:
+                    pass
+                time.sleep(delay)
+            return False
+
+        def _raise_for_status(self, resp):
+            if resp.status_code in (401, 403):
+                raise RuntimeError(f"Authentik API returned {resp.status_code}: invalid token.")
+            resp.raise_for_status()
+
+        def _get(self, path, params=None):
+            return self.session.get(f"{self.api_url}{path}", params=params,
+                                    timeout=self.timeout, verify=self.verify_ssl)
+
+        def _post(self, path, data):
+            return self.session.post(f"{self.api_url}{path}", json=data,
+                                     timeout=self.timeout, verify=self.verify_ssl)
+
+        def _patch(self, path, data):
+            return self.session.patch(f"{self.api_url}{path}", json=data,
+                                      timeout=self.timeout, verify=self.verify_ssl)
+
+        def _list_first(self, path, params):
+            resp = self._get(path, params=params)
+            self._raise_for_status(resp)
+            results = resp.json().get("results", [])
+            return results[0] if results else None
+
+        def get_authorization_flow(self, slug="default-provider-authorization-implicit-consent"):
+            flow = self._list_first("/flows/instances/", {"slug": slug})
+            if not flow:
+                resp = self._get("/flows/instances/", params={"designation": "authorization"})
+                self._raise_for_status(resp)
+                results = resp.json().get("results", [])
+                if not results:
+                    raise RuntimeError("No authorization flows found.")
+                flow = results[0]
+            return flow["pk"]
+
+        def get_default_outpost(self):
+            outpost = self._list_first("/outposts/instances/",
+                                       {"managed": "goauthentik.io/outposts/embedded"})
+            if not outpost:
+                resp = self._get("/outposts/instances/", params={"type": "proxy"})
+                self._raise_for_status(resp)
+                results = resp.json().get("results", [])
+                outpost = results[0] if results else None
+            return outpost
+
+        def get_or_create_proxy_provider(self, name, external_host, authorization_flow_pk,
+                                          mode="forward_single"):
+            existing = self._list_first("/providers/proxy/", {"name": name})
+            if existing:
+                return existing
+            resp = self._post("/providers/proxy/", {
+                "name": name,
+                "external_host": external_host,
+                "authorization_flow": authorization_flow_pk,
+                "mode": mode,
+                "access_token_validity": "hours=24",
+                "refresh_token_validity": "days=30",
+            })
+            self._raise_for_status(resp)
+            return resp.json()
+
+        def get_or_create_application(self, name, slug, provider_pk, meta_launch_url=""):
+            existing = self._list_first("/core/applications/", {"slug": slug})
+            if existing:
+                return existing
+            payload = {"name": name, "slug": slug, "provider": provider_pk}
+            if meta_launch_url:
+                payload["meta_launch_url"] = meta_launch_url
+            resp = self._post("/core/applications/", payload)
+            self._raise_for_status(resp)
+            return resp.json()
+
+        def add_provider_to_outpost(self, outpost, provider_pk):
+            current = outpost.get("providers", [])
+            if provider_pk in current:
+                return
+            resp = self._patch(f"/outposts/instances/{outpost['pk']}/",
+                               {"providers": list(current) + [provider_pk]})
+            self._raise_for_status(resp)
+
+        def provision_proxy_app(self, app_name, app_slug, external_host, mode="forward_single"):
+            auth_flow_pk = self.get_authorization_flow()
+            provider = self.get_or_create_proxy_provider(
+                name=f"{app_name} Provider",
+                external_host=external_host,
+                authorization_flow_pk=auth_flow_pk,
+                mode=mode,
+            )
+            application = self.get_or_create_application(
+                name=app_name, slug=app_slug,
+                provider_pk=provider["pk"], meta_launch_url=external_host,
+            )
+            outpost = self.get_default_outpost()
+            if outpost:
+                self.add_provider_to_outpost(outpost, provider["pk"])
+            return {"provider": provider, "application": application, "outpost": outpost}
+
+
+    if __name__ == "__main__":
+        import argparse
+        logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--service", required=True, choices=["hubble"])
+        parser.add_argument("--type", required=True, choices=["proxy"])
+        parser.add_argument("--external-host", required=True)
+        args = parser.parse_args()
+
+        url = os.environ.get("AUTHENTIK_URL", "")
+        token = os.environ.get("AUTHENTIK_BOOTSTRAP_TOKEN", "")
+        if not url or not token:
+            print("[ERROR] AUTHENTIK_URL and AUTHENTIK_BOOTSTRAP_TOKEN must be set", file=sys.stderr)
+            sys.exit(1)
+
+        p = AuthentikProvisioner(url, token)
+        if not p.wait_ready():
+            print("[ERROR] Authentik not ready", file=sys.stderr)
+            sys.exit(1)
+
+        if args.service == "hubble" and args.type == "proxy":
+            result = p.provision_proxy_app(
+                app_name="Hubble UI",
+                app_slug="hubble-ui",
+                external_host=args.external_host,
+            )
+            print(json.dumps({"status": "ok", "slug": result["application"]["slug"]}))

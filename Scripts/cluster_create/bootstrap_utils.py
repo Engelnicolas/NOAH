@@ -283,13 +283,32 @@ def _register_deploy_key(
     click.echo(f"[INFO] Registering deploy key via {provider} API ({host})…")
 
     # ── Check for an existing identical key (idempotent re-runs) ─────────
+    # For GitHub/Gitea/Forgejo: if the same key is already registered as
+    # read-only, delete it and re-add it with write access so Flux can push.
+    delete_url_template = None
+    if provider == "github":
+        delete_url_template = f"https://api.github.com/repos/{owner}/{repo}/keys/{{id}}"
+    elif provider in ("gitea", "forgejo"):
+        delete_url_template = f"https://{host}/api/v1/repos/{owner}/{repo}/keys/{{id}}"
+
     try:
         req = urllib.request.Request(list_url, headers=req_headers)
         with urllib.request.urlopen(req, timeout=15) as resp:
             existing = json.loads(resp.read())
-        if any(key_body in k.get(existing_key_field, "") for k in existing):
-            click.echo(f"[INFO] SSH deploy key already registered in {provider}.")
-            return True
+        match = next((k for k in existing if key_body in k.get(existing_key_field, "")), None)
+        if match:
+            needs_write = (
+                delete_url_template is not None
+                and match.get("read_only") is True
+            )
+            if needs_write:
+                click.echo(f"[INFO] Existing deploy key is read-only — deleting and re-adding with write access.")
+                del_url = delete_url_template.format(id=match["id"])
+                del_req = urllib.request.Request(del_url, headers=req_headers, method="DELETE")
+                urllib.request.urlopen(del_req, timeout=15).close()
+            else:
+                click.echo(f"[INFO] SSH deploy key already registered in {provider}.")
+                return True
     except urllib.error.HTTPError as exc:
         click.echo(
             f"[WARNING] {provider} API list-keys returned {exc.code} — will attempt to add anyway.",
@@ -319,6 +338,23 @@ def _register_deploy_key(
     except Exception as exc:
         click.echo(f"[WARNING] Could not register deploy key automatically: {exc}", err=True)
         return False
+
+
+def _key_is_accepted_by_remote(repo_url: str, key_file: Path) -> bool:
+    """Return True if the key authenticates successfully against the git remote."""
+    ssh_url = _flux_ssh_url(repo_url)
+    result = subprocess.run(
+        ["git", "ls-remote", "--exit-code", ssh_url, "HEAD"],
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_SSH_COMMAND": (
+                f"ssh -i {key_file} -o StrictHostKeyChecking=no "
+                "-o BatchMode=yes -o ConnectTimeout=10"
+            ),
+        },
+    )
+    return result.returncode == 0
 
 
 def _get_or_create_flux_deploy_key(key_file: Path) -> Tuple[str, str]:
@@ -414,8 +450,19 @@ def run_bootstrap(
         # If registration succeeded the key is already in the provider — no prompt needed.
         deploy_key_is_new = not registered
     else:
-        # No token: show the manual prompt only when the key is genuinely new.
-        deploy_key_is_new = key_was_new
+        # No token: prompt when the key is new OR when it's not accepted by the
+        # remote (e.g. operator deleted it from GitHub between runs).
+        if key_was_new:
+            deploy_key_is_new = True
+        else:
+            not_accepted = not _key_is_accepted_by_remote(flux_repo, deploy_key_file)
+            if not_accepted:
+                click.echo(
+                    "[WARNING] Deploy key exists locally but is not accepted by the remote. "
+                    "Please re-add it to the repository.",
+                    err=True,
+                )
+            deploy_key_is_new = not_accepted
 
     inventory = _build_inventory(node_list, ha, ssh_user, ssh_key)
 

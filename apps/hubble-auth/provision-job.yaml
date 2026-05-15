@@ -1,0 +1,45 @@
+---
+# Post-deploy Job that talks to the Authentik API to register Hubble UI
+# as a Proxy Provider (forward-auth flow). Idempotent — re-runs are
+# no-ops. Uses the bootstrap token Secret seeded with Authentik.
+#
+# This closes the v0.0.8 security gap where Hubble UI was reachable
+# without authentication. See spec §1.2 ("Hubble UI unauthenticated").
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authentik-provision-hubble
+  namespace: authentik
+  annotations:
+    # Re-run when the script changes (FluxCD will recreate the Job
+    # when the configmap hash changes).
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: provisioner
+          image: ghcr.io/goauthentik/python-cli:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              pip install --quiet requests
+              python /scripts/authentik_provisioner.py \
+                --service hubble \
+                --type proxy \
+                --external-host "https://hubble.noah-infra.com"
+          envFrom:
+            - secretRef:
+                name: authentik-bootstrap-token
+          volumeMounts:
+            - name: provisioner
+              mountPath: /scripts
+      volumes:
+        - name: provisioner
+          configMap:
+            name: authentik-provisioner-script
+            defaultMode: 0755

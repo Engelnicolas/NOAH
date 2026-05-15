@@ -1,0 +1,23 @@
+apiVersion: ENC[AES256_GCM,data:qUU=,iv:pBRKRSCS3mMkk7Z1Usl2QizSGDHyMZh4RUBR+qft5jI=,tag:cuGJiNoxmRXtEouZ+ZBnUg==,type:str]
+kind: ENC[AES256_GCM,data:GasKow/p,iv:+HUNlAj3OpLBqI0BzAgE/3rrbF63fwYhOUPqsSHy0S8=,tag:cQES1QSVTJa4NiYUiQv0Ug==,type:str]
+metadata:
+    name: ENC[AES256_GCM,data:j9Z/0wCD1iNMUYloLt/OJeeIaeYOH8P/jw==,iv:6jxnOKG2h2Kw1zj3CwU2gY+cpRBMyh3wiyH+jMV06XY=,tag:ugW/GVaFGknrvIRHIW4fiQ==,type:str]
+    namespace: ENC[AES256_GCM,data:maQjB0JSMs1K,iv:ZCUEbFfnh9elPqLffrJ6JYykM4OUWccqm2a5VqF7lN8=,tag:bcr1QNgPYcKZZ90z/qo4Vw==,type:str]
+stringData:
+    AUTHENTIK_TOKEN: ENC[AES256_GCM,data:2Lu/B9pZ5DeuciFVZXO5iQaQAfUNEhZCPzJX/XzLhWAt4apvhrWTBfIxa+lXOD2lpPg=,iv:TijEAEyNgixTR3bIO7U5hBIpJFDoAXE+hO+5DWtIlxI=,tag:h7D5HA4wnRhec/OmfxMPfg==,type:str]
+    AUTHENTIK_URL: ENC[AES256_GCM,data:bOnvm5ckrm1tZgHRGnGpnGuOLOBAZgPbjnPy,iv:EDYIMCwAiXCM8BPtgkDt93LsrvtcLlZB1oGJcCFZ2R8=,tag:fLUvcBU12qGCUElaJ7zQnw==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBoT0xHd25jRU1QWTUwc1BR
+            Tk0xNVNhV0Q0VGpCOTBvdDZwYjdHREZCRGxVCmFTdmZiNDB2ZDRIQ0NRSDJURlVG
+            dVRFYnR4bjBiMzJlbmJMcjJOaXBUTEUKLS0tIGMyQ1N4am5XSkJ5UFM5dkIvdEYy
+            VEVEbERrVGNRbjFPcXZSbG03d3hJVm8KpBqcU46BMtCTjK5QQ9BehTcbJRHVTQYq
+            VDXLHoo6qR7iwG13tEfjIiLW1ZsfXcHMJ8MgP4F1pftJ3zEVkppEoA==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1myvefml2hyy2ynfgj5vjlmlssqf2r0rz0g9qnk33mrqfmcmvjq6shq46x0
+    lastmodified: "2026-05-15T20:45:13Z"
+    mac: ENC[AES256_GCM,data:/JbXycfkwOJTpStBFqbPn7gDCfCC31LlwlOr/3TDyMKZQSC5cerYXbP60+MHSfcI5SXsey0beTEScHFQdNHBGQCRg65qtlmwxj1oAp+8hxjM9hupjqr7onuYas+mdDDyc4RAdzyK48Jpzr46E8VB/95PE8qmA1CA7Ts781obnrc=,iv:51eEe5Ii8td86DDfkD30+ve7DAWSs5X7bR2NLBjp1xk=,tag:yYzWjyzrtKDfGyqZDyLSZQ==,type:str]
+    unencrypted_suffix: _unencrypted
+    version: 3.13.0

@@ -1,0 +1,159 @@
+#################################################################
+# NOAH .gitignore
+#################################################################
+
+############################
+# Python / Build Artifacts #
+############################
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+develop-eggs/
+pip-wheel-metadata/
+*.manifest
+*.spec
+*.log
+*.sqlite3
+*.db
+
+############################
+# Virtual Environments     #
+############################
+.venv/
+env/
+venv/
+ENV/
+
+############################
+# Environment Files        #
+############################
+.env
+.env.*
+.envrc
+
+############################
+# Configuration            #
+# Keep plaintext out;      #
+# re-allow encrypted ones, #
+# then block machine-      #
+# specific enc.yaml files. #
+############################
+config.yaml
+config.yml
+secrets.yaml
+secrets.yml
+!*.enc.yaml
+!*.enc.yml
+Config/config.enc.yaml
+Config/noah_cfg_tmp_*.enc.yaml
+Secrets/canonical-secrets.enc.yaml
+
+############################
+# Canonical Secrets & Keys #
+# .sops.yaml is machine-   #
+# specific (tied to local  #
+# Age key) — not committed.#
+############################
+Age/
+*.agekey
+.sops.yaml
+
+############################
+# Ansible / Deployment     #
+############################
+*.retry
+.secret*
+vault_pass.txt
+Helm/*/secrets/
+
+############################
+# Helm                     #
+############################
+charts/*.tgz
+helmfile.lock
+tmpcharts/
+.chartcache/
+*.release.yaml
+.values.local.yaml
+.values.override.yaml
+*/.temp-*
+
+############################
+# Decrypted / Temp Secrets #
+############################
+*.dec.yaml
+*.dec.json
+*.dec.env
+Scripts/Secrets/canonical-secrets.yaml
+Scripts/Secrets/*.dec.yaml
+Scripts/Secrets/*.dec.json
+Scripts/Secrets/*.dec.env
+Scripts/Secrets/.temp-*
+Scripts/Secrets/temp-*
+Scripts/Secrets/secret-*.yaml
+Scripts/Secrets/secret-*.json
+Scripts/Secrets/secret-*.env
+Scripts/Secrets/canonical-secrets.enc.yaml
+Scripts/Certificates/ca.srl
+Scripts/Certificates/ca.key
+Scripts/Certificates/ca.pem
+Scripts/Certificates/ca.crt
+Scripts/Certificates/*.crt
+Scripts/Certificates/*.key
+Scripts/Certificates/*.pem
+Scripts/Certificates/*.srl
+
+############################
+# Kubeconfig (plaintext)   #
+# Commit the .enc.yaml     #
+# copy produced by         #
+# cluster bootstrap.       #
+############################
+Kube/noah-cluster.yaml
+
+############################
+# Kubeconfig (encrypted)   #
+############################
+Kube/noah-cluster.enc.yaml
+
+############################
+# Generated GitOps dirs    #
+############################
+gitops-*/
+
+############################
+# Certificates (private)   #
+############################
+Certificates/ca.srl
+Certificates/ca.key
+Certificates/ca.pem
+Certificates/ca.crt
+*.crt
+*.key
+*.pem
+
+############################
+# OS / Editor / Misc       #
+############################
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.bak
+*.tmp
+.claude/
+
+#################################################################
+# END
+#################################################################

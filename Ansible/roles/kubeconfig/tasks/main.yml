@@ -1,0 +1,28 @@
+---
+# NOAH role: kubeconfig
+# Fetches the K3s kubeconfig from the primary node, rewrites the
+# server URL so it points at the node's reachable IP (instead of the
+# default 127.0.0.1), and drops it under the operator's Kube directory.
+
+- name: Read k3s.yaml from primary node
+  slurp:
+    src: /etc/rancher/k3s/k3s.yaml
+  register: k3s_kubeconfig
+
+- name: Ensure local kubeconfig directory exists
+  file:
+    path: "{{ kubeconfig_local_dir | default(playbook_dir + '/../Kube') }}"
+    state: directory
+    mode: '0700'
+  delegate_to: localhost
+  become: no
+  run_once: true
+
+- name: Write kubeconfig locally with rewritten server address
+  copy:
+    dest: "{{ kubeconfig_local_dir | default(playbook_dir + '/../Kube') }}/{{ kubeconfig_filename | default('noah-cluster.yaml') }}"
+    mode: '0600'
+    content: "{{ k3s_kubeconfig['content'] | b64decode | regex_replace('https://127.0.0.1:6443', 'https://' ~ ansible_default_ipv4.address ~ ':6443') }}"
+  delegate_to: localhost
+  become: no
+  run_once: true

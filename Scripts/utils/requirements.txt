@@ -1,0 +1,77 @@
+# NOAH - Network Operations & Automation Hub
+# Python dependencies for deployment automation
+# Updated: May 2026 with latest stable versions
+
+# Core CLI framework
+click>=8.3.3
+
+# HTTP requests
+requests>=2.33.1
+
+# Configuration and data formats
+PyYAML>=6.0.3
+# Note: python-dotenv removed - NOAH now uses SOPS-encrypted YAML configuration
+
+# Kubernetes client library
+kubernetes>=35.0.0
+
+# Ansible for infrastructure automation
+ansible>=13.6.0
+ansible-core>=2.20.5
+
+# Cryptography and security
+cryptography>=48.0.0
+pycryptodome>=3.23.0
+
+# HTTP requests and web interactions
+urllib3>=2.7.0
+
+# Template rendering
+Jinja2>=3.1.6
+
+# Rich terminal output and formatting
+rich>=15.0.0
+typer>=0.25.1
+
+# Note: Helm is used as external binary, not Python package
+
+# Testing framework
+pytest>=9.0.3
+pytest-mock>=3.15.1
+
+# Development and code quality
+flake8>=7.3.0
+black>=26.3.1
+mypy>=2.0.0
+
+# Additional utilities
+setuptools>=82.0.1
+wheel>=0.47.0
+
+# Optional: Enhanced YAML handling
+ruamel.yaml>=0.19.1
+
+# Optional: Progress bars and CLI enhancements
+tqdm>=4.67.3
+colorama>=0.4.6
+
+# Optional: JSON schema validation
+jsonschema>=4.26.0
+
+# Optional: Date/time utilities
+python-dateutil>=2.9.0
+
+# Optional: Type checking helpers
+typing-extensions>=4.15.0
+
+# Optional: Performance and utilities
+attrs>=26.1.0
+packaging>=26.2
+
+# Development dependencies (optional)
+# Uncomment for development environment
+# pre-commit>=3.8.0
+# coverage>=7.6.0
+# pytest-cov>=6.0.0
+# sphinx>=8.1.0
+# sphinx-rtd-theme>=3.0.0

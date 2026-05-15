@@ -526,34 +526,23 @@ def reset(force):
         click.echo("Environment reset. Run 'python3 noah.py setup initialize' to start fresh.")
 
 @setup.command()
-@click.option('--domain',       required=True,  help='Your domain (replaces example.com throughout the repo)')
-@click.option('--target-dir',   default=None,   help='Where to write the prepared repo (default: ./gitops-<domain>)')
-@click.option('--github-repo',  default=None,   help='GitHub repo to create/push to, e.g. yourorg/noah-gitops')
-@click.option('--github-token', default=None,   envvar='GITHUB_TOKEN', help='GitHub personal access token (or set GITHUB_TOKEN)')
-@click.option('--push/--no-push', default=False, help='Push to GitHub after preparation (requires --github-repo)')
+@click.option('--domain', required=True, help='Your domain (replaces example.com / ${DOMAIN} throughout gitops/)')
 @click.pass_context
-def gitops(ctx, domain, target_dir, github_repo, github_token, push):
-    """Prepare the GitOps repository: copy template, fill secrets, encrypt, and optionally push to GitHub."""
+def gitops(ctx, domain):
+    """Prepare gitops/: substitute domain, fill secrets, encrypt. Then git push to GitHub."""
     from Scripts.gitops.gitops_init import setup_gitops
 
     project_root = Path(__file__).parent
-    resolved_target = Path(target_dir) if target_dir else project_root / f"gitops-{domain}"
 
     click.echo("🚀 NOAH GitOps Repository Setup")
     click.echo("=" * 35)
-    click.echo(f"  Domain     : {domain}")
-    click.echo(f"  Target dir : {resolved_target}")
-    if github_repo:
-        click.echo(f"  GitHub repo: {github_repo}")
+    click.echo(f"  Domain  : {domain}")
+    click.echo(f"  GitOps  : {project_root / 'gitops'}")
     click.echo("")
 
     try:
-        repo_url = setup_gitops(
+        setup_gitops(
             domain=domain,
-            target_dir=resolved_target,
-            github_repo=github_repo,
-            github_token=github_token,
-            push=push,
             project_root=project_root,
             print_status=print_status,
         )
@@ -562,16 +551,19 @@ def gitops(ctx, domain, target_dir, github_repo, github_token, push):
         sys.exit(1)
 
     click.echo("")
-    click.echo("✅ GitOps repository ready.")
+    click.echo("✅ GitOps directory ready.")
     click.echo("")
-    click.echo("Next step — bootstrap the cluster (no GitHub token needed):")
-    click.echo(f"  python3 noah.py cluster bootstrap \\")
-    click.echo(f"    --node <NODE-IP> \\")
-    click.echo(f"    --domain {domain} \\")
-    click.echo(f"    --flux-repo {repo_url} \\")
-    click.echo(f"    --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519")
-    click.echo(f"")
-    click.echo(f"NOAH will generate an SSH deploy key and pause for you to add it to your repo.")
+    click.echo("Next steps:")
+    click.echo("  1. Commit and push to GitHub so Flux can reconcile:")
+    click.echo("       git add gitops/ && git commit -m 'chore: update GitOps configuration'")
+    click.echo("       git push origin main")
+    click.echo("")
+    click.echo("  2. Bootstrap the cluster:")
+    click.echo(f"       python3 noah.py cluster bootstrap \\")
+    click.echo(f"         --node <NODE-IP> \\")
+    click.echo(f"         --domain {domain} \\")
+    click.echo(f"         --flux-repo ssh://git@github.com/<org>/NOAH \\")
+    click.echo(f"         --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519")
 
 @setup.command()
 def update_sops():

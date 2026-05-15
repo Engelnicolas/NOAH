@@ -22,7 +22,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: provisioner
-          image: ghcr.io/goauthentik/python-cli:latest
+          image: python:3.12-slim
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -35,6 +35,9 @@ spec:
           envFrom:
             - secretRef:
                 name: authentik-bootstrap-token
+          env:
+            - name: AUTHENTIK_URL
+              value: "http://authentik-server.authentik.svc.cluster.local"
           volumeMounts:
             - name: provisioner
               mountPath: /scripts

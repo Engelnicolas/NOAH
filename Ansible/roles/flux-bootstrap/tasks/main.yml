@@ -103,6 +103,17 @@
       {{ flux_deploy_public_key }}
   when: git_auth_check.rc != 0
 
+- name: Add flux-repo SSH host key to known_hosts
+  shell: |
+    host=$(echo "{{ flux_repo }}" | sed 's|ssh://[^@]*@\([^:/]*\).*|\1|')
+    mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    touch ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
+    ssh-keyscan -H "$host" 2>/dev/null >> ~/.ssh/known_hosts
+    sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+  args:
+    executable: /bin/bash
+  changed_when: false
+
 - name: Run flux bootstrap git (SSH, no token required)
   shell: |
     set -euo pipefail

@@ -19,6 +19,7 @@ All real work lives in the Ansible roles under Ansible/roles/.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -340,8 +341,55 @@ def _register_deploy_key(
         return False
 
 
+def _is_localhost(repo_url: str) -> bool:
+    """Return True when the repo URL points at the local machine."""
+    from urllib.parse import urlparse
+    host = urlparse(repo_url).hostname or ""
+    return host in ("localhost", "127.0.0.1", "::1")
+
+
+def _host_primary_ip() -> str:
+    """Return the primary non-loopback IP of this machine.
+
+    Flux runs inside a K3s pod so it can't reach 127.0.0.1 — it needs the
+    host's real interface IP.  We probe by connecting a UDP socket to a
+    public address (no traffic is sent) so the OS picks the preferred route.
+    """
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        return socket.gethostbyname(socket.gethostname())
+
+
+def _register_local_deploy_key(public_key: str) -> bool:
+    """Add the Flux deploy key to ~/.ssh/authorized_keys for local SSH access."""
+    ssh_dir = Path.home() / ".ssh"
+    ssh_dir.mkdir(mode=0o700, exist_ok=True)
+    authorized_keys = ssh_dir / "authorized_keys"
+    existing = authorized_keys.read_text() if authorized_keys.exists() else ""
+    if public_key.strip() in existing:
+        click.echo("[INFO] Flux deploy key already in ~/.ssh/authorized_keys")
+        return True
+    with authorized_keys.open("a") as f:
+        f.write(f"\n{public_key.strip()}\n")
+    authorized_keys.chmod(0o600)
+    click.echo("[SUCCESS] Flux deploy key added to ~/.ssh/authorized_keys")
+    return True
+
+
 def _key_is_accepted_by_remote(repo_url: str, key_file: Path) -> bool:
     """Return True if the key authenticates successfully against the git remote."""
+    if _is_localhost(repo_url):
+        pub = key_file.with_suffix(".pub")
+        if not pub.exists():
+            return False
+        authorized_keys = Path.home() / ".ssh" / "authorized_keys"
+        existing = authorized_keys.read_text() if authorized_keys.exists() else ""
+        return pub.read_text().strip() in existing
+
     ssh_url = _flux_ssh_url(repo_url)
     result = subprocess.run(
         ["git", "ls-remote", "--exit-code", ssh_url, "HEAD"],
@@ -383,9 +431,8 @@ def _get_or_create_flux_deploy_key(key_file: Path) -> Tuple[str, str]:
 def _encrypt_kubeconfig(project_root: Path, age_key_file: Path) -> None:
     """SOPS-encrypt Kube/noah-cluster.yaml → Kube/noah-cluster.enc.yaml.
 
-    The plaintext file contains an EC private key and must not be committed.
-    The encrypted copy matches the .*\.enc\.yaml$ SOPS rule and the
-    !*.enc.yaml gitignore exception, so it is safe to commit.
+    Both files contain cluster credentials and are excluded by .gitignore.
+    The encrypted copy exists as a local backup decryptable with the Age key.
     """
     import shutil
     plain = project_root / "Kube" / "noah-cluster.yaml"
@@ -400,12 +447,148 @@ def _encrypt_kubeconfig(project_root: Path, age_key_file: Path) -> None:
         env=env, capture_output=True, text=True,
     )
     if result.returncode == 0:
-        click.echo("[SUCCESS] Kubeconfig encrypted → Kube/noah-cluster.enc.yaml (safe to commit)")
+        click.echo("[SUCCESS] Kubeconfig encrypted → Kube/noah-cluster.enc.yaml")
         click.echo("[INFO]    Decrypt when needed:")
         click.echo("          sops -d Kube/noah-cluster.enc.yaml > ~/.kube/config")
     else:
         enc.unlink(missing_ok=True)
         click.echo(f"[WARNING] Could not encrypt kubeconfig: {result.stderr.strip()}", err=True)
+
+
+def _run_ansible_with_progress(cmd: list, cwd: Path, env: dict) -> int:
+    """Stream ansible-playbook output and render it as structured progress.
+
+    Parses PLAY / TASK / result lines from Ansible's default output and
+    prints a compact, icon-annotated view.  Errors are collected and
+    reprinted as a focused summary at the end.
+    """
+    _ANSI = re.compile(r"\x1b\[[0-9;]*m")
+    _RULE = "─" * 60
+
+    def _strip(line: str) -> str:
+        return _ANSI.sub("", line).rstrip()
+
+    TASK_ICONS = {
+        "ok":       ("✔", "green"),
+        "changed":  ("↺", "yellow"),
+        "skipping": ("⏩", "bright_black"),
+        "fatal":    ("✗", "red"),
+        "failed":   ("✗", "red"),
+        "censored": ("🔒", "bright_black"),
+    }
+
+    errors: list[dict] = []          # {phase, task, detail}
+    current_phase = ""
+    current_task = ""
+    phase_index = 0
+    in_fatal_block = False
+    fatal_lines: list[str] = []
+
+    def _flush_fatal():
+        nonlocal in_fatal_block, fatal_lines
+        if not in_fatal_block:
+            return
+        detail = "\n".join(fatal_lines).strip()
+        # Extract the human-readable message buried in the JSON-ish blob
+        for pattern in [r'"msg":\s*"([^"]+)"', r'stderr["\s:]+([^\n]{10,200})', r'(✗[^\n]+)']:
+            m = re.search(pattern, detail)
+            if m:
+                detail = m.group(1)
+                break
+        errors.append({"phase": current_phase, "task": current_task, "detail": detail})
+        in_fatal_block = False
+        fatal_lines = []
+
+    proc = subprocess.Popen(
+        cmd, cwd=cwd, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, bufsize=1,
+    )
+
+    for raw in proc.stdout:
+        line = _strip(raw)
+
+        # ── PLAY header ───────────────────────────────────────────────
+        if re.match(r"PLAY \[", line):
+            _flush_fatal()
+            in_fatal_block = False
+            phase_index += 1
+            current_phase = re.sub(r"\s*\*+$", "", line[6:]).strip(" []─")
+            click.echo(f"\n{_RULE}")
+            click.echo(click.style(f" Phase {phase_index}: {current_phase}", bold=True))
+            click.echo(_RULE)
+            continue
+
+        # ── TASK header ───────────────────────────────────────────────
+        if re.match(r"TASK \[", line):
+            _flush_fatal()
+            current_task = re.sub(r"\s*\*+$", "", line[5:]).strip(" []─")
+            # Shorten "role_name : task description" → keep both parts
+            continue
+
+        # ── Result lines ──────────────────────────────────────────────
+        result_match = re.match(r"(ok|changed|skipping|fatal|failed)\s*:\s*\[([^\]]+)\]", line)
+        if result_match:
+            _flush_fatal()
+            status = result_match.group(1)
+            icon, color = TASK_ICONS.get(status, ("·", "white"))
+            label = click.style(icon, fg=color, bold=(status in ("fatal", "failed")))
+            click.echo(f"  {label}  {current_task}")
+            if status in ("fatal", "failed"):
+                in_fatal_block = True
+                fatal_lines = [line]
+            continue
+
+        # ── censored (no_log) ─────────────────────────────────────────
+        if "censored:" in line and current_task:
+            _flush_fatal()
+            icon, color = TASK_ICONS["censored"]
+            click.echo(f"  {icon}  {current_task}  (output hidden — no_log)")
+            continue
+
+        # ── PLAY RECAP — flush before accumulating ────────────────────
+        if re.match(r"PLAY RECAP", line):
+            _flush_fatal()
+            continue
+
+        # ── accumulate fatal detail ───────────────────────────────────
+        if in_fatal_block:
+            fatal_lines.append(line)
+            continue
+
+        # ── recap host line  (host : ok=N changed=N …) ───────────────
+        recap = re.match(r"(\S+)\s+: ok=(\d+)\s+changed=(\d+)\s+\S+\s+failed=(\d+)", line)
+        if recap:
+            host, ok, changed, failed = recap.group(1), recap.group(2), recap.group(3), recap.group(4)
+            click.echo(
+                f"\n  host={host}  ok={ok}  changed={changed}  failed={click.style(failed, fg='red' if failed != '0' else 'green', bold=True)}"
+            )
+            continue
+
+        # ── skip noisy boilerplate ────────────────────────────────────
+        if re.match(r"\s*\*+\s*$|^Gathering Facts|^$", line):
+            continue
+
+        # ── anything else (warnings, skipped plays, etc.) ────────────
+        if line.strip():
+            click.echo(f"  {click.style('·', fg='bright_black')}  {line.strip()}")
+
+    proc.wait()
+
+    # ── Error summary ─────────────────────────────────────────────────
+    if errors:
+        click.echo(f"\n{_RULE}")
+        click.echo(click.style(f" {len(errors)} error(s) during bootstrap", fg="red", bold=True))
+        click.echo(_RULE)
+        for err in errors:
+            click.echo(f"  {click.style('✗', fg='red', bold=True)}  [{err['phase']}] {err['task']}")
+            if err["detail"]:
+                for detail_line in err["detail"].splitlines():
+                    click.echo(f"     {detail_line.strip()}")
+    else:
+        click.echo(f"\n{click.style('✔ All tasks completed successfully', fg='green', bold=True)}")
+
+    return proc.returncode
 
 
 def run_bootstrap(
@@ -442,16 +625,22 @@ def run_bootstrap(
                        deploy_key_file.with_suffix(".pub").exists())
     private_key, public_key = _get_or_create_flux_deploy_key(deploy_key_file)
 
-    # When a GitHub token is provided, register the deploy key automatically
-    # so the Ansible prompt can be skipped entirely.
     ssh_url = _flux_ssh_url(flux_repo)
-    if git_token:
+    if _is_localhost(flux_repo):
+        # Local SSH repo: add the deploy key to authorized_keys — no provider API needed.
+        _register_local_deploy_key(public_key)
+        deploy_key_is_new = False
+        # Flux runs inside a K3s pod and cannot reach 127.0.0.1 — replace with the
+        # host's real IP so the GitRepository source can connect from within the cluster.
+        host_ip = _host_primary_ip()
+        ssh_url = ssh_url.replace("127.0.0.1", host_ip).replace("localhost", host_ip)
+        click.echo(f"[INFO] Resolved local flux-repo URL to {ssh_url}")
+    elif git_token:
+        # Remote repo with token: register via provider API.
         registered = _register_deploy_key(flux_repo, git_token, public_key, git_provider)
-        # If registration succeeded the key is already in the provider — no prompt needed.
         deploy_key_is_new = not registered
     else:
-        # No token: prompt when the key is new OR when it's not accepted by the
-        # remote (e.g. operator deleted it from GitHub between runs).
+        # Remote repo, no token: prompt when key is new or rejected by remote.
         if key_was_new:
             deploy_key_is_new = True
         else:
@@ -511,11 +700,13 @@ def run_bootstrap(
         env = os.environ.copy()
         env.setdefault("ANSIBLE_HOST_KEY_CHECKING", "False")
         env.setdefault("SOPS_AGE_KEY_FILE", str(age_key_file))
+        env["ANSIBLE_NOCOLOR"] = "1"          # clean output for the parser
+        env["ANSIBLE_FORCE_COLOR"] = "0"
 
-        result = subprocess.run(cmd, cwd=ansible_dir, env=env)
-        if result.returncode == 0:
+        rc = _run_ansible_with_progress(cmd, cwd=ansible_dir, env=env)
+        if rc == 0:
             _encrypt_kubeconfig(ansible_dir.parent, age_key_file)
-        return result.returncode
+        return rc
 
 
 def run_add_nodes(

@@ -121,10 +121,12 @@ Scripts/Certificates/*.srl
 Kube/noah-cluster.yaml
 
 ############################
-# Generated GitOps output  #
-# Each gitops-<domain>/    #
-# dir is pushed to its own #
-# GitHub repo — not here.  #
+# Kubeconfig (encrypted)   #
+############################
+Kube/noah-cluster.enc.yaml
+
+############################
+# Generated GitOps dirs    #
 ############################
 gitops-*/
 

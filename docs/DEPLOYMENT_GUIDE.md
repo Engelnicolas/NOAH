@@ -97,11 +97,11 @@ python3 noah.py setup initialize   # interactive wizard configures Cloudflare to
 
 # 2. Prepare the GitOps repository automatically.
 #    The token is only needed to create and push to GitHub.
-export GITHUB_TOKEN=ghp_xxx   # only needed for --push
+export GITHUB_TOKEN=ghp_xxx   # only needed for 
 python3 noah.py setup gitops \
   --domain yourdomain.com \
-  --github-repo yourorg/noah-gitops \
-  --push
+  
+  
 
 # 3. Bootstrap K3s + FluxCD. GIT_TOKEN auto-registers the SSH deploy key.
 python3 noah.py cluster bootstrap \
@@ -174,18 +174,17 @@ The `setup gitops` command automates everything: it copies the `flux-repo/` temp
 python3 noah.py setup gitops --domain yourdomain.com
 
 # With automatic GitHub push (recommended)
-export GITHUB_TOKEN=ghp_xxx   # only needed for --push
+export GITHUB_TOKEN=ghp_xxx   # only needed for 
 python3 noah.py setup gitops \
   --domain yourdomain.com \
-  --github-repo yourorg/noah-gitops \
-  --push
+  
+  
 ```
 
 The command prints the exact `cluster bootstrap` invocation to run next.
 
 **Prerequisites:**
 - `setup initialize` completed (Age keys + canonical secrets store present; Cloudflare token configured via the wizard)
-- GitHub personal access token with `repo` scope — **optional**, only needed if using `--push` to auto-create/push the repo to GitHub
 
 ---
 
@@ -365,7 +364,7 @@ python noah.py password show-password
 **Rotate password** (see [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) for the full workflow):
 ```bash
 python3 noah.py password new
-python3 noah.py setup gitops --domain yourdomain.com --github-repo yourorg/noah-gitops --push
+python3 noah.py setup gitops --domain yourdomain.com
 python3 noah.py flux sync
 ```
 
@@ -540,7 +539,7 @@ python3 noah.py password show-password
 
 # Rotate password (see GITOPS_GUIDE.md)
 python3 noah.py password new
-python3 noah.py setup gitops --domain yourdomain.com --github-repo yourorg/noah-gitops --push
+python3 noah.py setup gitops --domain yourdomain.com
 python3 noah.py flux sync
 
 # Update NOAH

@@ -38,7 +38,7 @@ Run through this **before** you start the maintenance window.
 - [ ] GitOps repository created on GitHub (or GitLab) — empty is fine.
 - [ ] `Age/keys.txt` backed up to **two** locations.
 - [ ] **New in v0.0.9:** generate a backup Age key and add it to
-      `flux-repo/.sops.yaml` as a second recipient (see §"Age key
+      `gitops/.sops.yaml` as a second recipient (see §"Age key
       hardening" below).
 - [ ] Authentik PostgreSQL exported (`pg_dump` from the v0.0.8 pod).
 - [ ] All existing secrets re-encrypted with the new two-recipient
@@ -50,7 +50,7 @@ Run through this **before** you start the maintenance window.
 
 | # | Phase                        | Est. | What it does                                                                                                  |
 |---|------------------------------|------|---------------------------------------------------------------------------------------------------------------|
-| 0 | GitOps repo prep             | 2-3d | Copy `flux-repo/` into a new Git repo, replace placeholders, encrypt secrets, validate `.sops.yaml`.          |
+| 0 | GitOps repo prep             | 2-3d | Copy `gitops/` into a new Git repo, replace placeholders, encrypt secrets, validate `.sops.yaml`.          |
 | 1 | v0.0.8 backup                | 2 h  | `pg_dump` Authentik DB, archive `Config/`, snapshot the VM.                                                   |
 | 2 | K3s provisioning             | 30-90 min | `noah cluster bootstrap` — runs `bootstrap-k3s.yml` (OS prereqs → K3s init → [HA join] → validate). |
 | 3 | FluxCD bootstrap             | 30 min | Folded into phase 2; verify with `noah flux status`.                                                         |
@@ -71,12 +71,12 @@ inside it.
 ```bash
 # 1. Create an empty GitHub repo, e.g. acme-corp/noah-gitops.
 # 2. Copy the template tree.
-cp -R flux-repo/* /tmp/noah-gitops/
+cp -R gitops/* /tmp/noah-gitops/
 cd /tmp/noah-gitops
 git init && git remote add origin git@github.com:acme-corp/noah-gitops.git
 
 # 3. Replace placeholders:
-#    - flux-repo/.sops.yaml             → real Age recipients (×2)
+#    - gitops/.sops.yaml             → real Age recipients (×2)
 #    - apps/*/oidc-secret.enc.yaml      → real OIDC client secrets
 #    - apps/authentik/values-secret.enc.yaml → real bootstrap creds
 #    - infrastructure/*/cloudflare-secret.enc.yaml → real CF token
@@ -145,7 +145,7 @@ age-keygen -o backup-key.txt
 grep '^# public key:' backup-key.txt
 # → age1yyyyyyyy...
 
-# Add it to flux-repo/.sops.yaml:
+# Add it to gitops/.sops.yaml:
 #   age: >-
 #     age1xxxxxxx,    # primary (Age/keys.txt)
 #     age1yyyyyyy     # backup (offline)

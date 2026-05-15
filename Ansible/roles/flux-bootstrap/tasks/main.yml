@@ -1,0 +1,139 @@
+---
+# NOAH role: flux-bootstrap
+# Installs the FluxCD CLI, seeds the SOPS Age key, writes the SSH deploy
+# private key to a temp file, prompts the operator to add the public key
+# to the Git repository, then runs `flux bootstrap git` (SSH, no token).
+#
+# Re-runnable: flux bootstrap is idempotent.
+
+- name: Check whether the flux CLI is already installed
+  stat:
+    path: /usr/local/bin/flux
+  register: flux_binary
+
+- name: Install flux CLI
+  shell: |
+    set -euo pipefail
+    curl -s https://fluxcd.io/install.sh | bash
+  args:
+    executable: /bin/bash
+  when: not flux_binary.stat.exists
+
+- name: Wait for the cluster to accept kubectl from this node
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes
+  register: k3s_kubectl_check
+  retries: 10
+  delay: 6
+  until: k3s_kubectl_check.rc == 0
+  changed_when: false
+
+- name: Create flux-system namespace
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+      kubectl create namespace flux-system \
+        --dry-run=client -o yaml | \
+      KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Seed sops-age secret in flux-system namespace
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+      kubectl create secret generic sops-age \
+        --namespace=flux-system \
+        --from-literal=age.agekey="{{ age_private_key }}" \
+        --dry-run=client -o yaml | \
+      KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
+  args:
+    executable: /bin/bash
+  no_log: true
+  changed_when: false
+
+- name: Write SSH deploy private key to temp file on target node
+  copy:
+    content: "{{ flux_deploy_private_key }}"
+    dest: /tmp/flux-deploy-key
+    mode: "0600"
+  no_log: true
+
+- name: Prompt operator to add deploy key to Git repository
+  pause:
+    prompt: |
+
+      ──────────────────────────────────────────────────────────────
+       NOAH — FluxCD SSH deploy key
+      ──────────────────────────────────────────────────────────────
+
+       Add the following public key to your Git repository as a
+       read/write deploy key, then press ENTER to continue.
+
+       GitHub   → {{ flux_repo | regex_replace('^ssh://git@github\.com/', 'https://github.com/') | regex_replace('\.git$', '') }}/settings/keys
+       GitLab   → repository ▸ Settings ▸ Repository ▸ Deploy keys
+       Gitea    → repository ▸ Settings ▸ Deploy Keys
+       Forgejo  → repository ▸ Settings ▸ Deploy Keys
+       Bitbucket→ repository ▸ Repository settings ▸ Access keys
+
+       Tip: pass --git-token to 'noah cluster bootstrap' next time
+            to register this key automatically.
+
+      {{ flux_deploy_public_key }}
+      ──────────────────────────────────────────────────────────────
+       Press ENTER once the deploy key has been added.
+  when: deploy_key_is_new | default(true)
+
+- name: Verify deploy key can access the Git repository (provider-agnostic)
+  shell: |
+    GIT_SSH_COMMAND="ssh -i /tmp/flux-deploy-key -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10" \
+      git ls-remote --exit-code "{{ flux_repo }}" HEAD
+  register: git_auth_check
+  retries: 10
+  delay: 15
+  until: git_auth_check.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Fail if deploy key was never accepted after retries
+  fail:
+    msg: |
+      Could not access {{ flux_repo }} with the deploy key after multiple attempts.
+      Please add this public key to your repository as a read/write deploy key, then re-run bootstrap:
+
+      {{ flux_deploy_public_key }}
+  when: git_auth_check.rc != 0
+
+- name: Add flux-repo SSH host key to known_hosts
+  shell: |
+    host=$(echo "{{ flux_repo }}" | sed 's|ssh://[^@]*@\([^:/]*\).*|\1|')
+    mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    touch ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
+    ssh-keyscan -H "$host" 2>/dev/null >> ~/.ssh/known_hosts
+    sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Run flux bootstrap git (SSH, no token required)
+  shell: |
+    set -euo pipefail
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+      flux bootstrap git \
+        --url="{{ flux_repo }}" \
+        --branch="{{ flux_branch }}" \
+        --path="{{ flux_path }}" \
+        --private-key-file=/tmp/flux-deploy-key \
+        --components-extra=image-reflector-controller,image-automation-controller \
+        --silent
+  args:
+    executable: /bin/bash
+  register: flux_bootstrap_result
+
+- name: Remove SSH deploy private key from target node
+  file:
+    path: /tmp/flux-deploy-key
+    state: absent
+
+- name: Show flux bootstrap result tail
+  debug:
+    msg: "{{ flux_bootstrap_result.stdout_lines[-15:] | default([]) }}"

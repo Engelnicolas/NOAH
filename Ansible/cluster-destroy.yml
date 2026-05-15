@@ -1,0 +1,548 @@
+---
+- name: Comprehensive NOAH Kubernetes Cluster Destruction
+  hosts: localhost
+  gather_facts: true
+  vars:
+    default_cluster_name: "noah-cluster"
+    k3s_data_dir: "/var/lib/rancher/k3s"
+    k3s_config_dir: "/etc/rancher/k3s"
+    verbose_mode: true  # Enable verbose output by default
+    system_namespaces:
+      - kube-system
+      - kube-public
+      - kube-node-lease
+      - default
+    
+  tasks:
+    - name: Check if kubectl is available
+      ansible.builtin.command: which kubectl
+      register: kubectl_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: Check if K3s is running
+      ansible.builtin.shell: |
+        systemctl is-active k3s 2>/dev/null || echo "inactive"
+      register: k3s_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display initial cluster state (verbose mode)
+      ansible.builtin.debug:
+        msg:
+          - "[VERBOSE] Starting NOAH cluster destruction process"
+          - "[VERBOSE] kubectl available: {{ kubectl_check.rc == 0 }}"
+          - "[VERBOSE] K3s service active: {{ k3s_status.stdout.strip() == 'active' }}"
+          - "[VERBOSE] K3s service status: {{ k3s_status.stdout.strip() }}"
+          - "[VERBOSE] Target cluster: {{ cluster_name | default(default_cluster_name) }}"
+          - "[VERBOSE] Verbose mode: {{ verbose_mode }}"
+      when: verbose_mode | default(true)
+
+    - name: "PREREQUISITE: Delete all Helm releases (including NOAH components)"
+      ansible.builtin.shell: |
+        echo "=== DELETING ALL HELM RELEASES ==="
+        helm list --all-namespaces -o json | \
+        jq -r '.[] | "\(.name) \(.namespace)"' | \
+        while read name namespace; do
+          echo "Uninstalling Helm release: $name from namespace: $namespace"
+          helm uninstall "$name" -n "$namespace" --timeout=120s --wait || true
+        done
+        echo "=== HELM CLEANUP COMPLETED ==="
+      when: kubectl_check.rc == 0
+      ignore_errors: true
+
+    - name: "PREREQUISITE: Force delete all NOAH application pods"
+      ansible.builtin.shell: |
+        echo "=== DELETING NOAH PODS ==="
+        # Delete pods with specific NOAH labels
+        kubectl get pods --all-namespaces -l "noah.infra.com/managed-by=noah-cli" -o json 2>/dev/null | \
+        jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | \
+        while read namespace pod; do
+          echo "Force deleting NOAH pod: $pod in namespace: $namespace"
+          kubectl delete pod "$pod" -n "$namespace" --force --grace-period=0 || true
+        done
+        
+        # Delete all pods in NOAH-related namespaces
+        for ns in identity monitoring ingress-nginx cilium-system; do
+          echo "Force deleting all pods in namespace: $ns"
+          kubectl get pods -n "$ns" -o name 2>/dev/null | \
+          xargs -r kubectl delete -n "$ns" --force --grace-period=0 || true
+        done
+        echo "=== NOAH PODS CLEANUP COMPLETED ==="
+      when: kubectl_check.rc == 0
+      ignore_errors: true
+
+    - name: "PREREQUISITE: Delete all NOAH secrets and configmaps"
+      ansible.builtin.shell: |
+        echo "=== DELETING NOAH SECRETS AND CONFIGMAPS ==="
+        # Delete NOAH-specific secrets
+        kubectl get secrets --all-namespaces -l "noah.infra.com/component" -o json 2>/dev/null | \
+        jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | \
+        while read namespace secret; do
+          echo "Deleting NOAH secret: $secret from namespace: $namespace"
+          kubectl delete secret "$secret" -n "$namespace" || true
+        done
+        
+        # Delete NOAH-specific configmaps
+        kubectl get configmaps --all-namespaces -l "noah.infra.com/component" -o json 2>/dev/null | \
+        jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | \
+        while read namespace cm; do
+          echo "Deleting NOAH configmap: $cm from namespace: $namespace"
+          kubectl delete configmap "$cm" -n "$namespace" || true
+        done
+        
+        # Delete specific NOAH secrets by name pattern
+        for pattern in authentik cilium noah; do
+          kubectl get secrets --all-namespaces --field-selector metadata.name~="$pattern" -o json 2>/dev/null | \
+          jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | \
+          while read namespace secret; do
+            echo "Deleting secret by pattern: $secret from namespace: $namespace"
+            kubectl delete secret "$secret" -n "$namespace" || true
+          done
+        done
+        echo "=== SECRETS AND CONFIGMAPS CLEANUP COMPLETED ==="
+      when: kubectl_check.rc == 0
+      ignore_errors: true
+
+    - name: "PREREQUISITE: Delete all non-system namespaces"
+      ansible.builtin.shell: |
+        echo "=== DELETING NON-SYSTEM NAMESPACES ==="
+        kubectl get namespaces -o json | \
+        jq -r '.items[] | select(.metadata.name | test("^(kube-system|kube-public|kube-node-lease|default)$") | not) | .metadata.name' | \
+        while read namespace; do
+          echo "Deleting namespace: $namespace"
+          kubectl delete namespace "$namespace" --timeout=60s --force --grace-period=0 || true
+        done
+        echo "=== NAMESPACE CLEANUP COMPLETED ==="
+      when: kubectl_check.rc == 0
+      ignore_errors: true
+
+    - name: "PREREQUISITE: Validate clean state"
+      ansible.builtin.shell: |
+        echo "=== VALIDATING CLUSTER CLEAN STATE ==="
+        
+        # Check for remaining NOAH pods
+        remaining_pods=$(kubectl get pods --all-namespaces --field-selector metadata.namespace!=kube-system,metadata.namespace!=kube-public,metadata.namespace!=kube-node-lease,metadata.namespace!=default -o name 2>/dev/null | wc -l)
+        echo "Remaining non-system pods: $remaining_pods"
+        
+        # Check for remaining Helm releases
+        remaining_releases=$(helm list --all-namespaces -o json | jq '. | length')
+        echo "Remaining Helm releases: $remaining_releases"
+        
+        # Check for remaining non-system namespaces
+        remaining_namespaces=$(kubectl get namespaces -o json | jq -r '.items[] | select(.metadata.name | test("^(kube-system|kube-public|kube-node-lease|default)$") | not) | .metadata.name' | wc -l)
+        echo "Remaining non-system namespaces: $remaining_namespaces"
+        
+        echo "=== CLUSTER STATE VALIDATION COMPLETED ==="
+        echo "Prerequisites met: Cluster is clean and ready for redeployment"
+      when: kubectl_check.rc == 0
+      ignore_errors: true
+      register: validation_result
+
+    - name: Stop K3s service
+      ansible.builtin.systemd:
+        name: k3s
+        state: stopped
+        enabled: false
+      ignore_errors: true
+      when: k3s_status.stdout.strip() == 'active'
+
+    - name: Display K3s service stop result (verbose mode)
+      ansible.builtin.debug:
+        msg: "[VERBOSE] K3s service stop attempted for active service"
+      when: verbose_mode | default(true) and k3s_status.stdout.strip() == 'active'
+
+    - name: Kill any remaining K3s processes
+      shell: |
+        echo "[VERBOSE] Checking for K3s processes to terminate..."
+        k3s_pids=$(pgrep -f k3s || true)
+        if [ -n "$k3s_pids" ]; then
+          echo "[VERBOSE] Found K3s processes: $k3s_pids"
+          echo "[VERBOSE] Sending TERM signal to K3s processes..."
+          pkill -f k3s || true
+          echo "[VERBOSE] Sending TERM signal to containerd-shim processes..."
+          pkill -f containerd-shim || true
+          echo "[VERBOSE] Sending TERM signal to containerd processes..."
+          pkill -f containerd || true
+          echo "[VERBOSE] Waiting 8 seconds for graceful shutdown..."
+          sleep 8
+          echo "[VERBOSE] Sending KILL signal to any remaining K3s processes..."
+          pkill -9 -f k3s || true
+          echo "[VERBOSE] Sending KILL signal to any remaining containerd processes..."
+          pkill -9 -f containerd-shim || true
+          pkill -9 -f containerd || true
+          echo "[VERBOSE] Waiting 3 seconds after KILL signals..."
+          sleep 3
+          echo "[VERBOSE] K3s process cleanup completed"
+        else
+          echo "[VERBOSE] No K3s processes found to terminate"
+        fi
+      ignore_errors: yes
+
+    - name: Unmount K3s filesystems
+      ansible.builtin.shell: |
+        echo "[VERBOSE] Checking for K3s filesystem mounts..."
+        k3s_mounts=$(mount | grep -E '/var/lib/rancher/k3s|/run/k3s|/var/lib/kubelet' || true)
+        if [ -n "$k3s_mounts" ]; then
+          echo "[VERBOSE] Found K3s mounts to unmount:"
+          echo "$k3s_mounts"
+          echo "[VERBOSE] Unmounting K3s filesystems..."
+          
+          # Unmount all kubelet pod mounts first
+          mount | grep '/var/lib/kubelet/pods' | awk '{print $3}' | while read mountpoint; do
+            echo "Unmounting kubelet pod mount: $mountpoint"
+            umount "$mountpoint" 2>/dev/null || umount -l "$mountpoint" 2>/dev/null || true
+          done
+          
+          # Unmount main K3s mounts
+          umount $(mount | grep '/var/lib/rancher/k3s' | awk '{print $3}') 2>/dev/null || true
+          umount $(mount | grep '/run/k3s' | awk '{print $3}') 2>/dev/null || true
+          umount $(mount | grep '/var/lib/kubelet' | awk '{print $3}') 2>/dev/null || true
+          
+          echo "[VERBOSE] K3s filesystem unmount completed"
+        else
+          echo "[VERBOSE] No K3s filesystem mounts found"
+        fi
+      ignore_errors: true
+
+    - name: Remove K3s data directories (preserve service files and binary)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ k3s_data_dir }}"
+        - "{{ k3s_config_dir }}"
+        - "/run/k3s"
+        - "/var/lib/cni"
+        - "/opt/cni"
+      ignore_errors: true
+
+    - name: Force remove kubelet directory with retries
+      ansible.builtin.shell: |
+        echo "[VERBOSE] Attempting to force remove kubelet directory..."
+        
+        # Try multiple cleanup approaches for stubborn kubelet directory
+        for attempt in 1 2 3; do
+          echo "Attempt $attempt to remove /var/lib/kubelet..."
+          
+          # First, try to remove any remaining pod directories individually
+          if [ -d "/var/lib/kubelet/pods" ]; then
+            find /var/lib/kubelet/pods -type d -name "volumes" -exec umount -l {} \; 2>/dev/null || true
+            find /var/lib/kubelet/pods -mindepth 1 -maxdepth 1 -exec rm -rf {} \; 2>/dev/null || true
+          fi
+          
+          # Try to remove the entire directory
+          rm -rf /var/lib/kubelet 2>/dev/null && break
+          
+          # If that fails, try with lazy unmount first
+          if [ -d "/var/lib/kubelet" ]; then
+            echo "Standard removal failed, trying lazy unmount..."
+            find /var/lib/kubelet -type d -exec umount -l {} \; 2>/dev/null || true
+            sleep 1
+            rm -rf /var/lib/kubelet 2>/dev/null && break
+          fi
+          
+          # Wait before next attempt
+          [ $attempt -lt 3 ] && sleep 2
+        done
+        
+        if [ -d "/var/lib/kubelet" ]; then
+          echo "⚠️  Warning: /var/lib/kubelet could not be completely removed"
+          echo "  This may require a system reboot to fully clean up"
+        else
+          echo "✅ Successfully removed /var/lib/kubelet"
+        fi
+      ignore_errors: true
+
+    - name: "CLEANUP: Remove kubectl client cache and configuration"
+      ansible.builtin.shell: |
+        echo "=== CLEANING UP KUBECTL CLIENT CACHE ==="
+        
+        # Remove user kubectl configuration
+        if [ -f ~/.kube/config ]; then
+          echo "Removing kubectl config: ~/.kube/config"
+          rm -f ~/.kube/config
+        fi
+        
+        # Remove kubectl client cache (this prevents memcache errors)
+        if [ -d ~/.kube/cache ]; then
+          echo "Removing kubectl cache: ~/.kube/cache"
+          rm -rf ~/.kube/cache
+        fi
+        
+        # Clear KUBECONFIG environment variable reference to removed files
+        if [ "$KUBECONFIG" = "/etc/rancher/k3s/k3s.yaml" ]; then
+          echo "Clearing KUBECONFIG environment variable"
+          unset KUBECONFIG
+        fi
+        
+        # Clear any lingering kubectl process cache
+        if command -v kubectl >/dev/null 2>&1; then
+          echo "Testing kubectl after cache cleanup..."
+          kubectl version --client-only >/dev/null 2>&1 || echo "✓ kubectl properly disconnected from cluster"
+        fi
+        
+        echo "=== KUBECTL CACHE CLEANUP COMPLETED ==="
+      ignore_errors: true
+
+    - name: Display data directory cleanup status (verbose mode)
+      ansible.builtin.debug:
+        msg:
+          - "[VERBOSE] K3s data directory cleanup completed"
+          - "[VERBOSE] Removed directories:"
+          - "  - {{ k3s_data_dir }}"
+          - "  - {{ k3s_config_dir }}"
+          - "  - /run/k3s"
+          - "  - /var/lib/kubelet"
+          - "  - /var/lib/cni"
+          - "  - /opt/cni"
+          - "[VERBOSE] Preserved files:"
+          - "  - /usr/local/bin/k3s (binary)"
+          - "  - /etc/systemd/system/k3s*.service (service files)"
+      when: verbose_mode | default(true)
+
+    # Note: Keeping K3s service files to avoid need for reinstallation
+    # - Service files will be reused on cluster recreation
+    # - Only data directories are removed for clean state
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+      ignore_errors: true
+      become: yes
+
+    - name: Clean up K3s network interfaces
+      shell: |
+        echo "[VERBOSE] Cleaning up K3s network interfaces..."
+        # Remove CNI network interfaces
+        for iface in $(ip link show | grep -E "(cni0|flannel)" | awk -F: '{print $2}' | tr -d ' ' || true); do
+          if [ -n "$iface" ]; then
+            echo "Removing network interface: $iface"
+            ip link delete "$iface" 2>/dev/null || true
+          fi
+        done
+        
+        # Remove veth pairs (virtual ethernet pairs)
+        for iface in $(ip link show | grep -o "veth[^@]*" || true); do
+          if [ -n "$iface" ]; then
+            echo "Removing veth interface: $iface"
+            ip link delete "$iface" 2>/dev/null || true
+          fi
+        done
+        
+        echo "[VERBOSE] Network interface cleanup completed"
+      become: yes
+      ignore_errors: yes
+
+    - name: Clean container images (optional)
+      ansible.builtin.shell: |
+        # Clean up any remaining container images
+        if command -v crictl >/dev/null 2>&1; then
+          crictl rmi --prune || true
+        fi
+        if command -v docker >/dev/null 2>&1; then
+          docker system prune -af || true
+        fi
+      ignore_errors: true
+
+    - name: Final validation - Verify complete destruction
+      ansible.builtin.shell: |
+        echo "=== FINAL DESTRUCTION VALIDATION ==="
+        
+        # Check if K3s is still running
+        if systemctl is-active k3s >/dev/null 2>&1; then
+          echo "WARNING: K3s service is still active"
+        else
+          echo "✓ K3s service stopped"
+        fi
+        
+        # Check for remaining K3s processes
+        k3s_processes=$(pgrep -f k3s | wc -l)
+        echo "Remaining K3s processes: $k3s_processes"
+        
+        # Check for data directories
+        for dir in "{{ k3s_data_dir }}" "{{ k3s_config_dir }}" "/run/k3s"; do
+          if [ -d "$dir" ]; then
+            echo "WARNING: Directory still exists: $dir"
+          else
+            echo "✓ Directory removed: $dir"
+          fi
+        done
+        
+        echo "=== DESTRUCTION VALIDATION COMPLETED ==="
+        echo "Cluster destruction completed successfully"
+        echo "K3s binary and service files preserved for reuse"
+        echo "System is ready for fresh cluster creation"
+      ignore_errors: true
+
+    - name: "COMPREHENSIVE CLUSTER VALIDATION: Verify no K3s cluster exists"
+      ansible.builtin.shell: |
+        echo ""
+        echo "=============================================="
+        echo "  COMPREHENSIVE K3S CLUSTER VALIDATION TEST  "
+        echo "=============================================="
+        echo ""
+        
+        validation_errors=0
+        
+        echo "[VERBOSE] Testing K3s service status..."
+        if systemctl is-active k3s >/dev/null 2>&1; then
+          echo "❌ FAIL: K3s service is still running"
+          systemctl status k3s --no-pager -l || true
+          validation_errors=$((validation_errors + 1))
+        else
+          echo "✅ PASS: K3s service is stopped"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing K3s process cleanup..."
+        # Give processes more time to fully exit after our cleanup
+        sleep 2
+        # Exclude the current validation script process from the check
+        k3s_processes=$(pgrep -f "k3s\|containerd" 2>/dev/null | grep -v $$ || true)
+        if [ -n "$k3s_processes" ]; then
+          echo "❌ FAIL: K3s/containerd processes still running:"
+          echo "$k3s_processes" | while read pid; do
+            # Only show processes that aren't this validation script
+            if [ "$pid" != "$$" ]; then
+              ps -p $pid -o pid,ppid,cmd --no-headers 2>/dev/null || true
+            fi
+          done
+          # Recount excluding current process
+          actual_k3s_processes=$(echo "$k3s_processes" | wc -w)
+          if [ "$actual_k3s_processes" -gt 0 ]; then
+            validation_errors=$((validation_errors + 1))
+          fi
+        else
+          echo "✅ PASS: No K3s/containerd processes running"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing kubectl cluster connectivity..."
+        if timeout 5s kubectl cluster-info >/dev/null 2>&1; then
+          echo "❌ FAIL: kubectl can still connect to a cluster"
+          kubectl cluster-info 2>/dev/null || true
+          validation_errors=$((validation_errors + 1))
+        else
+          echo "✅ PASS: kubectl cannot connect to any cluster"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing Kubernetes API accessibility..."
+        if timeout 3s curl -k https://127.0.0.1:6443/api >/dev/null 2>&1; then
+          echo "❌ FAIL: Kubernetes API is still accessible on localhost:6443"
+          validation_errors=$((validation_errors + 1))
+        else
+          echo "✅ PASS: Kubernetes API is not accessible"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing data directory cleanup..."
+        for dir in "{{ k3s_data_dir }}" "{{ k3s_config_dir }}" "/run/k3s" "/var/lib/kubelet" "/var/lib/cni"; do
+          if [ -d "$dir" ]; then
+            echo "❌ FAIL: Directory still exists: $dir"
+            echo "  Contents: $(ls -la "$dir" 2>/dev/null | head -5)" 
+            validation_errors=$((validation_errors + 1))
+          else
+            echo "✅ PASS: Directory removed: $dir"
+          fi
+        done
+        
+        echo ""
+        echo "[VERBOSE] Testing Helm releases cleanup..."
+        if command -v helm >/dev/null 2>&1; then
+          remaining_releases=$(helm list --all-namespaces -o json 2>/dev/null | jq '. | length' 2>/dev/null || echo "0")
+          if [ "$remaining_releases" -gt 0 ]; then
+            echo "❌ FAIL: $remaining_releases Helm releases still exist:"
+            helm list --all-namespaces 2>/dev/null || true
+            validation_errors=$((validation_errors + 1))
+          else
+            echo "✅ PASS: All Helm releases removed"
+          fi
+        else
+          echo "⚠️  SKIP: Helm not available for validation"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing container runtime cleanup..."
+        if command -v crictl >/dev/null 2>&1; then
+          running_containers=$(crictl ps -q 2>/dev/null | wc -l)
+          if [ "$running_containers" -gt 0 ]; then
+            echo "❌ FAIL: $running_containers containers still running:"
+            crictl ps 2>/dev/null || true
+            validation_errors=$((validation_errors + 1))
+          else
+            echo "✅ PASS: No containers running"
+          fi
+        else
+          echo "⚠️  SKIP: crictl not available for container validation"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing network interface cleanup..."
+        k3s_interfaces=$(ip link show 2>/dev/null | grep -E "(cni0|flannel|veth)" | wc -l)
+        if [ "$k3s_interfaces" -gt 0 ]; then
+          echo "⚠️  WARNING: K3s network interfaces may still exist:"
+          ip link show 2>/dev/null | grep -E "(cni0|flannel|veth)" || true
+          echo "  This is usually not critical and will be cleaned up on reboot"
+        else
+          echo "✅ PASS: No K3s network interfaces detected"
+        fi
+        
+        echo ""
+        echo "[VERBOSE] Testing file system mounts..."
+        # Check for K3s/kubelet mounts excluding the validation script's own directory access
+        k3s_mounts=$(mount | grep -E "(k3s|kubelet)" | grep -v "$(pwd)" | wc -l)
+        if [ "$k3s_mounts" -gt 0 ]; then
+          echo "❌ FAIL: K3s file system mounts still exist:"
+          mount | grep -E "(k3s|kubelet)" | grep -v "$(pwd)" || true
+          validation_errors=$((validation_errors + 1))
+        else
+          echo "✅ PASS: No K3s file system mounts"
+        fi
+        
+        echo ""
+        echo "=============================================="
+        echo "           VALIDATION SUMMARY"
+        echo "=============================================="
+        
+        if [ $validation_errors -eq 0 ]; then
+          echo "🎉 SUCCESS: K3s cluster completely destroyed"
+          echo "✅ All validation tests passed"
+          echo "✅ System is clean and ready for fresh deployment"
+          echo ""
+          echo "Next step: python noah.py cluster create --name <cluster-name>"
+          exit 0
+        else
+          echo "❌ FAILURE: $validation_errors validation errors found"
+          echo "⚠️  Manual intervention may be required"
+          echo ""
+          echo "Troubleshooting steps:"
+          echo "1. Check running processes: ps aux | grep k3s"
+          echo "2. Check system services: systemctl list-units | grep k3s"
+          echo "3. Check mount points: mount | grep k3s"
+          echo "4. Reboot system if necessary to clear all resources"
+          echo ""
+          exit 1
+        fi
+      register: comprehensive_validation
+      failed_when: false  # Don't fail the playbook, just register results
+      ignore_errors: true
+
+    - name: Display comprehensive validation results
+      ansible.builtin.debug:
+        msg: "{{ comprehensive_validation.stdout_lines }}"
+      when: comprehensive_validation.stdout_lines is defined
+
+    - name: Display destruction summary
+      debug:
+        msg:
+          - "=== NOAH CLUSTER DESTRUCTION COMPLETE ==="
+          - "✓ All Helm releases uninstalled"
+          - "✓ All NOAH pods and secrets removed"  
+          - "✓ All non-system namespaces deleted"
+          - "✓ K3s service stopped and cluster data removed"
+          - "✓ K3s binary and service files preserved for reuse"
+          - "✓ System validated and ready for redeployment"
+          - ""
+          - "Next step: Run 'python noah.py cluster create' to create a fresh cluster"

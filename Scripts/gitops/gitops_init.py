@@ -79,16 +79,22 @@ def _get_or_generate_secrets(project_root: Path, domain: str) -> dict:
             "Run: python3 Scripts/security/set_cloudflare_token.py 'your-token'"
         )
 
+    def _ys(v: str) -> str:
+        """Return a YAML-safe single-quoted scalar for embedding in a YAML block."""
+        return "'" + v.replace("'", "''") + "'"
+
     return {
+        # Plain values — used in Kubernetes Secret stringData fields (not nested YAML)
         "REPLACE_WITH_CLOUDFLARE_TOKEN":       cf_token,
-        "REPLACE_WITH_50_CHAR_SECRET":         auth.get("secret_key", ""),
-        "REPLACE_WITH_ADMIN_PASSWORD":         auth.get("bootstrap_password", ""),
-        "REPLACE_WITH_BOOTSTRAP_TOKEN":        auth.get("bootstrap_token", ""),
-        "REPLACE_WITH_POSTGRES_PASSWORD":      auth.get("postgresql_password", ""),
-        "REPLACE_WITH_POSTGRES_ROOT_PASSWORD": auth.get("postgresql_password", ""),
         "REPLACE_WITH_OIDC_CLIENT_ID":         headlamp.get("oidc_client_id", "headlamp"),
         "REPLACE_WITH_OIDC_CLIENT_SECRET":     headlamp.get("oidc_client_secret", ""),
+        "REPLACE_WITH_BOOTSTRAP_TOKEN":        auth.get("bootstrap_token", ""),
         "admin@example.com":                   f"admin@{domain}",
+        # YAML-quoted values — embedded inside a `values.yaml: |` block (nested YAML)
+        "REPLACE_WITH_50_CHAR_SECRET":         _ys(auth.get("secret_key", "")),
+        "REPLACE_WITH_ADMIN_PASSWORD":         _ys(auth.get("bootstrap_password", "")),
+        "REPLACE_WITH_POSTGRES_PASSWORD":      _ys(auth.get("postgresql_password", "")),
+        "REPLACE_WITH_POSTGRES_ROOT_PASSWORD": _ys(auth.get("postgresql_password", "")),
     }
 
 

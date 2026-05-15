@@ -8,12 +8,12 @@ spec:
   dependsOn:
     - name: infrastructure
   interval: 10m
-  path: ./infrastructure/cert-manager-issuers
+  path: ./gitops/infrastructure/cert-manager-issuers
   prune: true
   retryInterval: 2m
   sourceRef:
     kind: GitRepository
-    name: flux-system
+    name: noah
   decryption:
     provider: sops
     secretRef:

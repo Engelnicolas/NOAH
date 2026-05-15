@@ -9,12 +9,12 @@ spec:
     - name: infrastructure
     - name: cert-manager-issuers
   interval: 10m
-  path: ./apps
+  path: ./gitops/apps
   prune: true
   retryInterval: 2m
   sourceRef:
     kind: GitRepository
-    name: flux-system
+    name: noah
   decryption:
     provider: sops
     secretRef:

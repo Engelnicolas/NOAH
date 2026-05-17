@@ -194,7 +194,9 @@ metadata:
   namespace: authentik
 type: Opaque
 stringData:
-  token: REPLACE_WITH_BOOTSTRAP_TOKEN
+  # Key name matches the AUTHENTIK_TOKEN env var the inline provisioner
+  # script (authentik-provisioner-script ConfigMap) reads via `envFrom`.
+  AUTHENTIK_TOKEN: REPLACE_WITH_BOOTSTRAP_TOKEN
 """,
     "apps/authentik/values-secret.enc.yaml": """\
 apiVersion: v1

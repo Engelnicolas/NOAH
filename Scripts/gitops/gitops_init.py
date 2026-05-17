@@ -51,13 +51,41 @@ creation_rules:
     (target_dir / ".sops.yaml").write_text(content)
 
 
-def _substitute_domain(text: str, domain: str) -> str:
+def _infer_previous_domain(gitops_dir: Path, current_domain: str) -> Optional[str]:
+    """Scan plain .yaml files for an `admin@<domain>` pattern to recover the
+    previously-used domain when the canonical store doesn't have one yet —
+    handles the migration case where existing files were filled with some
+    domain before this rotation feature existed. Returns a value only when
+    exactly one candidate domain (other than example.com or the current
+    --domain) appears across the tree, to avoid guessing under ambiguity."""
+    import re
+    pattern = re.compile(r"admin@([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})")
+    candidates: set[str] = set()
+    for yaml_file in gitops_dir.rglob("*.yaml"):
+        if yaml_file.name.endswith(".enc.yaml"):
+            continue
+        for m in pattern.finditer(yaml_file.read_text()):
+            d = m.group(1)
+            if d not in ("example.com", current_domain):
+                candidates.add(d)
+    return next(iter(candidates)) if len(candidates) == 1 else None
+
+
+def _substitute_domain(text: str, domain: str, previous_domain: Optional[str] = None) -> str:
+    # `previous_domain` handles re-runs with a new --domain after the file was
+    # already filled with a different one. Substitute the email form first so
+    # the bare-domain rule doesn't mangle anything unexpected.
+    if previous_domain and previous_domain != domain:
+        text = text.replace(f"admin@{previous_domain}", f"admin@{domain}")
+        text = text.replace(previous_domain, domain)
     text = text.replace("example.com", domain)
     text = text.replace("${DOMAIN}", domain)
     return text
 
 
-def _get_or_generate_secrets(project_root: Path, domain: str) -> dict:
+def _get_or_generate_secrets(
+    project_root: Path, domain: str, previous_domain: Optional[str] = None
+) -> dict:
     """Return all secrets needed to fill the enc.yaml placeholders."""
     from Scripts.security.canonical_store import get_canonical_store
     from Scripts.security.security_manager import NoahSecurityManager
@@ -83,7 +111,17 @@ def _get_or_generate_secrets(project_root: Path, domain: str) -> dict:
         """Return a YAML-safe single-quoted scalar for embedding in a YAML block."""
         return "'" + v.replace("'", "''") + "'"
 
-    return {
+    replacements: dict[str, str] = {}
+
+    # Domain rotation: if a previous run wrote a different domain, swap it for
+    # the new one before the standard `example.com` rule (which has nothing
+    # left to match once a file has already been filled with a real domain).
+    # Email form first so a `<prev> → <new>` pass doesn't have to know about it.
+    if previous_domain and previous_domain != domain:
+        replacements[f"admin@{previous_domain}"] = f"admin@{domain}"
+        replacements[previous_domain] = domain
+
+    replacements.update({
         # Plain values — used in Kubernetes Secret stringData fields (not nested YAML)
         "REPLACE_WITH_CLOUDFLARE_TOKEN":       cf_token,
         "REPLACE_WITH_OIDC_CLIENT_ID":         headlamp.get("oidc_client_id", "headlamp"),
@@ -95,7 +133,8 @@ def _get_or_generate_secrets(project_root: Path, domain: str) -> dict:
         "REPLACE_WITH_ADMIN_PASSWORD":         _ys(auth.get("bootstrap_password", "")),
         "REPLACE_WITH_POSTGRES_PASSWORD":      _ys(auth.get("postgresql_password", "")),
         "REPLACE_WITH_POSTGRES_ROOT_PASSWORD": _ys(auth.get("postgresql_password", "")),
-    }
+    })
+    return replacements
 
 
 def _fill_file(path: Path, replacements: dict) -> None:
@@ -201,18 +240,23 @@ def _decrypt_or_regenerate(
     gitops_dir: Path,
     age_key_file: Path,
     print_status,
-) -> None:
+) -> bool:
     """Decrypt enc_file in place. If decryption fails because the file is
     sealed to an age recipient we no longer have the private key for,
     overwrite it with the plaintext template (so step 4 can re-substitute
-    placeholders and step 6 can re-encrypt under the current key)."""
+    placeholders and step 6 can re-encrypt under the current key).
+
+    Returns True if the file was regenerated from a template (meaning the
+    original ciphertext is unrecoverable and must be re-encrypted fresh);
+    False if it was decrypted normally (meaning the original ciphertext
+    can be reused if the plaintext doesn't end up changing)."""
     env = {**os.environ, "SOPS_AGE_KEY_FILE": str(age_key_file)}
     result = subprocess.run(
         ["sops", "--decrypt", "--in-place", str(enc_file)],
         env=env, capture_output=True, text=True
     )
     if result.returncode == 0:
-        return
+        return False
 
     if not _is_unreachable_recipient_error(result.stderr):
         raise RuntimeError(f"SOPS decryption failed for {enc_file}:\n{result.stderr}")
@@ -232,6 +276,7 @@ def _decrypt_or_regenerate(
         f"[INFO] {rel}: sealed to an unavailable age key; regenerated from template",
         "INFO",
     )
+    return True
 
 
 def _sops_encrypt(path: Path, sops_yaml: Path, age_key_file: Path) -> None:
@@ -271,18 +316,32 @@ def setup_gitops(
 
     age_key_file = project_root / "Age" / "keys.txt"
 
+    # Read the domain the previous run wrote (if any) so step 1 and step 4 can
+    # rewrite files that were already filled with a different domain. Falls
+    # back to inferring from existing files when the store has no record (e.g.
+    # files were filled before this rotation feature existed).
+    from Scripts.security.canonical_store import get_canonical_store
+    store = get_canonical_store(project_root)
+    previous_domain = store.get_cluster_domain() or _infer_previous_domain(
+        gitops_dir, domain
+    )
+
     # 1. Substitute domain in plain YAML files
     for yaml_file in gitops_dir.rglob("*.yaml"):
         if yaml_file.name.endswith(".enc.yaml"):
             continue
         text = yaml_file.read_text()
-        if "example.com" in text or "${DOMAIN}" in text:
-            yaml_file.write_text(_substitute_domain(text, domain))
+        triggers = ("example.com", "${DOMAIN}")
+        needs_rewrite = any(t in text for t in triggers) or (
+            previous_domain and previous_domain != domain and previous_domain in text
+        )
+        if needs_rewrite:
+            yaml_file.write_text(_substitute_domain(text, domain, previous_domain))
     print_status(f"[SUCCESS] Substituted domain → {domain}", "SUCCESS")
 
     # 2. Load secrets
     print_status("[INFO] Loading secrets from canonical store...", "INFO")
-    replacements = _get_or_generate_secrets(project_root, domain)
+    replacements = _get_or_generate_secrets(project_root, domain, previous_domain)
     replacements["example.com"] = domain
     replacements["${DOMAIN}"] = domain
     print_status("[SUCCESS] Secrets loaded", "SUCCESS")
@@ -291,9 +350,25 @@ def setup_gitops(
     # If a file is sealed to an age recipient we no longer have the private key
     # for, regenerate it from the built-in template instead of aborting — this
     # keeps `setup gitops` working across age-key rotations.
+    #
+    # SOPS uses a random IV per encryption, so re-encrypting the same plaintext
+    # yields different ciphertext and dirties git. To keep re-runs no-op when
+    # nothing actually changed, snapshot the original ciphertext (for files we
+    # can still decrypt) and the post-decrypt plaintext, then in step 6 reuse
+    # the original ciphertext for any file whose plaintext didn't change.
+    original_ciphertext: dict[Path, bytes] = {}
     for enc_file in gitops_dir.rglob("*.enc.yaml"):
         if _is_sops_encrypted(enc_file):
-            _decrypt_or_regenerate(enc_file, gitops_dir, age_key_file, print_status)
+            snapshot = enc_file.read_bytes()
+            regenerated = _decrypt_or_regenerate(
+                enc_file, gitops_dir, age_key_file, print_status
+            )
+            if not regenerated:
+                original_ciphertext[enc_file] = snapshot
+
+    plaintext_before_fill: dict[Path, bytes] = {
+        f: f.read_bytes() for f in original_ciphertext
+    }
 
     # 4. Fill *.enc.yaml placeholders
     for enc_file in gitops_dir.rglob("*.enc.yaml"):
@@ -305,8 +380,26 @@ def setup_gitops(
     _write_sops_yaml(gitops_dir, age_pub)
     print_status("[SUCCESS] Generated .sops.yaml", "SUCCESS")
 
-    # 6. SOPS-encrypt each *.enc.yaml
+    # 6. SOPS-encrypt each *.enc.yaml — but if the plaintext didn't change
+    # versus the previous run, restore the original ciphertext to avoid the
+    # spurious git diff that a fresh IV would cause.
     sops_yaml = gitops_dir / ".sops.yaml"
+    unchanged = 0
     for enc_file in gitops_dir.rglob("*.enc.yaml"):
+        if enc_file in original_ciphertext:
+            if enc_file.read_bytes() == plaintext_before_fill[enc_file]:
+                enc_file.write_bytes(original_ciphertext[enc_file])
+                unchanged += 1
+                continue
         _sops_encrypt(enc_file, sops_yaml, age_key_file)
         print_status(f"[SUCCESS] Encrypted {enc_file.relative_to(gitops_dir)}", "SUCCESS")
+    if unchanged:
+        print_status(
+            f"[INFO] {unchanged} file(s) unchanged — kept existing ciphertext (no git churn)",
+            "INFO",
+        )
+
+    # Record the domain so the next run can rewrite files that were filled
+    # with this value if --domain changes.
+    if store.get_cluster_domain() != domain:
+        store.set_cluster_domain(domain)

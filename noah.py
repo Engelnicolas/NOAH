@@ -651,6 +651,20 @@ def headlamp(ctx, domain):
         click.echo("[VERBOSE] Headlamp test failed - check logs for details")
         sys.exit(1)
 
+@test.command()
+@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
+@click.pass_context
+def hubble(ctx, domain):
+    """Test Hubble UI deployment and Authentik forward-auth integration"""
+    click.echo("Testing Hubble UI deployment and Authentik integration...")
+    from Tests.test_hubble_auth import HubbleAuthTester
+    tester = HubbleAuthTester(domain=domain)
+    if tester.run_all_tests():
+        click.echo("✓ Hubble test successful")
+    else:
+        click.echo("✗ Hubble test failed", err=True)
+        sys.exit(1)
+
 @cli.command()  # type: ignore
 @click.pass_context
 def status(ctx):

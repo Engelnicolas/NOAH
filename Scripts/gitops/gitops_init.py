@@ -346,58 +346,94 @@ def setup_gitops(
     replacements["${DOMAIN}"] = domain
     print_status("[SUCCESS] Secrets loaded", "SUCCESS")
 
-    # 3. Decrypt any already-encrypted files before filling (idempotent re-runs).
-    # If a file is sealed to an age recipient we no longer have the private key
-    # for, regenerate it from the built-in template instead of aborting — this
-    # keeps `setup gitops` working across age-key rotations.
+    # Steps 3–6 modify *.enc.yaml files in place. Between decrypt (step 3) and
+    # encrypt (step 6) they hold plaintext secrets on disk — if the process
+    # crashes there, the user could accidentally `git add` and commit secrets.
+    # The try/except below guarantees that no .enc.yaml is left in a plaintext
+    # state when this function exits, by restoring the original ciphertext
+    # (for files we successfully decrypted) or the placeholder template (for
+    # files that had to be regenerated because their key was rotated).
     #
-    # SOPS uses a random IV per encryption, so re-encrypting the same plaintext
-    # yields different ciphertext and dirties git. To keep re-runs no-op when
-    # nothing actually changed, snapshot the original ciphertext (for files we
-    # can still decrypt) and the post-decrypt plaintext, then in step 6 reuse
-    # the original ciphertext for any file whose plaintext didn't change.
+    # Crash-recovery records — also reused by step 6 for idempotency.
     original_ciphertext: dict[Path, bytes] = {}
-    for enc_file in gitops_dir.rglob("*.enc.yaml"):
-        if _is_sops_encrypted(enc_file):
-            snapshot = enc_file.read_bytes()
-            regenerated = _decrypt_or_regenerate(
-                enc_file, gitops_dir, age_key_file, print_status
+    regenerated_templates: dict[Path, str] = {}
+    completed: set[Path] = set()
+
+    try:
+        # 3. Decrypt or regenerate. SOPS uses a random IV per encryption, so
+        # re-encrypting the same plaintext yields different ciphertext and
+        # dirties git. To keep no-op re-runs clean, snapshot original ciphertext
+        # for files we can still decrypt; step 6 reuses it when plaintext is
+        # unchanged. For files sealed to an unreachable key, capture the
+        # template instead — that's the only safe rollback target.
+        for enc_file in gitops_dir.rglob("*.enc.yaml"):
+            if _is_sops_encrypted(enc_file):
+                snapshot = enc_file.read_bytes()
+                regenerated = _decrypt_or_regenerate(
+                    enc_file, gitops_dir, age_key_file, print_status
+                )
+                if regenerated:
+                    regenerated_templates[enc_file] = enc_file.read_text()
+                else:
+                    original_ciphertext[enc_file] = snapshot
+
+        plaintext_before_fill: dict[Path, bytes] = {
+            f: f.read_bytes() for f in original_ciphertext
+        }
+
+        # 4. Fill *.enc.yaml placeholders
+        for enc_file in gitops_dir.rglob("*.enc.yaml"):
+            _fill_file(enc_file, replacements)
+        print_status("[SUCCESS] Filled secret placeholders in *.enc.yaml files", "SUCCESS")
+
+        # 5. Write .sops.yaml
+        age_pub = _age_public_key(project_root)
+        _write_sops_yaml(gitops_dir, age_pub)
+        print_status("[SUCCESS] Generated .sops.yaml", "SUCCESS")
+
+        # 6. SOPS-encrypt each *.enc.yaml — but if the plaintext didn't change
+        # versus the previous run, restore the original ciphertext to avoid the
+        # spurious git diff that a fresh IV would cause.
+        sops_yaml = gitops_dir / ".sops.yaml"
+        unchanged = 0
+        for enc_file in gitops_dir.rglob("*.enc.yaml"):
+            if enc_file in original_ciphertext:
+                if enc_file.read_bytes() == plaintext_before_fill[enc_file]:
+                    enc_file.write_bytes(original_ciphertext[enc_file])
+                    completed.add(enc_file)
+                    unchanged += 1
+                    continue
+            _sops_encrypt(enc_file, sops_yaml, age_key_file)
+            completed.add(enc_file)
+            print_status(f"[SUCCESS] Encrypted {enc_file.relative_to(gitops_dir)}", "SUCCESS")
+        if unchanged:
+            print_status(
+                f"[INFO] {unchanged} file(s) unchanged — kept existing ciphertext (no git churn)",
+                "INFO",
             )
-            if not regenerated:
-                original_ciphertext[enc_file] = snapshot
-
-    plaintext_before_fill: dict[Path, bytes] = {
-        f: f.read_bytes() for f in original_ciphertext
-    }
-
-    # 4. Fill *.enc.yaml placeholders
-    for enc_file in gitops_dir.rglob("*.enc.yaml"):
-        _fill_file(enc_file, replacements)
-    print_status("[SUCCESS] Filled secret placeholders in *.enc.yaml files", "SUCCESS")
-
-    # 5. Write .sops.yaml
-    age_pub = _age_public_key(project_root)
-    _write_sops_yaml(gitops_dir, age_pub)
-    print_status("[SUCCESS] Generated .sops.yaml", "SUCCESS")
-
-    # 6. SOPS-encrypt each *.enc.yaml — but if the plaintext didn't change
-    # versus the previous run, restore the original ciphertext to avoid the
-    # spurious git diff that a fresh IV would cause.
-    sops_yaml = gitops_dir / ".sops.yaml"
-    unchanged = 0
-    for enc_file in gitops_dir.rglob("*.enc.yaml"):
-        if enc_file in original_ciphertext:
-            if enc_file.read_bytes() == plaintext_before_fill[enc_file]:
-                enc_file.write_bytes(original_ciphertext[enc_file])
-                unchanged += 1
+    except BaseException:
+        # Best-effort restoration so no plaintext .enc.yaml survives a crash
+        # or Ctrl-C. Snapshots return files to byte-identical pre-run state;
+        # templates leave regenerated files as plain placeholders (no secrets).
+        for f, blob in original_ciphertext.items():
+            if f in completed:
                 continue
-        _sops_encrypt(enc_file, sops_yaml, age_key_file)
-        print_status(f"[SUCCESS] Encrypted {enc_file.relative_to(gitops_dir)}", "SUCCESS")
-    if unchanged:
+            try:
+                f.write_bytes(blob)
+            except OSError as restore_err:
+                print_status(f"[WARN] Failed to restore {f}: {restore_err}", "WARN")
+        for f, template in regenerated_templates.items():
+            if f in completed:
+                continue
+            try:
+                f.write_text(template)
+            except OSError as restore_err:
+                print_status(f"[WARN] Failed to restore {f}: {restore_err}", "WARN")
         print_status(
-            f"[INFO] {unchanged} file(s) unchanged — kept existing ciphertext (no git churn)",
-            "INFO",
+            "[ERROR] setup_gitops failed; .enc.yaml files restored to pre-run state",
+            "ERROR",
         )
+        raise
 
     # Record the domain so the next run can rewrite files that were filled
     # with this value if --domain changes.

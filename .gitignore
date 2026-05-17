@@ -89,10 +89,33 @@ tmpcharts/
 
 ############################
 # Decrypted / Temp Secrets #
+#                          #
+# Invariant for *.enc.yaml #
+# files in gitops/:        #
+# they MUST be SOPS-       #
+# encrypted (have a `sops:`#
+# stanza) before commit.   #
+# setup_gitops uses a      #
+# try/finally to restore   #
+# original ciphertext if   #
+# it crashes mid-flight,   #
+# so this should never be  #
+# violated — but the       #
+# patterns below catch any #
+# editor-leftover backups  #
+# of .enc.yaml files that  #
+# would carry plaintext    #
+# secrets if they appear.  #
 ############################
 *.dec.yaml
 *.dec.json
 *.dec.env
+*.enc.yaml.bak
+*.enc.yaml.orig
+*.enc.yaml.tmp
+*.enc.yaml~
+.#*.enc.yaml
+\#*.enc.yaml#
 Scripts/Secrets/canonical-secrets.yaml
 Scripts/Secrets/*.dec.yaml
 Scripts/Secrets/*.dec.json

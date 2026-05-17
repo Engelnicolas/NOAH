@@ -29,7 +29,6 @@
         --server "https://{{ node1_ip }}:6443" \
         --disable traefik \
         --disable servicelb \
-        --disable local-storage \
         --disable-network-policy \
         --flannel-backend=none \
         --tls-san "{{ node1_ip }}" \

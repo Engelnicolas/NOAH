@@ -553,16 +553,40 @@ def gitops(ctx, domain):
     click.echo("")
     click.echo("✅ GitOps directory ready.")
     click.echo("")
+
+    # Auto-detect the current repo's origin URL and branch so the suggested
+    # commands point at this NOAH mono-repo (which holds gitops/) rather than
+    # a generic <org>/NOAH placeholder. Falls back to placeholders if the
+    # working tree is detached or has no origin remote.
+    def _git(args):
+        try:
+            r = subprocess.run(['git', '-C', str(project_root), *args],
+                               capture_output=True, text=True, check=True)
+            return r.stdout.strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return ''
+
+    branch = _git(['rev-parse', '--abbrev-ref', 'HEAD']) or '<branch>'
+    origin = _git(['remote', 'get-url', 'origin'])
+    if origin.startswith('https://'):
+        # github.com/org/repo(.git) → ssh://git@github.com/org/repo.git (Flux needs SSH for deploy keys)
+        flux_repo = 'ssh://git@' + origin[len('https://'):]
+    elif origin:
+        flux_repo = origin
+    else:
+        flux_repo = 'ssh://git@github.com/<org>/NOAH'
+
     click.echo("Next steps:")
-    click.echo("  1. Commit and push to GitHub so Flux can reconcile:")
+    click.echo("  1. Commit and push so Flux can reconcile this repo:")
     click.echo("       git add gitops/ && git commit -m 'chore: update GitOps configuration'")
-    click.echo("       git push origin main")
+    click.echo(f"       git push origin {branch}")
     click.echo("")
-    click.echo("  2. Bootstrap the cluster:")
+    click.echo("  2. Bootstrap the cluster (this repo is the Flux source — gitops/ lives here):")
     click.echo(f"       python3 noah.py cluster bootstrap \\")
     click.echo(f"         --node <NODE-IP> \\")
     click.echo(f"         --domain {domain} \\")
-    click.echo(f"         --flux-repo ssh://git@github.com/<org>/NOAH \\")
+    click.echo(f"         --flux-repo {flux_repo} \\")
+    click.echo(f"         --flux-branch {branch} \\")
     click.echo(f"         --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519")
 
 @setup.command()

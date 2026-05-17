@@ -274,6 +274,18 @@ class CanonicalSecretsStore:
                 result[k] = v
         return result
 
+    # Cluster-level (non-secret) settings stored alongside the encrypted
+    # service secrets so `setup gitops` has a single source of truth for
+    # "what domain did the previous run use" without needing a separate
+    # state file. Not covered by the integrity hash (only `services` is).
+    def get_cluster_domain(self) -> Optional[str]:
+        return self.data.get("cluster", {}).get("domain")
+
+    def set_cluster_domain(self, domain: str) -> bool:
+        self.data.setdefault("cluster", {})["domain"] = domain
+        self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        return self.save()
+
     # ---------------- Schema Upgrade ----------------
     def _upgrade_schema_if_needed(self):
         cur = self.data.get('version', 1)

@@ -30,7 +30,6 @@
         --cluster-init \
         --disable traefik \
         --disable servicelb \
-        --disable local-storage \
         --disable-network-policy \
         --disable-kube-proxy \
         --flannel-backend=none \

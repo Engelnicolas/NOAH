@@ -175,7 +175,7 @@ Thumbs.db
 .vscode/
 *.bak
 *.tmp
-.claude/
+.claude/settings.local.json
 
 #################################################################
 # END

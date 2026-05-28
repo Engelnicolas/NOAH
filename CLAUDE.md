@@ -2,6 +2,85 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Behavioral prerequisites
+
+These rules apply to every task in this project, without exception.
+
+1. **If ambiguous: ask, don't choose silently.** When a request can be interpreted in more than one way, stop and ask one focused question before writing any code.
+2. **Minimal diff.** Touch only what is explicitly requested. No opportunistic cleanup, no related refactors, no "while I'm here" changes.
+3. **Define "Done" before starting.** State in one line what the completed task looks like, then proceed.
+4. **Verify in code, never assume.** Before referencing a function, variable, file path, or version, read the actual source. No guesses about what "latest" might be.
+5. **Minimum code.** Implement exactly what is asked. No speculative features, no extra abstractions, no future-proofing.
+
+## GitHub skills
+
+Use `gh` (GitHub CLI) for all GitHub interactions. Prefer it over raw `git` or API calls.
+
+```bash
+# View open PRs
+gh pr list
+
+# Review PR details and diff
+gh pr view <number> --comments
+gh pr diff <number>
+
+# Create a PR (always use HEREDOC for body)
+gh pr create --title "..." --body "$(cat <<'EOF'
+## Summary
+- …
+EOF
+)"
+
+# Check CI status
+gh pr checks <number>
+
+# Merge a PR (only when explicitly asked)
+gh pr merge <number> --squash
+
+# View and create issues
+gh issue list
+gh issue view <number>
+gh issue create --title "..." --body "..."
+
+# Fetch workflow run logs
+gh run list --limit 10
+gh run view <run-id> --log-failed
+```
+
+**Rules:**
+- Never push or merge without explicit user confirmation.
+- Always use `--squash` for merges unless the user specifies otherwise.
+- When referencing a branch or SHA, verify it exists with `gh` or `git` before acting.
+
+## AWS skills
+
+Use the `aws` CLI. Assume credentials are configured via environment variables or `~/.aws/credentials`. Never hardcode keys.
+
+```bash
+# Confirm active identity before any write operation
+aws sts get-caller-identity
+
+# List resources (common services used by NOAH's infra)
+aws ec2 describe-instances --query "Reservations[*].Instances[*].[InstanceId,State.Name,PublicIpAddress]" --output table
+aws route53 list-hosted-zones
+aws s3 ls
+
+# Route53 — look up a zone before modifying records
+aws route53 list-resource-record-sets --hosted-zone-id <zone-id>
+
+# SSM Parameter Store (secrets alternative to SOPS in cloud context)
+aws ssm get-parameter --name "/noah/..." --with-decryption
+
+# CloudFormation / CDK stack status
+aws cloudformation describe-stacks --stack-name <name>
+```
+
+**Rules:**
+- Run `aws sts get-caller-identity` before any write or delete operation.
+- Never delete resources without explicit user confirmation and a stated blast-radius estimate.
+- Prefer `--dry-run` or `--no-execute-changeset` flags where available.
+- Never read or write `~/.aws/credentials` directly; rely on the CLI's credential chain.
+
 ## What is NOAH
 
 NOAH (Network Operations & Automation Hub) is a Python CLI (`noah.py`) that provisions and manages a full Kubernetes infrastructure stack on K3s. It orchestrates: K3s cluster bootstrap via Ansible, FluxCD GitOps reconciliation, SOPS/Age-encrypted secrets, Authentik SSO, Cilium CNI, Headlamp dashboard, and Hubble UI.

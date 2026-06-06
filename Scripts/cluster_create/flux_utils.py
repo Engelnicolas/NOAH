@@ -18,6 +18,8 @@ from typing import List
 
 import click  # type: ignore
 
+from Scripts.utils.paths import NOAH_PATHS
+
 
 def _require_flux() -> None:
     if shutil.which("flux") is None:
@@ -28,13 +30,20 @@ def _require_flux() -> None:
 
 
 def _require_kubeconfig() -> None:
-    kubeconfig = os.environ.get("KUBECONFIG") or str(Path.home() / ".kube" / "config")
-    if not Path(kubeconfig).exists():
-        raise click.ClickException(
-            "No kubeconfig found. This command must run on a node with cluster access.\n"
-            "  On the cluster node:  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml\n"
-            "  Or copy the kubeconfig to ~/.kube/config on this machine."
-        )
+    candidates = [
+        os.environ.get("KUBECONFIG"),
+        str(Path.home() / ".kube" / "config"),
+        str(NOAH_PATHS["root_dir"] / "Kube" / "noah-cluster.yaml"),
+    ]
+    for path in candidates:
+        if path and Path(path).exists():
+            os.environ["KUBECONFIG"] = path
+            return
+    raise click.ClickException(
+        "No kubeconfig found. This command must run on a node with cluster access.\n"
+        "  On the cluster node:  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml\n"
+        "  Or copy the kubeconfig to ~/.kube/config on this machine."
+    )
 
 
 def _run(cmd: List[str]) -> int:

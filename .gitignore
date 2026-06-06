@@ -178,5 +178,11 @@ Thumbs.db
 .claude/settings.local.json
 
 #################################################################
-# END
+# SECRETS
 #################################################################
+gitops/.sops.yaml
+gitops/apps/authentik/bootstrap-token.enc.yaml
+gitops/apps/authentik/values-secret.enc.yaml
+gitops/apps/headlamp/oidc-secret.enc.yaml
+gitops/infrastructure/cert-manager-issuers/cloudflare-secret.enc.yaml
+gitops/infrastructure/external-dns/cloudflare-secret.enc.yaml

@@ -36,3 +36,4 @@ spec:
         use-forwarded-headers: "true"
         compute-full-forwarded-for: "true"
         proxy-body-size: "0"
+        allow-snippet-annotations: "true"

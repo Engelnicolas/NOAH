@@ -47,7 +47,7 @@ spec:
           enabled: false
     ingressController:
       enabled: true
-      loadbalancerMode: dedicated
+      loadbalancerMode: shared
       default: true
     gatewayAPI:
       enabled: false

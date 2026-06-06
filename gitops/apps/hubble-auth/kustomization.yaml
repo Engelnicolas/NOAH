@@ -5,3 +5,5 @@ resources:
   - provisioner-configmap.yaml
   - provision-job.yaml
   - hubble-ingress.yaml
+  - auth-proxy-configmap.yaml
+  - auth-proxy-deployment.yaml

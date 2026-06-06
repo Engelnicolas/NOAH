@@ -1,0 +1,23 @@
+---
+# Rewrites Host: hubble.noah-infra.com so Authentik's embedded outpost
+# can match the forward-auth request to the hubble-proxy provider.
+# nginx-ingress hardcodes Host to the upstream service hostname in the
+# auth_request block; this proxy transforms it to the application host.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hubble-auth-proxy-config
+  namespace: kube-system
+data:
+  nginx.conf: |
+    events { worker_processes 1; }
+    http {
+      server {
+        listen 80;
+        location / {
+          proxy_pass http://authentik-server.authentik.svc.cluster.local;
+          proxy_pass_request_headers on;
+          proxy_set_header Host hubble.noah-infra.com;
+        }
+      }
+    }

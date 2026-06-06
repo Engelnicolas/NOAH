@@ -37,3 +37,4 @@ spec:
         compute-full-forwarded-for: "true"
         proxy-body-size: "0"
         allow-snippet-annotations: "true"
+        annotations-risk-level: "Critical"

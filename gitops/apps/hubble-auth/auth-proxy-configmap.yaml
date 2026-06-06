@@ -10,7 +10,7 @@ metadata:
   namespace: kube-system
 data:
   nginx.conf: |
-    events { worker_processes 1; }
+    events {}
     http {
       server {
         listen 80;

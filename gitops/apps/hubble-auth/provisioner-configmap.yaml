@@ -109,10 +109,21 @@ data:
         if outposts["results"]:
             outpost = outposts["results"][0]
             providers = outpost.get("providers", [])
-            if provider_pk not in providers:
+            needs_update = provider_pk not in providers
+            if needs_update:
                 providers.append(provider_pk)
-                api("patch", f"/outposts/instances/{outpost['pk']}/", json={"providers": providers})
-                print("[INFO] Provider added to embedded outpost")
+            # Always ensure authentik_host is set so the outpost can build
+            # correct redirect URLs for unauthenticated forward-auth requests.
+            external_url = os.environ.get("AUTHENTIK_EXTERNAL_URL", "")
+            current_host = outpost.get("config", {}).get("authentik_host", "")
+            if external_url and current_host != external_url:
+                needs_update = True
+            if needs_update:
+                patch = {"providers": providers}
+                if external_url:
+                    patch["config"] = {**outpost.get("config", {}), "authentik_host": external_url}
+                api("patch", f"/outposts/instances/{outpost['pk']}/", json=patch)
+                print(f"[INFO] Outpost updated (authentik_host={external_url or 'unchanged'})")
             else:
                 print("[INFO] Provider already in embedded outpost")
         else:

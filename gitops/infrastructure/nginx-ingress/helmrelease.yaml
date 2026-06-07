@@ -35,11 +35,15 @@ spec:
       hostPort:
         enabled: true
       # hostPort binds :80/:443 on the node, so two controller pods cannot coexist
-      # on a single node. Recreate (instead of the default RollingUpdate surge)
-      # tears down the old pod before starting the new one, avoiding a
-      # FailedScheduling "didn't have free ports" deadlock on every upgrade.
+      # on a single node. Keep RollingUpdate (switching to Recreate is rejected by
+      # server-side apply while the live Deployment still carries a rollingUpdate
+      # block) but force maxSurge=0 so the old pod is torn down before the new one
+      # starts — avoiding the FailedScheduling "didn't have free ports" deadlock.
       updateStrategy:
-        type: Recreate
+        type: RollingUpdate
+        rollingUpdate:
+          maxSurge: 0
+          maxUnavailable: 1
       service:
         type: ClusterIP
       # With a ClusterIP service there is no LoadBalancer IP for nginx to write

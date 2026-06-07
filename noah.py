@@ -169,10 +169,12 @@ def destroy(ctx, name, force, keep_secrets):
               help='Skip the post-bootstrap readiness wait/verdict (reconciliation is async).')
 @click.option('--verify-timeout', default=600, show_default=True,
               help='Seconds to wait for Flux to converge after bootstrap.')
+@click.option('--url-timeout', 'url_timeout', default=300, show_default=True,
+              help='Seconds to wait for the public URLs to become reachable after Flux converges.')
 @click.pass_context
 def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
               ssh_user, ssh_key, age_key_file, k3s_version, force_reset,
-              git_token, git_provider, no_wait, verify_timeout):
+              git_token, git_provider, no_wait, verify_timeout, url_timeout):
     """Provision K3s + bootstrap FluxCD against a GitOps repo (SSH deploy key)."""
     rc = cluster_bootstrap(
         node=node,
@@ -197,7 +199,7 @@ def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
     # the operator knows whether the cluster actually deployed.
     if rc == 0 and not no_wait:
         from Scripts.cluster_create.verify_utils import verify_deployment
-        if not verify_deployment(domain=domain, timeout=verify_timeout):
+        if not verify_deployment(domain=domain, timeout=verify_timeout, url_timeout=url_timeout):
             rc = 1
     elif rc == 0 and no_wait:
         click.echo("\nℹ️  Flux reconciles asynchronously. Check the deployment with:")
@@ -237,14 +239,16 @@ def cluster_status(ctx):
 @cluster.command('verify')
 @click.option('--domain', default=None, help='Cluster domain (defaults to the value stored in the canonical store)')
 @click.option('--timeout', default=600, show_default=True, help='Seconds to wait for Flux to converge')
+@click.option('--url-timeout', 'url_timeout', default=300, show_default=True,
+              help='Seconds to wait for the public URLs to become reachable (HTTPS) after Flux converges')
 @click.pass_context
-def cluster_verify(ctx, domain, timeout):
-    """Wait for Flux to converge and print a pass/fail deployment verdict."""
+def cluster_verify(ctx, domain, timeout, url_timeout):
+    """Wait for Flux to converge and the URLs to serve, then print a pass/fail verdict."""
     from Scripts.cluster_create.verify_utils import verify_deployment
     if not domain:
         from Scripts.security.canonical_store import get_canonical_store  # type: ignore
         domain = get_canonical_store().get_cluster_domain()
-    ok = verify_deployment(domain=domain, timeout=timeout)
+    ok = verify_deployment(domain=domain, timeout=timeout, url_timeout=url_timeout)
     sys.exit(0 if ok else 1)
 
 

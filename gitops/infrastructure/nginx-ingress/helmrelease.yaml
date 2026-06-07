@@ -34,6 +34,12 @@ spec:
       # Avoids Cilium LB-IPAM/L2, which cannot announce a public IP on AWS.
       hostPort:
         enabled: true
+      # hostPort binds :80/:443 on the node, so two controller pods cannot coexist
+      # on a single node. Recreate (instead of the default RollingUpdate surge)
+      # tears down the old pod before starting the new one, avoiding a
+      # FailedScheduling "didn't have free ports" deadlock on every upgrade.
+      updateStrategy:
+        type: Recreate
       service:
         type: ClusterIP
       # With a ClusterIP service there is no LoadBalancer IP for nginx to write

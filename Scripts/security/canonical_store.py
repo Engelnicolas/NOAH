@@ -286,6 +286,14 @@ class CanonicalSecretsStore:
         self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
         return self.save()
 
+    def get_node_public_ip(self) -> Optional[str]:
+        return self.data.get("cluster", {}).get("node_public_ip")
+
+    def set_node_public_ip(self, node_public_ip: str) -> bool:
+        self.data.setdefault("cluster", {})["node_public_ip"] = node_public_ip
+        self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        return self.save()
+
     # ---------------- Schema Upgrade ----------------
     def _upgrade_schema_if_needed(self):
         cur = self.data.get('version', 1)

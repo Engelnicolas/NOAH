@@ -83,6 +83,16 @@ def _substitute_domain(text: str, domain: str, previous_domain: Optional[str] = 
     return text
 
 
+def _substitute_node_ip(text: str, node_ip: str, previous_ip: Optional[str] = None) -> str:
+    """Replace the ${NODE_PUBLIC_IP} placeholder (and any previously-substituted
+    IP on re-runs) with the node's reachable public IP. nginx publishes this via
+    --publish-status-address into each Ingress status, so external-dns creates
+    DNS records pointing at the EIP rather than the cluster-internal service IP."""
+    if previous_ip and previous_ip != node_ip:
+        text = text.replace(previous_ip, node_ip)
+    return text.replace("${NODE_PUBLIC_IP}", node_ip)
+
+
 def _get_or_generate_secrets(
     project_root: Path, domain: str, previous_domain: Optional[str] = None
 ) -> dict:
@@ -380,11 +390,16 @@ def setup_gitops(
     domain: str,
     project_root: Path,
     print_status,
+    node_public_ip: Optional[str] = None,
 ) -> None:
     """
     Prepare the gitops/ subdirectory in-place: substitute domain, fill secrets,
     and SOPS-encrypt. Idempotent — decrypts existing encrypted files before
     re-filling so re-runs with different domains or rotated secrets work cleanly.
+
+    When `node_public_ip` is provided, the ${NODE_PUBLIC_IP} placeholder (used by
+    nginx-ingress' publish-status-address) is substituted too, so external-dns
+    publishes DNS records pointing at the node's reachable public IP (EC2 EIP).
 
     After running, commit and push the NOAH repo so Flux can reconcile:
         git add gitops/ && git commit -m 'chore: update GitOps configuration'
@@ -408,19 +423,27 @@ def setup_gitops(
     previous_domain = store.get_cluster_domain() or _infer_previous_domain(
         gitops_dir, domain
     )
+    previous_node_ip = store.get_node_public_ip()
 
-    # 1. Substitute domain in plain YAML files
+    # 1. Substitute domain (and node public IP, when provided) in plain YAML
+    # files. Substitution is idempotent, so we always recompute and only write
+    # back when the content actually changed — keeps no-op re-runs free of churn.
     for yaml_file in gitops_dir.rglob("*.yaml"):
         if yaml_file.name.endswith(".enc.yaml"):
             continue
         text = yaml_file.read_text()
-        triggers = ("example.com", "${DOMAIN}")
-        needs_rewrite = any(t in text for t in triggers) or (
-            previous_domain and previous_domain != domain and previous_domain in text
+        new_text = _substitute_domain(text, domain, previous_domain)
+        if node_public_ip:
+            new_text = _substitute_node_ip(new_text, node_public_ip, previous_node_ip)
+        if new_text != text:
+            yaml_file.write_text(new_text)
+    if node_public_ip:
+        print_status(
+            f"[SUCCESS] Substituted domain → {domain}, node public IP → {node_public_ip}",
+            "SUCCESS",
         )
-        if needs_rewrite:
-            yaml_file.write_text(_substitute_domain(text, domain, previous_domain))
-    print_status(f"[SUCCESS] Substituted domain → {domain}", "SUCCESS")
+    else:
+        print_status(f"[SUCCESS] Substituted domain → {domain}", "SUCCESS")
 
     # 2. Load secrets
     print_status("[INFO] Loading secrets from canonical store...", "INFO")
@@ -522,3 +545,6 @@ def setup_gitops(
     # with this value if --domain changes.
     if store.get_cluster_domain() != domain:
         store.set_cluster_domain(domain)
+    # Same for the node public IP, so a later run can swap it if the EIP changes.
+    if node_public_ip and store.get_node_public_ip() != node_public_ip:
+        store.set_node_public_ip(node_public_ip)

@@ -36,6 +36,15 @@ spec:
         enabled: true
       service:
         type: ClusterIP
+      # With a ClusterIP service there is no LoadBalancer IP for nginx to write
+      # into each Ingress' status — external-dns would otherwise publish the
+      # cluster-internal service IP. Disable publishService and pin the node's
+      # public IP (EC2 EIP) so external-dns creates records pointing at the EIP.
+      # The address below is filled in by `noah setup gitops --node-ip`.
+      publishService:
+        enabled: false
+      extraArgs:
+        publish-status-address: 15.188.112.171
       config:
         use-forwarded-headers: "true"
         compute-full-forwarded-for: "true"

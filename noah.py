@@ -578,16 +578,24 @@ def reset(force):
 
 @setup.command()
 @click.option('--domain', required=True, help='Your domain (replaces example.com / ${DOMAIN} throughout gitops/)')
+@click.option('--node-ip', 'node_ip', default=None,
+              help='Public IP (EC2 EIP) external-dns should publish; replaces '
+                   '${NODE_PUBLIC_IP}. Defaults to the value stored in the canonical store.')
 @click.pass_context
-def gitops(ctx, domain):
+def gitops(ctx, domain, node_ip):
     """Prepare gitops/: substitute domain, fill secrets, encrypt. Then git push to GitHub."""
     from Scripts.gitops.gitops_init import setup_gitops
+    from Scripts.security.canonical_store import get_canonical_store
 
     project_root = Path(__file__).parent
+
+    if not node_ip:
+        node_ip = get_canonical_store(project_root).get_node_public_ip()
 
     click.echo("🚀 NOAH GitOps Repository Setup")
     click.echo("=" * 35)
     click.echo(f"  Domain  : {domain}")
+    click.echo(f"  Node IP : {node_ip or '(none — ${NODE_PUBLIC_IP} left unsubstituted)'}")
     click.echo(f"  GitOps  : {project_root / 'gitops'}")
     click.echo("")
 
@@ -596,6 +604,7 @@ def gitops(ctx, domain):
             domain=domain,
             project_root=project_root,
             print_status=print_status,
+            node_public_ip=node_ip,
         )
     except Exception as e:
         print_status(f"[ERROR] {e}", "ERROR")

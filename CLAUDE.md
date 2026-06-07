@@ -113,10 +113,10 @@ ansible-lint Ansible/ || true
 pytest Tests/ -v
 
 # Run a single test file
-pytest Tests/test_canonical_secrets.py -v
+pytest Tests/test_canonical_store.py -v
 
 # Run a single test by name
-pytest Tests/test_canonical_secrets.py::TestCanonicalStore::test_load_empty -v
+pytest Tests/test_canonical_store.py::test_node_public_ip_roundtrip_persists -v
 
 # Run including integration tests (requires real sops binary)
 pytest Tests/ -v -m integration

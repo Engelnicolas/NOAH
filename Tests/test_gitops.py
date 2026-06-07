@@ -2,15 +2,16 @@
 """
 Tests for the `setup gitops` command and the underlying setup_gitops() function.
 
-Fast unit tests: all external I/O (SOPS binary, GitHub, canonical store) is mocked.
-Integration test (requires sops binary): marked with @pytest.mark.integration.
+Fast unit tests: all external I/O (SOPS binary, canonical store, secret
+generation) is mocked. The integration test (requires the real sops binary) is
+marked with @pytest.mark.integration.
 """
 
 import os
 import sys
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # ---------------------------------------------------------------------------
 
 DOMAIN = "test.example.org"
+NODE_IP = "203.0.113.7"
 AGE_PUBLIC_KEY = "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq5zuzd"
 
 FAKE_SECRETS = {
@@ -39,12 +41,7 @@ FAKE_SECRETS = {
 
 @pytest.fixture()
 def project_root(tmp_path):
-    """
-    Build a minimal project root with:
-      - Age/keys.txt   (fake age key)
-      - flux-repo/     (one plain yaml + two enc.yaml files)
-    """
-    # Age key
+    """Minimal project root containing Age/keys.txt (fake age key)."""
     age_dir = tmp_path / "Age"
     age_dir.mkdir()
     (age_dir / "keys.txt").write_text(
@@ -52,30 +49,6 @@ def project_root(tmp_path):
         f"# public key: {AGE_PUBLIC_KEY}\n"
         f"AGE-SECRET-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ\n"
     )
-
-    # flux-repo template
-    flux = tmp_path / "flux-repo"
-    (flux / "apps" / "headlamp").mkdir(parents=True)
-    (flux / "infrastructure" / "cert-manager").mkdir(parents=True)
-
-    # Plain YAML with domain placeholder
-    (flux / "apps" / "headlamp" / "helmrelease.yaml").write_text(
-        "issuerURL: https://auth.example.com/application/o/headlamp/\n"
-        "host: headlamp.example.com\n"
-    )
-
-    # Two enc.yaml files with secret placeholders
-    (flux / "apps" / "headlamp" / "oidc-secret.enc.yaml").write_text(
-        "stringData:\n"
-        "  clientID: REPLACE_WITH_OIDC_CLIENT_ID\n"
-        "  clientSecret: REPLACE_WITH_OIDC_CLIENT_SECRET\n"
-    )
-    (flux / "infrastructure" / "cert-manager" / "cloudflare-secret.enc.yaml").write_text(
-        "stringData:\n"
-        "  api-token: REPLACE_WITH_CLOUDFLARE_TOKEN\n"
-        "  email: admin@example.com\n"
-    )
-
     return tmp_path
 
 
@@ -125,6 +98,22 @@ class TestSubstituteDomain:
         from Scripts.gitops.gitops_init import _substitute_domain
         text = "host: auth.mysite.io"
         assert _substitute_domain(text, "other.io") == text
+
+
+class TestSubstituteNodeIp:
+    def test_replaces_placeholder(self):
+        from Scripts.gitops.gitops_init import _substitute_node_ip
+        assert _substitute_node_ip("addr: ${NODE_PUBLIC_IP}", "1.2.3.4") == "addr: 1.2.3.4"
+
+    def test_swaps_previous_ip(self):
+        from Scripts.gitops.gitops_init import _substitute_node_ip
+        result = _substitute_node_ip("addr: 1.2.3.4", "9.9.9.9", previous_ip="1.2.3.4")
+        assert result == "addr: 9.9.9.9"
+
+    def test_no_change_without_placeholder_or_previous(self):
+        from Scripts.gitops.gitops_init import _substitute_node_ip
+        text = "addr: 9.9.9.9"
+        assert _substitute_node_ip(text, "9.9.9.9") == text
 
 
 class TestFillFile:
@@ -209,117 +198,60 @@ class TestRenderAppSecretManifests:
 
 
 # ---------------------------------------------------------------------------
-# Unit tests — setup_gitops() end-to-end (SOPS mocked)
+# Unit tests — setup_gitops() end-to-end (in-place; SOPS + store mocked)
 # ---------------------------------------------------------------------------
 
-class TestSetupGitops:
-    def _run(self, project_root, tmp_path, push=False, github_repo=None, github_token=None):
-        from Scripts.gitops.gitops_init import setup_gitops
-        target = tmp_path / "out"
+class TestSetupGitopsInPlace:
+    """The current setup_gitops() substitutes the domain and node public IP in
+    place inside project_root/gitops/, then SOPS-encrypts. SOPS, the canonical
+    store and secret generation are mocked."""
 
-        with patch("Scripts.gitops.gitops_init._get_or_generate_secrets",
-                   return_value=FAKE_SECRETS), \
-             patch("Scripts.gitops.gitops_init._sops_encrypt") as mock_sops, \
-             patch("Scripts.gitops.gitops_init._github_push",
-                   return_value="https://github.com/org/repo") as mock_push:
+    def _run(self, project_root, node_public_ip=None):
+        from Scripts.gitops import gitops_init
 
-            url = setup_gitops(
+        hr_dir = project_root / "gitops" / "infrastructure" / "nginx-ingress"
+        hr_dir.mkdir(parents=True)
+        hr = hr_dir / "helmrelease.yaml"
+        hr.write_text(
+            "host: auth.example.com\n"
+            "publish-status-address: ${NODE_PUBLIC_IP}\n"
+        )
+
+        store = MagicMock()
+        store.get_cluster_domain.return_value = None
+        store.get_node_public_ip.return_value = None
+
+        with patch.object(gitops_init, "_get_or_generate_secrets",
+                          return_value=dict(FAKE_SECRETS)), \
+             patch.object(gitops_init, "_sops_encrypt"), \
+             patch("Scripts.security.canonical_store.get_canonical_store",
+                   return_value=store):
+            gitops_init.setup_gitops(
                 domain=DOMAIN,
-                target_dir=target,
-                github_repo=github_repo,
-                github_token=github_token,
-                push=push,
                 project_root=project_root,
                 print_status=_noop_print_status,
+                node_public_ip=node_public_ip,
             )
-            return url, target, mock_sops, mock_push
+        return hr, store
 
-    def test_copies_flux_repo_template(self, project_root, tmp_path):
-        _, target, _, _ = self._run(project_root, tmp_path)
-        assert (target / "apps" / "headlamp" / "helmrelease.yaml").exists()
+    def test_substitutes_domain(self, project_root):
+        hr, _ = self._run(project_root)
+        text = hr.read_text()
+        assert DOMAIN in text
+        assert "example.com" not in text
 
-    def test_substitutes_domain_in_plain_yaml(self, project_root, tmp_path):
-        _, target, _, _ = self._run(project_root, tmp_path)
-        content = (target / "apps" / "headlamp" / "helmrelease.yaml").read_text()
-        assert DOMAIN in content
-        assert "example.com" not in content
+    def test_substitutes_node_ip_when_provided(self, project_root):
+        hr, store = self._run(project_root, node_public_ip=NODE_IP)
+        text = hr.read_text()
+        assert f"publish-status-address: {NODE_IP}" in text
+        assert "${NODE_PUBLIC_IP}" not in text
+        store.set_node_public_ip.assert_called_once_with(NODE_IP)
 
-    def test_fills_placeholders_in_enc_yaml(self, project_root, tmp_path):
-        _, target, _, _ = self._run(project_root, tmp_path)
-        oidc = (target / "apps" / "headlamp" / "oidc-secret.enc.yaml").read_text()
-        assert "REPLACE_WITH" not in oidc
-        assert "headlamp" in oidc
-        assert "oidc-secret" in oidc
-
-    def test_writes_sops_yaml(self, project_root, tmp_path):
-        _, target, _, _ = self._run(project_root, tmp_path)
-        sops = (target / ".sops.yaml").read_text()
-        assert AGE_PUBLIC_KEY in sops
-
-    def test_encrypts_all_enc_yaml_files(self, project_root, tmp_path):
-        _, target, mock_sops, _ = self._run(project_root, tmp_path)
-        encrypted_names = {call.args[0].name for call in mock_sops.call_args_list}
-        assert "oidc-secret.enc.yaml" in encrypted_names
-        assert "cloudflare-secret.enc.yaml" in encrypted_names
-
-    def test_returns_local_path_when_no_push(self, project_root, tmp_path):
-        url, target, _, mock_push = self._run(project_root, tmp_path)
-        assert url == str(target)
-        mock_push.assert_not_called()
-
-    def test_calls_github_push_when_push_true(self, project_root, tmp_path):
-        url, _, _, mock_push = self._run(
-            project_root, tmp_path,
-            push=True, github_repo="org/repo", github_token="ghp_tok"
-        )
-        mock_push.assert_called_once()
-        assert url == "https://github.com/org/repo"
-
-    def test_raises_without_github_repo_when_push(self, project_root, tmp_path):
-        from Scripts.gitops.gitops_init import setup_gitops
-        target = tmp_path / "out"
-        with patch("Scripts.gitops.gitops_init._get_or_generate_secrets",
-                   return_value=FAKE_SECRETS), \
-             patch("Scripts.gitops.gitops_init._sops_encrypt"):
-            with pytest.raises(RuntimeError, match="--github-repo is required"):
-                setup_gitops(
-                    domain=DOMAIN, target_dir=target,
-                    github_repo=None, github_token="tok",
-                    push=True, project_root=project_root,
-                    print_status=_noop_print_status,
-                )
-
-    def test_raises_without_github_token_when_push(self, project_root, tmp_path):
-        from Scripts.gitops.gitops_init import setup_gitops
-        target = tmp_path / "out"
-        with patch("Scripts.gitops.gitops_init._get_or_generate_secrets",
-                   return_value=FAKE_SECRETS), \
-             patch("Scripts.gitops.gitops_init._sops_encrypt"):
-            with pytest.raises(RuntimeError, match="GitHub token required"):
-                setup_gitops(
-                    domain=DOMAIN, target_dir=target,
-                    github_repo="org/repo", github_token=None,
-                    push=True, project_root=project_root,
-                    print_status=_noop_print_status,
-                )
-
-    def test_overwrites_existing_target_dir(self, project_root, tmp_path):
-        from Scripts.gitops.gitops_init import setup_gitops
-        target = tmp_path / "out"
-        target.mkdir()
-        (target / "stale_file.txt").write_text("old content")
-
-        with patch("Scripts.gitops.gitops_init._get_or_generate_secrets",
-                   return_value=FAKE_SECRETS), \
-             patch("Scripts.gitops.gitops_init._sops_encrypt"):
-            setup_gitops(
-                domain=DOMAIN, target_dir=target,
-                github_repo=None, github_token=None,
-                push=False, project_root=project_root,
-                print_status=_noop_print_status,
-            )
-
-        assert not (target / "stale_file.txt").exists()
+    def test_leaves_node_ip_placeholder_when_absent(self, project_root):
+        hr, store = self._run(project_root, node_public_ip=None)
+        text = hr.read_text()
+        assert "${NODE_PUBLIC_IP}" in text
+        store.set_node_public_ip.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -334,8 +266,7 @@ class TestSetupGitopsCli:
         result = runner.invoke(noah.cli, ["setup", "gitops", "--help"])
         assert result.exit_code == 0
         assert "--domain" in result.output
-        assert "--github-repo" in result.output
-        assert "--push" in result.output
+        assert "--node-ip" in result.output
 
     def test_missing_domain_exits_nonzero(self):
         import noah
@@ -345,25 +276,7 @@ class TestSetupGitopsCli:
         assert result.exit_code != 0
         assert "domain" in result.output.lower() or "missing" in result.output.lower()
 
-    def test_successful_run_prints_bootstrap_command(self, project_root, tmp_path):
-        import noah
-        from click.testing import CliRunner
-        runner = CliRunner()
-
-        with patch("Scripts.gitops.gitops_init.setup_gitops",
-                   return_value=str(tmp_path / "out")) as mock_sg:
-            result = runner.invoke(noah.cli, [
-                "setup", "gitops",
-                "--domain", DOMAIN,
-                "--target-dir", str(tmp_path / "out"),
-            ])
-
-        mock_sg.assert_called_once()
-        assert result.exit_code == 0
-        assert "cluster bootstrap" in result.output
-        assert DOMAIN in result.output
-
-    def test_setup_gitops_error_exits_nonzero(self, project_root, tmp_path):
+    def test_setup_gitops_error_exits_nonzero(self):
         import noah
         from click.testing import CliRunner
         runner = CliRunner()
@@ -373,7 +286,7 @@ class TestSetupGitopsCli:
             result = runner.invoke(noah.cli, [
                 "setup", "gitops",
                 "--domain", DOMAIN,
-                "--target-dir", str(tmp_path / "out"),
+                "--node-ip", "1.2.3.4",
             ])
 
         assert result.exit_code != 0
@@ -387,7 +300,7 @@ class TestSetupGitopsCli:
 @pytest.mark.integration
 def test_sops_encrypt_integration(project_root, tmp_path):
     """Calls the real sops binary to verify encryption works end-to-end."""
-    from Scripts.gitops.gitops_init import _sops_encrypt, _write_sops_yaml
+    from Scripts.gitops.gitops_init import _write_sops_yaml
 
     _write_sops_yaml(tmp_path, AGE_PUBLIC_KEY)
     enc_file = tmp_path / "test.enc.yaml"

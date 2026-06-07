@@ -669,6 +669,14 @@ def run_bootstrap(
     if k3s_version:
         extra_vars["k3s_version"] = k3s_version
 
+    # Render application secrets from the canonical store and deliver them
+    # out-of-band (the app-secrets role kubectl-applies this manifest). Secrets
+    # are never committed to Git, so a fresh deploy doesn't depend on a push.
+    from Scripts.gitops.gitops_init import render_app_secret_manifests
+    extra_vars["app_secrets_manifest"] = render_app_secret_manifests(
+        ansible_dir.parent, domain
+    )
+
     mode_label = "HA (3-node embedded etcd)" if ha else "single-node (embedded etcd)"
     click.echo(f"🚀 NOAH bootstrap — mode: {mode_label}")
     click.echo(f"   nodes:     {', '.join(node_list)}")

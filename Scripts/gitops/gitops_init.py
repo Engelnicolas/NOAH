@@ -291,6 +291,33 @@ def _sops_encrypt(path: Path, sops_yaml: Path, age_key_file: Path) -> None:
         raise RuntimeError(f"SOPS encryption failed for {path}:\n{result.stderr}")
 
 
+def render_app_secret_manifests(project_root: Path, domain: str) -> str:
+    """Render the application Secret manifests as a single plaintext, multi-document
+    YAML stream, built from the canonical store using the same templates and
+    placeholder substitution as the (now removed) gitops/*.enc.yaml files.
+
+    This is the out-of-band delivery path: the bootstrap passes the result to the
+    `app-secrets` Ansible role, which `kubectl apply`s it directly into the
+    cluster. Secrets therefore never need to be committed to Git during a
+    deployment. Reused for re-delivery after rotation.
+    """
+    from Scripts.security.canonical_store import get_canonical_store
+
+    store = get_canonical_store(project_root)
+    previous_domain = store.get_cluster_domain()
+    replacements = _get_or_generate_secrets(project_root, domain, previous_domain)
+    replacements["example.com"] = domain
+    replacements["${DOMAIN}"] = domain
+
+    documents: list[str] = []
+    for template in _DEFAULT_TEMPLATES.values():
+        text = template
+        for placeholder, value in replacements.items():
+            text = text.replace(placeholder, value)
+        documents.append(text.rstrip("\n"))
+    return "\n---\n".join(documents) + "\n"
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------

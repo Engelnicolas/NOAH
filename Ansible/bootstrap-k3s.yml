@@ -89,3 +89,10 @@
     flux_path: "{{ flux_path | default('clusters/production') }}"
   roles:
     - role: flux-bootstrap
+
+- name: NOAH bootstrap — phase 7, seed application secrets out-of-band
+  hosts: k3s_primary
+  become: yes
+  gather_facts: no
+  roles:
+    - role: app-secrets

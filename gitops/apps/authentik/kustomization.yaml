@@ -5,6 +5,4 @@ resources:
   - namespace.yaml
   - helmrepository.yaml
   - helmrelease.yaml
-  - values-secret.enc.yaml
-  - bootstrap-token.enc.yaml
   - authentik-ingress.yaml

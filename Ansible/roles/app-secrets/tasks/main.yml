@@ -1,0 +1,52 @@
+---
+# NOAH role: app-secrets
+# Delivers the application secrets to the cluster out-of-band (kubectl apply),
+# so they never need to be committed to Git during a deployment.
+#
+# The manifest is rendered by the noah CLI from the canonical secrets store
+# (Scripts/gitops/gitops_init.py:render_app_secret_manifests) and passed in as
+# the `app_secrets_manifest` extra-var. Namespaces are pre-created here because
+# the secrets land before Flux has reconciled the namespace.yaml manifests.
+#
+# Idempotent: namespace creation and `kubectl apply` are both repeatable.
+# Skipped when no manifest is provided (e.g. the add-nodes path reuses this
+# playbook without secrets).
+
+- name: Seed application secrets
+  when: app_secrets_manifest is defined and (app_secrets_manifest | length) > 0
+  block:
+    - name: Ensure target namespaces exist for application secrets
+      shell: |
+        KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+          kubectl create namespace {{ item }} \
+            --dry-run=client -o yaml | \
+          KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
+      args:
+        executable: /bin/bash
+      loop:
+        - external-dns
+        - cert-manager
+        - authentik
+        - headlamp
+      changed_when: false
+
+    - name: Write application secrets manifest to a temp file on the primary
+      copy:
+        content: "{{ app_secrets_manifest }}"
+        dest: /tmp/noah-app-secrets.yaml
+        mode: "0600"
+      no_log: true
+
+    - name: Apply application secrets
+      shell: |
+        KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+          kubectl apply -f /tmp/noah-app-secrets.yaml
+      args:
+        executable: /bin/bash
+      no_log: true
+      changed_when: false
+
+    - name: Remove application secrets temp file
+      file:
+        path: /tmp/noah-app-secrets.yaml
+        state: absent

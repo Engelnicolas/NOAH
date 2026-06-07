@@ -176,6 +176,38 @@ class TestGetOrGenerateSecrets:
         assert result[f"admin@example.com"] == f"admin@{DOMAIN}"
 
 
+class TestRenderAppSecretManifests:
+    """Out-of-band delivery path: secrets are rendered in memory (and applied via
+    kubectl by the app-secrets role) rather than committed to Git."""
+
+    def _render(self, project_root):
+        from Scripts.gitops.gitops_init import render_app_secret_manifests
+        mock_store = MagicMock()
+        mock_store.get_cluster_domain.return_value = None
+        with patch("Scripts.gitops.gitops_init._get_or_generate_secrets",
+                   return_value=dict(FAKE_SECRETS)), \
+             patch("Scripts.security.canonical_store.get_canonical_store",
+                   return_value=mock_store):
+            return render_app_secret_manifests(project_root, DOMAIN)
+
+    def test_renders_five_secret_documents(self, project_root):
+        out = self._render(project_root)
+        assert out.count("apiVersion: v1") == 5
+        assert out.count("kind: Secret") == 5
+        assert "\n---\n" in out  # multi-document stream
+
+    def test_all_placeholders_filled(self, project_root):
+        out = self._render(project_root)
+        assert "REPLACE_WITH" not in out
+        assert "example.com" not in out
+
+    def test_contains_expected_secret_material_and_namespaces(self, project_root):
+        out = self._render(project_root)
+        assert "cf-token-abc" in out
+        for ns in ("external-dns", "cert-manager", "authentik", "headlamp"):
+            assert f"namespace: {ns}" in out
+
+
 # ---------------------------------------------------------------------------
 # Unit tests — setup_gitops() end-to-end (SOPS mocked)
 # ---------------------------------------------------------------------------

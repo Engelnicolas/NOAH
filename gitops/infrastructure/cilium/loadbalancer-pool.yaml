@@ -1,8 +1,0 @@
----
-apiVersion: "cilium.io/v2"
-kind: CiliumLoadBalancerIPPool
-metadata:
-  name: noah-public-pool
-spec:
-  blocks:
-    - cidr: "13.38.117.45/32"

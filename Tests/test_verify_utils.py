@@ -103,12 +103,14 @@ class TestVerifyDeployment:
             p.start()
         try:
             with patch.object(vu, "_check_urls",
-                              return_value=[("https://auth.example.org", True, "HTTP 200")]):
+                              return_value=[("https://auth.example.org", True, "HTTP 200")]), \
+                 patch.object(vu, "_print_admin_credentials") as creds:
                 ok = vu.verify_deployment(domain="example.org", timeout=1, url_timeout=1)
         finally:
             for p in patches:
                 p.stop()
         assert ok is True
+        creds.assert_called_once_with("example.org")
 
     def test_fails_when_urls_unreachable(self):
         patches = _patch_env()

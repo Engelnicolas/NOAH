@@ -125,6 +125,29 @@ def _print_node_side_help() -> None:
     click.echo("    flux get all --all-namespaces")
 
 
+def _print_admin_credentials(domain: Optional[str]) -> None:
+    """Print the Authentik admin login provisioned during bootstrap (user
+    `akadmin`). Best-effort: the password lives in the SOPS-encrypted canonical
+    store, so this prints a hint instead when it can't be read (e.g. no Age key
+    on this machine)."""
+    try:
+        from Scripts.core_helm.authentik_credentials import get_authentik_credentials
+        creds, err = get_authentik_credentials(domain=domain)
+    except Exception as exc:  # pragma: no cover - defensive
+        creds, err = None, str(exc)
+
+    click.echo(click.style("\n Authentik admin login:", bold=True))
+    if creds:
+        click.echo(f"   Username : {creds['admin_username']}")
+        click.echo(f"   Password : {creds['admin_password']}")
+        click.echo(click.style(
+            "   (From the canonical secrets store — also via `noah password show-password`.)",
+            fg="bright_black"))
+    else:
+        click.echo(click.style(f"   Could not read admin credentials ({err}).", fg="yellow"))
+        click.echo("   Retrieve them with: noah password show-password")
+
+
 def _print_summary(ks_rows: List[Row], hr_rows: List[Row], success: bool,
                    url_rows: Optional[List[Row]], domain: Optional[str]) -> None:
     click.echo("\n" + _RULE)
@@ -245,4 +268,8 @@ def verify_deployment(domain: Optional[str] = None, timeout: int = 600,
 
     success = flux_ok and (url_rows is None or _all_urls_ok(url_rows))
     _print_summary(ks_rows, hr_rows, success, url_rows, domain)
+    # Surface the admin login only once the deployment fully succeeded (URLs
+    # validated), so the operator can sign in immediately.
+    if success and domain:
+        _print_admin_credentials(domain)
     return success

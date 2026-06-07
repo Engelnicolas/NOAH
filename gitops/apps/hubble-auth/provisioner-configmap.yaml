@@ -16,6 +16,7 @@ data:
     import argparse
     import os
     import sys
+    import time
     import requests
     import urllib3
 
@@ -61,12 +62,44 @@ data:
         sys.exit(1)
 
 
+    def wait_for_authentik(timeout=600, interval=10):
+        """Block until the Authentik API is reachable AND the default flows
+        exist. The provisioning Job can be scheduled before Authentik has
+        finished its first-boot bootstrap (Postgres migrations + flow import);
+        waiting here makes the Job resilient to that start-up race instead of
+        burning through the Job backoffLimit."""
+        base = os.environ["AUTHENTIK_URL"].rstrip("/")
+        deadline = time.time() + timeout
+        while True:
+            try:
+                r = requests.get(
+                    f"{base}/api/v3/flows/instances/",
+                    headers=headers(),
+                    params={"designation": "authorization"},
+                    verify=False,
+                    timeout=15,
+                )
+                if r.ok and r.json().get("results"):
+                    print("[INFO] Authentik is ready")
+                    return
+            except requests.RequestException:
+                pass
+            if time.time() >= deadline:
+                print("[ERROR] Authentik not ready within timeout", file=sys.stderr)
+                sys.exit(1)
+            print("[INFO] Waiting for Authentik to be ready...")
+            time.sleep(interval)
+
+
     def main():
         parser = argparse.ArgumentParser()
         parser.add_argument("--service", required=True)
         parser.add_argument("--type", required=True)
         parser.add_argument("--external-host", required=True)
         args = parser.parse_args()
+
+        # Tolerate the Job being scheduled before Authentik has finished booting.
+        wait_for_authentik()
 
         auth_flow = default_flow("authorization", "default-provider-authorization")
         invalidation_flow = default_flow("invalidation", "default-provider-invalidation")

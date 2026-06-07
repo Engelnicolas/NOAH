@@ -28,17 +28,22 @@ def get_authentik_credentials(domain: str | None = None) -> tuple[Optional[dict[
         admin_email = ''
         admin_username = 'akadmin'
 
+        # nginx-ingress binds the node's :80/:443 via hostPort (service is ClusterIP),
+        # so the external entry point is the node's IP (the EC2 EIP), not a
+        # LoadBalancer status. Prefer ExternalIP, fall back to InternalIP.
         external_ip = None
         resolution_status = 'not_attempted'
         import subprocess  # local import to avoid global dependency cost
         try:
-            kubectl_result = subprocess.run([
-                'kubectl', 'get', 'svc', '-n', 'identity', 'authentik-server',
-                '-o', 'jsonpath={.status.loadBalancer.ingress[0].ip}'
-            ], capture_output=True, text=True, timeout=8)
-            if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():
-                external_ip = kubectl_result.stdout.strip()
-                resolution_status = 'ip_assigned'
+            for addr_type in ('ExternalIP', 'InternalIP'):
+                kubectl_result = subprocess.run([
+                    'kubectl', 'get', 'nodes',
+                    '-o', f'jsonpath={{.items[0].status.addresses[?(@.type=="{addr_type}")].address}}'
+                ], capture_output=True, text=True, timeout=8)
+                if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():
+                    external_ip = kubectl_result.stdout.strip().split()[0]
+                    resolution_status = 'ip_assigned'
+                    break
             else:
                 resolution_status = 'pending'
         except Exception:

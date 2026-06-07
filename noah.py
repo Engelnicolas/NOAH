@@ -368,7 +368,7 @@ def show_password(ctx, domain):
         click.echo("")
         click.echo("💡 You can log in using either the username or email address")
         if credentials.get('resolution_status') in ('pending','lookup_error'):
-            click.echo("💡 External IP not ready yet; ensure LoadBalancer/Ingress and DNS are configured.")
+            click.echo("💡 Node IP not resolved yet; ensure the cluster is reachable and DNS is configured.")
     else:
         click.echo(f"⚠️  Could not retrieve credentials: {error}")
         click.echo("💡 Check FluxCD reconciliation: python3 noah.py flux status")

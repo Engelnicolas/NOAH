@@ -424,34 +424,6 @@ class ConfigLoader:
     
     # DNS provider configuration methods
 
-    def get_lb_ip_pool_cidr(self) -> str:
-        """Get Cilium LB IPAM pool CIDR for bare-metal LoadBalancer IP assignment.
-        Returns empty string when not configured (AWS without secondary ENI IPs)."""
-        return self.get('NOAH_LB_IP_POOL_CIDR', '')
-
-    def get_nginx_ingress_helm_values(self) -> Dict[str, Any]:
-        """Generate nginx-ingress Helm values with LB IPAM pool configuration."""
-        lb_pool_cidr = self.get_lb_ip_pool_cidr()
-        return {
-            'lbIpPool': {
-                'enabled': bool(lb_pool_cidr),
-                'cidr': lb_pool_cidr
-            },
-            'controller': {
-                'kind': 'DaemonSet',
-                'hostNetwork': True,
-                'dnsPolicy': 'ClusterFirstWithHostNet',
-                'ingressClassResource': {
-                    'name': 'nginx',
-                    'enabled': True,
-                    'default': True
-                },
-                'service': {
-                    'type': 'LoadBalancer'
-                }
-            }
-        }
-
     def get_dns_provider(self) -> str:
         """
         Get the configured DNS provider for external-dns.

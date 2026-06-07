@@ -318,6 +318,60 @@ def render_app_secret_manifests(project_root: Path, domain: str) -> str:
     return "\n---\n".join(documents) + "\n"
 
 
+# Namespaces the application secrets land in. Pre-created on apply because the
+# secrets may arrive before Flux has reconciled the namespace.yaml manifests.
+_SECRET_NAMESPACES = ("external-dns", "cert-manager", "authentik", "headlamp")
+
+
+def apply_app_secrets(
+    domain: Optional[str] = None,
+    project_root: Optional[Path] = None,
+    print_status=None,
+) -> None:
+    """Render the application secrets and apply them directly to the running
+    cluster via kubectl (out-of-band, no Git commit). This mirrors the
+    `app-secrets` Ansible role used at bootstrap, so secrets can be rotated and
+    propagated to the cluster WITHOUT re-bootstrapping.
+
+    Requires kubectl access (KUBECONFIG env, ~/.kube/config, or
+    Kube/noah-cluster.yaml). Idempotent: namespaces and Secrets are applied.
+    """
+    from Scripts.security.canonical_store import get_canonical_store
+    # Reuses the kubeconfig resolution already used by `noah flux ...`.
+    from Scripts.cluster_create.flux_utils import _require_kubeconfig
+    from Scripts.utils.paths import NOAH_PATHS
+
+    if project_root is None:
+        project_root = NOAH_PATHS["root_dir"]
+
+    store = get_canonical_store(project_root)
+    domain = domain or store.get_cluster_domain()
+    if not domain:
+        raise RuntimeError(
+            "No domain provided and none recorded in the canonical store. "
+            "Pass an explicit --domain."
+        )
+
+    _require_kubeconfig()  # sets KUBECONFIG in env or raises
+
+    ns_docs = "\n---\n".join(
+        f"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {ns}"
+        for ns in _SECRET_NAMESPACES
+    )
+    # Namespaces first so a single apply creates them before the namespaced Secrets.
+    manifest = ns_docs + "\n---\n" + render_app_secret_manifests(project_root, domain)
+
+    result = subprocess.run(
+        ["kubectl", "apply", "-f", "-"],
+        input=manifest, text=True, capture_output=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"kubectl apply failed:\n{result.stderr}")
+    if print_status:
+        for line in result.stdout.strip().splitlines():
+            print_status(f"[SUCCESS] {line}", "SUCCESS")
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------

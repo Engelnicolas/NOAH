@@ -7,11 +7,16 @@ For the one-time migration from v0.0.8, see `MIGRATION_GUIDE.md`.
 
 ## 1. The model in one paragraph
 
-Git is the source of truth. FluxCD's controllers run inside the
-cluster, watch the GitOps repository every 10 minutes, decrypt any
-SOPS-protected secrets with the `sops-age` Secret in `flux-system`,
-and apply the result. **You don't `kubectl apply` in production —
-you `git push`.**
+Git is the source of truth for all **non-secret** manifests. FluxCD's
+controllers run inside the cluster, watch the GitOps repository every
+10 minutes, and apply the result. For these manifests, **you don't
+`kubectl apply` in production — you `git push`.**
+
+Application **secrets are not stored in Git**. They live only in the
+encrypted canonical store (`Secrets/canonical-secrets.enc.yaml`) and are
+delivered straight to the cluster out-of-band: at bootstrap by the
+`app-secrets` Ansible role, and on demand via `noah secrets apply`. A
+fresh deployment therefore never has to commit or push secrets.
 
 ---
 
@@ -28,7 +33,7 @@ gitops/
 │   ├── cert-manager/       # cert-manager + ClusterIssuer + CF token
 │   └── external-dns/       # Cloudflare DNS sync
 └── apps/
-    ├── authentik/          # SSO (HelmRelease + SOPS-encrypted values)
+    ├── authentik/          # SSO (HelmRelease; secrets applied out-of-band)
     ├── headlamp/           # Cluster UI (OIDC via Authentik)
     └── hubble-auth/        # Hubble UI ingress + Authentik proxy
 ```
@@ -51,19 +56,21 @@ infrastructure  ← apps
 ```bash
 mkdir -p gitops/apps/myapp
 # Drop in: namespace.yaml, helmrepository.yaml, helmrelease.yaml,
-# any *.enc.yaml secrets, plus a kustomization.yaml that lists them.
+# plus a kustomization.yaml that lists them. (Non-secret manifests only.)
 echo "  - myapp" >> gitops/apps/kustomization.yaml
-sops --encrypt --in-place gitops/apps/myapp/secret.enc.yaml
 git add -A && git commit -m 'apps: add myapp' && git push
 python noah.py flux sync   # optional — Flux will pick it up within 10 min anyway
 ```
 
-### Update a secret
+If the app needs a secret, it is delivered out-of-band from the canonical
+store, not committed to Git — see §4.
+
+### Update / rotate a secret
 
 ```bash
-sops gitops/apps/authentik/values-secret.enc.yaml
-git commit -am 'authentik: rotate bootstrap password' && git push
-python noah.py flux sync
+# Rotate in the canonical store AND push straight to the cluster —
+# no git, no re-bootstrap:
+python noah.py secrets rotate --service authentik --apply
 ```
 
 ### Pin / pause a HelmRelease (e.g. before a manual chart upgrade)
@@ -93,20 +100,30 @@ python noah.py cluster status     # nodes + etcd + flux roll-up
 
 ---
 
-## 4. Secrets workflow (SOPS + Age)
+## 4. Secrets workflow (out-of-band)
 
-1. **Decrypt** locally: `sops gitops/apps/<svc>/<file>.enc.yaml`
-2. **Edit** in your $EDITOR (sops re-encrypts on save).
-3. **Commit + push** — FluxCD's kustomize-controller decrypts on
-   apply using the `sops-age` Secret in `flux-system`.
+Application secrets are **not** committed to Git and **not** reconciled
+by Flux. The single source of truth is the encrypted canonical store
+`Secrets/canonical-secrets.enc.yaml` (SOPS/Age). NOAH renders the
+Kubernetes Secret manifests from it and applies them directly:
 
-The `gitops/.sops.yaml` `creation_rules` declare which Age public
-keys can decrypt — keep at least two recipients (one offline) so
-losing `Age/keys.txt` is recoverable.
+1. **At bootstrap** — the `app-secrets` Ansible role `kubectl apply`s the
+   rendered secrets after Flux is installed.
+2. **On demand** — `python noah.py secrets apply` re-renders from the
+   canonical store and applies to the running cluster.
+3. **On rotation** — `python noah.py secrets rotate --service <svc> --apply`
+   rotates the value in the store and pushes it to the cluster in one step.
 
-> **Never** `kubectl create secret --from-literal` against the live
-> cluster. FluxCD will treat it as drift and either reset or refuse to
-> reconcile.
+Because these Secrets are unmanaged by Flux, they are **not** pruned or
+drift-corrected. To re-sync after a manual change, re-run `secrets apply`.
+
+Authentik picks up a changed value automatically (Flux watches its
+`authentik-values` Secret via `valuesFrom`). Env-mounted consumers
+(headlamp, external-dns, cert-manager) read their Secret at startup, so
+restart them to pick up a rotation, e.g. `kubectl rollout restart deploy -n headlamp`.
+
+> Back up `Secrets/canonical-secrets.enc.yaml` **and** `Age/keys.txt`
+> offline: together they are the only copy of your secret material.
 
 ---
 
@@ -144,5 +161,5 @@ the API than reconciling.
 | Cluster gone (single-node)            | Re-run `noah cluster bootstrap` — Flux reconstructs state.   |
 | One HA node down                      | Quorum holds; replace node, run `noah cluster add-nodes`.    |
 | `Age/keys.txt` lost, backup intact    | Restore backup as `Age/keys.txt`, re-run bootstrap.          |
-| Both Age keys lost                    | Secrets are unrecoverable. Restore from a non-SOPS backup.   |
-| GitOps repo gone                      | Restore from any clone — Flux re-points and re-reconciles.   |
+| Canonical store or Age key lost       | Secrets are unrecoverable (random-generated). Restore the offline backup of `Secrets/canonical-secrets.enc.yaml` + `Age/keys.txt`. |
+| GitOps repo gone                      | Restore from any clone — Flux re-reconciles. Secrets are unaffected (not stored in Git); re-apply with `noah secrets apply` if needed. |

@@ -19,8 +19,9 @@ def register_rotate_command(secrets_group):
     @click.option('--service', required=True, help='Service dont on veut faire tourner les secrets (authentik, cilium, etc)')
     @click.option('--keys', help='Liste de clés spécifiques séparées par des virgules (défaut: toutes)')
     @click.option('--show', is_flag=True, help='Afficher les métadonnées après rotation (valeurs masquées)')
+    @click.option('--apply', 'do_apply', is_flag=True, help='Appliquer les secrets au cluster en cours (sans re-bootstrap)')
     @click.pass_context
-    def rotate_canonical(ctx, service, keys, show):  # noqa: D401
+    def rotate_canonical(ctx, service, keys, show, do_apply):  # noqa: D401
         """Fait tourner un ou plusieurs secrets (store canonique)."""
         ensure_security_initialized(ctx)
         key_list = [k.strip() for k in keys.split(',')] if keys else None
@@ -29,6 +30,13 @@ def register_rotate_command(secrets_group):
             click.echo(f"❌ Aucune rotation effectuée pour {service}")
             return
         click.echo(f"✅ Rotation effectuée pour {service}: {', '.join(key_list) if key_list else 'TOUTES les clés'}")
+        if do_apply:
+            from Scripts.gitops.gitops_init import apply_app_secrets
+            try:
+                apply_app_secrets(print_status=lambda m, lvl='INFO': click.echo(m))
+                click.echo("✅ Secrets appliqués au cluster (aucun re-bootstrap nécessaire).")
+            except Exception as e:  # noqa: BLE001
+                click.echo(f"❌ Échec de l'application au cluster: {e}")
         if show:
             store = get_canonical_store()
             svc = store.data.get('services', {}).get(service, {})

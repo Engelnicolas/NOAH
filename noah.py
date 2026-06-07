@@ -422,6 +422,27 @@ def validate(ctx, service, namespace, fix):
         else:
             click.echo(f"💡 Run with --fix to automatically resolve inconsistencies")
 
+@secrets.command(name='apply')
+@click.option('--domain', help='Cluster domain (defaults to the value stored in the canonical store)')
+@click.pass_context
+def apply_secrets(ctx, domain):
+    """Apply application secrets to the running cluster (out-of-band, no Git commit).
+
+    Renders secrets from the canonical store and kubectl-applies them directly.
+    Use after `secrets rotate` to propagate new secrets without re-bootstrapping.
+    """
+    from Scripts.gitops.gitops_init import apply_app_secrets
+    try:
+        apply_app_secrets(domain=domain, project_root=Path(__file__).parent,
+                          print_status=print_status)
+    except Exception as e:
+        print_status(f"[ERROR] {e}", "ERROR")
+        sys.exit(1)
+    click.echo("✅ Application secrets applied to the cluster.")
+    click.echo("💡 Authentik picks up changes automatically (Flux watches its values Secret).")
+    click.echo("   Env-mounted consumers may need a restart, e.g.:")
+    click.echo("     kubectl rollout restart deploy -n headlamp")
+
 @secrets.command()
 @click.option('--service', required=True, help='Service to regenerate secrets for')
 @click.option('--namespace', default='identity', help='Kubernetes namespace')

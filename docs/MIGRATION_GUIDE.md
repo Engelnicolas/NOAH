@@ -75,19 +75,14 @@ cp -R gitops/* /tmp/noah-gitops/
 cd /tmp/noah-gitops
 git init && git remote add origin git@github.com:acme-corp/noah-gitops.git
 
-# 3. Replace placeholders:
-#    - gitops/.sops.yaml             → real Age recipients (×2)
-#    - apps/*/oidc-secret.enc.yaml      → real OIDC client secrets
-#    - apps/authentik/values-secret.enc.yaml → real bootstrap creds
-#    - infrastructure/*/cloudflare-secret.enc.yaml → real CF token
+# 3. Replace placeholders (non-secret manifests only):
 #    - apps/headlamp/helmrelease.yaml   → headlamp.<your-domain>
 #    - apps/hubble-auth/hubble-ingress.yaml → hubble.<your-domain>
 #    - infrastructure/cert-manager/clusterissuer.yaml → admin@<your-domain>
+#    Secrets are NOT placed in the tree — they are delivered out-of-band
+#    from the canonical store at bootstrap (see §4.5).
 
-# 4. Encrypt every *.enc.yaml file BEFORE committing.
-find . -name '*.enc.yaml' -exec sops --encrypt --in-place {} \;
-
-# 5. Commit + push.
+# 4. Commit + push.
 git add -A && git commit -m 'Initial NOAH GitOps tree' && git push -u origin main
 ```
 
@@ -123,12 +118,11 @@ python noah.py cluster status   # nodes + etcd + Flux roll-up
 
 ### 4.5 Update a secret post-migration
 
-The whole point of GitOps: edit, encrypt, commit.
+Secrets live in the canonical store, not Git. Rotate and push to the
+cluster in one step — no commit, no re-bootstrap:
 
 ```bash
-sops apps/authentik/values-secret.enc.yaml
-git commit -am 'Rotate Authentik bootstrap password' && git push
-python noah.py flux sync     # don't wait for the 10 min interval
+python noah.py secrets rotate --service authentik --apply
 ```
 
 ---

@@ -39,19 +39,19 @@ spec:
     # ID/secret arrive from the headlamp-oidc Secret via envFrom.
     env:
       - name: OIDC_ISSUER_URL
-        value: https://auth.noah-infra.com/application/o/headlamp/
+        value: "https://auth.${DOMAIN}/application/o/headlamp/"
       - name: OIDC_SCOPES
         value: openid profile email groups
     ingress:
       enabled: true
       ingressClassName: nginx
       hosts:
-        - host: headlamp.noah-infra.com
+        - host: "headlamp.${DOMAIN}"
           paths:
             - path: /
               type: Prefix
       tls:
         - secretName: headlamp-tls
-          hosts: [headlamp.noah-infra.com]
+          hosts: ["headlamp.${DOMAIN}"]
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod

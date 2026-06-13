@@ -88,18 +88,6 @@ class TestWriteSopsYaml:
         assert "enc" in content  # path_regex contains \.enc\.yaml$ (regex-escaped)
 
 
-class TestSubstituteDomain:
-    def test_replaces_example_com(self):
-        from Scripts.gitops.gitops_init import _substitute_domain
-        result = _substitute_domain("host: auth.example.com", "mysite.io")
-        assert result == "host: auth.mysite.io"
-
-    def test_no_change_when_no_placeholder(self):
-        from Scripts.gitops.gitops_init import _substitute_domain
-        text = "host: auth.mysite.io"
-        assert _substitute_domain(text, "other.io") == text
-
-
 class TestSubstituteNodeIp:
     def test_replaces_placeholder(self):
         from Scripts.gitops.gitops_init import _substitute_node_ip
@@ -202,9 +190,10 @@ class TestRenderAppSecretManifests:
 # ---------------------------------------------------------------------------
 
 class TestSetupGitopsInPlace:
-    """The current setup_gitops() substitutes the domain and node public IP in
-    place inside project_root/gitops/, then SOPS-encrypts. SOPS, the canonical
-    store and secret generation are mocked."""
+    """setup_gitops() substitutes the node public IP in place inside
+    project_root/gitops/, then SOPS-encrypts. The ${DOMAIN} placeholder is left
+    untouched for Flux to substitute at apply time. SOPS, the canonical store
+    and secret generation are mocked."""
 
     def _run(self, project_root, node_public_ip=None):
         from Scripts.gitops import gitops_init
@@ -213,7 +202,7 @@ class TestSetupGitopsInPlace:
         hr_dir.mkdir(parents=True)
         hr = hr_dir / "helmrelease.yaml"
         hr.write_text(
-            "host: auth.example.com\n"
+            "host: auth.${DOMAIN}\n"
             "publish-status-address: ${NODE_PUBLIC_IP}\n"
         )
 
@@ -234,11 +223,12 @@ class TestSetupGitopsInPlace:
             )
         return hr, store
 
-    def test_substitutes_domain(self, project_root):
+    def test_leaves_domain_placeholder_for_flux(self, project_root):
         hr, _ = self._run(project_root)
         text = hr.read_text()
-        assert DOMAIN in text
-        assert "example.com" not in text
+        # ${DOMAIN} must survive setup_gitops — Flux substitutes it at apply time.
+        assert "${DOMAIN}" in text
+        assert DOMAIN not in text
 
     def test_substitutes_node_ip_when_provided(self, project_root):
         hr, store = self._run(project_root, node_public_ip=NODE_IP)

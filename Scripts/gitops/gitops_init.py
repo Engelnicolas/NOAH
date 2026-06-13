@@ -1,6 +1,8 @@
 """
 Automates preparation of the NOAH GitOps repository (gitops/ subdirectory):
-  1. Substitute the example.com / ${DOMAIN} placeholder domain
+  1. Substitute the ${NODE_PUBLIC_IP} placeholder in plain manifests (the
+     ${DOMAIN} placeholder is left for Flux to substitute at apply time via
+     Kustomization postBuild.substituteFrom — the cluster-vars ConfigMap)
   2. Load secrets from the canonical store (generating missing ones automatically)
   3. Decrypt any already-encrypted *.enc.yaml files (idempotent re-runs)
   4. Fill *.enc.yaml placeholders
@@ -69,18 +71,6 @@ def _infer_previous_domain(gitops_dir: Path, current_domain: str) -> Optional[st
             if d not in ("example.com", current_domain):
                 candidates.add(d)
     return next(iter(candidates)) if len(candidates) == 1 else None
-
-
-def _substitute_domain(text: str, domain: str, previous_domain: Optional[str] = None) -> str:
-    # `previous_domain` handles re-runs with a new --domain after the file was
-    # already filled with a different one. Substitute the email form first so
-    # the bare-domain rule doesn't mangle anything unexpected.
-    if previous_domain and previous_domain != domain:
-        text = text.replace(f"admin@{previous_domain}", f"admin@{domain}")
-        text = text.replace(previous_domain, domain)
-    text = text.replace("example.com", domain)
-    text = text.replace("${DOMAIN}", domain)
-    return text
 
 
 def _substitute_node_ip(text: str, node_ip: str, previous_ip: Optional[str] = None) -> str:
@@ -428,25 +418,23 @@ def setup_gitops(
     )
     previous_node_ip = store.get_node_public_ip()
 
-    # 1. Substitute domain (and node public IP, when provided) in plain YAML
-    # files. Substitution is idempotent, so we always recompute and only write
-    # back when the content actually changed — keeps no-op re-runs free of churn.
-    for yaml_file in gitops_dir.rglob("*.yaml"):
-        if yaml_file.name.endswith(".enc.yaml"):
-            continue
-        text = yaml_file.read_text()
-        new_text = _substitute_domain(text, domain, previous_domain)
-        if node_public_ip:
-            new_text = _substitute_node_ip(new_text, node_public_ip, previous_node_ip)
-        if new_text != text:
-            yaml_file.write_text(new_text)
+    # 1. Substitute the node public IP placeholder in plain YAML files, when
+    # provided. The ${DOMAIN} placeholder is intentionally left untouched —
+    # Flux substitutes it at apply time from the cluster-vars ConfigMap
+    # (Kustomization postBuild.substituteFrom), so the committed manifests stay
+    # domain-agnostic and routine deploys don't rewrite per-file hostnames.
+    # Idempotent: only write back when the content actually changed.
     if node_public_ip:
+        for yaml_file in gitops_dir.rglob("*.yaml"):
+            if yaml_file.name.endswith(".enc.yaml"):
+                continue
+            text = yaml_file.read_text()
+            new_text = _substitute_node_ip(text, node_public_ip, previous_node_ip)
+            if new_text != text:
+                yaml_file.write_text(new_text)
         print_status(
-            f"[SUCCESS] Substituted domain → {domain}, node public IP → {node_public_ip}",
-            "SUCCESS",
+            f"[SUCCESS] Substituted node public IP → {node_public_ip}", "SUCCESS"
         )
-    else:
-        print_status(f"[SUCCESS] Substituted domain → {domain}", "SUCCESS")
 
     # 2. Load secrets
     print_status("[INFO] Loading secrets from canonical store...", "INFO")

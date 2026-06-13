@@ -51,6 +51,24 @@
   no_log: true
   changed_when: false
 
+- name: Seed cluster-vars ConfigMap in flux-system namespace
+  # Holds the substitution variables Flux injects into the GitOps manifests
+  # via Kustomization postBuild.substituteFrom (currently DOMAIN), so the
+  # committed manifests keep ${DOMAIN} and need no per-deploy domain rewrite.
+  # Guarded so the add-nodes path (which re-runs this role without `domain`)
+  # never overwrites the ConfigMap with an empty value.
+  when: domain is defined and (domain | length) > 0
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+      kubectl create configmap cluster-vars \
+        --namespace=flux-system \
+        --from-literal=DOMAIN="{{ domain }}" \
+        --dry-run=client -o yaml | \
+      KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
+  args:
+    executable: /bin/bash
+  changed_when: false
+
 - name: Write SSH deploy private key to temp file on target node
   copy:
     content: "{{ flux_deploy_private_key }}"

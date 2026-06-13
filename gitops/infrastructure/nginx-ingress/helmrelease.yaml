@@ -54,7 +54,7 @@ spec:
       publishService:
         enabled: false
       extraArgs:
-        publish-status-address: 15.188.112.171
+        publish-status-address: ${NODE_PUBLIC_IP}
       config:
         use-forwarded-headers: "true"
         compute-full-forwarded-for: "true"

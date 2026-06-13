@@ -251,9 +251,10 @@ class HeadlampSSOTester:
             data = json.loads(output)
             secret_data = data.get('data', {})
 
-            required_keys = ['clientID', 'clientSecret', 'issuerURL']
-            missing_keys = [key for key in required_keys if key not in secret_data and
-                           key.replace('ID', '_id').replace('URL', '_url') not in secret_data]
+            # Env-format keys consumed via envFrom (config.oidc.externalSecret).
+            # issuerURL/scopes live in the HelmRelease .Values.env, not the Secret.
+            required_keys = ['OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET']
+            missing_keys = [key for key in required_keys if key not in secret_data]
 
             if not missing_keys:
                 self.print_status('OK', 'OIDC secret configured with all required fields')

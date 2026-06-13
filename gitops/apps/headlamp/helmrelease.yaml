@@ -24,11 +24,24 @@ spec:
   values:
     config:
       oidc:
+        # Reference the existing headlamp-oidc Secret (delivered out-of-band by
+        # the app-secrets role). externalSecret wires it in via envFrom and emits
+        # the -oidc-client-id/-secret/-idp-issuer-url/-scopes flags
+        # unconditionally, unlike secret.create:false which only emits them when
+        # the (unset) inline config.oidc.* values are non-empty.
         secret:
           create: false
+        externalSecret:
+          enabled: true
           name: headlamp-oidc
-        issuerURL: https://auth.noah-infra.com/application/o/headlamp/
-        scopes: openid profile email groups
+    # issuerURL/scopes are non-secret but must exist as container env vars so the
+    # chart can expand $(OIDC_ISSUER_URL)/$(OIDC_SCOPES) in the args. Client
+    # ID/secret arrive from the headlamp-oidc Secret via envFrom.
+    env:
+      - name: OIDC_ISSUER_URL
+        value: https://auth.noah-infra.com/application/o/headlamp/
+      - name: OIDC_SCOPES
+        value: openid profile email groups
     ingress:
       enabled: true
       ingressClassName: nginx

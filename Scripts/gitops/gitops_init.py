@@ -237,8 +237,11 @@ metadata:
   namespace: headlamp
 type: Opaque
 stringData:
-  clientID: REPLACE_WITH_OIDC_CLIENT_ID
-  clientSecret: REPLACE_WITH_OIDC_CLIENT_SECRET
+  # Env-format keys: the Headlamp chart consumes this Secret via envFrom
+  # (config.oidc.externalSecret), so the keys become container env vars
+  # referenced as $(OIDC_CLIENT_ID)/$(OIDC_CLIENT_SECRET) in the args.
+  OIDC_CLIENT_ID: REPLACE_WITH_OIDC_CLIENT_ID
+  OIDC_CLIENT_SECRET: REPLACE_WITH_OIDC_CLIENT_SECRET
 """,
 }
 

@@ -59,6 +59,16 @@ def test_cli_structure():
         print(f"✗ CLI structure test failed: {e}")
         assert False
 
+
+def test_bootstrap_exposes_eip_alloc_id_option():
+    """The cluster bootstrap command exposes --eip-alloc-id."""
+    import noah
+    from click.testing import CliRunner
+
+    result = CliRunner().invoke(noah.cli, ['cluster', 'bootstrap', '--help'])
+    assert result.exit_code == 0
+    assert '--eip-alloc-id' in result.output
+
 def test_verbose_functionality():
     """Test that verbose output is included"""
     print("Testing verbose functionality...")

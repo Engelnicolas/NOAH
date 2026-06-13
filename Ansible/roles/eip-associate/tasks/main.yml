@@ -1,0 +1,83 @@
+---
+# NOAH role: eip-associate
+# Single-node AWS only. When `eip_alloc_id` is provided, associate the given
+# Elastic IP with THIS EC2 instance so inbound traffic to the EIP reaches the
+# node's hostPort-bound nginx-ingress. The EIP's address is then exposed as the
+# `node_public_ip` fact, which the flux-bootstrap role seeds into the
+# cluster-vars ConfigMap so Flux substitutes ${NODE_PUBLIC_IP} into nginx's
+# publish-status-address at apply time — removing the manual
+# `setup gitops --node-ip` + commit step.
+#
+# IAM prerequisite: the instance role must allow ec2:AssociateAddress and
+# ec2:DescribeAddresses. Without them the association task fails loudly.
+#
+# No-op when eip_alloc_id is unset (non-AWS or no EIP).
+
+- name: Associate Elastic IP with this node and resolve its public address
+  when: eip_alloc_id | default('') | length > 0
+  block:
+    - name: Fetch IMDSv2 token
+      ansible.builtin.uri:
+        url: http://169.254.169.254/latest/api/token
+        method: PUT
+        headers:
+          X-aws-ec2-metadata-token-ttl-seconds: "300"
+        return_content: true
+      register: imds_token
+
+    - name: Read EC2 instance-id from IMDS
+      ansible.builtin.uri:
+        url: http://169.254.169.254/latest/meta-data/instance-id
+        headers:
+          X-aws-ec2-metadata-token: "{{ imds_token.content }}"
+        return_content: true
+      register: imds_instance_id
+
+    - name: Read EC2 region from IMDS
+      ansible.builtin.uri:
+        url: http://169.254.169.254/latest/meta-data/placement/region
+        headers:
+          X-aws-ec2-metadata-token: "{{ imds_token.content }}"
+        return_content: true
+      register: imds_region
+
+    - name: Set instance-id / region facts
+      ansible.builtin.set_fact:
+        eip_instance_id: "{{ imds_instance_id.content | trim }}"
+        eip_region: "{{ imds_region.content | trim }}"
+
+    - name: Associate the Elastic IP with this instance
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ec2
+          - associate-address
+          - --instance-id
+          - "{{ eip_instance_id }}"
+          - --allocation-id
+          - "{{ eip_alloc_id }}"
+          - --allow-reassociation
+          - --region
+          - "{{ eip_region }}"
+      changed_when: true
+
+    - name: Resolve the Elastic IP's public address
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ec2
+          - describe-addresses
+          - --allocation-ids
+          - "{{ eip_alloc_id }}"
+          - --region
+          - "{{ eip_region }}"
+          - --query
+          - Addresses[0].PublicIp
+          - --output
+          - text
+      register: eip_describe
+      changed_when: false
+
+    - name: Expose the EIP as the node public IP for downstream roles
+      ansible.builtin.set_fact:
+        node_public_ip: "{{ eip_describe.stdout | trim }}"

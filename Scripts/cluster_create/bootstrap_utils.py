@@ -608,6 +608,7 @@ def run_bootstrap(
     ansible_dir: Path,
     git_token: Optional[str] = None,
     git_provider: Optional[str] = None,
+    eip_alloc_id: Optional[str] = None,
 ) -> int:
     """Drive the bootstrap end-to-end. Returns the Ansible exit code."""
 
@@ -668,6 +669,10 @@ def run_bootstrap(
     }
     if k3s_version:
         extra_vars["k3s_version"] = k3s_version
+    # Single-node AWS: the eip-associate role binds this EIP to the node and
+    # publishes its address as ${NODE_PUBLIC_IP}. Omitted → role is a no-op.
+    if eip_alloc_id:
+        extra_vars["eip_alloc_id"] = eip_alloc_id
 
     # Render application secrets from the canonical store and deliver them
     # out-of-band (the app-secrets role kubectl-applies this manifest). Secrets

@@ -51,10 +51,21 @@
   no_log: true
   changed_when: false
 
+- name: Build cluster-vars --from-literal arguments
+  # NODE_PUBLIC_IP is appended only when the eip-associate role resolved it
+  # (single-node AWS), so non-AWS deploys keep their existing behaviour.
+  when: domain is defined and (domain | length) > 0
+  ansible.builtin.set_fact:
+    cluster_vars_literals: >-
+      --from-literal=DOMAIN={{ domain }}
+      {{ ('--from-literal=NODE_PUBLIC_IP=' ~ node_public_ip)
+         if (node_public_ip is defined and (node_public_ip | length) > 0) else '' }}
+
 - name: Seed cluster-vars ConfigMap in flux-system namespace
-  # Holds the substitution variables Flux injects into the GitOps manifests
-  # via Kustomization postBuild.substituteFrom (currently DOMAIN), so the
-  # committed manifests keep ${DOMAIN} and need no per-deploy domain rewrite.
+  # Holds the substitution variables Flux injects into the GitOps manifests via
+  # Kustomization postBuild.substituteFrom (DOMAIN and, on single-node AWS,
+  # NODE_PUBLIC_IP), so the committed manifests keep ${DOMAIN}/${NODE_PUBLIC_IP}
+  # and need no per-deploy rewrite.
   # Guarded so the add-nodes path (which re-runs this role without `domain`)
   # never overwrites the ConfigMap with an empty value.
   when: domain is defined and (domain | length) > 0
@@ -62,7 +73,7 @@
     KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
       kubectl create configmap cluster-vars \
         --namespace=flux-system \
-        --from-literal=DOMAIN="{{ domain }}" \
+        {{ cluster_vars_literals }} \
         --dry-run=client -o yaml | \
       KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
   args:

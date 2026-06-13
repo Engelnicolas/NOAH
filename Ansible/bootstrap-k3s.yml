@@ -27,6 +27,8 @@
 #   flux_branch      defaults to main
 #   flux_path        defaults to clusters/production
 #   github_owner     overrides the owner inferred from flux_repo
+#   eip_alloc_id     AWS Elastic IP allocation id to associate with the single
+#                    node (published as ${NODE_PUBLIC_IP}); single-node AWS only
 
 - name: NOAH bootstrap — phase 1, OS prerequisites on all nodes
   hosts: k3s_nodes
@@ -88,6 +90,10 @@
     flux_branch: "{{ flux_branch | default('main') }}"
     flux_path: "{{ flux_path | default('clusters/production') }}"
   roles:
+    # Associate the EIP (single-node AWS) before flux-bootstrap so the resolved
+    # node_public_ip fact is available when cluster-vars is seeded. No-op unless
+    # eip_alloc_id is set.
+    - role: eip-associate
     - role: flux-bootstrap
 
 - name: NOAH bootstrap — phase 7, seed application secrets out-of-band

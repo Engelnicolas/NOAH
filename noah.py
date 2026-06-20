@@ -189,6 +189,12 @@ def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
     else:
         eip_alloc_id = store.get_eip_allocation_id()
 
+    # Single-node mode: default --node to the EIP recorded by `setup gitops
+    # --node-ip` so the operator doesn't re-enter the same IP. An explicit
+    # --node always wins; --nodes / --ha are unaffected.
+    if not node and not nodes and not ha:
+        node = store.get_node_public_ip()
+
     rc = cluster_bootstrap(
         node=node,
         nodes=nodes,

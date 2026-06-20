@@ -123,7 +123,10 @@ def _resolve_nodes(node: Optional[str], nodes: Optional[str], ha: bool) -> List[
                 "Pass --ha to deploy multiple nodes."
             )
         return node_list
-    raise click.UsageError("Provide --node <ip> for single-node mode, or --ha --nodes n1,n2,n3.")
+    raise click.UsageError(
+        "No node IP available. Pass --node <ip>, run `noah setup gitops --node-ip <ip>` "
+        "first (it records the IP in the canonical store), or use --ha --nodes n1,n2,n3."
+    )
 
 
 def _check_existing_cluster(force_reset: bool) -> None:

@@ -41,7 +41,11 @@ spec:
       - name: OIDC_ISSUER_URL
         value: "https://auth.${DOMAIN}/application/o/headlamp/"
       - name: OIDC_SCOPES
-        value: openid profile email groups
+        # Must match the scopes the Authentik provider grants (openid/profile/
+        # email). Authentik's default `profile` mapping already carries the
+        # user's groups, so a separate `groups` scope (which has no managed
+        # mapping) is not requested.
+        value: openid profile email
     ingress:
       enabled: true
       ingressClassName: nginx

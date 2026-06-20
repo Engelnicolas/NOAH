@@ -233,6 +233,21 @@ stringData:
   OIDC_CLIENT_ID: REPLACE_WITH_OIDC_CLIENT_ID
   OIDC_CLIENT_SECRET: REPLACE_WITH_OIDC_CLIENT_SECRET
 """,
+    "apps/headlamp/oidc-provision-secret.enc.yaml": """\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: headlamp-oidc-provision
+  namespace: authentik
+type: Opaque
+stringData:
+  # Consumed via envFrom by the authentik-provision-headlamp Job (which runs in
+  # the authentik namespace). Same client id/secret as the headlamp-oidc Secret
+  # in the headlamp namespace, so the OIDC client registered in Authentik
+  # matches the credentials Headlamp authenticates with.
+  OIDC_CLIENT_ID: REPLACE_WITH_OIDC_CLIENT_ID
+  OIDC_CLIENT_SECRET: REPLACE_WITH_OIDC_CLIENT_SECRET
+""",
 }
 
 

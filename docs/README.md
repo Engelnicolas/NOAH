@@ -53,13 +53,12 @@ NOAH/
 git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
 python3 noah.py setup initialize
 
-# 2. Fill and encrypt secrets in gitops/
-python3 noah.py setup gitops --domain your-domain.com
+# 2. Fill and encrypt secrets in gitops/ (records the node's public IP / EIP)
+python3 noah.py setup gitops --domain your-domain.com --node-ip <EIP>
 
-# 3. Bootstrap K3s + FluxCD (auto-registers SSH deploy key on GitHub)
+# 3. Bootstrap K3s + FluxCD (single-node: --node defaults to the recorded EIP; auto-registers SSH deploy key)
 export GITHUB_TOKEN=ghp_xxx
 python3 noah.py cluster bootstrap \
-  --node 127.0.0.1 \
   --domain your-domain.com \
   --flux-repo https://github.com/Engelnicolas/NOAH.git \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \

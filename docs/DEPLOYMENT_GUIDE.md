@@ -1,7 +1,7 @@
 # NOAH Deployment Guide
 
 **Version**: 0.0.8
-**Last Updated**: May 2026
+**Last Updated**: June 2026
 
 Deploy NOAH (Network Operations & Automation Hub) — a complete Kubernetes infrastructure with SSO authentication and web dashboards.
 
@@ -81,17 +81,16 @@ NOAH/
 git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
 python3 noah.py setup initialize        # wizard: installs tools, generates Age key, configures Cloudflare token
 
-# 2. Fill and encrypt secrets in gitops/
-python3 noah.py setup gitops --domain your-domain.com
+# 2. Fill and encrypt secrets in gitops/ (records the node's public IP / EIP)
+python3 noah.py setup gitops --domain your-domain.com --node-ip <EIP>
 
 # 3. Push gitops changes to GitHub
 export GITHUB_TOKEN=ghp_xxx
 git add gitops/ && git commit -m "chore: configure domain and secrets"
 git push origin main
 
-# 4. Bootstrap K3s + FluxCD
+# 4. Bootstrap K3s + FluxCD (single-node: --node defaults to the IP recorded in step 2)
 python3 noah.py cluster bootstrap \
-  --node 127.0.0.1 \
   --domain your-domain.com \
   --flux-repo https://github.com/Engelnicolas/NOAH.git \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \
@@ -148,15 +147,18 @@ python3 noah.py setup reset
 ### Step 2: Prepare GitOps Secrets
 
 ```bash
-python3 noah.py setup gitops --domain your-domain.com
+python3 noah.py setup gitops --domain your-domain.com --node-ip <EIP>
 ```
 
 **What it does:**
 - Substitutes `example.com` / `${DOMAIN}` placeholders in `gitops/` with your domain
+- Records the node's public IP (EC2 EIP) in the canonical store and substitutes `${NODE_PUBLIC_IP}` in `gitops/` (external-dns publishes it as the A-record target)
 - Loads secrets from the canonical store (generating any missing ones)
 - Fills `*.enc.yaml` placeholder values with real secrets
 - Writes `.sops.yaml` with the current Age public key
 - SOPS-encrypts every `*.enc.yaml` in-place
+
+> `--node-ip` is optional on later runs — it falls back to the IP already stored in the canonical store. This recorded IP is the single entry-point address: single-node `cluster bootstrap` reuses it as the default `--node`.
 
 **Prerequisites:** `setup initialize` completed (Age key present, Cloudflare token configured).
 
@@ -172,13 +174,16 @@ git push origin main
 
 ```bash
 python3 noah.py cluster bootstrap \
-  --node 127.0.0.1 \
   --domain your-domain.com \
   --flux-repo https://github.com/Engelnicolas/NOAH.git \
   --ssh-user ubuntu \
   --ssh-key ~/.ssh/id_ed25519 \
   --git-token $GITHUB_TOKEN
 ```
+
+> **Single-node:** `--node` is optional — it defaults to the IP recorded by `setup gitops --node-ip` (the single source of truth for the entry-point IP). Pass `--node <IP>` to override.
+>
+> **AWS:** add `--eip-alloc-id eipalloc-…` to bind an Elastic IP to the node during bootstrap; its address is published as `${NODE_PUBLIC_IP}`. The allocation id is persisted in the canonical store, so later bootstraps reuse it automatically.
 
 **`--flux-repo` must point at the NOAH mono-repo** (`Engelnicolas/NOAH.git`), not a separate gitops repository. Flux reads from `clusters/production/` at the repo root and pulls manifests from `gitops/` via the `noah` GitRepository source.
 
@@ -373,7 +378,6 @@ kubectl top pods -A
 python3 noah.py password show-password > backup-credentials.txt
 python3 noah.py cluster destroy --force
 python3 noah.py cluster bootstrap \
-  --node 127.0.0.1 \
   --domain your-domain.com \
   --flux-repo https://github.com/Engelnicolas/NOAH.git \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \

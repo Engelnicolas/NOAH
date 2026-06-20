@@ -5,3 +5,18 @@ resources:
   - authentik
   - headlamp
   - hubble-auth
+
+# Shared provisioner script, generated here (not as a static ConfigMap) so its
+# content hash is appended to the name. When the script changes, the generated
+# name changes, which changes the volume reference in BOTH provisioning Jobs
+# (authentik-provision-hubble and -headlamp) — combined with the
+# kustomize.toolkit.fluxcd.io/force annotation on those Jobs, FluxCD then
+# deletes and recreates them so the new script actually runs. A static
+# ConfigMap would leave the Jobs untouched (their spec wouldn't change) and the
+# edit would never re-provision. Generated at this aggregate level so the name
+# rewrite reaches the Jobs in both the headlamp/ and hubble-auth/ subdirs.
+configMapGenerator:
+  - name: authentik-provisioner-script
+    namespace: authentik
+    files:
+      - authentik_provisioner.py

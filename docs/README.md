@@ -72,6 +72,8 @@ python3 noah.py password show-password
 ```
 
 > For a 3-node HA cluster add `--ha --nodes node1,node2,node3` to step 3.
+>
+> Running NOAH **on the target node** (co-located single-node)? Override with `--node 127.0.0.1` (or the node's private IP) — an instance can't SSH to its own public/Elastic IP (the AWS Internet Gateway doesn't hairpin it), so the EIP default times out.
 
 ## Architecture Overview
 

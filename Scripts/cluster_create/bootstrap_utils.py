@@ -443,6 +443,13 @@ def _encrypt_kubeconfig(project_root: Path, age_key_file: Path) -> None:
     if not plain.exists():
         click.echo("[WARNING] Kube/noah-cluster.yaml not found — skipping kubeconfig encryption.", err=True)
         return
+    if shutil.which("sops") is None:
+        # The cluster is already up; this step is only a local encrypted backup.
+        # Skip before copying so we never leave a plaintext file named *.enc.yaml.
+        click.echo("[WARNING] sops not found on PATH — skipping kubeconfig backup encryption. "
+                   "Install sops (e.g. `setup initialize`) and re-run; the working "
+                   "kubeconfig remains at Kube/noah-cluster.yaml.", err=True)
+        return
     shutil.copy2(plain, enc)
     env = {**os.environ, "SOPS_AGE_KEY_FILE": str(age_key_file)}
     result = subprocess.run(

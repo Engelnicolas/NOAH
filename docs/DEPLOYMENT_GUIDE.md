@@ -183,8 +183,6 @@ python3 noah.py cluster bootstrap \
 
 > **Single-node:** `--node` is optional — it defaults to the IP recorded by `setup gitops --node-ip` (the single source of truth for the entry-point IP). Pass `--node <IP>` to override.
 >
-> **AWS:** add `--eip-alloc-id eipalloc-…` to bind an Elastic IP to the node during bootstrap; its address is published as `${NODE_PUBLIC_IP}`. The allocation id is persisted in the canonical store, so later bootstraps reuse it automatically.
->
 > **Co-located (NOAH runs on the target node):** override with `--node 127.0.0.1` (or the node's private IP). An instance can't SSH to its own public/Elastic IP — the AWS Internet Gateway doesn't hairpin that traffic, so the EIP default times out (`UNREACHABLE … Connection timed out`). The EIP still serves external traffic and stays `${NODE_PUBLIC_IP}`.
 
 **`--flux-repo` must point at the NOAH mono-repo** (`Engelnicolas/NOAH.git`), not a separate gitops repository. Flux reads from `clusters/production/` at the repo root and pulls manifests from `gitops/` via the `noah` GitRepository source.

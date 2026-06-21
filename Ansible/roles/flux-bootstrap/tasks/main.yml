@@ -52,8 +52,9 @@
   changed_when: false
 
 - name: Build cluster-vars --from-literal arguments
-  # NODE_PUBLIC_IP is appended only when the eip-associate role resolved it
-  # (single-node AWS), so non-AWS deploys keep their existing behaviour.
+  # NODE_PUBLIC_IP is appended only when node_public_ip is set — passed as an
+  # extra-var from the canonical store via `setup gitops --node-ip`. Otherwise
+  # cluster-vars holds only DOMAIN (non-AWS / no public IP declared).
   when: domain is defined and (domain | length) > 0
   ansible.builtin.set_fact:
     cluster_vars_literals: >-

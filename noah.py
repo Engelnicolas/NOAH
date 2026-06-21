@@ -165,10 +165,6 @@ def destroy(ctx, name, force, keep_secrets):
               type=click.Choice(['github', 'gitlab', 'gitea'], case_sensitive=False),
               help='Force git provider for deploy-key API (auto-detected from URL by default). '
                    'Use for self-hosted GitLab or Gitea instances.')
-@click.option('--eip-alloc-id', 'eip_alloc_id', default=None,
-              help='AWS Elastic IP allocation id (eipalloc-…) to associate with the single '
-                   'node during bootstrap; its address is published as ${NODE_PUBLIC_IP}. '
-                   'Single-node AWS only. Defaults to the value stored in the canonical store.')
 @click.option('--no-wait', is_flag=True, default=False,
               help='Skip the post-bootstrap readiness wait/verdict (reconciliation is async).')
 @click.option('--verify-timeout', default=600, show_default=True,
@@ -178,18 +174,12 @@ def destroy(ctx, name, force, keep_secrets):
 @click.pass_context
 def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
               ssh_user, ssh_key, age_key_file, k3s_version, force_reset,
-              git_token, git_provider, eip_alloc_id, no_wait, verify_timeout, url_timeout):
+              git_token, git_provider, no_wait, verify_timeout, url_timeout):
     """Provision K3s + bootstrap FluxCD against a GitOps repo (SSH deploy key)."""
-    # The EIP allocation id is stable across instance recreation, so persist it
-    # when given and fall back to the stored value on later bootstraps.
     from Scripts.security.canonical_store import get_canonical_store
     store = get_canonical_store(Path(__file__).parent)
-    if eip_alloc_id:
-        store.set_eip_allocation_id(eip_alloc_id)
-    else:
-        eip_alloc_id = store.get_eip_allocation_id()
 
-    # Single-node mode: default --node to the EIP recorded by `setup gitops
+    # Single-node mode: default --node to the public IP recorded by `setup gitops
     # --node-ip` so the operator doesn't re-enter the same IP. An explicit
     # --node always wins; --nodes / --ha are unaffected.
     if not node and not nodes and not ha:
@@ -211,7 +201,6 @@ def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
         ansible_dir=Path('Ansible').resolve(),
         git_token=git_token,
         git_provider=git_provider,
-        eip_alloc_id=eip_alloc_id,
     )
 
     # Ansible finishing only means Flux was *installed*; reconciliation of the

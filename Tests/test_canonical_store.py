@@ -38,15 +38,3 @@ def test_domain_and_node_ip_are_independent(tmp_path, monkeypatch):
     reloaded = _store(tmp_path)
     assert reloaded.get_cluster_domain() == "d.example"
     assert reloaded.get_node_public_ip() == "198.51.100.9"
-
-
-def test_eip_allocation_id_defaults_to_none(tmp_path, monkeypatch):
-    monkeypatch.setenv("NOAH_DISABLE_SOPS", "true")
-    assert _store(tmp_path).get_eip_allocation_id() is None
-
-
-def test_eip_allocation_id_roundtrip_persists(tmp_path, monkeypatch):
-    monkeypatch.setenv("NOAH_DISABLE_SOPS", "true")
-    assert _store(tmp_path).set_eip_allocation_id("eipalloc-0abc123") is True
-    # A fresh instance must read the value back from disk.
-    assert _store(tmp_path).get_eip_allocation_id() == "eipalloc-0abc123"

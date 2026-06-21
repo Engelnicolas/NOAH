@@ -618,7 +618,6 @@ def run_bootstrap(
     ansible_dir: Path,
     git_token: Optional[str] = None,
     git_provider: Optional[str] = None,
-    eip_alloc_id: Optional[str] = None,
 ) -> int:
     """Drive the bootstrap end-to-end. Returns the Ansible exit code."""
 
@@ -679,19 +678,14 @@ def run_bootstrap(
     }
     if k3s_version:
         extra_vars["k3s_version"] = k3s_version
-    # Single-node AWS: the eip-associate role binds this EIP to the node and
-    # publishes its address as ${NODE_PUBLIC_IP}. Omitted → role is a no-op.
-    if eip_alloc_id:
-        extra_vars["eip_alloc_id"] = eip_alloc_id
-    else:
-        # No EIP association: seed the operator-declared node public IP (recorded
-        # by `setup gitops --node-ip` in the canonical store) so the flux-bootstrap
-        # role writes NODE_PUBLIC_IP into cluster-vars and Flux substitutes
-        # ${NODE_PUBLIC_IP} into nginx's publish-status-address at apply time.
-        from Scripts.security.canonical_store import get_canonical_store
-        declared_ip = get_canonical_store(ansible_dir.parent).get_node_public_ip()
-        if declared_ip:
-            extra_vars["node_public_ip"] = declared_ip
+    # Seed the operator-declared node public IP (recorded by `setup gitops
+    # --node-ip` in the canonical store) so the flux-bootstrap role writes
+    # NODE_PUBLIC_IP into cluster-vars and Flux substitutes ${NODE_PUBLIC_IP}
+    # into nginx's publish-status-address at apply time.
+    from Scripts.security.canonical_store import get_canonical_store
+    declared_ip = get_canonical_store(ansible_dir.parent).get_node_public_ip()
+    if declared_ip:
+        extra_vars["node_public_ip"] = declared_ip
 
     # Render application secrets from the canonical store and deliver them
     # out-of-band (the app-secrets role kubectl-applies this manifest). Secrets

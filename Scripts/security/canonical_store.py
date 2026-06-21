@@ -294,14 +294,6 @@ class CanonicalSecretsStore:
         self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
         return self.save()
 
-    def get_eip_allocation_id(self) -> Optional[str]:
-        return self.data.get("cluster", {}).get("eip_allocation_id")
-
-    def set_eip_allocation_id(self, eip_allocation_id: str) -> bool:
-        self.data.setdefault("cluster", {})["eip_allocation_id"] = eip_allocation_id
-        self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
-        return self.save()
-
     # ---------------- Schema Upgrade ----------------
     def _upgrade_schema_if_needed(self):
         cur = self.data.get('version', 1)

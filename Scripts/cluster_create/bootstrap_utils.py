@@ -683,6 +683,15 @@ def run_bootstrap(
     # publishes its address as ${NODE_PUBLIC_IP}. Omitted → role is a no-op.
     if eip_alloc_id:
         extra_vars["eip_alloc_id"] = eip_alloc_id
+    else:
+        # No EIP association: seed the operator-declared node public IP (recorded
+        # by `setup gitops --node-ip` in the canonical store) so the flux-bootstrap
+        # role writes NODE_PUBLIC_IP into cluster-vars and Flux substitutes
+        # ${NODE_PUBLIC_IP} into nginx's publish-status-address at apply time.
+        from Scripts.security.canonical_store import get_canonical_store
+        declared_ip = get_canonical_store(ansible_dir.parent).get_node_public_ip()
+        if declared_ip:
+            extra_vars["node_public_ip"] = declared_ip
 
     # Render application secrets from the canonical store and deliver them
     # out-of-band (the app-secrets role kubectl-applies this manifest). Secrets

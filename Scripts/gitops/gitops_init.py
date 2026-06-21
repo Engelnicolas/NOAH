@@ -73,16 +73,6 @@ def _infer_previous_domain(gitops_dir: Path, current_domain: str) -> Optional[st
     return next(iter(candidates)) if len(candidates) == 1 else None
 
 
-def _substitute_node_ip(text: str, node_ip: str, previous_ip: Optional[str] = None) -> str:
-    """Replace the ${NODE_PUBLIC_IP} placeholder (and any previously-substituted
-    IP on re-runs) with the node's reachable public IP. nginx publishes this via
-    --publish-status-address into each Ingress status, so external-dns creates
-    DNS records pointing at the EIP rather than the cluster-internal service IP."""
-    if previous_ip and previous_ip != node_ip:
-        text = text.replace(previous_ip, node_ip)
-    return text.replace("${NODE_PUBLIC_IP}", node_ip)
-
-
 def _get_or_generate_secrets(
     project_root: Path, domain: str, previous_domain: Optional[str] = None
 ) -> dict:
@@ -431,25 +421,12 @@ def setup_gitops(
     previous_domain = store.get_cluster_domain() or _infer_previous_domain(
         gitops_dir, domain
     )
-    previous_node_ip = store.get_node_public_ip()
-
-    # 1. Substitute the node public IP placeholder in plain YAML files, when
-    # provided. The ${DOMAIN} placeholder is intentionally left untouched —
-    # Flux substitutes it at apply time from the cluster-vars ConfigMap
-    # (Kustomization postBuild.substituteFrom), so the committed manifests stay
-    # domain-agnostic and routine deploys don't rewrite per-file hostnames.
-    # Idempotent: only write back when the content actually changed.
-    if node_public_ip:
-        for yaml_file in gitops_dir.rglob("*.yaml"):
-            if yaml_file.name.endswith(".enc.yaml"):
-                continue
-            text = yaml_file.read_text()
-            new_text = _substitute_node_ip(text, node_public_ip, previous_node_ip)
-            if new_text != text:
-                yaml_file.write_text(new_text)
-        print_status(
-            f"[SUCCESS] Substituted node public IP → {node_public_ip}", "SUCCESS"
-        )
+    # 1. Node public IP is intentionally NOT substituted into files here. Both
+    # ${DOMAIN} and ${NODE_PUBLIC_IP} are left for Flux to substitute at apply
+    # time from the cluster-vars ConfigMap (Kustomization postBuild.substituteFrom),
+    # so committed manifests stay environment-agnostic. The operator-provided IP
+    # is recorded in the canonical store (below) and seeded into cluster-vars by
+    # the flux-bootstrap Ansible role at deploy time.
 
     # 2. Load secrets
     print_status("[INFO] Loading secrets from canonical store...", "INFO")

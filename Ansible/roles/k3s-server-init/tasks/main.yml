@@ -19,6 +19,52 @@
     path: /usr/local/bin/k3s
   register: k3s_binary
 
+# --- Headlamp SSO: make the kube-apiserver trust Authentik-issued OIDC tokens.
+# Headlamp signs the user in against Authentik, then forwards the resulting
+# id_token to the kube-apiserver as a bearer token; without these flags the
+# apiserver rejects it and the dashboard stays empty ("SSO not propagated").
+# Delivered as a config.yaml.d drop-in (k3s merges it on every start) rather than
+# install-time CLI flags, so it also applies when re-running against an existing
+# cluster. oidc-client-id must match headlamp-oidc's OIDC_CLIENT_ID (default
+# "headlamp"); oidc-issuer-url matches Authentik's per-provider issuer and
+# Headlamp's OIDC_ISSUER_URL exactly (trailing slash included).
+- name: Ensure k3s config drop-in directory exists
+  file:
+    path: /etc/rancher/k3s/config.yaml.d
+    state: directory
+    mode: "0755"
+  when: domain is defined and (domain | length) > 0
+
+- name: Configure kube-apiserver OIDC args for Authentik SSO (Headlamp)
+  copy:
+    dest: /etc/rancher/k3s/config.yaml.d/oidc.yaml
+    mode: "0600"
+    content: |
+      kube-apiserver-arg:
+        - "oidc-issuer-url=https://auth.{{ domain }}/application/o/headlamp/"
+        - "oidc-client-id=headlamp"
+        - "oidc-username-claim=preferred_username"
+        - "oidc-username-prefix=oidc:"
+        - "oidc-groups-claim=groups"
+        - "oidc-groups-prefix=oidc:"
+  register: k3s_oidc_dropin
+  when: domain is defined and (domain | length) > 0
+
+# The apiserver runs in the k3s host process and resolves the issuer host via the
+# node's /etc/hosts + resolver. On single-node EC2 the public auth.<domain> record
+# points at the EIP, which the instance cannot reach (AWS 1:1 NAT has no hairpin),
+# so pin auth.<domain> to this node's internal IP — nginx-ingress binds :443 there
+# (hostPort) and serves the valid Let's Encrypt cert, so TLS still verifies. The
+# apiserver's OIDC authenticator fetches discovery/JWKS lazily and retries, so it
+# tolerates Authentik not being up yet at first boot.
+- name: Resolve auth.<domain> to this node so the apiserver can reach the OIDC issuer
+  lineinfile:
+    path: /etc/hosts
+    regexp: '\sauth\.{{ domain | regex_escape }}(\s|$)'
+    line: "{{ ansible_default_ipv4.address }} auth.{{ domain }}"
+    state: present
+  when: domain is defined and (domain | length) > 0
+
 - name: Install K3s server (cluster-init, embedded etcd)
   shell: |
     set -euo pipefail
@@ -39,6 +85,16 @@
   args:
     executable: /bin/bash
   when: not k3s_binary.stat.exists
+
+# Fresh installs read the drop-in on first boot (written above); an already-running
+# cluster must be restarted to load the newly-added OIDC args.
+- name: Restart k3s to apply OIDC args (existing cluster only)
+  systemd:
+    name: k3s
+    state: restarted
+  when:
+    - k3s_binary.stat.exists
+    - k3s_oidc_dropin is changed
 
 - name: Ensure K3s service is enabled and running
   systemd:

@@ -1,0 +1,22 @@
+---
+# Grants cluster access to Authentik admins who sign in to Headlamp via OIDC.
+# The kube-apiserver (configured by the Ansible k3s-server-init role) runs with
+# oidc-groups-claim=groups and oidc-groups-prefix=oidc:, so Authentik's default
+# "authentik Admins" superuser group surfaces to Kubernetes as the group
+# "oidc:authentik Admins". Bind that group to a role here.
+#
+# This grants full cluster-admin. To scope it down, point roleRef at a narrower
+# ClusterRole (e.g. a read-mostly role) instead of cluster-admin, or bind a
+# different Authentik group than "authentik Admins".
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp-oidc-admins
+subjects:
+  - kind: Group
+    name: "oidc:authentik Admins"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io

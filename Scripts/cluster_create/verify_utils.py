@@ -13,11 +13,10 @@ from __future__ import annotations
 
 import json
 import shutil
+import socket
 import ssl
 import subprocess
 import time
-import urllib.error
-import urllib.request
 from typing import List, Optional, Tuple
 
 import click  # type: ignore
@@ -84,34 +83,91 @@ def _all_ready(ks_rows: List[Row], hr_rows: List[Row]) -> bool:
     )
 
 
-def _probe_url(url: str, timeout: int) -> Tuple[bool, str]:
-    """Probe a URL over HTTPS. Returns (reachable, detail).
+def _node_internal_ips() -> List[str]:
+    """Node InternalIPs via kubectl — the DNS-independent connect targets for the
+    URL probe. nginx binds the node's :443 (hostPort), so these reach the same
+    ingress as the public hostname, yet unlike the public EIP they're reachable
+    from the node itself (AWS 1:1 NAT has no hairpin to the instance's own EIP)."""
+    data, _ = _get_json("nodes")
+    if not data:
+        return []
+    ips: List[str] = []
+    for item in data.get("items", []):
+        for addr in item.get("status", {}).get("addresses", []):
+            if addr.get("type") == "InternalIP" and addr.get("address"):
+                ips.append(addr["address"])
+    return ips
 
-    Any HTTP status (200/302/401/…) means the ingress + app are serving, so it
-    counts as reachable — only a connection/DNS/TLS error counts as a failure.
-    TLS is verified (default context), so a not-yet-issued Let's Encrypt cert
-    surfaces as unreachable until issuance completes."""
-    req = urllib.request.Request(url, method="GET")
+
+def _status_code(status_line: str) -> Optional[int]:
+    """Parse the numeric status from an HTTP status line (`HTTP/1.1 200 OK`)."""
+    parts = status_line.split()
+    if len(parts) >= 2 and parts[0].startswith("HTTP/"):
+        try:
+            return int(parts[1])
+        except ValueError:
+            return None
+    return None
+
+
+def _probe_host(host: str, connect_ips: List[str], timeout: int) -> Tuple[bool, str]:
+    """Probe https://host without DNS: connect to each candidate node-local IP in
+    turn, always presenting `host` for SNI + the HTTP Host header so TLS validates
+    against the service's Let's Encrypt cert and nginx routes by vhost. Returns
+    (reachable, detail).
+
+    Any HTTP status (200/302/401/…) means the ingress + app are serving → reachable;
+    only connection/TLS failures count as a miss. TLS is verified (default context),
+    so a not-yet-issued cert surfaces as unreachable until issuance completes."""
     ctx = ssl.create_default_context()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-            return True, f"HTTP {resp.status}"
-    except urllib.error.HTTPError as exc:
-        # Server responded with a 4xx/5xx — the stack is reachable.
-        return True, f"HTTP {exc.code}"
-    except urllib.error.URLError as exc:
-        return False, str(exc.reason)
-    except Exception as exc:  # pragma: no cover - defensive
-        return False, str(exc)
+    last = "no node-local address to probe"
+    for ip in connect_ips:
+        try:
+            with socket.create_connection((ip, 443), timeout=timeout) as raw, \
+                    ctx.wrap_socket(raw, server_hostname=host) as tls:
+                tls.settimeout(timeout)
+                tls.sendall(
+                    f"GET / HTTP/1.1\r\nHost: {host}\r\n"
+                    "User-Agent: noah-verify\r\nConnection: close\r\n\r\n".encode()
+                )
+                buf = b""
+                while b"\r\n" not in buf and len(buf) < 256:
+                    chunk = tls.recv(256 - len(buf))
+                    if not chunk:
+                        break
+                    buf += chunk
+            status_line = buf.split(b"\r\n", 1)[0].decode("latin-1", "replace")
+        except ssl.SSLError as exc:
+            # The server completed the TCP connect but the TLS cert isn't valid
+            # yet (e.g. Let's Encrypt issuance pending). Every node-local target
+            # serves the same cert, so stop here rather than retry.
+            return False, str(exc) or exc.__class__.__name__
+        except OSError as exc:
+            # Connection refused/timeout on this candidate — try the next one.
+            last = str(exc) or exc.__class__.__name__
+            continue
+        code = _status_code(status_line)
+        if code is not None:
+            return True, f"HTTP {code} (via {ip})"
+        last = f"unexpected response {status_line!r}"
+    return False, last
 
 
 def _check_urls(domain: str, timeout: int = 10) -> List[Row]:
-    """Probe each service URL once; returns one (url, reachable, detail) Row each."""
+    """Probe each service URL once; returns one (url, reachable, detail) Row each.
+
+    DNS-independent: connects to node-local addresses (the node's InternalIP, then
+    loopback) rather than resolving the public hostname. On the single-node EC2 the
+    public EIP isn't reachable from the node (AWS 1:1 NAT has no hairpin) and public
+    DNS may not resolve on the node yet — both would surface as a false 'timed out'.
+    SNI/Host stays the service host so TLS still validates against the LE cert."""
+    connect_ips = _node_internal_ips()
+    connect_ips.append("127.0.0.1")
     rows: List[Row] = []
     for sub in _SERVICE_SUBDOMAINS:
-        url = f"https://{sub}.{domain}"
-        ok, detail = _probe_url(url, timeout)
-        rows.append((url, ok, detail))
+        host = f"{sub}.{domain}"
+        ok, detail = _probe_host(host, connect_ips, timeout)
+        rows.append((f"https://{host}", ok, detail))
     return rows
 
 
@@ -185,8 +241,8 @@ def _print_summary(ks_rows: List[Row], hr_rows: List[Row], success: bool,
         click.echo("   noah cluster verify        # re-check after it has had more time")
         if _all_ready(ks_rows, hr_rows) and not _all_urls_ok(url_rows):
             click.echo(click.style(
-                "   (Flux converged but some URLs aren't reachable yet — DNS propagation "
-                "or Let's Encrypt TLS issuance can take a few minutes.)", fg="bright_black"))
+                "   (Flux converged but some URLs aren't serving yet — the ingress "
+                "controller or Let's Encrypt TLS issuance can take a few minutes.)", fg="bright_black"))
 
 
 def verify_deployment(domain: Optional[str] = None, timeout: int = 600,
@@ -195,10 +251,12 @@ def verify_deployment(domain: Optional[str] = None, timeout: int = 600,
 
     1. Poll until all Flux Kustomizations + HelmReleases are Ready (or `timeout`
        seconds elapse).
-    2. Once Flux has converged and a `domain` is known, poll the public service
-       URLs over HTTPS until they all respond (or `url_timeout` seconds elapse) —
-       this confirms DNS resolves to the node and TLS is issued. Skipped when no
-       domain is provided, preserving the Flux-only verdict.
+    2. Once Flux has converged and a `domain` is known, poll the service URLs over
+       HTTPS until they all respond (or `url_timeout` seconds elapse) — this
+       confirms the ingress serves each vhost and TLS is issued. The probe is
+       DNS-independent: it connects to node-local addresses (see `_check_urls`),
+       not the public hostname, so it works when run on the node itself. Skipped
+       when no domain is provided, preserving the Flux-only verdict.
 
     Prints live progress and a final verdict.
     """
@@ -247,9 +305,10 @@ def verify_deployment(domain: Optional[str] = None, timeout: int = 600,
 
     flux_ok = _all_ready(ks_rows, hr_rows)
 
-    # Phase 2: confirm the public URLs actually serve (DNS resolves to the node's
-    # public IP and TLS is issued). Only meaningful once Flux has converged and a
-    # domain is known; otherwise url_rows stays None and the verdict is Flux-only.
+    # Phase 2: confirm the URLs actually serve (ingress routes the vhost and TLS
+    # is issued), probing node-local addresses so it works on the node itself.
+    # Only meaningful once Flux has converged and a domain is known; otherwise
+    # url_rows stays None and the verdict is Flux-only.
     url_rows: Optional[List[Row]] = None
     if flux_ok and domain:
         click.echo(click.style(

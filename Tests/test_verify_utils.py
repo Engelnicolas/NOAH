@@ -6,8 +6,9 @@ Covers the URL reachability probing and the two-phase verdict of
 verify_deployment() (Flux convergence + URL reachability). All network and
 kubectl I/O is mocked.
 """
+import socket
+import ssl
 import sys
-import urllib.error
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -33,42 +34,98 @@ class TestAllUrlsOk:
 
 
 # ---------------------------------------------------------------------------
-# _probe_url — any HTTP response means reachable; only conn/DNS/TLS errors fail
+# _status_code — parse the HTTP status line
 # ---------------------------------------------------------------------------
 
-class TestProbeUrl:
-    def test_2xx_is_reachable(self):
-        resp = MagicMock()
-        resp.status = 200
-        cm = MagicMock()
-        cm.__enter__.return_value = resp
-        with patch("urllib.request.urlopen", return_value=cm):
-            ok, detail = vu._probe_url("https://auth.example.org", 5)
-        assert ok is True
-        assert detail == "HTTP 200"
+class TestStatusCode:
+    def test_parses_status(self):
+        assert vu._status_code("HTTP/1.1 200 OK") == 200
+        assert vu._status_code("HTTP/2 401 Unauthorized") == 401
 
-    def test_http_error_status_is_still_reachable(self):
-        err = urllib.error.HTTPError("https://x", 401, "Unauthorized", hdrs=None, fp=None)
-        with patch("urllib.request.urlopen", side_effect=err):
-            ok, detail = vu._probe_url("https://hubble.example.org", 5)
-        assert ok is True
-        assert detail == "HTTP 401"
+    def test_none_for_non_http(self):
+        assert vu._status_code("") is None
+        assert vu._status_code("garbage line") is None
 
-    def test_connection_error_is_unreachable(self):
-        with patch("urllib.request.urlopen",
-                   side_effect=urllib.error.URLError("connection refused")):
-            ok, detail = vu._probe_url("https://auth.example.org", 5)
+
+# ---------------------------------------------------------------------------
+# _probe_host — DNS-independent: connect to node-local IPs, SNI/Host = service.
+# Any HTTP response means reachable; only conn/TLS errors fail.
+# ---------------------------------------------------------------------------
+
+def _mock_cm(recv_chunks=None):
+    """A MagicMock usable as a context manager (returns itself), optionally
+    scripting tls.recv() with a list of byte chunks."""
+    m = MagicMock()
+    m.__enter__.return_value = m
+    m.__exit__.return_value = False
+    if recv_chunks is not None:
+        m.recv.side_effect = list(recv_chunks) + [b""]
+    return m
+
+
+class TestProbeHost:
+    def test_http_status_is_reachable(self):
+        raw = _mock_cm()
+        tls = _mock_cm([b"HTTP/1.1 200 OK\r\nServer: nginx\r\n\r\n"])
+        ctx = MagicMock()
+        ctx.wrap_socket.return_value = tls
+        with patch.object(vu.socket, "create_connection", return_value=raw), \
+             patch.object(vu.ssl, "create_default_context", return_value=ctx):
+            ok, detail = vu._probe_host("auth.example.org", ["10.0.0.5"], 5)
+        assert ok is True
+        assert detail == "HTTP 200 (via 10.0.0.5)"
+        # SNI/Host must be the service hostname, not the connect IP.
+        assert ctx.wrap_socket.call_args.kwargs["server_hostname"] == "auth.example.org"
+
+    def test_4xx_is_still_reachable(self):
+        tls = _mock_cm([b"HTTP/1.1 401 Unauthorized\r\n\r\n"])
+        ctx = MagicMock()
+        ctx.wrap_socket.return_value = tls
+        with patch.object(vu.socket, "create_connection", return_value=_mock_cm()), \
+             patch.object(vu.ssl, "create_default_context", return_value=ctx):
+            ok, detail = vu._probe_host("hubble.example.org", ["10.0.0.5"], 5)
+        assert ok is True
+        assert detail.startswith("HTTP 401")
+
+    def test_tries_next_candidate_on_connection_error(self):
+        tls = _mock_cm([b"HTTP/1.1 200 OK\r\n\r\n"])
+        ctx = MagicMock()
+        ctx.wrap_socket.return_value = tls
+        # First candidate refuses; second connects.
+        with patch.object(vu.socket, "create_connection",
+                          side_effect=[ConnectionRefusedError("refused"), _mock_cm()]), \
+             patch.object(vu.ssl, "create_default_context", return_value=ctx):
+            ok, detail = vu._probe_host("auth.example.org", ["10.0.0.5", "127.0.0.1"], 5)
+        assert ok is True
+        assert detail == "HTTP 200 (via 127.0.0.1)"
+
+    def test_all_candidates_fail_is_unreachable(self):
+        with patch.object(vu.socket, "create_connection",
+                          side_effect=socket.timeout("timed out")), \
+             patch.object(vu.ssl, "create_default_context", return_value=MagicMock()):
+            ok, detail = vu._probe_host("auth.example.org", ["10.0.0.5", "127.0.0.1"], 5)
         assert ok is False
-        assert "connection refused" in detail
+        assert "timed out" in detail
+
+    def test_tls_error_is_unreachable(self):
+        ctx = MagicMock()
+        ctx.wrap_socket.side_effect = ssl.SSLError("certificate verify failed")
+        with patch.object(vu.socket, "create_connection", return_value=_mock_cm()), \
+             patch.object(vu.ssl, "create_default_context", return_value=ctx):
+            ok, detail = vu._probe_host("auth.example.org", ["10.0.0.5"], 5)
+        assert ok is False
+        assert "certificate verify failed" in detail
 
 
 # ---------------------------------------------------------------------------
-# _check_urls — builds one HTTPS URL per service subdomain
+# _check_urls — builds one HTTPS URL per service subdomain, probed DNS-free
 # ---------------------------------------------------------------------------
 
 class TestCheckUrls:
     def test_builds_url_per_subdomain(self):
-        with patch.object(vu, "_probe_url", return_value=(True, "HTTP 200")) as probe:
+        with patch.object(vu, "_node_internal_ips", return_value=["10.0.0.5"]), \
+             patch.object(vu, "_probe_host",
+                          return_value=(True, "HTTP 200 (via 10.0.0.5)")) as probe:
             rows = vu._check_urls("example.org")
         urls = [name for name, _, _ in rows]
         assert urls == [
@@ -78,6 +135,10 @@ class TestCheckUrls:
         ]
         assert all(ok for _, ok, _ in rows)
         assert probe.call_count == 3
+        # Probes the bare hostname against node-local targets (InternalIP + loopback).
+        first = probe.call_args_list[0]
+        assert first.args[0] == "auth.example.org"
+        assert first.args[1] == ["10.0.0.5", "127.0.0.1"]
 
 
 # ---------------------------------------------------------------------------

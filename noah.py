@@ -76,6 +76,25 @@ from Scripts.cluster_destroy.cluster_destroy_utils import destroy_cluster_comman
 
 VERSION = "0.0.8"
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', '')
+
+
+def _print_banner() -> None:
+    """Print the NOAH ASCII logo, tagline and version.
+
+    Shown only on interactive launches (TTY) so piped/CI output stays clean.
+    """
+    click.echo(rf"""
+   _   _   ___      _     _   _
+  | \ | | / _ \    / \   | | | |
+  |  \| || | | |  / _ \  | |_| |
+  | |\  || |_| | / ___ \ |  _  |
+  |_| \_| \___/ /_/   \_\|_| |_|
+
+  Network Operations & Automation Hub
+  v{VERSION}
+""")
+
+
 def check_repository_root():
     """Check if the current directory is the root of the NOAH repository"""
     current_dir = Path.cwd()
@@ -103,7 +122,7 @@ def check_repository_root():
         click.echo(f"   python noah.py <command>", err=True)
         sys.exit(1)
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(version=VERSION, prog_name="NOAH")
 @click.pass_context
 def cli(ctx: click.Context) -> None:
@@ -111,6 +130,16 @@ def cli(ctx: click.Context) -> None:
     
     Automates deployment of open source information systems on Kubernetes
     """
+    # Show the ASCII banner on interactive launches only (skipped when output
+    # is piped/redirected or under CI, to keep machine-readable output clean).
+    if sys.stdout.isatty():
+        _print_banner()
+
+    # No subcommand → show help and stop before building the heavy managers.
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+        ctx.exit()
+
     # Check if running from repository root before initializing
     check_repository_root()
     
@@ -144,8 +173,10 @@ def destroy(ctx, name, force, keep_secrets):
 @click.option('--node', default=None, help='Single node IP (default single-node mode)')
 @click.option('--nodes', default=None, help='Comma-separated IPs for HA mode (>=3, odd)')
 @click.option('--ha', is_flag=True, default=False, help='Enable 3-node embedded-etcd HA mode')
-@click.option('--domain', required=True, help='Primary domain for the cluster')
-@click.option('--flux-repo', required=True, help='GitOps repository URL (HTTPS or SSH)')
+@click.option('--domain', required=True, prompt='Primary domain for the cluster',
+              help='Primary domain for the cluster')
+@click.option('--flux-repo', required=True, prompt='GitOps repository URL (HTTPS or SSH)',
+              help='GitOps repository URL (HTTPS or SSH)')
 @click.option('--flux-branch', default='main', show_default=True, help='GitOps branch')
 @click.option('--flux-path', default='clusters/production', show_default=True,
               help='Path inside the GitOps repo Flux will reconcile')
@@ -176,6 +207,10 @@ def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
               ssh_user, ssh_key, age_key_file, k3s_version, force_reset,
               git_token, git_provider, no_wait, verify_timeout, url_timeout):
     """Provision K3s + bootstrap FluxCD against a GitOps repo (SSH deploy key)."""
+    # Single-node mode with nothing specified → prompt for the node IP rather
+    # than erroring out (HA mode still requires explicit --nodes).
+    if not ha and not node and not nodes:
+        node = click.prompt('Single node IP (single-node mode)')
     rc = cluster_bootstrap(
         node=node,
         nodes=nodes,
@@ -581,7 +616,8 @@ def reset(force):
         click.echo("Environment reset. Run 'python3 noah.py setup initialize' to start fresh.")
 
 @setup.command()
-@click.option('--domain', required=True, help='Your domain (replaces example.com / ${DOMAIN} throughout gitops/)')
+@click.option('--domain', required=True, prompt='Your domain (e.g. example.com)',
+              help='Your domain (replaces example.com / ${DOMAIN} throughout gitops/)')
 @click.option('--node-ip', 'node_ip', default=None,
               help='Public IP (EC2 EIP) external-dns should publish; replaces '
                    '${NODE_PUBLIC_IP}. Defaults to the value stored in the canonical store.')

@@ -16,7 +16,8 @@ def register_rotate_command(secrets_group):
     """
 
     @secrets_group.command(name='rotate')  # type: ignore
-    @click.option('--service', required=True, help='Service dont on veut faire tourner les secrets (authentik, cilium, etc)')
+    @click.option('--service', required=True, prompt='Service dont on veut faire tourner les secrets',
+                  help='Service dont on veut faire tourner les secrets (authentik, cilium, etc)')
     @click.option('--keys', help='Liste de clés spécifiques séparées par des virgules (défaut: toutes)')
     @click.option('--show', is_flag=True, help='Afficher les métadonnées après rotation (valeurs masquées)')
     @click.option('--apply', 'do_apply', is_flag=True, help='Appliquer les secrets au cluster en cours (sans re-bootstrap)')

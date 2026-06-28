@@ -23,13 +23,10 @@ def _bootstrap_venv():
 _bootstrap_venv()
 
 import click  # type: ignore
-import json
 import yaml  # type: ignore
 import subprocess
 import shutil
-import time
 from pathlib import Path
-from Scripts.utils.paths import get_noah_paths, NOAH_PATHS
 from Scripts.security.secure_env_loader import SecureEnvLoader
 
 # Load environment variables from encrypted configuration (best-effort on startup;
@@ -98,19 +95,19 @@ def _print_banner() -> None:
 def check_repository_root():
     """Check if the current directory is the root of the NOAH repository"""
     current_dir = Path.cwd()
-    
+
     # Check for key repository files/directories that should exist in the root
     required_items = [
         'Scripts',
         'Ansible',
         'noah.py'
     ]
-    
+
     missing_items = []
     for item in required_items:
         if not (current_dir / item).exists():
             missing_items.append(item)
-    
+
     if missing_items:
         click.echo(f"❌ Error: NOAH must be run from the repository root directory!", err=True)
         click.echo(f"", err=True)
@@ -127,7 +124,7 @@ def check_repository_root():
 @click.pass_context
 def cli(ctx: click.Context) -> None:
     """NOAH - Network Operations & Automation Hub
-    
+
     Automates deployment of open source information systems on Kubernetes
     """
     # Show the ASCII banner on interactive launches only (skipped when output
@@ -142,7 +139,7 @@ def cli(ctx: click.Context) -> None:
 
     # Check if running from repository root before initializing
     check_repository_root()
-    
+
     ctx.ensure_object(dict)
     ctx.obj['config'] = ConfigLoader()
     ctx.obj['cluster'] = ClusterManager(ctx.obj['config'])
@@ -336,11 +333,11 @@ def certificates(ctx):
 def generate_certs(ctx, domain, force):
     """Generate self-signed TLS certificates"""
     certs_dir = Path("Certificates")
-    
+
     if certs_dir.exists() and any(certs_dir.glob("*.crt")) and not force:
         click.echo(f"[VERBOSE] TLS certificates already exist. Use --force to regenerate.")
         return
-    
+
     click.echo(f"[VERBOSE] Generating TLS certificates for domain: {domain}")
     ctx.obj['secrets'].generate_tls_certificates(domain)
     click.echo(f"✓ TLS certificates generated for {domain}")
@@ -370,7 +367,7 @@ def password(ctx):
 def new(ctx):
     """Generate a new Authentik admin password"""
     click.echo("🔄 Regenerating Authentik admin password...")
-    
+
     result, error = regenerate_authentik_password()
     if result:
         click.echo("✅ Password regenerated successfully!")
@@ -441,11 +438,11 @@ def init(ctx):
     """Initialize Age keys and SOPS configuration"""
     click.echo("[VERBOSE] Starting secret management initialization...")
     click.echo("Initializing secret management...")
-    
+
     # Create Age directory if it doesn't exist
     age_dir = Path("Age")
     age_dir.mkdir(exist_ok=True)
-    
+
     click.echo("[VERBOSE] Initializing Age keys...")
     ctx.obj['secrets'].initialize_encryption()
     click.echo("[VERBOSE] SOPS configuration completed.")
@@ -458,7 +455,7 @@ def generate(ctx, service, namespace):
     """Generate encrypted secrets for a service"""
     # Ensure security is initialized
     ensure_security_initialized(ctx)
-    
+
     click.echo(f"[VERBOSE] Starting secret generation process...")
     click.echo(f"[VERBOSE] Service: {service}")
     click.echo(f"[VERBOSE] Namespace: {namespace}")
@@ -475,19 +472,19 @@ def generate(ctx, service, namespace):
 def validate(ctx, service, namespace, fix):
     """Validate service secrets consistency"""
     ensure_security_initialized(ctx)
-    
+
     click.echo(f"🔍 Validating secrets for {service} in namespace {namespace}...")
-    
+
     is_valid = ctx.obj['secrets'].validate_service_secrets(service, namespace)
-    
+
     if is_valid:
         click.echo(f"✅ All secrets for {service} are consistent")
     else:
         click.echo(f"❌ Secret inconsistencies found for {service}")
-        
+
         if fix:
             click.echo(f"🔧 Attempting to fix secret inconsistencies...")
-            
+
             # Re-deploy with synchronized secrets
             if service == 'authentik':
                 ctx.obj['secrets'].generate_service_secrets(service)
@@ -525,7 +522,7 @@ def apply_secrets(ctx, domain):
 def regenerate(ctx, service, namespace):
     """Regenerate secrets for a service (preserves existing passwords)"""
     ensure_security_initialized(ctx)
-    
+
     click.echo(f"🔄 Regenerating secrets for {service} in namespace {namespace}...")
     ctx.obj['secrets'].generate_service_secrets(service)
     click.echo(f"✅ Secrets regenerated for {service}")
@@ -701,7 +698,7 @@ def update_sops():
     click.echo("🔄 SOPS Version Update")
     click.echo("=" * 25)
     click.echo("")
-    
+
     if update_sops_version():
         click.echo("")
         print_status("SOPS update completed successfully!", "SUCCESS")
@@ -812,14 +809,14 @@ def domains(ctx):
 @config.command()
 @click.argument('service')
 @click.option('--domain', help='Override service domain')
-@click.option('--subdomain', help='Override service subdomain') 
+@click.option('--subdomain', help='Override service subdomain')
 @click.option('--namespace', help='Override service namespace')
 @click.pass_context
 def override(ctx, service, domain, subdomain, namespace):
     """Set service-specific configuration overrides"""
     from Scripts.utils.config_utils import override_service_configuration
     result = override_service_configuration(service, domain, subdomain, namespace, ctx)
-    
+
     if result:
         # Show updated configuration
         click.echo(f"\nUpdated configuration for {service}:")

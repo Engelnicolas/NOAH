@@ -207,10 +207,16 @@ def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
               ssh_user, ssh_key, age_key_file, k3s_version, force_reset,
               git_token, git_provider, no_wait, verify_timeout, url_timeout):
     """Provision K3s + bootstrap FluxCD against a GitOps repo (SSH deploy key)."""
-    # Single-node mode with nothing specified → prompt for the node IP rather
-    # than erroring out (HA mode still requires explicit --nodes).
-    if not ha and not node and not nodes:
-        node = click.prompt('Single node IP (single-node mode)')
+    from Scripts.security.canonical_store import get_canonical_store
+    store = get_canonical_store(Path(__file__).parent)
+
+    # Single-node mode: default --node to the public IP recorded by `setup gitops
+    # --node-ip` so the operator doesn't re-enter the same IP. If nothing was
+    # recorded, prompt for it rather than erroring out. An explicit --node always
+    # wins; --nodes / --ha are unaffected (HA mode still requires explicit --nodes).
+    if not node and not nodes and not ha:
+        node = store.get_node_public_ip() or click.prompt('Single node IP (single-node mode)')
+
     rc = cluster_bootstrap(
         node=node,
         nodes=nodes,

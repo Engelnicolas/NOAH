@@ -1,6 +1,8 @@
 """
 Automates preparation of the NOAH GitOps repository (gitops/ subdirectory):
-  1. Substitute the example.com / ${DOMAIN} placeholder domain
+  1. Substitute the ${NODE_PUBLIC_IP} placeholder in plain manifests (the
+     ${DOMAIN} placeholder is left for Flux to substitute at apply time via
+     Kustomization postBuild.substituteFrom — the cluster-vars ConfigMap)
   2. Load secrets from the canonical store (generating missing ones automatically)
   3. Decrypt any already-encrypted *.enc.yaml files (idempotent re-runs)
   4. Fill *.enc.yaml placeholders
@@ -69,28 +71,6 @@ def _infer_previous_domain(gitops_dir: Path, current_domain: str) -> Optional[st
             if d not in ("example.com", current_domain):
                 candidates.add(d)
     return next(iter(candidates)) if len(candidates) == 1 else None
-
-
-def _substitute_domain(text: str, domain: str, previous_domain: Optional[str] = None) -> str:
-    # `previous_domain` handles re-runs with a new --domain after the file was
-    # already filled with a different one. Substitute the email form first so
-    # the bare-domain rule doesn't mangle anything unexpected.
-    if previous_domain and previous_domain != domain:
-        text = text.replace(f"admin@{previous_domain}", f"admin@{domain}")
-        text = text.replace(previous_domain, domain)
-    text = text.replace("example.com", domain)
-    text = text.replace("${DOMAIN}", domain)
-    return text
-
-
-def _substitute_node_ip(text: str, node_ip: str, previous_ip: Optional[str] = None) -> str:
-    """Replace the ${NODE_PUBLIC_IP} placeholder (and any previously-substituted
-    IP on re-runs) with the node's reachable public IP. nginx publishes this via
-    --publish-status-address into each Ingress status, so external-dns creates
-    DNS records pointing at the EIP rather than the cluster-internal service IP."""
-    if previous_ip and previous_ip != node_ip:
-        text = text.replace(previous_ip, node_ip)
-    return text.replace("${NODE_PUBLIC_IP}", node_ip)
 
 
 def _get_or_generate_secrets(
@@ -237,8 +217,26 @@ metadata:
   namespace: headlamp
 type: Opaque
 stringData:
-  clientID: REPLACE_WITH_OIDC_CLIENT_ID
-  clientSecret: REPLACE_WITH_OIDC_CLIENT_SECRET
+  # Env-format keys: the Headlamp chart consumes this Secret via envFrom
+  # (config.oidc.externalSecret), so the keys become container env vars
+  # referenced as $(OIDC_CLIENT_ID)/$(OIDC_CLIENT_SECRET) in the args.
+  OIDC_CLIENT_ID: REPLACE_WITH_OIDC_CLIENT_ID
+  OIDC_CLIENT_SECRET: REPLACE_WITH_OIDC_CLIENT_SECRET
+""",
+    "apps/headlamp/oidc-provision-secret.enc.yaml": """\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: headlamp-oidc-provision
+  namespace: authentik
+type: Opaque
+stringData:
+  # Consumed via envFrom by the authentik-provision-headlamp Job (which runs in
+  # the authentik namespace). Same client id/secret as the headlamp-oidc Secret
+  # in the headlamp namespace, so the OIDC client registered in Authentik
+  # matches the credentials Headlamp authenticates with.
+  OIDC_CLIENT_ID: REPLACE_WITH_OIDC_CLIENT_ID
+  OIDC_CLIENT_SECRET: REPLACE_WITH_OIDC_CLIENT_SECRET
 """,
 }
 
@@ -423,27 +421,12 @@ def setup_gitops(
     previous_domain = store.get_cluster_domain() or _infer_previous_domain(
         gitops_dir, domain
     )
-    previous_node_ip = store.get_node_public_ip()
-
-    # 1. Substitute domain (and node public IP, when provided) in plain YAML
-    # files. Substitution is idempotent, so we always recompute and only write
-    # back when the content actually changed — keeps no-op re-runs free of churn.
-    for yaml_file in gitops_dir.rglob("*.yaml"):
-        if yaml_file.name.endswith(".enc.yaml"):
-            continue
-        text = yaml_file.read_text()
-        new_text = _substitute_domain(text, domain, previous_domain)
-        if node_public_ip:
-            new_text = _substitute_node_ip(new_text, node_public_ip, previous_node_ip)
-        if new_text != text:
-            yaml_file.write_text(new_text)
-    if node_public_ip:
-        print_status(
-            f"[SUCCESS] Substituted domain → {domain}, node public IP → {node_public_ip}",
-            "SUCCESS",
-        )
-    else:
-        print_status(f"[SUCCESS] Substituted domain → {domain}", "SUCCESS")
+    # 1. Node public IP is intentionally NOT substituted into files here. Both
+    # ${DOMAIN} and ${NODE_PUBLIC_IP} are left for Flux to substitute at apply
+    # time from the cluster-vars ConfigMap (Kustomization postBuild.substituteFrom),
+    # so committed manifests stay environment-agnostic. The operator-provided IP
+    # is recorded in the canonical store (below) and seeded into cluster-vars by
+    # the flux-bootstrap Ansible role at deploy time.
 
     # 2. Load secrets
     print_status("[INFO] Loading secrets from canonical store...", "INFO")

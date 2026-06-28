@@ -1,0 +1,63 @@
+---
+# Post-deploy Job that registers Headlamp as an Authentik OAuth2/OIDC client,
+# so "Sign in with OIDC" works. Idempotent — re-runs are no-ops.
+#
+# Runs in the authentik namespace to reach the internal API over plain HTTP
+# (no public hairpin, no TLS verification) and to reuse the bootstrap-token
+# Secret and the shared provisioner-script ConfigMap.
+#
+# Closes the gap introduced by the v0.0.7 -> v0.0.8 GitOps migration: the
+# Headlamp OIDC provisioning previously run at the end of deploy-headlamp.yml
+# was never carried over, leaving Authentik with no `headlamp` application
+# (its OIDC discovery endpoint returned 404 and login could not complete).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authentik-provision-headlamp
+  namespace: authentik
+  annotations:
+    # Re-run when the script changes (FluxCD recreates the Job when the
+    # ConfigMap hash changes).
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: provisioner
+          image: python:3.12-slim
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              pip install --quiet requests
+              python /scripts/authentik_provisioner.py \
+                --service headlamp \
+                --type oidc \
+                --external-host "https://headlamp.${DOMAIN}"
+          envFrom:
+            # AUTHENTIK_TOKEN (bootstrap admin token).
+            - secretRef:
+                name: authentik-bootstrap-token
+            # OIDC_CLIENT_ID / OIDC_CLIENT_SECRET — same values as the
+            # headlamp-oidc Secret in the headlamp namespace, so the client
+            # registered here matches what Headlamp authenticates with.
+            - secretRef:
+                name: headlamp-oidc-provision
+          env:
+            - name: AUTHENTIK_URL
+              value: "http://authentik-server.authentik.svc.cluster.local"
+            - name: AUTHENTIK_EXTERNAL_URL
+              value: "https://auth.${DOMAIN}"
+          volumeMounts:
+            - name: provisioner
+              mountPath: /scripts
+      volumes:
+        - name: provisioner
+          configMap:
+            # Shared script ConfigMap (defined alongside the hubble-auth
+            # provisioning, same authentik namespace).
+            name: authentik-provisioner-script
+            defaultMode: 0755

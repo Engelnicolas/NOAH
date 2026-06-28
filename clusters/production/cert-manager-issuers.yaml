@@ -18,5 +18,12 @@ spec:
     provider: sops
     secretRef:
       name: sops-age
+  # Flux substitutes ${DOMAIN} (and any other key) into the manifests at apply
+  # time from the cluster-vars ConfigMap, seeded by the flux-bootstrap Ansible
+  # role. Keeps the committed manifests domain-agnostic.
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-vars
   timeout: 5m
   wait: true

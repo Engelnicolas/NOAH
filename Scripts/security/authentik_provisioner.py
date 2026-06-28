@@ -148,11 +148,13 @@ class AuthentikProvisioner:
         Defaults to the four standard OpenID scopes.
         """
         if managed_list is None:
+            # Standard OIDC scopes Headlamp requests (openid/profile/email).
+            # offline_access is intentionally omitted — Headlamp does not request
+            # it, and advertising an unused scope only confuses consent.
             managed_list = [
                 "goauthentik.io/providers/oauth2/scope-openid",
                 "goauthentik.io/providers/oauth2/scope-profile",
                 "goauthentik.io/providers/oauth2/scope-email",
-                "goauthentik.io/providers/oauth2/scope-offline_access",
             ]
         pks = []
         for managed in managed_list:
@@ -210,7 +212,11 @@ class AuthentikProvisioner:
             "authorization_flow": authorization_flow_pk,
             "sub_mode": "hashed_user_id",
             "include_claims_in_id_token": True,
-            "issuer_mode": "global",
+            # per_provider → the discovery `issuer` is ".../application/o/<slug>/",
+            # matching the per-application OIDC_ISSUER_URL clients like Headlamp
+            # are configured with. "global" would publish the bare base URL and
+            # break go-oidc's issuer check.
+            "issuer_mode": "per_provider",
         }
         if property_mapping_pks:
             payload["property_mappings"] = property_mapping_pks

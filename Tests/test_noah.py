@@ -59,6 +59,7 @@ def test_cli_structure():
         print(f"✗ CLI structure test failed: {e}")
         assert False
 
+
 def test_verbose_functionality():
     """Test that verbose output is included"""
     print("Testing verbose functionality...")

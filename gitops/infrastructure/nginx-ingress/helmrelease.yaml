@@ -50,11 +50,13 @@ spec:
       # into each Ingress' status — external-dns would otherwise publish the
       # cluster-internal service IP. Disable publishService and pin the node's
       # public IP (EC2 EIP) so external-dns creates records pointing at the EIP.
-      # The address below is filled in by `noah setup gitops --node-ip`.
+      # ${NODE_PUBLIC_IP} is substituted at apply time by Flux postBuild from the
+      # cluster-vars ConfigMap (seeded each bootstrap from the operator-provided
+      # node IP via `setup gitops --node-ip`), so no literal IP is committed here.
       publishService:
         enabled: false
       extraArgs:
-        publish-status-address: 15.188.112.171
+        publish-status-address: ${NODE_PUBLIC_IP}
       config:
         use-forwarded-headers: "true"
         compute-full-forwarded-for: "true"

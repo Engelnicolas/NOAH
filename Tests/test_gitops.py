@@ -88,34 +88,6 @@ class TestWriteSopsYaml:
         assert "enc" in content  # path_regex contains \.enc\.yaml$ (regex-escaped)
 
 
-class TestSubstituteDomain:
-    def test_replaces_example_com(self):
-        from Scripts.gitops.gitops_init import _substitute_domain
-        result = _substitute_domain("host: auth.example.com", "mysite.io")
-        assert result == "host: auth.mysite.io"
-
-    def test_no_change_when_no_placeholder(self):
-        from Scripts.gitops.gitops_init import _substitute_domain
-        text = "host: auth.mysite.io"
-        assert _substitute_domain(text, "other.io") == text
-
-
-class TestSubstituteNodeIp:
-    def test_replaces_placeholder(self):
-        from Scripts.gitops.gitops_init import _substitute_node_ip
-        assert _substitute_node_ip("addr: ${NODE_PUBLIC_IP}", "1.2.3.4") == "addr: 1.2.3.4"
-
-    def test_swaps_previous_ip(self):
-        from Scripts.gitops.gitops_init import _substitute_node_ip
-        result = _substitute_node_ip("addr: 1.2.3.4", "9.9.9.9", previous_ip="1.2.3.4")
-        assert result == "addr: 9.9.9.9"
-
-    def test_no_change_without_placeholder_or_previous(self):
-        from Scripts.gitops.gitops_init import _substitute_node_ip
-        text = "addr: 9.9.9.9"
-        assert _substitute_node_ip(text, "9.9.9.9") == text
-
-
 class TestFillFile:
     def test_replaces_all_placeholders(self, tmp_path):
         from Scripts.gitops.gitops_init import _fill_file
@@ -202,9 +174,10 @@ class TestRenderAppSecretManifests:
 # ---------------------------------------------------------------------------
 
 class TestSetupGitopsInPlace:
-    """The current setup_gitops() substitutes the domain and node public IP in
-    place inside project_root/gitops/, then SOPS-encrypts. SOPS, the canonical
-    store and secret generation are mocked."""
+    """setup_gitops() leaves both ${DOMAIN} and ${NODE_PUBLIC_IP} untouched for
+    Flux to substitute at apply time from the cluster-vars ConfigMap; it only
+    records the node IP in the canonical store, then SOPS-encrypts. SOPS, the
+    canonical store and secret generation are mocked."""
 
     def _run(self, project_root, node_public_ip=None):
         from Scripts.gitops import gitops_init
@@ -213,7 +186,7 @@ class TestSetupGitopsInPlace:
         hr_dir.mkdir(parents=True)
         hr = hr_dir / "helmrelease.yaml"
         hr.write_text(
-            "host: auth.example.com\n"
+            "host: auth.${DOMAIN}\n"
             "publish-status-address: ${NODE_PUBLIC_IP}\n"
         )
 
@@ -234,17 +207,21 @@ class TestSetupGitopsInPlace:
             )
         return hr, store
 
-    def test_substitutes_domain(self, project_root):
+    def test_leaves_domain_placeholder_for_flux(self, project_root):
         hr, _ = self._run(project_root)
         text = hr.read_text()
-        assert DOMAIN in text
-        assert "example.com" not in text
+        # ${DOMAIN} must survive setup_gitops — Flux substitutes it at apply time.
+        assert "${DOMAIN}" in text
+        assert DOMAIN not in text
 
-    def test_substitutes_node_ip_when_provided(self, project_root):
+    def test_records_node_ip_but_leaves_placeholder_when_provided(self, project_root):
         hr, store = self._run(project_root, node_public_ip=NODE_IP)
         text = hr.read_text()
-        assert f"publish-status-address: {NODE_IP}" in text
-        assert "${NODE_PUBLIC_IP}" not in text
+        # The ${NODE_PUBLIC_IP} placeholder is left for Flux to substitute at apply
+        # time; setup_gitops only records the IP in the canonical store (which the
+        # flux-bootstrap role then seeds into the cluster-vars ConfigMap).
+        assert "${NODE_PUBLIC_IP}" in text
+        assert NODE_IP not in text
         store.set_node_public_ip.assert_called_once_with(NODE_IP)
 
     def test_leaves_node_ip_placeholder_when_absent(self, project_root):

@@ -3,6 +3,8 @@
 NOAH - Network Operations & Automation Hub
 Main CLI for deploying and managing Kubernetes-based information systems
 """
+# ruff: noqa: E402 — every module-level import below intentionally follows the
+# venv re-exec in _bootstrap_venv(), so it runs under the venv interpreter.
 
 import sys
 import os
@@ -23,7 +25,6 @@ def _bootstrap_venv():
 _bootstrap_venv()
 
 import click  # type: ignore
-import yaml  # type: ignore
 import subprocess
 import shutil
 from pathlib import Path
@@ -37,21 +38,12 @@ if _CONFIG_ENC.exists():
     secure_loader.load_secure_env(_CONFIG_ENC)
 
 # Import CLI utilities
-from Scripts.cluster_destroy.kubectl_utils import cleanup_kubectl_cache, display_kubectl_status, verify_kubectl_disconnected
-
-## Paths now provided by Scripts.utils.paths (get_noah_paths, NOAH_PATHS)
-
 from Scripts.core_helm.cluster_manager import ClusterManager
 from Scripts.security.security_manager import NoahSecurityManager as SecretManager
 from Scripts.utils.ansible_runner import AnsibleRunner
 from Scripts.utils.config_loader import ConfigLoader
-from Scripts.env_init.environment_initializer import initialize_noah_environment, check_command_exists, update_sops_version
+from Scripts.env_init.environment_initializer import initialize_noah_environment, update_sops_version
 from Scripts.env_init.doctor_utils import print_status, diagnose_noah_environment
-from Scripts.utils import (
-    config_show_command,
-    config_domains_command,
-    config_override_command
-)
 from Scripts.security import ensure_security_initialized, get_security_config
 from Scripts.security.rotate_cli import register_rotate_command  # type: ignore
 from Scripts.core_helm import (
@@ -109,14 +101,14 @@ def check_repository_root():
             missing_items.append(item)
 
     if missing_items:
-        click.echo(f"❌ Error: NOAH must be run from the repository root directory!", err=True)
-        click.echo(f"", err=True)
+        click.echo("❌ Error: NOAH must be run from the repository root directory!", err=True)
+        click.echo("", err=True)
         click.echo(f"Current directory: {current_dir}", err=True)
         click.echo(f"Missing required items: {', '.join(missing_items)}", err=True)
-        click.echo(f"", err=True)
-        click.echo(f"💡 Please change to the NOAH repository root directory and try again:", err=True)
-        click.echo(f"   cd /path/to/noah-repository", err=True)
-        click.echo(f"   python noah.py <command>", err=True)
+        click.echo("", err=True)
+        click.echo("💡 Please change to the NOAH repository root directory and try again:", err=True)
+        click.echo("   cd /path/to/noah-repository", err=True)
+        click.echo("   python noah.py <command>", err=True)
         sys.exit(1)
 
 @click.group(invoke_without_command=True)
@@ -335,7 +327,7 @@ def generate_certs(ctx, domain, force):
     certs_dir = Path("Certificates")
 
     if certs_dir.exists() and any(certs_dir.glob("*.crt")) and not force:
-        click.echo(f"[VERBOSE] TLS certificates already exist. Use --force to regenerate.")
+        click.echo("[VERBOSE] TLS certificates already exist. Use --force to regenerate.")
         return
 
     click.echo(f"[VERBOSE] Generating TLS certificates for domain: {domain}")
@@ -456,7 +448,7 @@ def generate(ctx, service, namespace):
     # Ensure security is initialized
     ensure_security_initialized(ctx)
 
-    click.echo(f"[VERBOSE] Starting secret generation process...")
+    click.echo("[VERBOSE] Starting secret generation process...")
     click.echo(f"[VERBOSE] Service: {service}")
     click.echo(f"[VERBOSE] Namespace: {namespace}")
     click.echo(f"Generating secrets for {service} in namespace {namespace}")
@@ -483,7 +475,7 @@ def validate(ctx, service, namespace, fix):
         click.echo(f"❌ Secret inconsistencies found for {service}")
 
         if fix:
-            click.echo(f"🔧 Attempting to fix secret inconsistencies...")
+            click.echo("🔧 Attempting to fix secret inconsistencies...")
 
             # Re-deploy with synchronized secrets
             if service == 'authentik':
@@ -492,7 +484,7 @@ def validate(ctx, service, namespace, fix):
             else:
                 click.echo(f"❌ Auto-fix not implemented for {service}")
         else:
-            click.echo(f"💡 Run with --fix to automatically resolve inconsistencies")
+            click.echo("💡 Run with --fix to automatically resolve inconsistencies")
 
 @secrets.command(name='apply')
 @click.option('--domain', help='Cluster domain (defaults to the value stored in the canonical store)')
@@ -685,12 +677,12 @@ def gitops(ctx, domain, node_ip):
     click.echo(f"       git push origin {branch}")
     click.echo("")
     click.echo("  2. Bootstrap the cluster (this repo is the Flux source — gitops/ lives here):")
-    click.echo(f"       python3 noah.py cluster bootstrap \\")
-    click.echo(f"         --node <NODE-IP> \\")
+    click.echo("       python3 noah.py cluster bootstrap \\")
+    click.echo("         --node <NODE-IP> \\")
     click.echo(f"         --domain {domain} \\")
     click.echo(f"         --flux-repo {flux_repo} \\")
     click.echo(f"         --flux-branch {branch} \\")
-    click.echo(f"         --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519")
+    click.echo("         --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519")
 
 @setup.command()
 def update_sops():

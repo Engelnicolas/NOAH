@@ -1,178 +1,129 @@
 # NOAH Deployment Guide
 
-**Version**: 0.0.8
-**Last Updated**: June 2026
-
-Deploy NOAH (Network Operations & Automation Hub) — a complete Kubernetes infrastructure with SSO authentication and web dashboards.
-
-> **v0.0.8** — K3s uses embedded etcd (no SQLite SPOF). All application services are reconciled by FluxCD from `gitops/` in this repository. The legacy `noah deploy <service>` commands are removed; use `noah cluster bootstrap` to provision and `noah flux ...` to operate.
-> See [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) for day-to-day GitOps workflow.
+**Version 0.0.8** — K3s with embedded etcd (no SQLite SPOF). The full
+application stack is reconciled by FluxCD from `gitops/` in this repository.
+There is no imperative `noah deploy <service>` — you provision with
+`noah cluster bootstrap` and operate with `noah flux …` (see the
+[Operations Guide](OPERATIONS_GUIDE.md)).
 
 ---
 
-## Table of Contents
+## Contents
 
 1. [Overview](#overview)
 2. [Requirements](#requirements)
-3. [Quick Start](#quick-start)
-4. [Detailed Steps](#detailed-steps)
-5. [DNS Configuration](#dns-configuration)
-6. [Accessing Services](#accessing-services)
-7. [Troubleshooting](#troubleshooting)
+3. [Deployment steps](#deployment-steps)
+4. [DNS configuration](#dns-configuration)
+5. [Accessing services](#accessing-services)
+6. [Troubleshooting](#troubleshooting)
+7. [Validation checklist](#validation-checklist)
 
 ---
 
 ## Overview
 
-### What NOAH deploys
+`noah cluster bootstrap` does the following on the target node(s):
 
-- **Kubernetes (K3s)** - Lightweight K8s with embedded etcd
-- **Cilium CNI** - eBPF networking + Ingress
-- **Authentik SSO** - Identity and access management
-- **Headlamp Dashboard** - Kubernetes web UI with SSO
-- **Hubble UI** - Network observability (SSO-gated)
-- **External-DNS** - Optional automatic DNS via Cloudflare
+1. Installs K3s with embedded etcd.
+2. Deploys the local-path storage provisioner and writes `~/.kube/config`.
+3. Installs Cilium CNI (bootstrap pass).
+4. Bootstraps FluxCD, pointing it at `clusters/production/` in this repo.
+5. Delivers application secrets out-of-band (the `app-secrets` Ansible role
+   `kubectl apply`s manifests rendered from the canonical store — secrets are
+   never committed to Git).
+6. FluxCD then reconciles the full stack from `gitops/`.
 
-### Repository layout (Flux paths)
+**Total time:** ~25–45 minutes.
 
-```
-NOAH/
-├── clusters/production/         ← Flux bootstrap root (path: ./clusters/production)
-│   ├── kustomization.yaml       ← entry point, references all Kustomization CRs
-│   ├── flux-system/             ← Flux component manifests (managed by flux bootstrap)
-│   ├── noah-source.yaml         ← GitRepository pointing at gitops/ subtree
-│   ├── infrastructure.yaml      ← deploys cert-manager, Cilium, external-dns
-│   ├── cert-manager-issuers.yaml
-│   └── apps.yaml                ← deploys Authentik, Headlamp, Hubble
-└── gitops/                      ← actual HelmRelease / Secret manifests
-    ├── infrastructure/
-    └── apps/
-```
+### Reconciliation order and timing
 
-**Deployment time**: ~25-45 minutes total
+| Phase | Component | Duration | Notes |
+|---|---|---|---|
+| 0 | external-dns | ~2–3 min | Creates/updates Cloudflare A records |
+| 1 | cert-manager | ~2–3 min | `letsencrypt-prod` + `letsencrypt-staging` issuers |
+| 2 | Cilium CNI | ~5–7 min | Full eBPF config, Hubble Relay + UI |
+| 3 | nginx-ingress | ~2–3 min | DaemonSet, `hostNetwork: true`, ports 80/443 |
+| 4 | Authentik SSO | ~7–10 min | PostgreSQL, Redis, Server + Worker (~2 GB RAM) |
+| 5 | Hubble auth | ~1–2 min | Forward-auth proxy auto-provisioned in Authentik |
+| 6 | Headlamp | ~3–5 min | OIDC client auto-registered in Authentik |
 
 ---
 
 ## Requirements
 
-### System
-- **OS**: Ubuntu 20.04+, Debian 11+, CentOS 8+, RHEL 8+
-- **CPU**: 4 cores minimum (8+ recommended)
-- **RAM**: 8 GB minimum (16 GB+ recommended)
-- **Storage**: 50 GB free (100 GB+ recommended)
-- **Kernel**: Linux 5.10+ (for Cilium eBPF)
-- **Network**: Internet connectivity
+**System (per node):**
+- OS: Ubuntu 20.04+, Debian 11+, RHEL/CentOS 8+
+- Kernel 5.10+ (Cilium eBPF)
+- 4 CPU / 8 GB RAM / 50 GB disk minimum
+- SSD for `/var/lib/rancher/k3s` (etcd is write-heavy)
+- Internet connectivity
 
-### Tools (auto-installed)
-- Python 3.8+, kubectl, FluxCD CLI, Ansible
-- age, sops
+**HA only:** inter-node latency < 10 ms.
 
-### DNS Options
-1. **Cloudflare** (automatic) - API token required
-2. **Manual** - Any provider, create A records after deployment
-3. **Local** - `/etc/hosts` for testing
+**Workstation tools** (auto-installed by `setup initialize`): Python 3.8+,
+kubectl, FluxCD CLI, Ansible, `age`, `sops`.
 
----
-
-## Quick Start
-
-```bash
-# 1. Initialize environment
-git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
-python3 noah.py setup initialize        # wizard: installs tools, generates Age key, configures Cloudflare token
-
-# 2. Fill and encrypt secrets in gitops/ (records the node's public IP / EIP)
-python3 noah.py setup gitops --domain your-domain.com --node-ip <EIP>
-
-# 3. Push gitops changes to GitHub
-export GITHUB_TOKEN=ghp_xxx
-git add gitops/ && git commit -m "chore: configure domain and secrets"
-git push origin main
-
-# 4. Bootstrap K3s + FluxCD (single-node: --node defaults to the IP recorded in step 2)
-python3 noah.py cluster bootstrap \
-  --domain your-domain.com \
-  --flux-repo https://github.com/Engelnicolas/NOAH.git \
-  --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \
-  --git-token $GITHUB_TOKEN
-
-# 5. Watch FluxCD reconcile the stack
-watch kubectl get kustomization,helmrelease -A
-
-# 6. Get credentials
-python3 noah.py password show-password
-```
-
-> For a 3-node HA cluster, add `--ha --nodes n1,n2,n3` to step 4.
+**DNS:** Cloudflare (automatic via external-dns), or any provider with manual
+A records, or `/etc/hosts` for local testing — see
+[DNS configuration](#dns-configuration).
 
 ---
 
-## Detailed Steps
+## Deployment steps
 
-### Step 1: Initialize Environment
+### Step 1 — Initialize the environment
 
 ```bash
 python3 noah.py setup initialize
 ```
 
-**What it does:**
-- Checks Python 3.8+ version
-- Creates virtual environment (`.venv/`)
-- Installs Python dependencies
-- Validates kernel for Cilium (BPF support)
-- Installs system packages (age, kubectl, helm, ansible)
-- Generates Age encryption keys (`Age/keys.txt`)
-- Creates SOPS configuration (`.sops.yaml`)
-- Runs the Cloudflare DNS wizard (interactive)
-
-To skip the DNS wizard:
-```bash
-python3 noah.py setup initialize --skip-dns-wizard
-```
-
-Verify the environment:
-```bash
-python3 noah.py setup doctor
-```
-
-Reset and start over (removes venv, Age keys, secrets store, SOPS config):
-```bash
-python3 noah.py setup reset
-```
-
-> **Important**: if you run `setup reset`, the Age key changes. Any previously encrypted `*.enc.yaml` files in `gitops/` will no longer be decryptable. Re-run `setup gitops` to regenerate them.
-
----
-
-### Step 2: Prepare GitOps Secrets
+This checks Python ≥ 3.8, creates `.venv/`, installs dependencies, validates
+the kernel for Cilium, installs system packages (`age`, kubectl, helm,
+ansible), generates the Age key (`Age/keys.txt`), writes the SOPS config, and
+runs the interactive Cloudflare DNS wizard.
 
 ```bash
-python3 noah.py setup gitops --domain your-domain.com --node-ip <EIP>
+python3 noah.py setup initialize --skip-dns-wizard   # configure Cloudflare later
+python3 noah.py setup doctor                          # diagnose the environment
+python3 noah.py setup reset                           # remove venv, Age key, secrets, SOPS config
 ```
 
-**What it does:**
-- Substitutes `example.com` / `${DOMAIN}` placeholders in `gitops/` with your domain
-- Records the node's public IP (EC2 EIP) in the canonical store and substitutes `${NODE_PUBLIC_IP}` in `gitops/` (external-dns publishes it as the A-record target)
-- Loads secrets from the canonical store (generating any missing ones)
-- Fills `*.enc.yaml` placeholder values with real secrets
-- Writes `.sops.yaml` with the current Age public key
-- SOPS-encrypts every `*.enc.yaml` in-place
+> **`setup reset` changes the Age key.** Anything previously encrypted with the
+> old key can no longer be decrypted. Re-run `setup gitops` afterwards.
 
-> `--node-ip` is optional on later runs — it falls back to the IP already stored in the canonical store. This recorded IP is the single entry-point address: single-node `cluster bootstrap` reuses it as the default `--node`.
+### Step 2 — Prepare gitops/ for your domain
 
-**Prerequisites:** `setup initialize` completed (Age key present, Cloudflare token configured).
+```bash
+python3 noah.py setup gitops --domain your-domain.com --node-ip <NODE_PUBLIC_IP>
+```
 
-After running, commit and push so FluxCD can reconcile:
+This records your domain and the node's public IP in the canonical store and
+prepares the `gitops/` tree. `${DOMAIN}` and `${NODE_PUBLIC_IP}` are substituted
+by Flux at apply time from the `cluster-vars` ConfigMap (seeded by the
+flux-bootstrap role), so committed manifests stay environment-agnostic.
+
+`--node-ip` is optional on later runs — it falls back to the IP already in the
+canonical store. That recorded IP is the single entry-point address:
+single-node `cluster bootstrap` reuses it as the default `--node`.
+
+> Application secrets are **not** written into `gitops/`. They live only in the
+> canonical store and are delivered out-of-band (Step 4 / `secrets apply`).
+> See the [Operations Guide](OPERATIONS_GUIDE.md#secrets).
+
+### Step 3 — Commit and push
+
 ```bash
 git add gitops/ && git commit -m "chore: configure domain and secrets"
 git push origin main
 ```
 
----
+Flux reconciles from the pushed repository, so the `gitops/` changes must be on
+the branch Flux tracks (`--flux-branch`, default `main`).
 
-### Step 3: Bootstrap Cluster
+### Step 4 — Bootstrap the cluster
 
 ```bash
+export GITHUB_TOKEN=ghp_xxx
 python3 noah.py cluster bootstrap \
   --domain your-domain.com \
   --flux-repo https://github.com/Engelnicolas/NOAH.git \
@@ -181,61 +132,29 @@ python3 noah.py cluster bootstrap \
   --git-token $GITHUB_TOKEN
 ```
 
-> **Single-node:** `--node` is optional — it defaults to the IP recorded by `setup gitops --node-ip` (the single source of truth for the entry-point IP). Pass `--node <IP>` to override.
->
-> **Co-located (NOAH runs on the target node):** override with `--node 127.0.0.1` (or the node's private IP). An instance can't SSH to its own public/Elastic IP — the AWS Internet Gateway doesn't hairpin that traffic, so the EIP default times out (`UNREACHABLE … Connection timed out`). The EIP still serves external traffic and stays `${NODE_PUBLIC_IP}`.
+- **`--flux-repo` must point at the NOAH mono-repo** (not a separate gitops
+  repo). Flux reads `clusters/production/` at the root and pulls manifests from
+  `gitops/` via the `noah` GitRepository source.
+- **`--node`** is optional for single-node: it defaults to the IP recorded in
+  Step 2. Pass `--node <IP>` to override; use `--node 127.0.0.1` when NOAH runs
+  *on* the target node (see the co-located note in the
+  [README](README.md#quick-start)).
+- **`--git-token`** (or `$GITHUB_TOKEN` / `$GIT_TOKEN`) auto-registers the SSH
+  deploy key on your git provider (GitHub/GitLab/Gitea, detected from the URL).
+  Without a token, NOAH pauses and prints the public key for you to add
+  manually as a read-only deploy key, then continues on Enter.
+- **3-node HA:** add `--ha --nodes node1,node2,node3`.
 
-**`--flux-repo` must point at the NOAH mono-repo** (`Engelnicolas/NOAH.git`), not a separate gitops repository. Flux reads from `clusters/production/` at the repo root and pulls manifests from `gitops/` via the `noah` GitRepository source.
-
-When `--git-token` is set (or `$GITHUB_TOKEN` / `$GIT_TOKEN` env var), NOAH auto-registers the SSH deploy key on GitHub and continues without prompting. The provider is detected from the URL (GitHub, GitLab, Gitea/Forgejo).
-
-**Without a token — manual deploy key step:**
-NOAH pauses and displays the SSH public key. Add it as a read-only deploy key at `https://github.com/Engelnicolas/NOAH/settings/keys`, then press Enter.
-
-**What it does:**
-1. Installs K3s with embedded etcd on the target node
-2. Deploys local-path storage provisioner
-3. Writes kubeconfig to `~/.kube/config`
-4. Installs Cilium CNI (bootstrap pass)
-5. Bootstraps FluxCD, pointing it at `clusters/production/` in this repo
-6. FluxCD reconciles the full stack automatically
-
-> For a 3-node HA cluster: add `--ha --nodes node1,node2,node3`
-
-Verify:
-```bash
-kubectl get nodes
-kubectl get kustomization,helmrelease -A
-```
-
----
-
-### Step 4: Monitor Reconciliation
+### Step 5 — Watch reconciliation
 
 ```bash
-# Overview
+python3 noah.py cluster verify --domain your-domain.com   # wait + print verdict
+# or watch manually:
 watch kubectl get kustomization,helmrelease -A
-
-# Live Flux logs
 python3 noah.py flux logs -f
 ```
 
-**Reconciliation order and timing (~25-45 min total):**
-
-| Phase | Component | Duration | Notes |
-|---|---|---|---|
-| 0 | External-DNS | ~2-3 min | Creates/updates Cloudflare A records |
-| 1 | cert-manager | ~2-3 min | `letsencrypt-prod` + `letsencrypt-staging` ClusterIssuers |
-| 2 | Cilium CNI | ~5-7 min | Full eBPF config, Hubble Relay + UI |
-| 2.5 | nginx-ingress | ~2-3 min | DaemonSet, `hostNetwork: true`, ports 80/443 |
-| 3 | Authentik SSO | ~7-10 min | PostgreSQL, Redis, Server + Worker (~2 GB RAM) |
-| 3.5 | Hubble SSO | ~1-2 min | Forward-auth proxy auto-provisioned in Authentik |
-| 4 | Headlamp | ~3-5 min | OIDC client auto-registered in Authentik |
-| 5 | Validation | ~1-2 min | Pod readiness, service health |
-
----
-
-### Step 5: Get Credentials
+### Step 6 — Get credentials
 
 ```bash
 python3 noah.py password show-password
@@ -243,70 +162,76 @@ python3 noah.py password show-password
 
 ---
 
-## DNS Configuration
+## DNS configuration
 
-### Option A: Automatic (Cloudflare)
+Three options. Configure DNS **before** bootstrap so external-dns (Phase 0) can
+publish records immediately.
 
-Configured during `setup initialize` via the interactive wizard. External-DNS creates A records automatically after bootstrap.
+### Option A — Automatic (Cloudflare)
 
-To configure manually after skipping the wizard:
-```bash
-export CLOUDFLARE_API_TOKEN='your-token'
-```
+external-dns watches Ingress resources and creates/updates A records in
+Cloudflare automatically.
 
-Verify:
+1. **Create a scoped API token** at Cloudflare → Profile → API Tokens →
+   "Edit zone DNS" template. Permissions: `Zone → DNS → Edit` and
+   `Zone → Zone → Read`, scoped to your zone. Never use a Global API key.
+2. **Store it.** The token is captured by the DNS wizard during
+   `setup initialize` and stored SOPS/Age-encrypted in the canonical store.
+   If you skipped the wizard, export it before bootstrap:
+   ```bash
+   export CLOUDFLARE_API_TOKEN='your-token'
+   ```
+
+Verify after bootstrap:
 ```bash
 kubectl logs -n external-dns -l app.kubernetes.io/name=external-dns
 nslookup auth.your-domain.com
 ```
 
----
+**DNS policy:** the default is `upsert-only` (creates/updates, never deletes).
+external-dns tracks ownership with a TXT registry (`txtOwnerId` derived from
+the domain), so multiple deployments can share one zone without interfering.
 
-### Option B: Manual DNS
+### Option B — Manual DNS
 
-After deployment, get the node IP:
+After bootstrap, point your records at the node's public IP. Create A records:
+
+| Hostname | Type | Value | TTL |
+|---|---|---|---|
+| `auth.your-domain.com` | A | `<node-public-ip>` | 300 |
+| `headlamp.your-domain.com` | A | `<node-public-ip>` | 300 |
+| `hubble.your-domain.com` | A | `<node-public-ip>` | 300 |
+
+Verify:
 ```bash
-kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.externalIPs[0]}'
+nslookup auth.your-domain.com
+curl -I https://auth.your-domain.com
 ```
 
-Create A records at your DNS provider:
+### Option C — Local testing (`/etc/hosts`)
 
-| Hostname | Type | Value |
+```bash
+IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.externalIPs[0]}')
+echo "$IP auth.your-domain.com headlamp.your-domain.com hubble.your-domain.com" | sudo tee -a /etc/hosts
+# clean up: sudo sed -i '/your-domain.com/d' /etc/hosts
+```
+
+---
+
+## Accessing services
+
+| Service | URL | Login |
 |---|---|---|
-| `auth.your-domain.com` | A | `<node-ip>` |
-| `headlamp.your-domain.com` | A | `<node-ip>` |
-| `hubble.your-domain.com` | A | `<node-ip>` |
+| Authentik SSO | `https://auth.your-domain.com` | `admin` + `password show-password` |
+| Headlamp | `https://headlamp.your-domain.com` | "Sign in with OIDC" → Authentik |
+| Hubble UI | `https://hubble.your-domain.com` | Authentik forward-auth |
 
----
+Headlamp's OIDC client and Hubble's forward-auth proxy are **auto-provisioned**
+in Authentik during reconciliation. See the
+[Operations Guide](OPERATIONS_GUIDE.md#sso) for how SSO is wired.
 
-### Option C: Local Testing
-
-```bash
-EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.externalIPs[0]}')
-echo "$EXTERNAL_IP auth.your-domain.com headlamp.your-domain.com hubble.your-domain.com" | sudo tee -a /etc/hosts
-```
-
----
-
-## Accessing Services
-
-| Service | URL |
-|---|---|
-| Authentik SSO | `https://auth.your-domain.com` |
-| Headlamp Dashboard | `https://headlamp.your-domain.com` |
-| Hubble UI | `https://hubble.your-domain.com` |
-
-**Login:**
-- Authentik: username `admin`, password from `python3 noah.py password show-password`
-- Headlamp: click "Sign in with OIDC", use Authentik credentials
-- Hubble UI: no authentication required
-
-**Rotate password** (see [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md)):
-```bash
-python3 noah.py password new
-python3 noah.py setup gitops --domain your-domain.com
-python3 noah.py flux sync
-```
+To rotate the Authentik admin password, see
+[Operations Guide → rotating secrets](OPERATIONS_GUIDE.md#rotating-a-secret).
 
 ---
 
@@ -320,32 +245,30 @@ kubectl get svc ingress-nginx-controller -n ingress-nginx
 nslookup auth.your-domain.com
 ```
 
-### FluxCD kustomizations not progressing
+### Kustomizations not progressing
 
 ```bash
 kubectl get kustomization -A
 kubectl describe kustomization infrastructure -n flux-system
 ```
 
-Common causes:
-- **`GitRepository "noah" not found`** — `noah-source.yaml` missing from `clusters/production/`. Re-run bootstrap or add it manually.
-- **SOPS decryption failed** — Age key mismatch (see below).
-- **Dependency not ready** — `apps` waits on `infrastructure`; `cert-manager-issuers` waits on `infrastructure`. Normal during initial rollout.
+- **`GitRepository "noah" not found`** — `noah-source.yaml` is missing from
+  `clusters/production/`. Re-run bootstrap.
+- **Dependency not ready** — `apps` waits on `infrastructure`; this is normal
+  during the initial rollout.
+- **SOPS decryption failed** — see below.
 
-### SOPS decryption failed (Age key mismatch)
+### SOPS decryption failed (`no identity matched any of the recipients`)
 
-If you see `no identity matched any of the recipients`, the `*.enc.yaml` files in `gitops/` were encrypted with a different Age key than the one in `Age/keys.txt`. This happens after `setup reset` or when deploying from a fresh clone.
+The `cluster-vars` / sops-age material was encrypted with a different Age key
+than the one in `Age/keys.txt` (happens after `setup reset` or from a fresh
+clone). Re-run `setup gitops`, push, and reconcile:
 
-**Recovery:**
 ```bash
-# Re-encrypt all secrets with the current key
 python3 noah.py setup gitops --domain your-domain.com
-git add gitops/ && git commit -m "fix: re-encrypt secrets with current Age key"
-git push origin main
+git add gitops/ && git commit -m "fix: re-encrypt with current Age key" && git push
 flux reconcile kustomization flux-system --with-source
 ```
-
-If the `*.enc.yaml` files are still encrypted (i.e., the `setup gitops` command itself fails to decrypt them), replace them with plaintext templates first — the file format expected by each service is documented in `Scripts/gitops/gitops_init.py` (`_get_or_generate_secrets` function).
 
 ### Pods not starting
 
@@ -359,17 +282,29 @@ kubectl logs -n kube-system ds/cilium
 
 ```bash
 kubectl get certificate -A
-kubectl describe challenge -A   # shows ACME HTTP-01 status
+kubectl describe challenge -A    # ACME HTTP-01 status
 ```
 
-Certificates require valid DNS records. Ensure A records resolve before expecting TLS.
+Certificates require resolvable DNS — ensure A records resolve before
+expecting valid TLS (allow ~5 min after first issuance).
+
+### DNS records not created (external-dns)
+
+```bash
+kubectl logs -n external-dns -l app.kubernetes.io/name=external-dns
+# "authentication error" → invalid token   "permission denied" → token scope
+```
+
+The token needs `Zone → DNS → Edit` and `Zone → Zone → Read`. After fixing it
+in Cloudflare, re-run `setup gitops` (or re-export `CLOUDFLARE_API_TOKEN`) and
+let external-dns retry.
 
 ### Resource shortfall
 
 ```bash
 kubectl top nodes
 kubectl top pods -A
-# Minimum: 4 CPU, 8 GB RAM, 50 GB storage
+# Minimum: 4 CPU, 8 GB RAM, 50 GB disk
 ```
 
 ### Full reset
@@ -386,53 +321,24 @@ python3 noah.py cluster bootstrap \
 
 ---
 
-## Validation Checklist
+## Validation checklist
 
 ```bash
-kubectl get pods -A                  # all Running
-kubectl get kustomization -A         # all True
-kubectl get helmrelease -A           # all Ready
-kubectl top nodes                    # resource headroom
+kubectl get pods -A             # all Running
+kubectl get kustomization -A    # all Ready=True
+kubectl get helmrelease -A      # all Ready
+kubectl top nodes               # resource headroom
 ```
 
-- All pods `Running`
-- All kustomizations `True`
-- All HelmReleases `Ready`
-- DNS resolves to node IP
-- HTTPS works (valid cert after ~5 min)
-- Authentik login succeeds
-- Headlamp shows cluster resources
-- Hubble UI shows network flows
+- [ ] All pods `Running`
+- [ ] All kustomizations and HelmReleases `Ready`
+- [ ] DNS resolves to the node IP
+- [ ] HTTPS works with a valid Let's Encrypt cert
+- [ ] Authentik login succeeds (`admin`)
+- [ ] Headlamp authenticates via Authentik OIDC
+- [ ] Hubble UI prompts for Authentik login (no anonymous access)
 
 ---
 
-## Maintenance
-
-```bash
-# Check status
-python3 noah.py cluster status
-kubectl get kustomization,helmrelease -A
-
-# View credentials
-python3 noah.py password show-password
-
-# Update NOAH
-git pull origin main
-python3 noah.py setup initialize --skip-tests
-
-# Backup critical files
-tar -czf noah-backup-$(date +%Y%m%d).tar.gz \
-  Age/ Secrets/ gitops/.sops.yaml
-```
-
----
-
-## Additional Resources
-
-- [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) — day-to-day GitOps workflow and secret rotation
-- [`DNS_MANAGEMENT_GUIDE.md`](DNS_MANAGEMENT_GUIDE.md) — Cloudflare DNS setup details
-- [`HEADLAMP_INTEGRATION.md`](HEADLAMP_INTEGRATION.md) — Headlamp OIDC configuration
-
----
-
-Made with love by the NOAH Team
+See the [Operations Guide](OPERATIONS_GUIDE.md) for day-2 work: GitOps
+changes, secret rotation, SSO details, scaling to HA, and disaster recovery.

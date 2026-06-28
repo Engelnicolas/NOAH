@@ -296,7 +296,7 @@ def cluster_verify(ctx, domain, timeout, url_timeout):
 @cli.group()  # type: ignore
 @click.pass_context
 def flux(ctx):
-    """Interact with the FluxCD GitOps controller (v0.0.9+)."""
+    """Interact with the FluxCD GitOps controller."""
     pass
 
 

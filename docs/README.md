@@ -1,62 +1,51 @@
-# NOAH - Network Operations & Automation Hub
+# NOAH — Network Operations & Automation Hub
 
-**NOAH** is a complete Kubernetes infrastructure platform with integrated SSO, networking, and GitOps automation.
+**Version 0.0.8**
 
-## What is NOAH?
+NOAH is a Python CLI (`noah.py`) that provisions and operates a complete
+Kubernetes platform on K3s: SSO, networking, dashboards, and GitOps
+reconciliation — from a single command.
 
-NOAH deploys and manages a full infrastructure stack:
+## What NOAH deploys
 
-- **Authentik SSO** - Identity and access management with automatic OIDC app provisioning
-- **Cilium CNI** - eBPF-based networking with Hubble UI (SSO-gated)
-- **Headlamp Dashboard** - Kubernetes web UI with Authentik SSO
-- **Canonical Secrets Store** - Single encrypted secrets file (Age/SOPS)
-- **Cloudflare DNS Wizard** - Interactive DNS automation (`setup initialize`)
-- **GitOps with FluxCD** - Continuous reconciliation from `gitops/` with SOPS-encrypted secrets
-- **CI/CD Ready** - GitHub Actions for Python and GitOps validation
+| Component | Role |
+|---|---|
+| **K3s** (embedded etcd) | Lightweight Kubernetes, single-node or 3-node HA |
+| **Cilium** | eBPF CNI + Hubble network observability |
+| **FluxCD** | Continuous GitOps reconciliation from `gitops/` |
+| **cert-manager** | Automatic TLS via Let's Encrypt |
+| **external-dns** | Automatic Cloudflare DNS records |
+| **nginx-ingress** | L7 ingress on `hostNetwork` (ports 80/443) |
+| **Authentik** | SSO / OIDC identity provider |
+| **Headlamp** | Kubernetes dashboard (SSO-gated) |
+| **Hubble UI** | Network flows (SSO-gated via forward-auth) |
 
-### Repository structure
+Secrets have a single source of truth — the SOPS/Age-encrypted
+`Secrets/canonical-secrets.enc.yaml` — and are delivered to the cluster
+**out-of-band** (never committed to Git). See the
+[Operations Guide](OPERATIONS_GUIDE.md#secrets) for the model.
 
-```
-NOAH/
-├── .github/workflows/
-│   ├── ci-python.yml            # lint, test, security scan
-│   └── ci-gitops.yml            # YAML lint, kubeconform, Helm dry-run
-├── Ansible/                     # K3s bootstrap roles
-├── Scripts/                     # Python orchestration modules
-├── Tests/                       # pytest suite
-├── docs/                        # documentation
-├── clusters/production/         # Flux reconciliation root (read by FluxCD)
-│   ├── kustomization.yaml       # top-level entry point
-│   ├── flux-system/             # Flux bootstrap manifests
-│   ├── noah-source.yaml         # GitRepository pointing at gitops/
-│   ├── infrastructure.yaml      # Kustomization CR for infrastructure
-│   ├── cert-manager-issuers.yaml
-│   └── apps.yaml                # Kustomization CR for apps
-├── gitops/                      # FluxCD manifests (actual Helm/Kustomize content)
-│   ├── clusters/production/     # mirrors clusters/ for local tooling
-│   ├── apps/                    # Authentik, Headlamp, Hubble
-│   └── infrastructure/          # cert-manager, Cilium, external-dns
-└── noah.py                      # NOAH CLI entry point
-```
+## Documentation
 
-> **Note on Flux paths**: `flux bootstrap` writes to `clusters/production/` (repo root). The `gitops/` subtree contains the actual Helm manifests and encrypted secrets that Flux pulls via the `noah` GitRepository source.
+| Guide | When to read it |
+|---|---|
+| [Deployment Guide](DEPLOYMENT_GUIDE.md) | Go from zero to a running cluster, incl. DNS and troubleshooting |
+| [Operations Guide](OPERATIONS_GUIDE.md) | Day-2: GitOps workflow, secret rotation, SSO, disaster recovery |
 
-### Documentation
-- [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) - end-to-end install
-- [`GITOPS_GUIDE.md`](GITOPS_GUIDE.md) - day-to-day FluxCD workflow
-- [`MIGRATION_GUIDE.md`](MIGRATION_GUIDE.md) - upgrade from v0.0.7
-
-## Quick Start
+## Quick start
 
 ```bash
-# 1. Clone and initialize (installs tools, generates Age key, runs Cloudflare DNS wizard)
+# 1. Clone and initialize (installs tools, generates the Age key, runs the DNS wizard)
 git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
 python3 noah.py setup initialize
 
-# 2. Fill and encrypt secrets in gitops/ (records the node's public IP / EIP)
-python3 noah.py setup gitops --domain your-domain.com --node-ip <EIP>
+# 2. Prepare gitops/ for your domain and record the node's public IP
+python3 noah.py setup gitops --domain your-domain.com --node-ip <NODE_PUBLIC_IP>
 
-# 3. Bootstrap K3s + FluxCD (single-node: --node defaults to the recorded EIP; auto-registers SSH deploy key)
+# 3. Commit and push so Flux can reconcile this repo
+git add gitops/ && git commit -m "chore: configure domain" && git push origin main
+
+# 4. Bootstrap K3s + FluxCD (single-node: --node defaults to the recorded IP)
 export GITHUB_TOKEN=ghp_xxx
 python3 noah.py cluster bootstrap \
   --domain your-domain.com \
@@ -64,105 +53,109 @@ python3 noah.py cluster bootstrap \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \
   --git-token $GITHUB_TOKEN
 
-# 4. Watch FluxCD reconcile the stack (~25-45 min)
-watch kubectl get kustomization,helmrelease -A
+# 5. Wait for the stack to converge and print the verdict (~25–45 min)
+python3 noah.py cluster verify --domain your-domain.com
 
-# 5. Get credentials
+# 6. Get the Authentik admin credentials
 python3 noah.py password show-password
 ```
 
-> For a 3-node HA cluster add `--ha --nodes node1,node2,node3` to step 3.
+> **3-node HA:** add `--ha --nodes node1,node2,node3` to step 4.
 >
-> Running NOAH **on the target node** (co-located single-node)? Override with `--node 127.0.0.1` (or the node's private IP) — an instance can't SSH to its own public/Elastic IP (the AWS Internet Gateway doesn't hairpin it), so the EIP default times out.
+> **Co-located (NOAH runs on the target node):** add `--node 127.0.0.1` (or the
+> node's private IP) — an instance can't SSH to its own public/Elastic IP
+> (the AWS Internet Gateway doesn't hairpin it), so the recorded-IP default
+> times out.
 
-## Architecture Overview
+**NOAH must always be run from the repository root** — it checks for
+`Scripts/`, `Ansible/`, and `noah.py`.
+
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    User Access Layer                    │
-│  https://auth.your-domain.com     (Authentik SSO)       │
-│  https://headlamp.your-domain.com (K8s Dashboard)       │
-│  https://hubble.your-domain.com   (Network Observ.)     │
-└────────────────────────┬────────────────────────────────┘
-                         │ HTTPS/TLS
+│                    User access layer                     │
+│  https://auth.your-domain.com      (Authentik SSO)       │
+│  https://headlamp.your-domain.com  (K8s dashboard)       │
+│  https://hubble.your-domain.com    (network flows)       │
+└────────────────────────┬─────────────────────────────────┘
+                         │ HTTPS / TLS (Let's Encrypt)
                          ▼
 ┌─────────────────────────────────────────────────────────┐
-│         nginx-ingress (hostNetwork, ports 80/443)       │
-│  • L7 routing  • TLS via cert-manager / Let's Encrypt   │
-└────────────────────────┬────────────────────────────────┘
-                         │
+│        nginx-ingress (hostNetwork, ports 80/443)         │
+└────────────────────────┬─────────────────────────────────┘
         ┌────────────────┼────────────────┐
         ▼                ▼                ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │  Authentik   │  │  Headlamp    │  │  Hubble UI   │
-│  SSO/OIDC    │◄─┤  Dashboard   │  │  Network     │
-│  + Worker    │  │  (OIDC auth) │  │  Flows       │
+│  SSO / OIDC  │◄─┤  (OIDC)      │  │ (forward-auth)│
 └──────┬───────┘  └──────────────┘  └──────────────┘
-       │
        ├──────────┬──────────┐
        ▼          ▼          ▼
 ┌──────────┐ ┌────────┐ ┌────────────┐
 │PostgreSQL│ │ Redis  │ │   Cilium   │
-│ (state)  │ │(cache) │ │ CNI/Proxy  │
 └──────────┘ └────────┘ └────────────┘
 ───────────────────────────────────────────────────────────
               Kubernetes (K3s, embedded etcd)
 ───────────────────────────────────────────────────────────
-FluxCD reconciliation order:
-  Phase 0:   External-DNS (Cloudflare)
-  Phase 1:   cert-manager + ClusterIssuers
-  Phase 2:   Cilium CNI
-  Phase 2.5: nginx-ingress (hostNetwork)
-  Phase 3:   Authentik SSO (PostgreSQL + Redis)
-  Phase 3.5: Hubble UI SSO provisioning
-  Phase 4:   Headlamp Dashboard
-  Phase 5:   Validation
+
+FluxCD reconciliation order (enforced by dependsOn):
+  external-dns → cert-manager → Cilium → nginx-ingress
+              → Authentik → Hubble UI → Headlamp
 ```
+
+## Repository layout
+
+```
+NOAH/
+├── noah.py                  # CLI entry point (run from repo root)
+├── Scripts/                 # Python orchestration modules
+├── Ansible/                 # K3s + FluxCD bootstrap roles
+├── Tests/                   # pytest suite
+├── Age/keys.txt             # Age private key (encrypts the canonical store)
+├── Secrets/                 # canonical-secrets.enc.yaml (single source of truth)
+├── clusters/production/     # Flux reconciliation root (written by flux bootstrap)
+│   ├── kustomization.yaml
+│   ├── noah-source.yaml     # GitRepository → gitops/
+│   ├── infrastructure.yaml  # Kustomization CR
+│   ├── cert-manager-issuers.yaml
+│   └── apps.yaml            # Kustomization CR (dependsOn infrastructure)
+├── gitops/                  # Helm/Kustomize manifests Flux reconciles
+│   ├── infrastructure/      # cilium, cert-manager, external-dns, nginx-ingress
+│   └── apps/                # authentik, headlamp, hubble-auth
+└── docs/                    # this documentation
+```
+
+> `flux bootstrap` writes to `clusters/production/`. The `gitops/` subtree holds
+> the actual manifests, pulled via the `noah` GitRepository source.
 
 ## Requirements
 
-### System
-- **OS**: Ubuntu 20.04+, Debian 11+, CentOS 8+, RHEL 8+
-- **CPU**: 4 cores minimum (8+ recommended)
-- **RAM**: 8 GB minimum (16 GB+ recommended)
-- **Storage**: 50 GB free (100 GB+ recommended)
-- **Kernel**: Linux 5.10+ (required by Cilium eBPF)
-- **Network**: Internet connectivity
+**Target node(s):**
+- OS: Ubuntu 20.04+, Debian 11+, RHEL/CentOS 8+
+- Kernel 5.10+ (required by Cilium eBPF)
+- 4 CPU / 8 GB RAM / 50 GB disk minimum (8 CPU / 16 GB / 100 GB recommended)
+- Internet connectivity
 
-### Tools (auto-installed by `setup initialize`)
-- Python 3.8+, kubectl, FluxCD CLI, Ansible
-- age, sops (encryption)
+**Workstation tools** (auto-installed by `setup initialize`): Python 3.8+,
+kubectl, FluxCD CLI, Ansible, `age`, `sops`.
 
-## Service Access
+## Service access
 
-After deployment:
-
-| Service | URL |
-|---|---|
-| Authentik SSO | `https://auth.your-domain.com` |
-| Headlamp Dashboard | `https://headlamp.your-domain.com` |
-| Hubble UI | `https://hubble.your-domain.com` |
-
-```bash
-# Show admin credentials
-python3 noah.py password show-password
-
-# Rotate password
-python3 noah.py password new
-python3 noah.py setup gitops --domain your-domain.com
-python3 noah.py flux sync
-```
+| Service | URL | Auth |
+|---|---|---|
+| Authentik SSO | `https://auth.your-domain.com` | `admin` + `password show-password` |
+| Headlamp | `https://headlamp.your-domain.com` | "Sign in with OIDC" → Authentik |
+| Hubble UI | `https://hubble.your-domain.com` | Authentik forward-auth |
 
 ## Testing
 
 ```bash
-# Run test suite
-python3 Tests/test_noah.py
-
-# CI without a cluster
-NOAH_SKIP_ANSIBLE=true python3 -m pytest Tests/test_deploy_core_secrets.py -q
+pytest Tests/ -v                       # unit tests (integration excluded)
+pytest Tests/ -v -m integration        # include integration (needs real sops)
+NOAH_SKIP_ANSIBLE=true pytest Tests/ -q # skip Ansible in CI
 ```
 
 ---
 
-Made with love by the NOAH Team
+Made with care by the NOAH Team.

@@ -85,6 +85,8 @@ aws cloudformation describe-stacks --stack-name <name>
 
 NOAH (Network Operations & Automation Hub) is a Python CLI (`noah.py`) that provisions and manages a full Kubernetes infrastructure stack on K3s. It orchestrates: K3s cluster bootstrap via Ansible, FluxCD GitOps reconciliation, SOPS/Age-encrypted secrets, Authentik SSO, Cilium CNI, Headlamp dashboard, and Hubble UI.
 
+User-facing docs live in `docs/`: [`README.md`](docs/README.md) (overview + quickstart), [`DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md) (install, DNS, troubleshooting), [`OPERATIONS_GUIDE.md`](docs/OPERATIONS_GUIDE.md) (day-2: GitOps, secrets, SSO, DR).
+
 ## Commands
 
 ### Setup and development
@@ -129,7 +131,7 @@ NOAH_SKIP_ANSIBLE=true pytest Tests/ -q
 
 ```bash
 python3 noah.py setup doctor                    # diagnose environment
-python3 noah.py setup gitops --domain example.com --node-ip EIP   # fill & encrypt gitops/ secrets; records the node public IP (single IP entry point)
+python3 noah.py setup gitops --domain example.com --node-ip EIP   # prepare gitops/ for the domain; records the node public IP (single IP entry point)
 python3 noah.py cluster bootstrap --domain D --flux-repo URL --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 --git-token $GITHUB_TOKEN   # single-node: --node defaults to the recorded EIP (pass --node to override)
 python3 noah.py cluster status
 python3 noah.py flux sync / status / logs
@@ -151,16 +153,16 @@ python3 noah.py secrets rotate --service authentik
 | `Scripts/cluster_destroy/` | Cluster teardown and kubectl cleanup |
 | `Scripts/security/` | Canonical secrets store, SOPS client, rotation CLI, Authentik provisioner |
 | `Scripts/core_helm/` | Authentik credential retrieval and password management |
-| `Scripts/gitops/` | Domain substitution, secret filling, encryption of `gitops/` for FluxCD |
+| `Scripts/gitops/` | Domain/IP prep of `gitops/` for FluxCD; renders out-of-band Secret manifests from the canonical store |
 | `Scripts/utils/` | Config loader, Ansible runner, path resolution, dict utilities |
 
 ### Secrets model
 
 Secrets have a single source of truth: `Secrets/canonical-secrets.enc.yaml` (SOPS/Age encrypted). `Scripts/security/canonical_store.py` loads/saves this file. `Scripts/security/sops_client.py` wraps the `sops` binary with a typed exception hierarchy (`SopsError` → `SopsBinaryNotFoundError`, `SopsDecryptionError`, etc.).
 
-`setup gitops` reads from the canonical store and writes SOPS-encrypted `*.enc.yaml` files into `gitops/`. The kustomize controller decrypts these at apply time via the `sops-age` Secret bootstrapped by Ansible.
+Secrets are **never committed to Git** and are **not** reconciled by Flux. NOAH renders Kubernetes Secret manifests from the canonical store (`gitops_init.render_app_secret_manifests`) and applies them directly to the cluster — out-of-band. This happens at bootstrap (the `app-secrets` Ansible role `kubectl apply`s them after Flux is installed), on demand via `noah secrets apply`, and on rotation via `noah secrets rotate --service <svc> --apply`. `setup gitops` only prepares the non-secret `gitops/` tree (domain/IP) and records the node public IP in the store.
 
-Age keys live in `Age/keys.txt`. The public key recipient in `gitops/.sops.yaml` controls which key can decrypt gitops secrets.
+Age keys live in `Age/keys.txt`. Together with `Secrets/canonical-secrets.enc.yaml` they are the only copy of secret material — back both up offline.
 
 ### GitOps / FluxCD structure
 
@@ -172,8 +174,8 @@ clusters/production/          ← Flux reconciliation root (written by flux boot
   apps.yaml                   ← Kustomization CR (dependsOn infrastructure)
 
 gitops/                       ← Actual Helm manifests reconciled by Flux
-  infrastructure/             ← Cilium, cert-manager, external-dns
-  apps/                       ← Authentik, Headlamp, hubble-auth
+  infrastructure/             ← cilium, cert-manager, cert-manager-issuers, external-dns, nginx-ingress
+  apps/                       ← authentik, headlamp, hubble-auth
   .sops.yaml                  ← Encryption rules (Age recipients)
 ```
 
@@ -187,6 +189,7 @@ Reconciliation order enforced via `dependsOn`: external-dns → cert-manager →
 
 - **`ci-python.yml`**: runs on changes to `Scripts/`, `Tests/`, `noah.py`. Steps: ruff lint → bandit → syntax check → pytest → NOAH CLI smoke test → ansible-lint.
 - **`ci-gitops.yml`**: runs on changes to `gitops/`. Steps: yamllint → kubeconform (skips `*.enc.yaml`) → Helm dry-run on `helmrelease.yaml` files.
+- **`test.yml`** / **`deploy.yml`** / **`release.yml`**: the NOAH test, deploy, and release pipelines.
 
 ### Environment variables
 

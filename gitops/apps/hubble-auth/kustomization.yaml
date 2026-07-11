@@ -7,5 +7,6 @@ resources:
   # to the script re-trigger this Job.
   - provision-job.yaml
   - hubble-ingress.yaml
+  - hubble-outpost-ingress.yaml
   - auth-proxy-configmap.yaml
   - auth-proxy-deployment.yaml

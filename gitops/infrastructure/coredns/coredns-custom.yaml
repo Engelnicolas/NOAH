@@ -1,0 +1,27 @@
+---
+# Split-horizon DNS for the public auth host, so in-cluster server-side OIDC
+# clients can reach it.
+#
+# The Headlamp backend is a confidential OIDC client: it fetches the discovery
+# document and performs the code/token exchange server-side against
+# https://auth.${DOMAIN}. That name resolves to the node's public EIP, but a
+# pod cannot reach its own instance's public IP (AWS Internet Gateway does not
+# hairpin), so the request times out and Headlamp logs "failed to get provider".
+#
+# This rewrites just the auth host to the in-cluster nginx-ingress Service. The
+# request then stays inside the cluster; nginx serves the same Let's Encrypt
+# certificate for auth.${DOMAIN} (SNI is preserved), so TLS still validates and
+# the OIDC issuer string is unchanged (browsers keep using the public URL).
+#
+# k3s CoreDNS imports /etc/coredns/custom/*.override into the .:53 block from
+# the optional `coredns-custom` ConfigMap, so this needs no edit to the
+# k3s-managed `coredns` ConfigMap. The rewrite plugin runs before kubernetes/
+# forward regardless of position, so ordering inside the block is irrelevant.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  noah-auth.override: |
+    rewrite name exact auth.${DOMAIN} nginx-ingress-ingress-nginx-controller.nginx-ingress.svc.cluster.local

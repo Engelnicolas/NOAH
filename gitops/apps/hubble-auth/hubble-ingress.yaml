@@ -10,10 +10,14 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/auth-url: "http://hubble-auth-proxy.kube-system.svc.cluster.local/outpost.goauthentik.io/auth/nginx"
-    # $$ escapes nginx runtime vars from Flux's postBuild envsubst (which would
-    # otherwise blank $scheme/$http_host/$escaped_request_uri); ${DOMAIN} is
-    # left single-$ so Flux substitutes it from the cluster-vars ConfigMap.
-    nginx.ingress.kubernetes.io/auth-signin: "https://auth.${DOMAIN}/outpost.goauthentik.io/start?rd=$$scheme%3A%2F%2F$$http_host$$escaped_request_uri"
+    # Base URL only, no query string: ingress-nginx (>=1.9, CVE-2023-5044
+    # hardening) rejects auth-signin values containing nginx runtime vars
+    # ($scheme/$http_host/$escaped_request_uri) — it silently drops the whole
+    # annotation, so a 401 from the outpost is returned raw instead of
+    # redirecting to login. The controller appends ?rd=<original-url> itself
+    # (buildAuthSignURL), so the redirect-back is preserved. ${DOMAIN} is left
+    # single-$ so Flux substitutes it from the cluster-vars ConfigMap.
+    nginx.ingress.kubernetes.io/auth-signin: "https://auth.${DOMAIN}/outpost.goauthentik.io/start"
     nginx.ingress.kubernetes.io/auth-response-headers: "X-authentik-username,X-authentik-groups,X-authentik-email,X-authentik-name,X-authentik-uid"
 spec:
   ingressClassName: nginx

@@ -1,15 +1,46 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(sudo -E kubectl logs -n authentik authentik-server-789dbfc897-nk42b --tail=200)",
+      "Bash(sudo -E kubectl get svc -n nginx-ingress)",
+      "Bash(sudo -E kubectl get svc -n nginx-ingress -o jsonpath='{.items[?\\(@.spec.type==\"LoadBalancer\"\\)].metadata.name}')",
+      "Bash(sudo -E kubectl run curltest3 --rm -i --restart=Never --image=curlimages/curl -n nginx-ingress --command -- curl -sk -D - -o /dev/null -H 'Host: hubble.noah-infra.com' https://nginx-ingress-controller.nginx-ingress.svc.cluster.local/)",
+      "Bash(sudo -E kubectl run curltest4 --rm -i --restart=Never --image=curlimages/curl -n nginx-ingress --command -- curl -sk -D - -o /dev/null -H 'Host: hubble.noah-infra.com' https://nginx-ingress-ingress-nginx-controller.nginx-ingress.svc.cluster.local/)",
+      "Bash(sudo -E kubectl run curltest5 --rm -i --restart=Never --image=curlimages/curl -n nginx-ingress --command -- curl -sk -D - -o /dev/null -H 'Host: headlamp.noah-infra.com' https://nginx-ingress-ingress-nginx-controller.nginx-ingress.svc.cluster.local/)",
+      "Bash(sudo -E kubectl get deploy headlamp -n headlamp -o jsonpath='{.spec.template.spec.containers[0].args}')",
+      "Bash(sudo -E kubectl get deploy headlamp -n headlamp -o jsonpath='{range .spec.template.spec.containers[0].env[*]}{.name}={.value}{\"\\\\n\"}{end}')",
+      "Bash(sudo -E kubectl get deploy headlamp -n headlamp -o jsonpath='{.spec.template.spec.containers[0].envFrom}')",
+      "Bash(sudo -E kubectl run oidctest --rm -i --restart=Never --image=curlimages/curl -n authentik --command -- curl -s -H 'Host: auth.noah-infra.com' http://authentik-server.authentik.svc.cluster.local/application/o/headlamp/.well-known/openid-configuration)",
+      "Bash(sudo -E kubectl run oidctest2 --rm -i --restart=Never --image=curlimages/curl -n nginx-ingress --command -- curl -sk -H 'Host: auth.noah-infra.com' https://nginx-ingress-ingress-nginx-controller.nginx-ingress.svc.cluster.local/application/o/headlamp/.well-known/openid-configuration)",
+      "Bash(sudo -E kubectl logs -n headlamp deploy/headlamp --tail=60)",
+      "Bash(sudo -E kubectl run dnstest --rm -i --restart=Never --image=curlimages/curl -n headlamp --command -- sh -c 'nslookup auth.noah-infra.com 2>/dev/null | tail -4; echo '\\\\''--- curl public \\(expect timeout\\) ---'\\\\''; curl -sk --max-time 8 -o /dev/null -w '\\\\''HTTP %{http_code} time=%{time_total}\\\\n'\\\\'' https://auth.noah-infra.com/application/o/headlamp/.well-known/openid-configuration 2>&1')",
+      "Bash(sudo -E kubectl get cm -n flux-system)",
+      "Bash(sudo -E kubectl get cm cluster-vars -n flux-system -o jsonpath='{.data}')",
+      "Bash(sudo -E kubectl get deploy coredns -n kube-system -o jsonpath='{range .spec.template.spec.volumes[*]}{.name}{\" -> cm=\"}{.configMap.name}{\" optional=\"}{.configMap.optional}{\"\\\\n\"}{end}')",
+      "Bash(sudo -E kubectl get deploy coredns -n kube-system -o jsonpath='{range .spec.template.spec.containers[0].volumeMounts[*]}{.name}{\" @ \"}{.mountPath}{\"\\\\n\"}{end}')",
+      "Bash(sudo -E kubectl logs -n kube-system deploy/coredns --tail=15)",
+      "Bash(sudo -E kubectl run dnsverify --rm -i --restart=Never --image=curlimages/curl -n headlamp --command -- sh -c 'nslookup auth.noah-infra.com 2>/dev/null | grep -A2 '\\\\''Name:'\\\\''; echo '\\\\''--- discovery fetch ---'\\\\''; curl -sk --max-time 10 -o /dev/null -w '\\\\''HTTP %{http_code} time=%{time_total}\\\\n'\\\\'' https://auth.noah-infra.com/application/o/headlamp/.well-known/openid-configuration')",
+      "Bash(sudo -E kubectl rollout restart deploy/headlamp -n headlamp)",
+      "Bash(sudo -E kubectl rollout status deploy/headlamp -n headlamp --timeout=90s)",
+      "Bash(sudo -E kubectl logs -n headlamp deploy/headlamp --tail=40)",
+      "Bash(sudo -E kubectl get pods -n headlamp -o wide)"
+    ]
+  },
   "mcpServers": {
     "aws-docs": {
       "command": "uvx",
-      "args": ["awslabs.aws-documentation-mcp-server@latest"],
+      "args": [
+        "awslabs.aws-documentation-mcp-server@latest"
+      ],
       "env": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       }
     },
     "aws-eks": {
       "command": "uvx",
-      "args": ["awslabs.eks-mcp-server@latest"],
+      "args": [
+        "awslabs.eks-mcp-server@latest"
+      ],
       "env": {
         "AWS_REGION": "eu-west-3",
         "FASTMCP_LOG_LEVEL": "ERROR"
@@ -17,7 +48,9 @@
     },
     "aws-pricing": {
       "command": "uvx",
-      "args": ["awslabs.aws-pricing-mcp-server@latest"],
+      "args": [
+        "awslabs.aws-pricing-mcp-server@latest"
+      ],
       "env": {
         "AWS_REGION": "eu-west-3",
         "FASTMCP_LOG_LEVEL": "ERROR"

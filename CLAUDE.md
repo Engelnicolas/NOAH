@@ -12,74 +12,15 @@ These rules apply to every task in this project, without exception.
 4. **Verify in code, never assume.** Before referencing a function, variable, file path, or version, read the actual source. No guesses about what "latest" might be.
 5. **Minimum code.** Implement exactly what is asked. No speculative features, no extra abstractions, no future-proofing.
 
-## GitHub skills
+## External tools — safety rules
 
-Use `gh` (GitHub CLI) for all GitHub interactions. Prefer it over raw `git` or API calls.
+- GitHub: use `gh`; never push or merge without explicit user confirmation;
+  merges use `--squash` unless specified otherwise; verify a branch or SHA exists before acting on it.
+- AWS: run `aws sts get-caller-identity` before any write; never delete without
+  explicit confirmation and a blast-radius estimate; prefer dry-run flags;
+  rely on the credential chain, never touch `~/.aws/credentials`.
 
-```bash
-# View open PRs
-gh pr list
-
-# Review PR details and diff
-gh pr view <number> --comments
-gh pr diff <number>
-
-# Create a PR (always use HEREDOC for body)
-gh pr create --title "..." --body "$(cat <<'EOF'
-## Summary
-- …
-EOF
-)"
-
-# Check CI status
-gh pr checks <number>
-
-# Merge a PR (only when explicitly asked)
-gh pr merge <number> --squash
-
-# View and create issues
-gh issue list
-gh issue view <number>
-gh issue create --title "..." --body "..."
-
-# Fetch workflow run logs
-gh run list --limit 10
-gh run view <run-id> --log-failed
-```
-
-**Rules:**
-- Never push or merge without explicit user confirmation.
-- Always use `--squash` for merges unless the user specifies otherwise.
-- When referencing a branch or SHA, verify it exists with `gh` or `git` before acting.
-
-## AWS skills
-
-Use the `aws` CLI. Assume credentials are configured via environment variables or `~/.aws/credentials`. Never hardcode keys.
-
-```bash
-# Confirm active identity before any write operation
-aws sts get-caller-identity
-
-# List resources (common services used by NOAH's infra)
-aws ec2 describe-instances --query "Reservations[*].Instances[*].[InstanceId,State.Name,PublicIpAddress]" --output table
-aws route53 list-hosted-zones
-aws s3 ls
-
-# Route53 — look up a zone before modifying records
-aws route53 list-resource-record-sets --hosted-zone-id <zone-id>
-
-# SSM Parameter Store (secrets alternative to SOPS in cloud context)
-aws ssm get-parameter --name "/noah/..." --with-decryption
-
-# CloudFormation / CDK stack status
-aws cloudformation describe-stacks --stack-name <name>
-```
-
-**Rules:**
-- Run `aws sts get-caller-identity` before any write or delete operation.
-- Never delete resources without explicit user confirmation and a stated blast-radius estimate.
-- Prefer `--dry-run` or `--no-execute-changeset` flags where available.
-- Never read or write `~/.aws/credentials` directly; rely on the CLI's credential chain.
+Command references live in `.claude/skills/github/` and `.claude/skills/aws/`.
 
 ## What is NOAH
 

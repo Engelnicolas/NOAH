@@ -124,25 +124,27 @@ the branch Flux tracks (`--flux-branch`, default `main`).
 
 ```bash
 export GITHUB_TOKEN=ghp_xxx
-python3 noah.py cluster bootstrap \
-  --domain your-domain.com \
-  --flux-repo https://github.com/Engelnicolas/NOAH.git \
-  --ssh-user ubuntu \
-  --ssh-key ~/.ssh/id_ed25519 \
-  --git-token $GITHUB_TOKEN
+python3 noah.py cluster bootstrap
 ```
 
-- **`--flux-repo` must point at the NOAH mono-repo** (not a separate gitops
-  repo). Flux reads `clusters/production/` at the root and pulls manifests from
-  `gitops/` via the `noah` GitRepository source.
-- **`--node`** is optional for single-node: it defaults to the IP recorded in
-  Step 2. Pass `--node <IP>` to override; use `--node 127.0.0.1` when NOAH runs
-  *on* the target node (see the co-located note in the
-  [README](README.md#quick-start)).
-- **`--git-token`** (or `$GITHUB_TOKEN` / `$GIT_TOKEN`) auto-registers the SSH
+Every flag has a sensible default for the single-node case:
+
+- **`--domain`** defaults to the domain recorded in Step 2; pass it to
+  override.
+- **`--flux-repo`** defaults to this repo's `origin` remote — the NOAH
+  mono-repo, which is exactly what Flux must track (it reads
+  `clusters/production/` at the root and pulls manifests from `gitops/` via
+  the `noah` GitRepository source). Do **not** point it at a separate gitops
+  repo.
+- **`--node`** defaults to the IP recorded in Step 2. Pass `--node <IP>` to
+  override; use `--node 127.0.0.1` when NOAH runs *on* the target node (see
+  the co-located note in the [README](README.md#quick-start)).
+- **`$GITHUB_TOKEN` / `$GIT_TOKEN`** (or `--git-token`) auto-registers the SSH
   deploy key on your git provider (GitHub/GitLab/Gitea, detected from the URL).
   Without a token, NOAH pauses and prints the public key for you to add
   manually as a read-only deploy key, then continues on Enter.
+- **`--ssh-user` / `--ssh-key`** default to `ubuntu` and your standard SSH key
+  resolution; pass them only for a different user or a non-default key path.
 - **3-node HA:** add `--ha --nodes node1,node2,node3`.
 
 ### Step 5 — Watch reconciliation
@@ -312,12 +314,14 @@ kubectl top pods -A
 ```bash
 python3 noah.py password show-password > backup-credentials.txt
 python3 noah.py cluster destroy --force
-python3 noah.py cluster bootstrap \
-  --domain your-domain.com \
-  --flux-repo https://github.com/Engelnicolas/NOAH.git \
-  --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \
-  --git-token $GITHUB_TOKEN
+python3 noah.py cluster bootstrap
 ```
+
+`destroy` keeps the canonical store by default, so the domain, node IP, and
+Cloudflare token recorded earlier survive the teardown — `bootstrap` reuses
+them and needs no flags. For a clean-slate teardown that also wipes the store,
+secrets, and certificates, add `--purge-secrets`; you then re-supply the
+Cloudflare token via `setup gitops` and pass `--domain` to bootstrap.
 
 ---
 

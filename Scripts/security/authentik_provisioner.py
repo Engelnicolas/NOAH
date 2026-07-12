@@ -11,7 +11,6 @@ import time
 import json
 import logging
 from typing import Optional
-from pathlib import Path
 
 try:
     import requests

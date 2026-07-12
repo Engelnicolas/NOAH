@@ -8,7 +8,6 @@ and enables external-dns in the deployment configuration.
 
 import os
 import sys
-import json
 import subprocess
 import tempfile
 from pathlib import Path

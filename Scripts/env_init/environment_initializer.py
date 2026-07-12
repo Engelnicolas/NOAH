@@ -302,7 +302,8 @@ def update_sops_version(print_status=None):
             print_status("[INFO] SOPS not found or version not detected", "INFO")
 
         print_status("[INFO] Fetching latest SOPS version...", "INFO")
-        import urllib.request, json as _json
+        import urllib.request
+        import json as _json
         with urllib.request.urlopen(
             'https://api.github.com/repos/getsops/sops/releases/latest', timeout=30
         ) as resp:
@@ -330,7 +331,8 @@ def update_sops_version(print_status=None):
         with urllib.request.urlopen(download_url, timeout=120) as resp:
             content = resp.read()
 
-        import tempfile, shutil
+        import tempfile
+        import shutil
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name

@@ -5,7 +5,7 @@ Extracted from noah.py to reduce main CLI size and improve reuse.
 """
 from __future__ import annotations
 
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Any
 
 
 def get_authentik_credentials(domain: str | None = None) -> tuple[Optional[dict[str, Any]], Optional[str]]:

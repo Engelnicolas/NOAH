@@ -151,10 +151,10 @@ class TestRenderAppSecretManifests:
                    return_value=mock_store):
             return render_app_secret_manifests(project_root, DOMAIN)
 
-    def test_renders_five_secret_documents(self, project_root):
+    def test_renders_six_secret_documents(self, project_root):
         out = self._render(project_root)
-        assert out.count("apiVersion: v1") == 5
-        assert out.count("kind: Secret") == 5
+        assert out.count("apiVersion: v1") == 6
+        assert out.count("kind: Secret") == 6
         assert "\n---\n" in out  # multi-document stream
 
     def test_all_placeholders_filled(self, project_root):

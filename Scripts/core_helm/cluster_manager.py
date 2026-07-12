@@ -5,7 +5,7 @@ import json
 import time
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any, Optional, List
 
 # Optional imports with graceful fallbacks
 yaml: Optional[Any] = None
@@ -92,7 +92,7 @@ class ClusterManager:
         """Create a Kubernetes namespace"""
         if self.core_v1 is None or client is None:
             print(f"⚠️  Warning: No Kubernetes cluster connected. Cannot create namespace {namespace}")
-            print(f"💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
+            print("💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
             return False
         
         try:
@@ -112,7 +112,7 @@ class ClusterManager:
         """Delete a Kubernetes namespace"""
         if self.core_v1 is None:
             print(f"⚠️  Warning: No Kubernetes cluster connected. Cannot delete namespace {namespace}")
-            print(f"💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
+            print("💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
             return False
         
         try:
@@ -126,7 +126,7 @@ class ClusterManager:
         """Wait for a deployment to be ready"""
         if self.apps_v1 is None:
             print(f"⚠️  Warning: No Kubernetes cluster connected. Skipping deployment wait for {deployment_name}")
-            print(f"💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
+            print("💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
             return True  # Skip the wait if no cluster is available
         
         start_time = time.time()
@@ -147,7 +147,7 @@ class ClusterManager:
         """Get the endpoint for a service"""
         if self.core_v1 is None:
             print(f"⚠️  Warning: No Kubernetes cluster connected. Cannot get endpoint for {service_name}")
-            print(f"💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
+            print("💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
             return None
         
         try:

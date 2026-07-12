@@ -50,7 +50,8 @@ def _config_enc_readable(config_path: Path, age_key_file: Path) -> bool:
     """Return True if config_path exists and can be decrypted with the current age key."""
     if not config_path.exists():
         return False
-    import subprocess, os
+    import subprocess
+    import os
     env = os.environ.copy()
     env['SOPS_AGE_KEY_FILE'] = str(age_key_file)
     result = subprocess.run(
@@ -62,7 +63,11 @@ def _config_enc_readable(config_path: Path, age_key_file: Path) -> bool:
 
 def _create_fresh_config_enc(config_path: Path, age_key_file: Path, domain: str):
     """Create a new config.enc.yaml encrypted with the current age key."""
-    import subprocess, os, secrets, tempfile, shutil
+    import subprocess
+    import os
+    import secrets
+    import tempfile
+    import shutil
     import yaml  # type: ignore
 
     # Pull authentik secret_key from canonical store if available

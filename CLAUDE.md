@@ -73,7 +73,7 @@ NOAH_SKIP_ANSIBLE=true pytest Tests/ -q
 ```bash
 python3 noah.py setup doctor                    # diagnose environment
 python3 noah.py setup gitops --domain example.com --node-ip EIP   # prepare gitops/ for the domain; records the node public IP (single IP entry point)
-python3 noah.py cluster bootstrap --domain D --flux-repo URL --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 --git-token $GITHUB_TOKEN   # single-node: --node defaults to the recorded EIP (pass --node to override)
+python3 noah.py cluster bootstrap   # single-node: --node/--domain default to the EIP and domain recorded by `setup gitops`, --flux-repo to the origin remote; deploy-key token read from $GITHUB_TOKEN/$GIT_TOKEN. Pass any flag to override.
 python3 noah.py cluster status
 python3 noah.py flux sync / status / logs
 python3 noah.py password show-password

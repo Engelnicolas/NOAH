@@ -147,7 +147,10 @@ def cluster(ctx):
 @cluster.command()
 @click.option('--name', default='noah-cluster', help='Cluster name')
 @click.option('--force', is_flag=True, help='Force deletion without confirmation')
-@click.option('--keep-secrets', is_flag=True, help='Keep secrets and certificates after destruction')
+@click.option('--keep-secrets/--purge-secrets', 'keep_secrets', default=True, show_default=True,
+              help='Keep secrets and certificates after destruction (default). '
+                   'Pass --purge-secrets to also delete the canonical store '
+                   '(including the Cloudflare token), generated secrets, and certificates.')
 @click.pass_context
 def destroy(ctx, name, force, keep_secrets):
     """Destroy Kubernetes cluster and clean up resources"""
@@ -162,10 +165,12 @@ def destroy(ctx, name, force, keep_secrets):
 @click.option('--node', default=None, help='Single node IP (default single-node mode)')
 @click.option('--nodes', default=None, help='Comma-separated IPs for HA mode (>=3, odd)')
 @click.option('--ha', is_flag=True, default=False, help='Enable 3-node embedded-etcd HA mode')
-@click.option('--domain', required=True, prompt='Primary domain for the cluster',
-              help='Primary domain for the cluster')
-@click.option('--flux-repo', required=True, prompt='GitOps repository URL (HTTPS or SSH)',
-              help='GitOps repository URL (HTTPS or SSH)')
+@click.option('--domain', default=None,
+              help='Primary domain for the cluster '
+                   '(default: the domain recorded by `setup gitops`)')
+@click.option('--flux-repo', default=None,
+              help='GitOps repository URL, HTTPS or SSH '
+                   "(default: this repo's origin remote)")
 @click.option('--flux-branch', default='main', show_default=True, help='GitOps branch')
 @click.option('--flux-path', default='clusters/production', show_default=True,
               help='Path inside the GitOps repo Flux will reconcile')
@@ -198,6 +203,22 @@ def bootstrap(ctx, node, nodes, ha, domain, flux_repo, flux_branch, flux_path,
     """Provision K3s + bootstrap FluxCD against a GitOps repo (SSH deploy key)."""
     from Scripts.security.canonical_store import get_canonical_store
     store = get_canonical_store(Path(__file__).parent)
+
+    # Same fallback pattern as --node below: `setup gitops` records the domain
+    # in the canonical store, and gitops/ lives in this repo, so its origin
+    # remote IS the GitOps repo (run_bootstrap normalizes any URL form).
+    # Explicit flags always win; prompt only when nothing is recorded.
+    if not domain:
+        domain = store.get_cluster_domain() or click.prompt('Primary domain for the cluster')
+    if not flux_repo:
+        try:
+            r = subprocess.run(['git', '-C', str(Path(__file__).parent),
+                                'remote', 'get-url', 'origin'],
+                               capture_output=True, text=True, check=True)
+            flux_repo = r.stdout.strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            flux_repo = ''
+        flux_repo = flux_repo or click.prompt('GitOps repository URL (HTTPS or SSH)')
 
     # Single-node mode: default --node to the public IP recorded by `setup gitops
     # --node-ip` so the operator doesn't re-enter the same IP. If nothing was
@@ -649,10 +670,10 @@ def gitops(ctx, domain, node_ip):
     click.echo("✅ GitOps directory ready.")
     click.echo("")
 
-    # Auto-detect the current repo's origin URL and branch so the suggested
-    # commands point at this NOAH mono-repo (which holds gitops/) rather than
-    # a generic <org>/NOAH placeholder. Falls back to placeholders if the
-    # working tree is detached or has no origin remote.
+    # Auto-detect the current branch so the suggested commands match this
+    # checkout. bootstrap now defaults --domain/--node to the values recorded
+    # above and --flux-repo to the origin remote, but it tracks `main` unless
+    # told otherwise — surface --flux-branch only when it matters.
     def _git(args):
         try:
             r = subprocess.run(['git', '-C', str(project_root), *args],
@@ -662,27 +683,18 @@ def gitops(ctx, domain, node_ip):
             return ''
 
     branch = _git(['rev-parse', '--abbrev-ref', 'HEAD']) or '<branch>'
-    origin = _git(['remote', 'get-url', 'origin'])
-    if origin.startswith('https://'):
-        # github.com/org/repo(.git) → ssh://git@github.com/org/repo.git (Flux needs SSH for deploy keys)
-        flux_repo = 'ssh://git@' + origin[len('https://'):]
-    elif origin:
-        flux_repo = origin
-    else:
-        flux_repo = 'ssh://git@github.com/<org>/NOAH'
+    flux_branch_opt = f' --flux-branch {branch}' if branch not in ('main', '<branch>') else ''
 
     click.echo("Next steps:")
     click.echo("  1. Commit and push so Flux can reconcile this repo:")
     click.echo("       git add gitops/ && git commit -m 'chore: update GitOps configuration'")
     click.echo(f"       git push origin {branch}")
     click.echo("")
-    click.echo("  2. Bootstrap the cluster (this repo is the Flux source — gitops/ lives here):")
-    click.echo("       python3 noah.py cluster bootstrap \\")
-    click.echo("         --node <NODE-IP> \\")
-    click.echo(f"         --domain {domain} \\")
-    click.echo(f"         --flux-repo {flux_repo} \\")
-    click.echo(f"         --flux-branch {branch} \\")
-    click.echo("         --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519")
+    click.echo("  2. Bootstrap the cluster (this repo is the Flux source — gitops/ lives here;")
+    click.echo("     the domain and node IP recorded above are reused as defaults):")
+    click.echo("       export GITHUB_TOKEN=<token>   # or GIT_TOKEN — auto-registers the deploy key")
+    click.echo(f"       python3 noah.py cluster bootstrap{flux_branch_opt}")
+    click.echo("     (co-located on the target node itself? add: --node 127.0.0.1)")
 
 @setup.command()
 def update_sops():

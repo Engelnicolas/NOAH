@@ -45,13 +45,11 @@ python3 noah.py setup gitops --domain your-domain.com --node-ip <NODE_PUBLIC_IP>
 # 3. Commit and push so Flux can reconcile this repo
 git add gitops/ && git commit -m "chore: configure domain" && git push origin main
 
-# 4. Bootstrap K3s + FluxCD (single-node: --node defaults to the recorded IP)
+# 4. Bootstrap K3s + FluxCD — the domain and node IP recorded in step 2 and
+#    this repo's origin remote are reused as defaults; the deploy-key token
+#    is read from the environment
 export GITHUB_TOKEN=ghp_xxx
-python3 noah.py cluster bootstrap \
-  --domain your-domain.com \
-  --flux-repo https://github.com/Engelnicolas/NOAH.git \
-  --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519 \
-  --git-token $GITHUB_TOKEN
+python3 noah.py cluster bootstrap
 
 # 5. Wait for the stack to converge and print the verdict (~25–45 min)
 python3 noah.py cluster verify --domain your-domain.com

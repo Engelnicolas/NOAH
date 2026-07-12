@@ -3,7 +3,7 @@
 import os
 import yaml
 from pathlib import Path
-from typing import Any, Optional, Dict, List, Union
+from typing import Any, Optional, Dict, List
 
 class ConfigLoader:
     """

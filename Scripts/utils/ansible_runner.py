@@ -3,7 +3,7 @@
 import subprocess
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Optional
 
 class AnsibleRunner:
     def __init__(self, config_loader):

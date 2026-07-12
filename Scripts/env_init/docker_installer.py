@@ -12,7 +12,6 @@ import os
 import sys
 import subprocess
 import platform
-import urllib.request
 from pathlib import Path
 
 

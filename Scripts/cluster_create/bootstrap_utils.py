@@ -21,7 +21,6 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -306,7 +305,7 @@ def _register_deploy_key(
                 and match.get("read_only") is True
             )
             if needs_write:
-                click.echo(f"[INFO] Existing deploy key is read-only — deleting and re-adding with write access.")
+                click.echo("[INFO] Existing deploy key is read-only — deleting and re-adding with write access.")
                 del_url = delete_url_template.format(id=match["id"])
                 del_req = urllib.request.Request(del_url, headers=req_headers, method="DELETE")
                 urllib.request.urlopen(del_req, timeout=15).close()
@@ -714,7 +713,7 @@ def run_bootstrap(
         if os.environ.get("NOAH_SKIP_ANSIBLE", "false").lower() in ("1", "true", "yes"):
             click.echo("[TEST-SHORTCUT] NOAH_SKIP_ANSIBLE set; skipping ansible-playbook.")
             click.echo(f"  inventory : {inv_path}")
-            click.echo(f"  extra-vars: (redacted)")
+            click.echo("  extra-vars: (redacted)")
             return 0
 
         cmd = [

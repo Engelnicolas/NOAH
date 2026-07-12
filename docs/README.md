@@ -1,6 +1,6 @@
 # NOAH — Network Operations & Automation Hub
 
-**Version 0.0.8**
+**Version 0.0.9**
 
 NOAH is a Python CLI (`noah.py`) that provisions and operates a complete
 Kubernetes platform on K3s: SSO, networking, dashboards, and GitOps

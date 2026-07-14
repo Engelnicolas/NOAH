@@ -197,6 +197,10 @@ def provision_oidc(service, external_host):
         "client_type": "confidential",
         "authorization_flow": auth_flow,
         "invalidation_flow": invalidation_flow,
+        # Without this, Authentik defaults grant_types to an empty list,
+        # rejecting the token exchange with "Invalid grant_type for
+        # provider" (surfaces to Headlamp as oauth2 invalid_grant).
+        "grant_types": ["authorization_code", "refresh_token"],
         # Authentik 2024.4+ models redirect URIs as structured objects.
         "redirect_uris": [{"matching_mode": "strict", "url": f"{external_host}/oidc-callback"}],
         "sub_mode": "hashed_user_id",

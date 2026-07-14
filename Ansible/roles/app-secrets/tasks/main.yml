@@ -28,6 +28,8 @@
         - cert-manager
         - authentik
         - headlamp
+        - nextcloud
+        - stalwart
       changed_when: false
 
     - name: Write application secrets manifest to a temp file on the primary

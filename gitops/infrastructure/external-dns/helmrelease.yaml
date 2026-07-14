@@ -27,8 +27,20 @@ spec:
     sources:
       - service
       - ingress
+      # DNSEndpoint CRs (mail MX/SPF/DKIM/DMARC records for Stalwart). The
+      # DNSEndpoint CRD is vendored in dnsendpoint-crd.yaml — the chart does
+      # not ship it.
+      - crd
     policy: sync
     txtOwnerId: noah
+    # A/CNAME (+ TXT ownership) are the defaults; MX and standalone TXT are
+    # needed for the mail records published via the crd source.
+    managedRecordTypes:
+      - A
+      - AAAA
+      - CNAME
+      - TXT
+      - MX
     env:
       - name: CF_API_TOKEN
         valueFrom:

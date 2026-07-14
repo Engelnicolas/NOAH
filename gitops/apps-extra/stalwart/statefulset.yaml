@@ -1,0 +1,105 @@
+---
+# Stalwart mail server, single replica. Mail ports (25/587/465/143/993) bind
+# the node directly via hostPort — nginx-ingress is L7/HTTP-only and this
+# single-node EC2 sits behind a 1:1 NAT EIP (same rationale as the hostPort
+# block in gitops/infrastructure/nginx-ingress/helmrelease.yaml). hostPort
+# also means two replicas cannot coexist on one node; a StatefulSet updates
+# pods by delete-then-create, so no maxSurge deadlock is possible.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: stalwart
+  namespace: stalwart
+spec:
+  serviceName: stalwart
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stalwart
+  template:
+    metadata:
+      labels:
+        app: stalwart
+    spec:
+      containers:
+        - name: stalwart
+          # Last TOML-configurable release — see configmap.yaml header before
+          # bumping to v0.16.
+          image: stalwartlabs/stalwart:v0.15.5
+          ports:
+            - name: smtp
+              containerPort: 25
+              hostPort: 25
+            - name: submission
+              containerPort: 587
+              hostPort: 587
+            - name: submissions
+              containerPort: 465
+              hostPort: 465
+            - name: imap
+              containerPort: 143
+              hostPort: 143
+            - name: imaps
+              containerPort: 993
+              hostPort: 993
+            # webadmin + JMAP: cluster-internal only, exposed via nginx-ingress.
+            - name: http
+              containerPort: 8080
+          env:
+            # Referenced by config.toml %{env:...}% macros.
+            - name: ADMIN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-app
+                  key: ADMIN_SECRET
+            - name: DKIM_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-app
+                  key: DKIM_PRIVATE_KEY
+          volumeMounts:
+            - name: data
+              mountPath: /opt/stalwart
+            # subPath keeps the file present at the path the image entrypoint
+            # checks, so its `--init` branch (which would generate a fresh
+            # config) never runs.
+            - name: config
+              mountPath: /opt/stalwart/etc/config.toml
+              subPath: config.toml
+              readOnly: true
+            - name: tls
+              mountPath: /opt/stalwart/tls
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: config
+          configMap:
+            name: stalwart-config
+        - name: tls
+          secret:
+            # Issued by certificate.yaml (cert-manager, dns01); the pod stays
+            # Pending until the Secret exists on first deploy.
+            secretName: mail-tls
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi

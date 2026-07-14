@@ -1,0 +1,18 @@
+---
+# TLS certificate for the mail protocols themselves (SMTPS 465, IMAPS 993,
+# STARTTLS) — terminated by Stalwart, not nginx. Issued via dns01 (the
+# letsencrypt-prod ClusterIssuer uses Cloudflare), so no HTTP exposure is
+# needed. Mounted into the pod at /opt/stalwart/tls and referenced by the
+# [certificate."default"] block in config.toml.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mail-tls
+  namespace: stalwart
+spec:
+  secretName: mail-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-prod
+  dnsNames:
+    - "mail.${DOMAIN}"

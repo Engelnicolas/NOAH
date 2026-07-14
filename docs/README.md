@@ -117,10 +117,12 @@ NOAH/
 │   ├── noah-source.yaml     # GitRepository → gitops/
 │   ├── infrastructure.yaml  # Kustomization CR
 │   ├── cert-manager-issuers.yaml
-│   └── apps.yaml            # Kustomization CR (dependsOn infrastructure)
+│   ├── apps.yaml            # Kustomization CR (dependsOn infrastructure)
+│   └── apps-extra.yaml      # Kustomization CR (dependsOn apps)
 ├── gitops/                  # Helm/Kustomize manifests Flux reconciles
 │   ├── infrastructure/      # cilium, cert-manager, external-dns, nginx-ingress
-│   └── apps/                # authentik, headlamp, hubble-auth
+│   ├── apps/                # authentik, headlamp, hubble-auth
+│   └── apps-extra/          # nextcloud, stalwart (mail)
 └── docs/                    # this documentation
 ```
 
@@ -145,6 +147,13 @@ kubectl, FluxCD CLI, Ansible, `age`, `sops`.
 | Authentik SSO | `https://auth.your-domain.com` | `admin` + `password show-password` |
 | Headlamp | `https://headlamp.your-domain.com` | "Sign in with OIDC" → Authentik |
 | Hubble UI | `https://hubble.your-domain.com` | Authentik forward-auth |
+| Nextcloud | `https://nextcloud.your-domain.com` | "Log in with Authentik" (OIDC) or local |
+| Stalwart mail (web admin) | `https://mail.your-domain.com` | break-glass `admin` (`secrets canonical --show`, service `stalwart`) |
+
+Mail protocols (SMTP 25/587/465, IMAP 143/993) bind the node's public IP
+directly. Sending real mail additionally requires AWS-side steps (outbound
+port 25 unblock, EIP PTR record) — see the
+[Deployment Guide](DEPLOYMENT_GUIDE.md#mail-prerequisites-stalwart).
 
 ## Testing
 

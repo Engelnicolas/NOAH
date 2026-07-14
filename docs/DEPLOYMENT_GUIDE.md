@@ -203,6 +203,13 @@ After bootstrap, point your records at the node's public IP. Create A records:
 | `auth.your-domain.com` | A | `<node-public-ip>` | 300 |
 | `headlamp.your-domain.com` | A | `<node-public-ip>` | 300 |
 | `hubble.your-domain.com` | A | `<node-public-ip>` | 300 |
+| `nextcloud.your-domain.com` | A | `<node-public-ip>` | 300 |
+| `mail.your-domain.com` | A | `<node-public-ip>` | 300 |
+
+With automatic DNS (Option A), the mail MX/SPF/DKIM/DMARC records are also
+published by external-dns (`DNSEndpoint` CRs in `gitops/apps-extra/stalwart/`).
+With manual DNS, create them yourself — the DKIM TXT value comes from
+`kubectl -n flux-system get secret stalwart-dns-vars -o jsonpath='{.data.DKIM_TXT_VALUE}' | base64 -d`.
 
 Verify:
 ```bash
@@ -227,10 +234,37 @@ echo "$IP auth.your-domain.com headlamp.your-domain.com hubble.your-domain.com" 
 | Authentik SSO | `https://auth.your-domain.com` | `admin` + `password show-password` |
 | Headlamp | `https://headlamp.your-domain.com` | "Sign in with OIDC" → Authentik |
 | Hubble UI | `https://hubble.your-domain.com` | Authentik forward-auth |
+| Nextcloud | `https://nextcloud.your-domain.com` | "Log in with Authentik" (OIDC) or local `admin` |
+| Stalwart mail (web admin) | `https://mail.your-domain.com` | break-glass `admin` (`secrets canonical --show`, service `stalwart`) |
 
 Headlamp's OIDC client and Hubble's forward-auth proxy are **auto-provisioned**
-in Authentik during reconciliation. See the
+in Authentik during reconciliation; so are the Nextcloud and Stalwart OIDC
+clients (`apps-extra`). See the
 [Operations Guide](OPERATIONS_GUIDE.md#sso) for how SSO is wired.
+
+### Mail prerequisites (Stalwart)
+
+Stalwart reconciles like any other app, but **delivering real mail needs two
+AWS-side steps no manifest can do**:
+
+1. **Outbound TCP 25 is blocked by default on EC2.** Ask AWS to lift it
+   ("Request to Remove Email Sending Limitations" form), and open inbound
+   25/587/465/143/993 in the instance security group.
+2. **PTR (reverse DNS) for the EIP** must be set at the AWS level and match
+   `mail.your-domain.com`. Without it (plus SPF/DKIM/DMARC), Gmail/Outlook
+   will reject or spam-folder your mail.
+
+Client notes:
+- IMAP/SMTP clients authenticate with **OAUTHBEARER/XOAUTH2** using an
+  Authentik access token for the `stalwart` OIDC app (client OAuth support
+  varies — see the Operations Guide). The web admin uses the break-glass
+  `admin` account.
+- A user must **log in once** (IMAP/JMAP) before their address can receive
+  mail: Stalwart materializes OIDC accounts on first authentication.
+- Stalwart is pinned to **v0.15.x**, the last release configurable via a
+  declarative `config.toml` (v0.16 moved configuration into its datastore,
+  managed by `stalwart-cli`). Upgrading to v0.16 is a separate migration —
+  see `gitops/apps-extra/stalwart/configmap.yaml`.
 
 To rotate the Authentik admin password, see
 [Operations Guide → rotating secrets](OPERATIONS_GUIDE.md#rotating-a-secret).

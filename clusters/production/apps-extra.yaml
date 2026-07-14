@@ -1,0 +1,37 @@
+---
+# Second-phase apps (Nextcloud, Stalwart) in their own Kustomization so their
+# long first-boot (PostgreSQL init, Nextcloud install, certificate issuance)
+# never blocks or times out the core apps (Authentik/Headlamp/Hubble).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps-extra
+  namespace: flux-system
+spec:
+  dependsOn:
+    # apps provides Authentik (OIDC provisioning target) and the static
+    # provisioner-script ConfigMap; infrastructure (transitively) provides the
+    # DNSEndpoint CRD, cert-manager and nginx-ingress.
+    - name: apps
+  interval: 10m
+  path: ./gitops/apps-extra
+  prune: true
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: noah
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-vars
+      # DKIM_TXT_VALUE for the Stalwart DNSEndpoint — delivered out-of-band by
+      # the app-secrets role / `noah secrets apply`. Not optional: reconciling
+      # without it would publish a literal ${DKIM_TXT_VALUE} TXT record.
+      - kind: Secret
+        name: stalwart-dns-vars
+  timeout: 30m
+  wait: true

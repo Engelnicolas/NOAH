@@ -1,0 +1,140 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: nextcloud
+      version: '>=9.2.0 <10.0.0'
+      sourceRef:
+        kind: HelmRepository
+        name: nextcloud
+        namespace: flux-system
+      interval: 1h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    nextcloud:
+      host: "nextcloud.${DOMAIN}"
+      # Admin credentials from the nextcloud-app Secret (delivered out-of-band
+      # by the app-secrets role / `noah secrets apply`).
+      existingSecret:
+        enabled: true
+        secretName: nextcloud-app
+        usernameKey: admin-username
+        passwordKey: admin-password
+      # Reverse-proxy correctness behind nginx-ingress (TLS terminates there).
+      configs:
+        proxy.config.php: |-
+          <?php
+          $CONFIG = array (
+            'overwriteprotocol' => 'https',
+            'overwritehost' => 'nextcloud.${DOMAIN}',
+            'overwrite.cli.url' => 'https://nextcloud.${DOMAIN}',
+            'trusted_proxies' => array('10.0.0.0/8', '127.0.0.1'),
+          );
+      # OIDC client credentials for the post-installation hook below (from the
+      # nextcloud-oidc Secret, same values the provision Job registers in
+      # Authentik).
+      extraEnv:
+        - name: OIDC_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: nextcloud-oidc
+              key: OIDC_CLIENT_ID
+        - name: OIDC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: nextcloud-oidc
+              key: OIDC_CLIENT_SECRET
+      # Runs once, right after the initial Nextcloud installation (executed by
+      # the container entrypoint via run_as, i.e. as www-data with env intact):
+      # installs user_oidc and registers Authentik as OIDC provider. Default
+      # user_oidc scopes are "openid email profile" — exactly what the
+      # Authentik provider grants. Local password login stays enabled
+      # (decision: OIDC + local accounts; the admin account is the
+      # break-glass).
+      hooks:
+        post-installation: |
+          #!/bin/sh
+          set -eu
+          php /var/www/html/occ app:install user_oidc || true
+          php /var/www/html/occ app:enable user_oidc
+          php /var/www/html/occ user_oidc:provider authentik \
+            --clientid="$OIDC_CLIENT_ID" \
+            --clientsecret="$OIDC_CLIENT_SECRET" \
+            --discoveryuri="https://auth.${DOMAIN}/application/o/nextcloud/.well-known/openid-configuration"
+    internalDatabase:
+      enabled: false
+    # Bundled PostgreSQL subchart is enabled below; the chart still reads the
+    # application-side DB credentials from externalDatabase.existingSecret
+    # (POSTGRES_USER/POSTGRES_PASSWORD env), so both must point at the same
+    # Secret keys.
+    externalDatabase:
+      type: postgresql
+      existingSecret:
+        enabled: true
+        secretName: nextcloud-app
+        usernameKey: db-username
+        passwordKey: db-password
+    postgresql:
+      enabled: true
+      global:
+        postgresql:
+          auth:
+            username: nextcloud
+            database: nextcloud
+            existingSecret: nextcloud-app
+            secretKeys:
+              adminPasswordKey: db-root-password
+              userPasswordKey: db-password
+      primary:
+        persistence:
+          enabled: true
+          size: 8Gi
+    redis:
+      enabled: true
+      # architecture: standalone is the chart default — single node, no replicas.
+      auth:
+        enabled: true
+        existingSecret: nextcloud-app
+        existingSecretPasswordKey: redis-password
+    persistence:
+      enabled: true
+      size: 50Gi
+    # First install (download + occ install + user_oidc) takes several
+    # minutes; the startup probe keeps the liveness probe from killing the pod
+    # during it (30 × 10s).
+    startupProbe:
+      enabled: true
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+    ingress:
+      enabled: true
+      className: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        # CalDAV/CardDAV .well-known redirects (Nextcloud requirement).
+        nginx.ingress.kubernetes.io/server-snippet: |-
+          location = /.well-known/carddav {
+            return 301 $scheme://$host/remote.php/dav;
+          }
+          location = /.well-known/caldav {
+            return 301 $scheme://$host/remote.php/dav;
+          }
+      tls:
+        - secretName: nextcloud-tls
+          hosts: ["nextcloud.${DOMAIN}"]

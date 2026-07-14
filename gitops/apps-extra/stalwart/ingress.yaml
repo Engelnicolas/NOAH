@@ -1,0 +1,31 @@
+---
+# Web admin + JMAP at https://mail.${DOMAIN} through nginx-ingress. Also what
+# makes external-dns publish the A record for mail.${DOMAIN} (pinned to the
+# node EIP via publish-status-address).
+#
+# Uses its own TLS secret (mail-web-tls, created by ingress-shim) — distinct
+# from mail-tls (certificate.yaml), which cert-manager owns explicitly for the
+# pod's IMAP/SMTP TLS, so the two controllers never fight over one Secret.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stalwart
+  namespace: stalwart
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: "mail.${DOMAIN}"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stalwart
+                port:
+                  name: http
+  tls:
+    - secretName: mail-web-tls
+      hosts: ["mail.${DOMAIN}"]

@@ -1,0 +1,61 @@
+---
+# Post-deploy Job that registers Nextcloud as an Authentik OAuth2/OIDC client
+# so "Log in with Authentik" (user_oidc) works. Idempotent — re-runs PATCH the
+# existing provider/application.
+#
+# Same pattern as gitops/apps/headlamp/provision-job.yaml, with one
+# difference: the redirect URI is user_oidc's callback
+# (/apps/user_oidc/code), not the default /oidc-callback.
+#
+# Mounts authentik-provisioner-script-static (unhashed name) because this Job
+# is built by the apps-extra Flux Kustomization, which cannot resolve the
+# hashed ConfigMap name generated inside the apps Kustomization. Trade-off: a
+# script edit alone does not re-trigger this Job (it re-runs when the Job spec
+# changes, thanks to the force annotation).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authentik-provision-nextcloud
+  namespace: authentik
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: provisioner
+          image: python:3.12-slim
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              pip install --quiet requests
+              python /scripts/authentik_provisioner.py \
+                --service nextcloud \
+                --type oidc \
+                --external-host "https://nextcloud.${DOMAIN}" \
+                --redirect-uri "https://nextcloud.${DOMAIN}/apps/user_oidc/code"
+          envFrom:
+            # AUTHENTIK_TOKEN (bootstrap admin token).
+            - secretRef:
+                name: authentik-bootstrap-token
+            # OIDC_CLIENT_ID / OIDC_CLIENT_SECRET — same values as the
+            # nextcloud-oidc Secret in the nextcloud namespace.
+            - secretRef:
+                name: nextcloud-oidc-provision
+          env:
+            - name: AUTHENTIK_URL
+              value: "http://authentik-server.authentik.svc.cluster.local"
+            - name: AUTHENTIK_EXTERNAL_URL
+              value: "https://auth.${DOMAIN}"
+          volumeMounts:
+            - name: provisioner
+              mountPath: /scripts
+      volumes:
+        - name: provisioner
+          configMap:
+            name: authentik-provisioner-script-static
+            defaultMode: 0755

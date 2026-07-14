@@ -5,4 +5,4 @@ resources:
   - namespace.yaml
   - helmrepository.yaml
   - helmrelease.yaml
-  - dnsendpoint-crd.yaml
+  - provision-job.yaml

@@ -16,6 +16,7 @@ command, commit and push the NOAH repo to GitHub so Flux can reconcile:
 """
 from __future__ import annotations
 
+import base64
 import os
 import subprocess
 from pathlib import Path
@@ -73,6 +74,30 @@ def _infer_previous_domain(gitops_dir: Path, current_domain: str) -> Optional[st
     return next(iter(candidates)) if len(candidates) == 1 else None
 
 
+def _indent_pem(pem: str, indent: str = "    ") -> str:
+    """Re-indent a PEM block so it can replace a placeholder sitting inside a
+    YAML block scalar (`|`). The first line inherits the placeholder's own
+    indentation; subsequent lines get `indent` prepended."""
+    return ("\n" + indent).join(pem.strip().splitlines())
+
+
+def _dkim_txt_value(private_key_pem: str) -> str:
+    """Derive the DKIM TXT record value (v=DKIM1; k=rsa; p=<b64 SPKI>) from
+    the stored private key, so the published record always matches the key
+    Stalwart signs with."""
+    if not private_key_pem:
+        return ""
+    result = subprocess.run(
+        ["openssl", "pkey", "-pubout", "-outform", "DER"],
+        input=private_key_pem.encode(), capture_output=True
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to derive DKIM public key:\n{result.stderr.decode()}"
+        )
+    return f"v=DKIM1; k=rsa; p={base64.b64encode(result.stdout).decode()}"
+
+
 def _get_or_generate_secrets(
     project_root: Path, domain: str, previous_domain: Optional[str] = None
 ) -> dict:
@@ -83,12 +108,14 @@ def _get_or_generate_secrets(
     store = get_canonical_store(project_root)
     manager = NoahSecurityManager(project_root=project_root)
 
-    for service in ("authentik", "headlamp", "cloudflare"):
+    for service in ("authentik", "headlamp", "cloudflare", "nextcloud", "stalwart"):
         manager.generate_service_secrets(service)
 
     cf = store.get_service_secrets("cloudflare")
     auth = store.get_service_secrets("authentik")
     headlamp = store.get_service_secrets("headlamp")
+    nextcloud = store.get_service_secrets("nextcloud")
+    stalwart = store.get_service_secrets("stalwart")
 
     cf_token = cf.get("api_token")
     if not cf_token:
@@ -116,6 +143,17 @@ def _get_or_generate_secrets(
         "REPLACE_WITH_CLOUDFLARE_TOKEN":       cf_token,
         "REPLACE_WITH_OIDC_CLIENT_ID":         headlamp.get("oidc_client_id", "headlamp"),
         "REPLACE_WITH_OIDC_CLIENT_SECRET":     headlamp.get("oidc_client_secret", ""),
+        "REPLACE_WITH_NEXTCLOUD_ADMIN_PASSWORD":     nextcloud.get("admin_password", ""),
+        "REPLACE_WITH_NEXTCLOUD_DB_PASSWORD":        nextcloud.get("db_password", ""),
+        "REPLACE_WITH_NEXTCLOUD_DB_ROOT_PASSWORD":   nextcloud.get("db_root_password", ""),
+        "REPLACE_WITH_NEXTCLOUD_REDIS_PASSWORD":     nextcloud.get("redis_password", ""),
+        "REPLACE_WITH_NEXTCLOUD_OIDC_CLIENT_ID":     nextcloud.get("oidc_client_id", "nextcloud"),
+        "REPLACE_WITH_NEXTCLOUD_OIDC_CLIENT_SECRET": nextcloud.get("oidc_client_secret", ""),
+        "REPLACE_WITH_STALWART_ADMIN_PASSWORD":      stalwart.get("admin_password", ""),
+        "REPLACE_WITH_STALWART_OIDC_CLIENT_ID":      stalwart.get("oidc_client_id", "stalwart"),
+        "REPLACE_WITH_STALWART_OIDC_CLIENT_SECRET":  stalwart.get("oidc_client_secret", ""),
+        "REPLACE_WITH_STALWART_DKIM_KEY_PEM":  _indent_pem(stalwart.get("dkim_private_key", "")),
+        "REPLACE_WITH_STALWART_DKIM_TXT":      _dkim_txt_value(stalwart.get("dkim_private_key", "")),
         "REPLACE_WITH_BOOTSTRAP_TOKEN":        auth.get("bootstrap_token", ""),
         "admin@example.com":                   f"admin@{domain}",
         # YAML-quoted values — embedded inside a `values.yaml: |` block (nested YAML)
@@ -238,6 +276,92 @@ stringData:
   OIDC_CLIENT_ID: REPLACE_WITH_OIDC_CLIENT_ID
   OIDC_CLIENT_SECRET: REPLACE_WITH_OIDC_CLIENT_SECRET
 """,
+    "apps-extra/nextcloud/app-secret.enc.yaml": """\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nextcloud-app
+  namespace: nextcloud
+type: Opaque
+stringData:
+  # Consumed by the Nextcloud chart: admin credentials via
+  # nextcloud.existingSecret, DB credentials via externalDatabase.existingSecret
+  # + the bundled PostgreSQL subchart (global.postgresql.auth.existingSecret),
+  # Redis password via redis.auth.existingSecret.
+  admin-username: admin
+  admin-password: REPLACE_WITH_NEXTCLOUD_ADMIN_PASSWORD
+  db-username: nextcloud
+  db-password: REPLACE_WITH_NEXTCLOUD_DB_PASSWORD
+  db-root-password: REPLACE_WITH_NEXTCLOUD_DB_ROOT_PASSWORD
+  redis-password: REPLACE_WITH_NEXTCLOUD_REDIS_PASSWORD
+""",
+    "apps-extra/nextcloud/oidc-secret.enc.yaml": """\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nextcloud-oidc
+  namespace: nextcloud
+type: Opaque
+stringData:
+  # Exposed to the Nextcloud container via nextcloud.extraEnv so the
+  # post-installation hook can register the user_oidc provider.
+  OIDC_CLIENT_ID: REPLACE_WITH_NEXTCLOUD_OIDC_CLIENT_ID
+  OIDC_CLIENT_SECRET: REPLACE_WITH_NEXTCLOUD_OIDC_CLIENT_SECRET
+""",
+    "apps-extra/nextcloud/oidc-provision-secret.enc.yaml": """\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nextcloud-oidc-provision
+  namespace: authentik
+type: Opaque
+stringData:
+  # Consumed via envFrom by the authentik-provision-nextcloud Job. Same
+  # client id/secret as the nextcloud-oidc Secret in the nextcloud namespace.
+  OIDC_CLIENT_ID: REPLACE_WITH_NEXTCLOUD_OIDC_CLIENT_ID
+  OIDC_CLIENT_SECRET: REPLACE_WITH_NEXTCLOUD_OIDC_CLIENT_SECRET
+""",
+    "apps-extra/stalwart/app-secret.enc.yaml": """\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stalwart-app
+  namespace: stalwart
+type: Opaque
+stringData:
+  # Injected as env vars into the Stalwart container; config.toml references
+  # them via %{env:ADMIN_SECRET}% / %{env:DKIM_PRIVATE_KEY}% macros.
+  ADMIN_SECRET: REPLACE_WITH_STALWART_ADMIN_PASSWORD
+  DKIM_PRIVATE_KEY: |
+    REPLACE_WITH_STALWART_DKIM_KEY_PEM
+""",
+    "apps-extra/stalwart/oidc-provision-secret.enc.yaml": """\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stalwart-oidc-provision
+  namespace: authentik
+type: Opaque
+stringData:
+  # Consumed via envFrom by the authentik-provision-stalwart Job.
+  OIDC_CLIENT_ID: REPLACE_WITH_STALWART_OIDC_CLIENT_ID
+  OIDC_CLIENT_SECRET: REPLACE_WITH_STALWART_OIDC_CLIENT_SECRET
+""",
+    "apps-extra/stalwart/dns-vars-secret.enc.yaml": """\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stalwart-dns-vars
+  namespace: flux-system
+type: Opaque
+stringData:
+  # Not secret material (a DKIM *public* key), but delivered through the same
+  # out-of-band channel because its value is derived per-deployment from the
+  # canonical store. The apps-extra Flux Kustomization substitutes
+  # ${DKIM_TXT_VALUE} into the Stalwart DNSEndpoint records from this Secret
+  # (postBuild.substituteFrom).
+  DKIM_TXT_VALUE: REPLACE_WITH_STALWART_DKIM_TXT
+""",
 }
 
 
@@ -328,7 +452,10 @@ def render_app_secret_manifests(project_root: Path, domain: str) -> str:
 
 # Namespaces the application secrets land in. Pre-created on apply because the
 # secrets may arrive before Flux has reconciled the namespace.yaml manifests.
-_SECRET_NAMESPACES = ("external-dns", "cert-manager", "authentik", "headlamp")
+# (flux-system, target of stalwart-dns-vars, always exists by this point.)
+_SECRET_NAMESPACES = (
+    "external-dns", "cert-manager", "authentik", "headlamp", "nextcloud", "stalwart"
+)
 
 
 def apply_app_secrets(

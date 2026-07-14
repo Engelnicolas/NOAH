@@ -20,3 +20,14 @@ configMapGenerator:
     namespace: authentik
     files:
       - authentik_provisioner.py
+  # Same script under a static (unhashed) name, for the provisioning Jobs in
+  # gitops/apps-extra/ — a separate Flux Kustomization cannot resolve the
+  # hashed name above (kustomize only rewrites references within one build).
+  # Content still updates in place on script edits; only the automatic
+  # Job re-trigger is limited to the apps/ Jobs.
+  - name: authentik-provisioner-script-static
+    namespace: authentik
+    options:
+      disableNameSuffixHash: true
+    files:
+      - authentik_provisioner.py

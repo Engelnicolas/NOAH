@@ -72,21 +72,37 @@ class NoahSecurityManager:
         # Ensure at least one character from each category
         password = [
             secrets.choice(string.ascii_lowercase),
-            secrets.choice(string.ascii_uppercase), 
+            secrets.choice(string.ascii_uppercase),
             secrets.choice(string.digits)
         ]
-        
+
         if include_special:
             password.append(secrets.choice("!@#$%^&*"))
-            
+
         # Fill the rest randomly
         for _ in range(length - len(password)):
             password.append(secrets.choice(chars))
-            
+
         # Shuffle the password
         secrets.SystemRandom().shuffle(password)
         return ''.join(password)
-    
+
+    def generate_dkim_private_key(self):
+        """Generate an RSA-2048 private key (PEM) for DKIM signing.
+
+        Only the private key is stored; the public TXT record value is
+        derived from it at render time (Scripts/gitops/gitops_init.py),
+        so the pair can never drift apart.
+        """
+        result = subprocess.run(
+            ['openssl', 'genpkey', '-algorithm', 'RSA',
+             '-pkeyopt', 'rsa_keygen_bits:2048'],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            raise Exception(f"Failed to generate DKIM key: {result.stderr}")
+        return result.stdout
+
 
     # ================================
     # SERVICE-SPECIFIC SECRETS
@@ -141,6 +157,24 @@ class NoahSecurityManager:
                 'proxy_client_id': lambda: 'hubble-ui',  # Fixed client ID for Authentik proxy provider
                 'proxy_client_secret': lambda: self.generate_secure_password(40, include_special=False),
                 'cookie_secret': lambda: self.generate_secure_password(32, include_special=False),
+            }
+        elif service_name == 'nextcloud':
+            # No special characters: db/redis passwords are interpolated into
+            # unquoted URLs and YAML scalars by the Nextcloud chart.
+            required = {
+                'admin_password': lambda: self.generate_secure_password(24, include_special=False),
+                'db_password': lambda: self.generate_secure_password(32, include_special=False),
+                'db_root_password': lambda: self.generate_secure_password(32, include_special=False),
+                'redis_password': lambda: self.generate_secure_password(32, include_special=False),
+                'oidc_client_id': lambda: 'nextcloud',  # Fixed client ID for Authentik provider
+                'oidc_client_secret': lambda: self.generate_secure_password(40, include_special=False),
+            }
+        elif service_name == 'stalwart':
+            required = {
+                'admin_password': lambda: self.generate_secure_password(32, include_special=False),
+                'oidc_client_id': lambda: 'stalwart',  # Fixed client ID for Authentik provider
+                'oidc_client_secret': lambda: self.generate_secure_password(40, include_special=False),
+                'dkim_private_key': self.generate_dkim_private_key,
             }
         elif service_name == 'cloudflare':
             # api_token cannot be auto-generated — stored empty until set via set-cloudflare-token

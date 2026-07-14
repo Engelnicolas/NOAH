@@ -7,8 +7,9 @@ Modes:
                  outpost, e.g. Hubble UI. No client credentials needed.
   --type oidc  : OAuth2/OIDC Provider + Application, e.g. Headlamp. Reads
                  OIDC_CLIENT_ID / OIDC_CLIENT_SECRET from the environment
-                 and registers a confidential client whose redirect URI is
-                 "<external-host>/oidc-callback".
+                 and registers a confidential client. Redirect URIs come from
+                 --redirect-uri (repeatable); when omitted, defaults to
+                 "<external-host>/oidc-callback" (the Headlamp callback).
 
 Reads AUTHENTIK_URL and AUTHENTIK_TOKEN from the environment.
 Idempotent: re-running is a no-op if the provider/app already exist.
@@ -189,12 +190,14 @@ def provision_proxy(service, external_host):
     bind_embedded_outpost(provider_pk)
 
 
-def provision_oidc(service, external_host):
+def provision_oidc(service, external_host, redirect_uris=None):
     client_id = os.environ.get("OIDC_CLIENT_ID", service)
     client_secret = os.environ.get("OIDC_CLIENT_SECRET", "")
     if not client_secret:
         print("[ERROR] OIDC_CLIENT_SECRET must be set for --type oidc", file=sys.stderr)
         sys.exit(1)
+    if not redirect_uris:
+        redirect_uris = [f"{external_host}/oidc-callback"]
     auth_flow = default_flow("authorization", "default-provider-authorization")
     invalidation_flow = default_flow("invalidation", "default-provider-invalidation")
     payload = {
@@ -209,7 +212,9 @@ def provision_oidc(service, external_host):
         # provider" (surfaces to Headlamp as oauth2 invalid_grant).
         "grant_types": ["authorization_code", "refresh_token"],
         # Authentik 2024.4+ models redirect URIs as structured objects.
-        "redirect_uris": [{"matching_mode": "strict", "url": f"{external_host}/oidc-callback"}],
+        "redirect_uris": [
+            {"matching_mode": "strict", "url": uri} for uri in redirect_uris
+        ],
         "sub_mode": "hashed_user_id",
         "include_claims_in_id_token": True,
         # per_provider → discovery `issuer` is ".../application/o/<slug>/",
@@ -241,6 +246,13 @@ def main():
     parser.add_argument("--service", required=True)
     parser.add_argument("--type", required=True, choices=["proxy", "oidc"])
     parser.add_argument("--external-host", required=True)
+    parser.add_argument(
+        "--redirect-uri",
+        action="append",
+        dest="redirect_uris",
+        default=None,
+        help="OIDC redirect URI (repeatable); defaults to <external-host>/oidc-callback",
+    )
     args = parser.parse_args()
 
     # Tolerate the Job being scheduled before Authentik has finished booting.
@@ -249,7 +261,7 @@ def main():
     if args.type == "proxy":
         provision_proxy(args.service, args.external_host)
     else:
-        provision_oidc(args.service, args.external_host)
+        provision_oidc(args.service, args.external_host, args.redirect_uris)
 
     print("[SUCCESS] Provisioning complete")
 

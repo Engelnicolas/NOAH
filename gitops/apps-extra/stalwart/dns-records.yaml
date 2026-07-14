@@ -1,0 +1,41 @@
+---
+# Mail DNS records, published to Cloudflare by external-dns via its `crd`
+# source (enabled in gitops/infrastructure/external-dns/helmrelease.yaml,
+# which also vendors this CRD). The A record for mail.${DOMAIN} is NOT here —
+# it comes from the Ingress like every other NOAH hostname.
+#
+# ${DKIM_TXT_VALUE} is substituted by Flux (apps-extra postBuild) from the
+# stalwart-dns-vars Secret, itself rendered out-of-band from the canonical
+# store — so the published record always matches the private key Stalwart
+# signs with, and nothing key-derived is committed to Git.
+#
+# Reminder (spec §4.4): inbound/outbound TCP 25 and the PTR record for the EIP
+# are AWS-level prerequisites that no manifest can provide.
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: stalwart-mail-records
+  namespace: stalwart
+spec:
+  endpoints:
+    - dnsName: "${DOMAIN}"
+      recordType: MX
+      recordTTL: 300
+      targets:
+        - "10 mail.${DOMAIN}"
+    - dnsName: "${DOMAIN}"
+      recordType: TXT
+      recordTTL: 300
+      targets:
+        - "v=spf1 mx -all"
+    # Selector must match [signature."rsa-${DOMAIN}"].selector in configmap.yaml.
+    - dnsName: "stalwart._domainkey.${DOMAIN}"
+      recordType: TXT
+      recordTTL: 300
+      targets:
+        - "${DKIM_TXT_VALUE}"
+    - dnsName: "_dmarc.${DOMAIN}"
+      recordType: TXT
+      recordTTL: 300
+      targets:
+        - "v=DMARC1; p=quarantine; rua=mailto:postmaster@${DOMAIN}"

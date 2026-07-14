@@ -6,3 +6,4 @@ resources:
 - infrastructure.yaml
 - cert-manager-issuers.yaml
 - apps.yaml
+- apps-extra.yaml

@@ -34,6 +34,17 @@ FAKE_SECRETS = {
     "REPLACE_WITH_POSTGRES_ROOT_PASSWORD": "pg-pass",
     "REPLACE_WITH_OIDC_CLIENT_ID":         "headlamp",
     "REPLACE_WITH_OIDC_CLIENT_SECRET":     "oidc-secret",
+    "REPLACE_WITH_NEXTCLOUD_ADMIN_PASSWORD":     "nc-admin-pass",
+    "REPLACE_WITH_NEXTCLOUD_DB_PASSWORD":        "nc-db-pass",
+    "REPLACE_WITH_NEXTCLOUD_DB_ROOT_PASSWORD":   "nc-db-root-pass",
+    "REPLACE_WITH_NEXTCLOUD_REDIS_PASSWORD":     "nc-redis-pass",
+    "REPLACE_WITH_NEXTCLOUD_OIDC_CLIENT_ID":     "nextcloud",
+    "REPLACE_WITH_NEXTCLOUD_OIDC_CLIENT_SECRET": "nc-oidc-secret",
+    "REPLACE_WITH_STALWART_ADMIN_PASSWORD":      "st-admin-pass",
+    "REPLACE_WITH_STALWART_OIDC_CLIENT_ID":      "stalwart",
+    "REPLACE_WITH_STALWART_OIDC_CLIENT_SECRET":  "st-oidc-secret",
+    "REPLACE_WITH_STALWART_DKIM_KEY_PEM":  "fake-dkim-pem",
+    "REPLACE_WITH_STALWART_DKIM_TXT":      "v=DKIM1; k=rsa; p=fake",
     "admin@example.com":                   f"admin@{DOMAIN}",
     "example.com":                         DOMAIN,
 }
@@ -110,6 +121,9 @@ class TestGetOrGenerateSecrets:
             "authentik":  {"secret_key": "sk", "bootstrap_password": "bp",
                            "bootstrap_token": "bt", "postgresql_password": "pp"},
             "headlamp":   {"oidc_client_id": "headlamp", "oidc_client_secret": "os"},
+            # Empty dkim_private_key keeps _dkim_txt_value from invoking openssl.
+            "nextcloud":  {"oidc_client_id": "nextcloud"},
+            "stalwart":   {"oidc_client_id": "stalwart", "dkim_private_key": ""},
         }[svc]
 
         with patch("Scripts.security.canonical_store.get_canonical_store", return_value=mock_store), \
@@ -126,6 +140,8 @@ class TestGetOrGenerateSecrets:
             "authentik":  {"secret_key": "sk", "bootstrap_password": "bp",
                            "bootstrap_token": "bt", "postgresql_password": "pp"},
             "headlamp":   {"oidc_client_id": "headlamp", "oidc_client_secret": "os"},
+            "nextcloud":  {"oidc_client_id": "nextcloud"},
+            "stalwart":   {"oidc_client_id": "stalwart", "dkim_private_key": ""},
         }[svc]
 
         with patch("Scripts.security.canonical_store.get_canonical_store", return_value=mock_store), \
@@ -151,10 +167,12 @@ class TestRenderAppSecretManifests:
                    return_value=mock_store):
             return render_app_secret_manifests(project_root, DOMAIN)
 
-    def test_renders_six_secret_documents(self, project_root):
+    def test_renders_twelve_secret_documents(self, project_root):
+        # 6 core (cloudflare ×2, authentik ×2, headlamp ×2)
+        # + 6 apps-extra (nextcloud ×3, stalwart ×3)
         out = self._render(project_root)
-        assert out.count("apiVersion: v1") == 6
-        assert out.count("kind: Secret") == 6
+        assert out.count("apiVersion: v1") == 12
+        assert out.count("kind: Secret") == 12
         assert "\n---\n" in out  # multi-document stream
 
     def test_all_placeholders_filled(self, project_root):

@@ -45,10 +45,17 @@ def api(method, path, **kwargs):
 
 
 def find_or_create(path, key, value, payload):
+    """Get-or-create by `key`==`value`. When the item already exists, PATCH it
+    with `payload` so drift (stale redirect_uri, rotated client_secret,
+    changed external_host, etc.) self-heals on every idempotent re-run
+    instead of freezing in whatever state first created it."""
     for item in api("get", path, params={"search": value}).get("results", []):
         if item.get(key) == value:
-            print(f"[INFO] Already exists: {value}")
-            return item
+            print(f"[INFO] Already exists: {value} — syncing config")
+            # Authentik's detail endpoint is keyed by slug for applications
+            # but by numeric pk for providers/outposts.
+            item_id = item.get("slug", item.get("pk"))
+            return api("patch", f"{path}{item_id}/", json=payload)
     print(f"[INFO] Creating: {value}")
     return api("post", path, json=payload)
 

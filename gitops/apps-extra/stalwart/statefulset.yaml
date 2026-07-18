@@ -21,11 +21,15 @@ spec:
       labels:
         app: stalwart
     spec:
+      # The v0.16 image runs as UID/GID 2000; fsGroup makes the data PVC
+      # group-writable so RocksDB can initialise under /var/lib/stalwart.
+      securityContext:
+        runAsUser: 2000
+        runAsGroup: 2000
+        fsGroup: 2000
       containers:
         - name: stalwart
-          # Last TOML-configurable release — see configmap.yaml header before
-          # bumping to v0.16.
-          image: stalwartlabs/stalwart:v0.15.5
+          image: stalwartlabs/stalwart:v0.16.13
           ports:
             - name: smtp
               containerPort: 25
@@ -46,29 +50,25 @@ spec:
             - name: http
               containerPort: 8080
           env:
-            # Referenced by config.toml %{env:...}% macros.
+            # Break-glass administrator for the management API / web UI (OIDC
+            # users authenticate with tokens, not passwords). Replaces v0.15's
+            # [authentication.fallback-admin]. ADMIN_SECRET must be listed first
+            # so the $(ADMIN_SECRET) reference below resolves.
             - name: ADMIN_SECRET
               valueFrom:
                 secretKeyRef:
                   name: stalwart-app
                   key: ADMIN_SECRET
-            - name: DKIM_PRIVATE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: stalwart-app
-                  key: DKIM_PRIVATE_KEY
+            - name: STALWART_RECOVERY_ADMIN
+              value: "admin:$(ADMIN_SECRET)"
           volumeMounts:
             - name: data
-              mountPath: /opt/stalwart
-            # subPath keeps the file present at the path the image entrypoint
-            # checks, so its `--init` branch (which would generate a fresh
-            # config) never runs.
+              mountPath: /var/lib/stalwart
+            # config.json (datastore definition only) is read-only; everything
+            # else is reconciled into the datastore by the stalwart-config Job.
             - name: config
-              mountPath: /opt/stalwart/etc/config.toml
-              subPath: config.toml
-              readOnly: true
-            - name: tls
-              mountPath: /opt/stalwart/tls
+              mountPath: /etc/stalwart/config.json
+              subPath: config.json
               readOnly: true
           readinessProbe:
             tcpSocket:
@@ -90,11 +90,6 @@ spec:
         - name: config
           configMap:
             name: stalwart-config
-        - name: tls
-          secret:
-            # Issued by certificate.yaml (cert-manager, dns01); the pod stays
-            # Pending until the Secret exists on first deploy.
-            secretName: mail-tls
   volumeClaimTemplates:
     - metadata:
         name: data

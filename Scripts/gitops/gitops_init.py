@@ -347,8 +347,10 @@ metadata:
   namespace: stalwart
 type: Opaque
 stringData:
-  # Injected as env vars into the Stalwart container; config.toml references
-  # them via %{env:ADMIN_SECRET}% / %{env:DKIM_PRIVATE_KEY}% macros.
+  # Stalwart v0.16 consumes these out of band (no config.toml): ADMIN_SECRET is
+  # the break-glass admin, pinned via STALWART_RECOVERY_ADMIN on the StatefulSet
+  # and used by the stalwart-config Job to authenticate; DKIM_PRIVATE_KEY is
+  # injected into the datastore by that Job's `stalwart-cli apply` plan.
   ADMIN_SECRET: REPLACE_WITH_STALWART_ADMIN_PASSWORD
   DKIM_PRIVATE_KEY: |
     REPLACE_WITH_STALWART_DKIM_KEY_PEM

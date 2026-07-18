@@ -1,110 +1,24 @@
 ---
-# Stalwart v0.15 configuration. Deployed as raw manifests (no official Helm
-# chart; community charts are 0.x on personal registries — spec §4.1 fallback).
+# Stalwart v0.16 on-disk configuration. Deployed as raw manifests (no official
+# Helm chart; community charts are 0.x on personal registries — spec §4.1
+# fallback).
 #
-# v0.15 is pinned deliberately: it is the last release configurable through a
-# declarative config.toml. v0.16 moved all configuration into its datastore,
-# managed via `stalwart-cli apply` (binary not shipped in the Docker image) —
-# migrating is a separate task; upstream ships a zero-downtime migration tool.
+# Unlike v0.15 (a full declarative config.toml), v0.16 keeps ONLY the datastore
+# definition on disk. Everything else — listeners, domain, OIDC directory, DKIM
+# signature, TLS certificate — lives inside the datastore as JMAP objects and is
+# reconciled by the stalwart-config provision Job via `stalwart-cli apply`
+# (see apply-plan-configmap.yaml / provision-config-job.yaml).
 #
-# Every key below was verified against the v0.15.5 source
-# (resources/config/config.toml template, crates/directory/src/backend/oidc/,
-# crates/common/src/config/smtp/auth.rs, crates/common/src/config/server/tls.rs).
+# Because config.json is present at startup, the server boots straight into
+# normal mode (no bootstrap-mode dance) with default listeners, then the Job
+# reconciles the NOAH configuration over the management API on port 8080.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: stalwart-config
   namespace: stalwart
 data:
-  config.toml: |
-    [server]
-    hostname = "mail.${DOMAIN}"
-
-    # Mail listeners are exposed on the node itself via hostPort (same
-    # single-node EIP rationale as nginx-ingress). HTTP (webadmin + JMAP) is
-    # NOT: it goes through nginx-ingress, which terminates TLS.
-    [server.listener."smtp"]
-    bind = ["[::]:25"]
-    protocol = "smtp"
-
-    [server.listener."submission"]
-    bind = ["[::]:587"]
-    protocol = "smtp"
-
-    [server.listener."submissions"]
-    bind = ["[::]:465"]
-    protocol = "smtp"
-    tls.implicit = true
-
-    [server.listener."imap"]
-    bind = ["[::]:143"]
-    protocol = "imap"
-
-    [server.listener."imaptls"]
-    bind = ["[::]:993"]
-    protocol = "imap"
-    tls.implicit = true
-
-    [server.listener."http"]
-    bind = ["[::]:8080"]
-    protocol = "http"
-
-    # TLS for the implicit-TLS mail listeners (465/993) and STARTTLS: the
-    # cert-manager Certificate mail-tls (dns01, certificate.yaml) is mounted
-    # at /opt/stalwart/tls.
-    [certificate."default"]
-    cert = "%{file:/opt/stalwart/tls/tls.crt}%"
-    private-key = "%{file:/opt/stalwart/tls/tls.key}%"
-    default = true
-
-    [storage]
-    data = "rocksdb"
-    fts = "rocksdb"
-    blob = "rocksdb"
-    lookup = "rocksdb"
-    directory = "oidc"
-
-    [store."rocksdb"]
-    type = "rocksdb"
-    path = "/opt/stalwart/data"
-    compression = "lz4"
-
-    # Authentik as authentication backend. Mail clients authenticate over
-    # IMAP/SMTP/JMAP with OAUTHBEARER/XOAUTH2, presenting an Authentik access
-    # token (obtained against the `stalwart` OIDC app); Stalwart validates it
-    # by calling the userinfo endpoint and maps the account from the claims.
-    # Accounts (and their domain) are persisted in the data store on first
-    # successful login — a user must log in once before receiving mail.
-    [directory."oidc"]
-    type = "oidc"
-    timeout = "15s"
-    endpoint.url = "https://auth.${DOMAIN}/application/o/userinfo/"
-    endpoint.method = "userinfo"
-    fields.email = "email"
-    fields.username = "preferred_username"
-    fields.full-name = "name"
-
-    # Break-glass admin for the web admin UI (OIDC users authenticate with
-    # tokens, not passwords).
-    [authentication.fallback-admin]
-    user = "admin"
-    secret = "%{env:ADMIN_SECRET}%"
-
-    # DKIM: the default auth.dkim.sign rule signs outbound mail from local
-    # domains with the signature named "rsa-<sender_domain>" — this block's
-    # name must therefore stay "rsa-${DOMAIN}". The private key comes from the
-    # canonical store (stalwart-app Secret); the matching public TXT record is
-    # published by dns-records.yaml.
-    [signature."rsa-${DOMAIN}"]
-    algorithm = "rsa-sha256"
-    domain = "${DOMAIN}"
-    selector = "stalwart"
-    private-key = "%{env:DKIM_PRIVATE_KEY}%"
-    canonicalization = "relaxed/relaxed"
-    headers = ["From", "To", "Date", "Subject", "Message-ID"]
-
-    [tracer."stdout"]
-    type = "stdout"
-    level = "info"
-    ansi = false
-    enable = true
+  # DataStore object: RocksDB rooted at the persistent volume mounted at
+  # /var/lib/stalwart (the v0.16 image's data mount point; UID 2000).
+  config.json: |
+    {"@type":"RocksDb","path":"/var/lib/stalwart"}

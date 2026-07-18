@@ -1,0 +1,75 @@
+---
+# Reconciles the NOAH Stalwart configuration into the v0.16 datastore over the
+# management API. The init container renders the apply plan from mounted secrets
+# (DKIM key, TLS cert) + ${DOMAIN}; the cli container applies it. Idempotent —
+# every op uses matchOn, so re-runs are no-ops. Flux re-creates the Job on each
+# reconcile (force annotation), which also picks up rotated certs.
+#
+# The pod stays in ContainerCreating until the mail-tls Secret exists (mounted
+# below), so it never runs before cert-manager has issued the certificate. The
+# cli container then retries (OnFailure + backoffLimit) until the StatefulSet is
+# serving on :8080.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: stalwart-config
+  namespace: stalwart
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      volumes:
+        - name: work
+          emptyDir: {}
+        - name: render-script
+          configMap:
+            name: stalwart-apply-plan
+        - name: app-secret
+          secret:
+            secretName: stalwart-app
+        - name: tls-secret
+          secret:
+            secretName: mail-tls
+      initContainers:
+        - name: render
+          image: python:3.12-slim
+          command: ["sh", "-c", "python /scripts/render_plan.py > /work/plan.ndjson"]
+          env:
+            # Substituted by Flux (apps-extra postBuild), like every other
+            # ${DOMAIN} reference in the tree.
+            - name: DOMAIN
+              value: "${DOMAIN}"
+          volumeMounts:
+            - name: render-script
+              mountPath: /scripts
+            - name: app-secret
+              mountPath: /secrets/app
+              readOnly: true
+            - name: tls-secret
+              mountPath: /secrets/tls
+              readOnly: true
+            - name: work
+              mountPath: /work
+      containers:
+        - name: apply
+          image: stalwartlabs/cli:1.0.10
+          args: ["apply", "--file", "/work/plan.ndjson"]
+          env:
+            - name: STALWART_URL
+              value: "http://stalwart.stalwart.svc.cluster.local:8080"
+            - name: STALWART_USER
+              value: "admin"
+            # Break-glass admin, same value the StatefulSet pins via
+            # STALWART_RECOVERY_ADMIN.
+            - name: STALWART_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-app
+                  key: ADMIN_SECRET
+          volumeMounts:
+            - name: work
+              mountPath: /work

@@ -4,9 +4,11 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - configmap.yaml
+  - apply-plan-configmap.yaml
   - statefulset.yaml
   - service.yaml
   - ingress.yaml
   - certificate.yaml
   - dns-records.yaml
   - provision-job.yaml
+  - provision-config-job.yaml

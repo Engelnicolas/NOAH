@@ -1,0 +1,79 @@
+---
+# Renders the declarative Stalwart v0.16 configuration as a `stalwart-cli apply`
+# plan (NDJSON). Run by the stalwart-config Job's init container, which pipes
+# the output to a file the cli container then applies. Kept as a script (not a
+# static plan) because the DKIM key and TLS certificate are secret material
+# injected at run time from mounted Secrets — nothing key-derived is committed.
+#
+# Every op uses `matchOn` so the plan is idempotent (re-runs reconcile in place).
+# The two non-obvious keys: DkimSignature matches on `selector` only (its stored
+# `domainId` is a resolved id, never the "#dom0" plan reference), and Tracer
+# matches on `@type`. In-plan references must be declared before use, hence the
+# Directory -> Domain -> DKIM ordering.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stalwart-apply-plan
+  namespace: stalwart
+data:
+  render_plan.py: |
+    #!/usr/bin/env python3
+    """Render the Stalwart v0.16 apply plan (NDJSON) from mounted secrets + DOMAIN."""
+    import json
+    import os
+
+    DOMAIN = os.environ["DOMAIN"]
+    # Authentik per-application OIDC issuer (issuer_mode: per_provider); the
+    # provider is registered under the "stalwart" application slug.
+    ISSUER = f"https://auth.{DOMAIN}/application/o/stalwart/"
+
+    with open("/secrets/app/DKIM_PRIVATE_KEY") as f:
+        dkim_key = f.read()
+    with open("/secrets/tls/tls.crt") as f:
+        tls_crt = f.read()
+    with open("/secrets/tls/tls.key") as f:
+        tls_key = f.read()
+
+    def listener(name, port, protocol, use_tls, implicit):
+        return {"@type": "upsert", "object": "NetworkListener", "matchOn": ["name"],
+                "value": {name: {"name": name, "protocol": protocol,
+                                 "bind": {f"[::]:{port}": True},
+                                 "useTls": use_tls, "tlsImplicit": implicit}}}
+
+    ops = [
+        # stdout logging for `kubectl logs` (matchOn @type keeps it idempotent)
+        {"@type": "upsert", "object": "Tracer", "matchOn": ["@type"],
+         "value": {"trc0": {"@type": "Stdout", "enable": True, "level": "info",
+                            "ansi": False, "buffered": False, "lossy": False,
+                            "multiline": False}}},
+        # references must be defined BEFORE use: Directory -> Domain -> DKIM
+        {"@type": "upsert", "object": "Directory", "matchOn": ["description"],
+         "value": {"oidc0": {"@type": "Oidc", "description": "Authentik",
+                             "issuerUrl": ISSUER,
+                             "claimUsername": "preferred_username",
+                             "claimName": "name", "usernameDomain": DOMAIN,
+                             "requireScopes": {"openid": True, "email": True}}}},
+        {"@type": "upsert", "object": "Domain", "matchOn": ["name"],
+         "value": {"dom0": {"name": DOMAIN, "isEnabled": True,
+                            "directoryId": "#oidc0",
+                            "dkimManagement": {"@type": "Manual"},
+                            "dnsManagement": {"@type": "Manual"},
+                            "certificateManagement": {"@type": "Manual"}}}},
+        {"@type": "upsert", "object": "DkimSignature", "matchOn": ["selector"],
+         "value": {"dkim0": {"@type": "Dkim1RsaSha256", "domainId": "#dom0",
+                             "selector": "stalwart",
+                             "canonicalization": "relaxed/relaxed",
+                             "privateKey": {"@type": "Text", "secret": dkim_key}}}},
+        listener("http", 8080, "http", False, False),
+        listener("smtp", 25, "smtp", True, False),
+        listener("submission", 587, "smtp", True, False),
+        listener("submissions", 465, "smtp", True, True),
+        listener("imap", 143, "imap", True, False),
+        listener("imaps", 993, "imap", True, True),
+        {"@type": "upsert", "object": "Certificate", "matchOn": ["certificate"],
+         "value": {"cert0": {"certificate": {"@type": "Text", "value": tls_crt},
+                             "privateKey": {"@type": "Text", "secret": tls_key}}}},
+    ]
+
+    for op in ops:
+        print(json.dumps(op, ensure_ascii=False))

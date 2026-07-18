@@ -3,11 +3,12 @@
 SSO Network Integration Tests for NOAH v0.0.7
 Tests SSO-gated services over the network:
   - Authentik OIDC provider reachability
-  - Headlamp OIDC app (provisioned via AuthentikProvisioner)
-  - Hubble UI forward-auth proxy app (provisioned via AuthentikProvisioner)
+  - Headlamp OIDC app (provisioned via the Authentik provisioner script)
+  - Hubble UI forward-auth proxy app (provisioned via the Authentik provisioner script)
   - Cloudflare wizard module integrity
 """
 
+import importlib.util
 import os
 import sys
 import json
@@ -16,6 +17,16 @@ from pathlib import Path
 from typing import Tuple
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+def _load_authentik_provisioner():
+    """Load gitops/apps/authentik_provisioner.py — the exact script the
+    provisioning Jobs run — so these tests exercise the production code."""
+    path = Path(__file__).resolve().parent.parent / 'gitops' / 'apps' / 'authentik_provisioner.py'
+    spec = importlib.util.spec_from_file_location('authentik_provisioner', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class SSONetworkTester:
@@ -174,34 +185,32 @@ class SSONetworkTester:
         return False
 
     # ------------------------------------------------------------------
-    # AuthentikProvisioner unit checks
+    # Authentik provisioner script unit checks
     # ------------------------------------------------------------------
 
     def test_provisioner_oidc_app_methods(self) -> bool:
-        """Verify AuthentikProvisioner has all required methods for OIDC + proxy provisioning."""
-        self._status('INFO', 'Validating AuthentikProvisioner API surface…')
+        """Verify the provisioner script exposes the functions for OIDC + proxy provisioning."""
+        self._status('INFO', 'Validating Authentik provisioner script API surface…')
         try:
-            from Scripts.security.authentik_provisioner import AuthentikProvisioner
-            p = AuthentikProvisioner('https://auth.example.com', 'token')
-            required_methods = [
-                'wait_ready',
-                'get_authorization_flow',
-                'get_property_mappings',
-                'get_default_outpost',
-                'get_or_create_provider',
-                'get_or_create_proxy_provider',
-                'get_or_create_application',
-                'add_provider_to_outpost',
-                'provision_oidc_app',
-                'provision_proxy_app',
-                'delete_application',
+            mod = _load_authentik_provisioner()
+            required_functions = [
+                'wait_for_authentik',
+                'default_flow',
+                'scope_mapping_pks',
+                'default_signing_key',
+                'bind_embedded_outpost',
+                'find_or_create',
+                'provision_oidc',
+                'provision_proxy',
+                'api',
+                'main',
             ]
-            missing = [m for m in required_methods if not hasattr(p, m)]
+            missing = [f for f in required_functions if not callable(getattr(mod, f, None))]
             if missing:
-                self._status('ERROR', f'AuthentikProvisioner missing methods: {missing}')
+                self._status('ERROR', f'Provisioner script missing functions: {missing}')
                 self.results['provisioner'].append(('methods', False, str(missing)))
                 return False
-            self._status('OK', 'AuthentikProvisioner has all required methods')
+            self._status('OK', 'Provisioner script has all required functions')
             self.results['provisioner'].append(('methods', True, 'all present'))
             return True
         except Exception as exc:
@@ -217,9 +226,16 @@ class SSONetworkTester:
             self.results['provisioner'].append(('headlamp_app', False, 'no token'))
             return False
         try:
-            from Scripts.security.authentik_provisioner import AuthentikProvisioner
-            p = AuthentikProvisioner(self.authentik_url, token, verify_ssl=False, timeout=10)
-            app = p._list_first('/core/applications/', {'slug': 'headlamp'})
+            mod = _load_authentik_provisioner()
+            os.environ['AUTHENTIK_URL'] = self.authentik_url
+            os.environ['AUTHENTIK_TOKEN'] = token
+            resp = mod.requests.get(
+                f"{mod.base_url()}/core/applications/",
+                headers=mod.headers(), params={'search': 'headlamp'},
+                verify=False, timeout=10,
+            )
+            apps = resp.json().get('results', []) if resp.ok else []
+            app = next((a for a in apps if a.get('slug') == 'headlamp'), None)
             if app:
                 self._status('OK', f"Headlamp app found in Authentik (slug={app['slug']})")
                 self.results['provisioner'].append(('headlamp_app', True, app['slug']))
@@ -240,9 +256,16 @@ class SSONetworkTester:
             self.results['provisioner'].append(('hubble_app', False, 'no token'))
             return False
         try:
-            from Scripts.security.authentik_provisioner import AuthentikProvisioner
-            p = AuthentikProvisioner(self.authentik_url, token, verify_ssl=False, timeout=10)
-            app = p._list_first('/core/applications/', {'slug': 'hubble-ui'})
+            mod = _load_authentik_provisioner()
+            os.environ['AUTHENTIK_URL'] = self.authentik_url
+            os.environ['AUTHENTIK_TOKEN'] = token
+            resp = mod.requests.get(
+                f"{mod.base_url()}/core/applications/",
+                headers=mod.headers(), params={'search': 'hubble-ui'},
+                verify=False, timeout=10,
+            )
+            apps = resp.json().get('results', []) if resp.ok else []
+            app = next((a for a in apps if a.get('slug') == 'hubble-ui'), None)
             if app:
                 self._status('OK', f"Hubble UI app found in Authentik (slug={app['slug']})")
                 self.results['provisioner'].append(('hubble_app', True, app['slug']))
@@ -302,7 +325,7 @@ class SSONetworkTester:
                 self.test_hubble_forward_auth_annotations,
                 self.test_hubble_requires_auth,
             ]),
-            ('AuthentikProvisioner Module', [
+            ('Authentik provisioner script', [
                 self.test_provisioner_oidc_app_methods,
                 self.test_provisioner_headlamp_app_in_authentik,
                 self.test_provisioner_hubble_app_in_authentik,

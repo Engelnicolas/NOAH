@@ -163,6 +163,15 @@ pytest Tests/ -v -m integration        # include integration (needs real sops)
 NOAH_SKIP_ANSIBLE=true pytest Tests/ -q # skip Ansible in CI
 ```
 
+## License
+
+NOAH is free software licensed under the **GNU Affero General Public License,
+version 3 or later** (AGPL-3.0-or-later). The full text is in
+[`LICENSE`](../LICENSE), and every source file carries a short notice.
+
+Under the AGPL, if you modify NOAH and make it available to users over a
+network, you must also offer those users the corresponding source code.
+
 ---
 
 Made with care by the NOAH Team.

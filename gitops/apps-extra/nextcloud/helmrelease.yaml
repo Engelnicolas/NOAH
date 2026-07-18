@@ -41,7 +41,7 @@ spec:
             'overwrite.cli.url' => 'https://nextcloud.${DOMAIN}',
             'trusted_proxies' => array('10.0.0.0/8', '127.0.0.1'),
           );
-      # OIDC client credentials for the post-installation hook below (from the
+      # OIDC client credentials for the before-starting hook below (from the
       # nextcloud-oidc Secret, same values the provision Job registers in
       # Authentik).
       extraEnv:
@@ -55,23 +55,38 @@ spec:
             secretKeyRef:
               name: nextcloud-oidc
               key: OIDC_CLIENT_SECRET
-      # Runs once, right after the initial Nextcloud installation (executed by
-      # the container entrypoint via run_as, i.e. as www-data with env intact):
-      # installs user_oidc and registers Authentik as OIDC provider. Default
-      # user_oidc scopes are "openid email profile" — exactly what the
-      # Authentik provider grants. Local password login stays enabled
-      # (decision: OIDC + local accounts; the admin account is the
-      # break-glass).
+      # Runs on EVERY container start (after any install/upgrade), executed by
+      # the entrypoint via run_as as www-data with env intact. Idempotently
+      # (re)installs user_oidc and (re)registers Authentik as the OIDC provider
+      # with the CURRENT client secret from env, so `noah secrets rotate`
+      # propagates on the next pod restart (the old post-installation hook ran
+      # only once at install, freezing the first secret). Default user_oidc
+      # scopes are "openid email profile" — exactly what the Authentik provider
+      # grants. Local password login stays enabled (decision: OIDC + local
+      # accounts; the admin account is the break-glass).
+      #
+      # Notes:
+      #  - $${OIDC_CLIENT_ID}/$${OIDC_CLIENT_SECRET} are escaped ($$) so Flux's
+      #    postBuild substitution leaves them for the shell to expand from env;
+      #    ${DOMAIN} stays a single $ so Flux DOES substitute it.
+      #  - The entrypoint treats a non-zero hook as fatal (exit 1), so every step
+      #    is guarded and the script always exits 0 — a transient error (DB not
+      #    ready, app store unreachable) must never block Nextcloud from starting.
+      #  - --unique-uid=0 --mapping-uid=preferred_username gives readable, stable
+      #    usernames instead of a hashed sub. Do NOT change this mapping once real
+      #    users exist: a different uid mapping orphans their accounts.
       hooks:
-        post-installation: |
+        before-starting: |
           #!/bin/sh
-          set -eu
-          php /var/www/html/occ app:install user_oidc || true
-          php /var/www/html/occ app:enable user_oidc
+          php /var/www/html/occ app:install user_oidc >/dev/null 2>&1 || true
+          php /var/www/html/occ app:enable user_oidc || true
           php /var/www/html/occ user_oidc:provider authentik \
-            --clientid="$OIDC_CLIENT_ID" \
-            --clientsecret="$OIDC_CLIENT_SECRET" \
-            --discoveryuri="https://auth.${DOMAIN}/application/o/nextcloud/.well-known/openid-configuration"
+            --clientid="$${OIDC_CLIENT_ID}" \
+            --clientsecret="$${OIDC_CLIENT_SECRET}" \
+            --discoveryuri="https://auth.${DOMAIN}/application/o/nextcloud/.well-known/openid-configuration" \
+            --unique-uid=0 \
+            --mapping-uid=preferred_username || true
+          exit 0
     internalDatabase:
       enabled: false
     # Bundled PostgreSQL subchart is enabled below; the chart still reads the

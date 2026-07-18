@@ -4,8 +4,10 @@
 # existing provider/application.
 #
 # Same pattern as gitops/apps/headlamp/provision-job.yaml, with one
-# difference: the redirect URI is user_oidc's callback
-# (/apps/user_oidc/code), not the default /oidc-callback.
+# difference: the redirect URIs are user_oidc's callback
+# (/apps/user_oidc/code), not the default /oidc-callback. Both the pretty-URL
+# and /index.php variants are registered so login works regardless of whether
+# Nextcloud's front controller is serving pretty URLs.
 #
 # Mounts authentik-provisioner-script-static (unhashed name) because this Job
 # is built by the apps-extra Flux Kustomization, which cannot resolve the
@@ -37,7 +39,8 @@ spec:
                 --service nextcloud \
                 --type oidc \
                 --external-host "https://nextcloud.${DOMAIN}" \
-                --redirect-uri "https://nextcloud.${DOMAIN}/apps/user_oidc/code"
+                --redirect-uri "https://nextcloud.${DOMAIN}/apps/user_oidc/code" \
+                --redirect-uri "https://nextcloud.${DOMAIN}/index.php/apps/user_oidc/code"
           envFrom:
             # AUTHENTIK_TOKEN (bootstrap admin token).
             - secretRef:

@@ -22,6 +22,15 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        # fsGroup makes the shared `work` emptyDir group-writable so the
+        # non-root render/apply containers can exchange plan.ndjson.
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
       volumes:
         - name: work
           emptyDir: {}
@@ -38,6 +47,11 @@ spec:
         - name: render
           image: python:3.12-slim
           command: ["sh", "-c", "python /scripts/render_plan.py > /work/plan.ndjson"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           env:
             # Substituted by Flux (apps-extra postBuild), like every other
             # ${DOMAIN} reference in the tree.
@@ -58,6 +72,11 @@ spec:
         - name: apply
           image: stalwartlabs/cli:1.0.10
           args: ["apply", "--file", "/work/plan.ndjson"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           env:
             - name: STALWART_URL
               value: "http://stalwart.stalwart.svc.cluster.local:8080"

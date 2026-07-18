@@ -14,16 +14,35 @@ spec:
       labels:
         app: hubble-auth-proxy
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: nginx
-          image: nginx:alpine
+          # Unprivileged nginx image: runs as UID 101 and listens on 8080, so it
+          # needs neither root nor the NET_BIND_SERVICE capability, and works
+          # with a read-only root filesystem (temp/pid dirs point at /tmp).
+          image: nginxinc/nginx-unprivileged:alpine
           ports:
-            - containerPort: 80
+            - containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           volumeMounts:
             - name: config
               mountPath: /etc/nginx/nginx.conf
               subPath: nginx.conf
+            - name: tmp
+              mountPath: /tmp
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: config
           configMap:
             name: hubble-auth-proxy-config
@@ -38,4 +57,4 @@ spec:
     app: hubble-auth-proxy
   ports:
     - port: 80
-      targetPort: 80
+      targetPort: 8080

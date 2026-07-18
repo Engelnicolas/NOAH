@@ -93,7 +93,10 @@ class DockerInstaller:
 
         try:
             if shell:
-                result = subprocess.run(cmd, shell=True, check=check,
+                # shell=True is only used with hardcoded install commands
+                # (apt / `curl … | gpg …` pipes); no external input is
+                # interpolated into cmd, so there is no injection surface.
+                result = subprocess.run(cmd, shell=True, check=check,  # nosec B602
                                        capture_output=True, text=True)
             else:
                 result = subprocess.run(cmd, check=check,

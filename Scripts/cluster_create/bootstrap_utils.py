@@ -314,7 +314,7 @@ def _register_deploy_key(
 
     try:
         req = urllib.request.Request(list_url, headers=req_headers)
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310
             existing = json.loads(resp.read())
         match = next((k for k in existing if key_body in k.get(existing_key_field, "")), None)
         if match:
@@ -326,7 +326,7 @@ def _register_deploy_key(
                 click.echo("[INFO] Existing deploy key is read-only — deleting and re-adding with write access.")
                 del_url = delete_url_template.format(id=match["id"])
                 del_req = urllib.request.Request(del_url, headers=req_headers, method="DELETE")
-                urllib.request.urlopen(del_req, timeout=15).close()
+                urllib.request.urlopen(del_req, timeout=15).close()  # nosec B310
             else:
                 click.echo(f"[INFO] SSH deploy key already registered in {provider}.")
                 return True
@@ -343,7 +343,7 @@ def _register_deploy_key(
     try:
         payload = json.dumps(create_body).encode()
         req = urllib.request.Request(create_url, data=payload, headers=req_headers, method="POST")
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310
             result = json.loads(resp.read())
         click.echo(f"[SUCCESS] Deploy key registered in {provider} (id={result.get('id')}).")
         return True

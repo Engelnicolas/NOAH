@@ -34,7 +34,8 @@ spec:
           args:
             - |
               set -euo pipefail
-              pip install --quiet requests
+              export HOME=/tmp
+              pip install --quiet --user requests
               python /scripts/authentik_provisioner.py \
                 --service nextcloud \
                 --type oidc \
@@ -54,10 +55,23 @@ spec:
               value: "http://authentik-server.authentik.svc.cluster.local"
             - name: AUTHENTIK_EXTERNAL_URL
               value: "https://auth.${DOMAIN}"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
           volumeMounts:
             - name: provisioner
               mountPath: /scripts
+            - name: tmp
+              mountPath: /tmp
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: provisioner
           configMap:
             name: authentik-provisioner-script-static

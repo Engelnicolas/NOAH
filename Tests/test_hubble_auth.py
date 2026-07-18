@@ -8,6 +8,7 @@ covered by gitops/apps/hubble-auth/ (provisioner Job + ingress with
 nginx auth-url annotations).
 """
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -16,6 +17,16 @@ from pathlib import Path
 from typing import Tuple
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+def _load_authentik_provisioner():
+    """Load gitops/apps/authentik_provisioner.py — the exact script the
+    provisioning Jobs run — so these tests exercise the production code."""
+    path = Path(__file__).resolve().parent.parent / 'gitops' / 'apps' / 'authentik_provisioner.py'
+    spec = importlib.util.spec_from_file_location('authentik_provisioner', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class HubbleAuthTester:
@@ -190,9 +201,16 @@ class HubbleAuthTester:
             self.print_status('WARN', 'AUTHENTIK_BOOTSTRAP_TOKEN not set — skipping live check')
             return False
         try:
-            from Scripts.security.authentik_provisioner import AuthentikProvisioner
-            provisioner = AuthentikProvisioner(authentik_url, token, verify_ssl=False, timeout=10)
-            app = provisioner._list_first('/core/applications/', {'slug': 'hubble'})
+            mod = _load_authentik_provisioner()
+            os.environ['AUTHENTIK_URL'] = authentik_url
+            os.environ['AUTHENTIK_TOKEN'] = token
+            resp = mod.requests.get(
+                f"{mod.base_url()}/core/applications/",
+                headers=mod.headers(), params={'search': 'hubble'},
+                verify=False, timeout=10,
+            )
+            apps = resp.json().get('results', []) if resp.ok else []
+            app = next((a for a in apps if a.get('slug') == 'hubble'), None)
             if app:
                 self.print_status('OK', f"Hubble application found in Authentik (slug={app['slug']})")
                 return True

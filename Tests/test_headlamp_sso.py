@@ -4,6 +4,7 @@ Headlamp SSO Integration Test
 Tests Headlamp Kubernetes Dashboard deployment and Authentik SSO integration
 """
 
+import importlib.util
 import subprocess
 import sys
 import json
@@ -11,6 +12,16 @@ from pathlib import Path
 from typing import Tuple, Dict, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+def _load_authentik_provisioner():
+    """Load gitops/apps/authentik_provisioner.py — the exact script the
+    provisioning Jobs run — so these tests exercise the production code."""
+    path = Path(__file__).resolve().parent.parent / 'gitops' / 'apps' / 'authentik_provisioner.py'
+    spec = importlib.util.spec_from_file_location('authentik_provisioner', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class HeadlampSSOTester:
@@ -271,24 +282,19 @@ class HeadlampSSOTester:
             return False
 
     def test_authentik_provisioner_import(self) -> bool:
-        """Test that the AuthentikProvisioner module is importable and well-formed."""
-        self.print_status('INFO', 'Testing AuthentikProvisioner module…')
+        """Test that the canonical Authentik provisioner script is importable and well-formed."""
+        self.print_status('INFO', 'Testing Authentik provisioner script…')
         try:
-            from Scripts.security.authentik_provisioner import AuthentikProvisioner
-            provisioner = AuthentikProvisioner(
-                authentik_url='https://auth.example.com',
-                api_token='dummy-token',
-            )
-            # Verify key methods exist
-            for method in ('wait_ready', 'provision_oidc_app', 'provision_proxy_app',
-                           'get_or_create_provider', 'get_or_create_application',
-                           'delete_application'):
-                assert hasattr(provisioner, method), f"Missing method: {method}"
-            self.print_status('OK', 'AuthentikProvisioner imported and validated')
-            self.results['oidc'].append(('provisioner_import', True, 'All methods present'))
+            mod = _load_authentik_provisioner()
+            # Verify the key entry points exist (the script the Jobs invoke).
+            for fn in ('provision_oidc', 'provision_proxy', 'wait_for_authentik',
+                       'find_or_create', 'main'):
+                assert callable(getattr(mod, fn, None)), f"Missing function: {fn}"
+            self.print_status('OK', 'Authentik provisioner script imported and validated')
+            self.results['oidc'].append(('provisioner_import', True, 'All functions present'))
             return True
         except Exception as exc:
-            self.print_status('ERROR', f'AuthentikProvisioner import failed: {exc}')
+            self.print_status('ERROR', f'Authentik provisioner import failed: {exc}')
             self.results['oidc'].append(('provisioner_import', False, str(exc)))
             return False
 
@@ -305,9 +311,16 @@ class HeadlampSSOTester:
             return False
 
         try:
-            from Scripts.security.authentik_provisioner import AuthentikProvisioner
-            provisioner = AuthentikProvisioner(authentik_url, token, verify_ssl=False, timeout=10)
-            app = provisioner._list_first('/core/applications/', {'slug': 'headlamp'})
+            mod = _load_authentik_provisioner()
+            os.environ['AUTHENTIK_URL'] = authentik_url
+            os.environ['AUTHENTIK_TOKEN'] = token
+            resp = mod.requests.get(
+                f"{mod.base_url()}/core/applications/",
+                headers=mod.headers(), params={'search': 'headlamp'},
+                verify=False, timeout=10,
+            )
+            apps = resp.json().get('results', []) if resp.ok else []
+            app = next((a for a in apps if a.get('slug') == 'headlamp'), None)
             if app:
                 self.print_status('OK', f"Headlamp application found in Authentik (slug={app['slug']})")
                 self.results['oidc'].append(('authentik_app_exists', True, app['slug']))
@@ -338,7 +351,7 @@ class HeadlampSSOTester:
             ('Service', self.test_headlamp_service),
             ('Ingress', self.test_headlamp_ingress),
             ('OIDC Configuration', self.test_oidc_secret),
-            ('Authentik Provisioner Module', self.test_authentik_provisioner_import),
+            ('Authentik provisioner script', self.test_authentik_provisioner_import),
             ('Headlamp App in Authentik', self.test_headlamp_oidc_provisioned_in_authentik),
         ]
 

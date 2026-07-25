@@ -102,6 +102,13 @@ data:
         {"@type": "upsert", "object": "Certificate", "matchOn": ["certificate"],
          "value": {"cert0": {"certificate": {"@type": "Text", "value": tls_crt},
                              "privateKey": {"@type": "Text", "secret": tls_key}}}},
+        # MUST stay last. A running Stalwart does not pick up settings written
+        # to its datastore — the auth directory and the SMTP hostname both stay
+        # stale until reloaded. Without this the Job "succeeds" while the server
+        # keeps serving the previous configuration, and only a pod restart fixes
+        # it. Reloading in-process avoids that, and avoids bouncing the MTA.
+        {"@type": "create", "object": "Action",
+         "value": {"act0": {"@type": "ReloadSettings"}}},
     ]
 
     for op in ops:

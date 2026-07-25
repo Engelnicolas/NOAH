@@ -22,7 +22,13 @@ spec:
       recordType: MX
       recordTTL: 300
       targets:
-        - "10 mail.${DOMAIN}"
+        # Priority 0, not 10: external-dns' Cloudflare provider writes the
+        # priority correctly but reads it back as 0, so any other value never
+        # compares equal and the record is deleted/recreated on every 1-minute
+        # reconcile — leaving a brief window with no MX each time. Declaring 0
+        # makes desired match what is read, and the loop stops. Harmless here:
+        # priority only orders multiple MX hosts, and there is a single one.
+        - "0 mail.${DOMAIN}"
     - dnsName: "${DOMAIN}"
       recordType: TXT
       recordTTL: 300

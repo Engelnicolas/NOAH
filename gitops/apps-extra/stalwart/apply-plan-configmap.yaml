@@ -26,6 +26,9 @@ data:
     # Authentik per-application OIDC issuer (issuer_mode: per_provider); the
     # provider is registered under the "stalwart" application slug.
     ISSUER = f"https://auth.{DOMAIN}/application/o/stalwart/"
+    # Authentik's bootstrap admin, same identity the provisioner puts in the
+    # `admin` group (see authentik_provisioner.py --admin-user).
+    ADMIN_USER = "akadmin"
 
     with open("/secrets/app/DKIM_PRIVATE_KEY") as f:
         dkim_key = f.read()
@@ -47,11 +50,14 @@ data:
                             "ansi": False, "buffered": False, "lossy": False,
                             "multiline": False}}},
         # references must be defined BEFORE use: Directory -> Domain -> DKIM
+        # claimGroups makes Stalwart read group membership from the token's
+        # `groups` claim (populated by Authentik's default `profile` mapping).
         {"@type": "upsert", "object": "Directory", "matchOn": ["description"],
          "value": {"oidc0": {"@type": "Oidc", "description": "Authentik",
                              "issuerUrl": ISSUER,
                              "claimUsername": "preferred_username",
-                             "claimName": "name", "usernameDomain": DOMAIN,
+                             "claimName": "name", "claimGroups": "groups",
+                             "usernameDomain": DOMAIN,
                              "requireScopes": {"openid": True, "email": True}}}},
         {"@type": "upsert", "object": "Domain", "matchOn": ["name"],
          "value": {"dom0": {"name": DOMAIN, "isEnabled": True,
@@ -64,6 +70,22 @@ data:
                              "selector": "stalwart",
                              "canonicalization": "relaxed/relaxed",
                              "privateKey": {"@type": "Text", "secret": dkim_key}}}},
+        # SSO: authenticate every principal against Authentik instead of the
+        # internal directory. The break-glass admin is unaffected — it is pinned
+        # by STALWART_RECOVERY_ADMIN on the StatefulSet and bypasses directories.
+        # `update` (not `upsert`): Authentication is a singleton.
+        {"@type": "update", "object": "Authentication",
+         "value": {"directoryId": "#oidc0"}},
+        # Grant the Authentik admin the built-in System Administrator role (id
+        # "e", seeded at bootstrap). It must sit on the account itself: Stalwart
+        # does NOT inherit roles through group membership, so belonging to an
+        # `admin` group is not enough. Pre-creating the account here means the
+        # role is already in place the first time the identity signs in.
+        {"@type": "upsert", "object": "Account", "matchOn": ["name"],
+         "value": {"acc0": {"@type": "User", "name": ADMIN_USER,
+                            "domainId": "#dom0",
+                            "roles": {"@type": "Custom",
+                                      "roleIds": {"e": True}}}}},
         listener("http", 8080, "http", False, False),
         listener("smtp", 25, "smtp", True, False),
         listener("submission", 587, "smtp", True, False),

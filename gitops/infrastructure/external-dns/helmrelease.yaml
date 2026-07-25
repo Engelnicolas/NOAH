@@ -33,6 +33,15 @@ spec:
       - crd
     policy: sync
     txtOwnerId: noah
+    # Ownership TXT records must live INSIDE the zone. The default naming
+    # (`<type>-<name>`) puts the apex ones at `mx-noah-infra.com` /
+    # `txt-noah-infra.com`, which belong to `.com`, not to the zone — Cloudflare
+    # rejects them ("DNS name is invalid"), so external-dns can never own an
+    # apex record and silently skips the MX and SPF published by the crd source.
+    # The trailing dot turns the prefix into a label, keeping every ownership
+    # record in-zone (`mx-edns.noah-infra.com`); %{record_type} keeps the MX and
+    # TXT owners from colliding on the same apex name.
+    txtPrefix: "%{record_type}-edns."
     # A/CNAME (+ TXT ownership) are the defaults; MX and standalone TXT are
     # needed for the mail records published via the crd source.
     managedRecordTypes:

@@ -41,7 +41,8 @@ spec:
                 --type oidc \
                 --external-host "https://nextcloud.${DOMAIN}" \
                 --redirect-uri "https://nextcloud.${DOMAIN}/apps/user_oidc/code" \
-                --redirect-uri "https://nextcloud.${DOMAIN}/index.php/apps/user_oidc/code"
+                --redirect-uri "https://nextcloud.${DOMAIN}/index.php/apps/user_oidc/code" \
+                --admin-group admin
           envFrom:
             # AUTHENTIK_TOKEN (bootstrap admin token).
             - secretRef:

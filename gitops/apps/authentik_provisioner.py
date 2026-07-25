@@ -61,6 +61,39 @@ def find_or_create(path, key, value, payload):
     return api("post", path, json=payload)
 
 
+def ensure_admin_group(group_name, username):
+    """Put `username` in the Authentik group `group_name`, creating it if needed.
+
+    The group name travels to the service in the `groups` claim of the `profile`
+    scope, which Authentik's default mapping already populates. A service that
+    maps that claim onto its own admin group (Nextcloud's built-in `admin`)
+    then grants administrator rights to the SSO identity, so the local admin
+    account is only ever needed as break-glass.
+    """
+    users = api("get", "/core/users/", params={"username": username}).get("results", [])
+    user_pk = next((u["pk"] for u in users if u.get("username") == username), None)
+    if user_pk is None:
+        print(f"[WARNING] User {username} not found; group {group_name} left unchanged",
+              file=sys.stderr)
+        return None
+
+    # Deliberately not find_or_create(): its blanket PATCH would overwrite the
+    # member list, dropping anyone an operator added by hand. Merge instead.
+    for group in api("get", "/core/groups/", params={"search": group_name}).get("results", []):
+        if group.get("name") != group_name:
+            continue
+        members = [u["pk"] if isinstance(u, dict) else u for u in group.get("users", [])]
+        if user_pk in members:
+            print(f"[INFO] Group {group_name} already contains {username}")
+            return group
+        print(f"[INFO] Adding {username} to existing group {group_name}")
+        return api("patch", f"/core/groups/{group['pk']}/",
+                   json={"users": members + [user_pk]})
+
+    print(f"[INFO] Creating group {group_name} with {username}")
+    return api("post", "/core/groups/", json={"name": group_name, "users": [user_pk]})
+
+
 def default_flow(designation, preferred_slug_fragment):
     flows = api("get", "/flows/instances/", params={"designation": designation})
     results = flows.get("results", [])
@@ -253,10 +286,25 @@ def main():
         default=None,
         help="OIDC redirect URI (repeatable); defaults to <external-host>/oidc-callback",
     )
+    parser.add_argument(
+        "--admin-group",
+        default=None,
+        help="Authentik group to create and populate with --admin-user; its name "
+             "reaches the service in the `groups` claim, which lets the service "
+             "grant admin rights to the SSO identity",
+    )
+    parser.add_argument(
+        "--admin-user",
+        default="akadmin",
+        help="User added to --admin-group (default: akadmin, the bootstrap admin)",
+    )
     args = parser.parse_args()
 
     # Tolerate the Job being scheduled before Authentik has finished booting.
     wait_for_authentik()
+
+    if args.admin_group:
+        ensure_admin_group(args.admin_group, args.admin_user)
 
     if args.type == "proxy":
         provision_proxy(args.service, args.external_host)

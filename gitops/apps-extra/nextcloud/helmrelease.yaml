@@ -75,6 +75,11 @@ spec:
       #  - --unique-uid=0 --mapping-uid=preferred_username gives readable, stable
       #    usernames instead of a hashed sub. Do NOT change this mapping once real
       #    users exist: a different uid mapping orphans their accounts.
+      #  - --mapping-groups=groups --group-provisioning=1 syncs the `groups` claim
+      #    (already populated by Authentik's default `profile` scope mapping) into
+      #    Nextcloud groups. Membership of Authentik's `admin` group — created by
+      #    the provision Job's --admin-group — thus lands the SSO identity in
+      #    Nextcloud's built-in `admin` group, i.e. makes it an administrator.
       hooks:
         before-starting: |
           #!/bin/sh
@@ -85,7 +90,9 @@ spec:
             --clientsecret="$${OIDC_CLIENT_SECRET}" \
             --discoveryuri="https://auth.${DOMAIN}/application/o/nextcloud/.well-known/openid-configuration" \
             --unique-uid=0 \
-            --mapping-uid=preferred_username || true
+            --mapping-uid=preferred_username \
+            --mapping-groups=groups \
+            --group-provisioning=1 || true
           exit 0
     internalDatabase:
       enabled: false

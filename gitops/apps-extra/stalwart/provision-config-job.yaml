@@ -79,7 +79,11 @@ spec:
               drop: [ALL]
           env:
             - name: STALWART_URL
-              value: "http://stalwart.stalwart.svc.cluster.local:8080"
+              # Service port, not container port: the Service exposes :80 and
+              # forwards to the container's named `http` port (8080). Targeting
+              # :8080 here reaches nothing and the apply retries until
+              # backoffLimit, leaving Stalwart entirely unconfigured.
+              value: "http://stalwart.stalwart.svc.cluster.local:80"
             - name: STALWART_USER
               value: "admin"
             # Break-glass admin, same value the StatefulSet pins via

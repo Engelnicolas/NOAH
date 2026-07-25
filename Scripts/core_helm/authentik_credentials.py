@@ -25,6 +25,79 @@ from __future__ import annotations
 
 from typing import Optional, Any
 
+# Services exposing an admin login: (service, canonical store key, ingress
+# subdomain, admin username, admin email local-part). Usernames are pinned by
+# the manifests rather than the store: 'akadmin' by the Authentik chart,
+# 'admin' by the nextcloud-app Secret and by STALWART_RECOVERY_ADMIN on the
+# StatefulSet. Only Authentik seeds an admin email (bootstrap_email, rewritten
+# to admin@<domain> by gitops_init); None means the account has no address.
+_ADMIN_SERVICES: tuple[tuple[str, str, str, str, str | None], ...] = (
+    ('authentik', 'bootstrap_password', 'auth', 'akadmin', 'admin'),
+    ('nextcloud', 'admin_password', 'nextcloud', 'admin', None),
+    ('stalwart', 'admin_password', 'mail', 'admin', None),
+)
+
+
+def _resolve_node_ip() -> tuple[str | None, str]:
+    """Resolve the node IP fronting the cluster, with a resolution status.
+
+    nginx-ingress binds the node's :80/:443 via hostPort (service is ClusterIP),
+    so the external entry point is the node's IP (the EC2 EIP), not a
+    LoadBalancer status. Prefer ExternalIP, fall back to InternalIP.
+    """
+    import subprocess  # local import to avoid global dependency cost
+    try:
+        for addr_type in ('ExternalIP', 'InternalIP'):
+            kubectl_result = subprocess.run([
+                'kubectl', 'get', 'nodes',
+                '-o', f'jsonpath={{.items[0].status.addresses[?(@.type=="{addr_type}")].address}}'
+            ], capture_output=True, text=True, timeout=8)
+            if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():
+                return kubectl_result.stdout.strip().split()[0], 'ip_assigned'
+        return None, 'pending'
+    except Exception:  # noqa: BLE001
+        return None, 'lookup_error'
+
+
+def get_admin_credentials(domain: str | None = None) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """Get admin credentials for every service exposing an admin login.
+
+    Behavior:
+    - Falls back to the domain recorded by `setup gitops` when none is given;
+      every ingress is host-based, so an IP alone cannot reach a service.
+    - Skips services whose password is absent from the store (not deployed).
+    """
+    try:
+        from Scripts.security.canonical_store import get_canonical_store  # type: ignore
+        store = get_canonical_store()
+        services = store.data.get('services', {})
+        domain = domain or store.get_cluster_domain()
+        external_ip, resolution_status = _resolve_node_ip()
+
+        credentials: list[dict[str, Any]] = []
+        for service, store_key, subdomain, admin_username, email_local in _ADMIN_SERVICES:
+            entry = services.get(service, {}).get(store_key)
+            password = entry.get('value') if isinstance(entry, dict) else entry
+            if not password:
+                continue
+            host = f"{subdomain}.{domain}" if domain else None
+            credentials.append({
+                'service': service,
+                'http_url': f"http://{host}" if host else "(domain not recorded)",
+                'https_url': f"https://{host}" if host else "(domain not recorded)",
+                'admin_username': admin_username,
+                'admin_email': f"{email_local}@{domain}" if email_local and domain else '',
+                'admin_password': password,
+                'external_ip': external_ip,
+                'resolution_status': resolution_status
+            })
+
+        if not credentials:
+            return None, "No admin passwords present in canonical store"
+        return credentials, None
+    except Exception as e:  # noqa: BLE001
+        return None, f"Error retrieving canonical credentials: {e}"
+
 
 def get_authentik_credentials(domain: str | None = None) -> tuple[Optional[dict[str, Any]], Optional[str]]:
     """Get Authentik admin credentials from canonical secrets store.
@@ -46,26 +119,7 @@ def get_authentik_credentials(domain: str | None = None) -> tuple[Optional[dict[
         admin_email = ''
         admin_username = 'akadmin'
 
-        # nginx-ingress binds the node's :80/:443 via hostPort (service is ClusterIP),
-        # so the external entry point is the node's IP (the EC2 EIP), not a
-        # LoadBalancer status. Prefer ExternalIP, fall back to InternalIP.
-        external_ip = None
-        resolution_status = 'not_attempted'
-        import subprocess  # local import to avoid global dependency cost
-        try:
-            for addr_type in ('ExternalIP', 'InternalIP'):
-                kubectl_result = subprocess.run([
-                    'kubectl', 'get', 'nodes',
-                    '-o', f'jsonpath={{.items[0].status.addresses[?(@.type=="{addr_type}")].address}}'
-                ], capture_output=True, text=True, timeout=8)
-                if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():
-                    external_ip = kubectl_result.stdout.strip().split()[0]
-                    resolution_status = 'ip_assigned'
-                    break
-            else:
-                resolution_status = 'pending'
-        except Exception:
-            resolution_status = 'lookup_error'
+        external_ip, resolution_status = _resolve_node_ip()
 
         if domain:
             http_url = f"http://auth.{domain}"

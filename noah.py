@@ -65,7 +65,7 @@ from Scripts.env_init.doctor_utils import print_status, diagnose_noah_environmen
 from Scripts.security import ensure_security_initialized, get_security_config
 from Scripts.security.rotate_cli import register_rotate_command  # type: ignore
 from Scripts.core_helm import (
-    get_authentik_credentials,
+    get_admin_credentials,
     regenerate_authentik_password,
 )
 from Scripts.cluster_create.status_utils import show_cluster_status
@@ -422,25 +422,31 @@ def new(ctx):
         sys.exit(1)
 
 @password.command()
-@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for Authentik (used for URL display)')
+@click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for service URLs (defaults to the domain recorded by `setup gitops`)')
 @click.pass_context
 def show_password(ctx, domain):
-    """Show current Authentik admin credentials"""
-    click.echo("🔍 Current Authentik admin credentials:")
+    """Show current admin credentials for NOAH services"""
+    click.echo("🔍 Current admin credentials:")
     click.echo("=" * 50)
-    credentials, error = get_authentik_credentials(domain=domain)
+    credentials, error = get_admin_credentials(domain=domain)
     if credentials:
-        click.echo(f"📍 URL (HTTP):   {credentials['http_url']}")
-        click.echo(f"📍 URL (HTTPS):  {credentials['https_url']}")
-        if credentials.get('external_ip'):
-            click.echo(f"🌐 External IP:  {credentials['external_ip']}")
-        click.echo(f"📶 Resolution:   {credentials.get('resolution_status','unknown')}")
-        click.echo(f"👤 Username:     {credentials['admin_username']}")
-        click.echo(f"📧 Email:        {credentials['admin_email']}")
-        click.echo(f"🔑 Password:     {credentials['admin_password']}")
+        # External IP and resolution are node-level: identical for every service.
+        node = credentials[0]
+        if node.get('external_ip'):
+            click.echo(f"🌐 External IP:  {node['external_ip']}")
+        click.echo(f"📶 Resolution:   {node.get('resolution_status','unknown')}")
+        for cred in credentials:
+            click.echo("")
+            click.echo(f"[{cred['service']}]")
+            click.echo(f"📍 URL (HTTP):   {cred['http_url']}")
+            click.echo(f"📍 URL (HTTPS):  {cred['https_url']}")
+            click.echo(f"👤 Username:     {cred['admin_username']}")
+            if cred.get('admin_email'):
+                click.echo(f"📧 Email:        {cred['admin_email']}")
+            click.echo(f"🔑 Password:     {cred['admin_password']}")
         click.echo("")
-        click.echo("💡 You can log in using either the username or email address")
-        if credentials.get('resolution_status') in ('pending','lookup_error'):
+        click.echo("💡 Authentik accepts either the username or the email address")
+        if node.get('resolution_status') in ('pending','lookup_error'):
             click.echo("💡 Node IP not resolved yet; ensure the cluster is reachable and DNS is configured.")
     else:
         click.echo(f"⚠️  Could not retrieve credentials: {error}")

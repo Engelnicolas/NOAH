@@ -126,12 +126,6 @@ Reconciliation order enforced via `dependsOn`: external-dns → cert-manager →
 
 `noah.py` re-execs itself under `.venv/bin/python3` at startup if the venv exists and the current interpreter is not already the venv's. This means `python3 noah.py` always uses the venv without the user needing to activate it.
 
-### CI
-
-- **`ci-python.yml`**: runs on changes to `Scripts/`, `Tests/`, `noah.py`. Steps: ruff lint → bandit → syntax check → pytest → NOAH CLI smoke test → ansible-lint.
-- **`ci-gitops.yml`**: runs on changes to `gitops/`. Steps: yamllint → kubeconform (skips `*.enc.yaml`) → Helm dry-run on `helmrelease.yaml` files.
-- **`test.yml`** / **`deploy.yml`** / **`release.yml`**: the NOAH test, deploy, and release pipelines.
-
 ### Environment variables
 
 | Variable | Purpose |

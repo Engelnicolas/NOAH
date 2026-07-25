@@ -36,8 +36,10 @@ All real work lives in the Ansible roles under Ansible/roles/.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import socket
 import subprocess
 import tempfile
 from pathlib import Path
@@ -808,6 +810,68 @@ def run_add_nodes(
         return subprocess.run(cmd, cwd=ansible_dir, env=env).returncode
 
 
+def _tcp_open(port: int, timeout: float = 2.0) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _host_port_report(run) -> str:
+    """Report declared hostPorts that are not actually answering on the node.
+
+    `run` is the command runner from show_cluster_status_v2: it takes an argv
+    list and returns (returncode, combined output).
+
+    Cilium (kube-proxy replacement) publishes hostPorts as load-balancer
+    frontends. When a pod is recreated the previous frontend is not always
+    released first, and the new registration is refused with "frontend already
+    owned by another service" — a warn-level log nobody reads. The pod stays
+    Running and the manifest still declares the port, yet nothing listens on the
+    node. Connecting is the only reliable way to catch it.
+
+    Probes 127.0.0.1, so this is meaningful when run on the node itself, which
+    is the case in the single-node topology NOAH deploys.
+    """
+    rc, out = run(["kubectl", "get", "pods", "--all-namespaces", "-o", "json"])
+    if rc != 0:
+        return out or "(kubectl unavailable)"
+    try:
+        items = json.loads(out).get("items", [])
+    except ValueError:
+        return "(could not parse kubectl output)"
+
+    declared = [
+        (port["hostPort"], pod["metadata"]["namespace"], pod["metadata"]["name"])
+        for pod in items
+        if (pod.get("status") or {}).get("phase") == "Running"
+        for container in (pod.get("spec") or {}).get("containers") or []
+        for port in container.get("ports") or []
+        if port.get("hostPort")
+    ]
+    if not declared:
+        return "(no hostPort declared)"
+
+    lines, down = [], []
+    for port, namespace, name in sorted(declared):
+        reachable = _tcp_open(port)
+        lines.append(f"{'OK  ' if reachable else 'DOWN'}  :{port:<5}  {namespace}/{name}")
+        if not reachable:
+            down.append(str(port))
+
+    if down:
+        lines += [
+            "",
+            f"Declared but not listening: {', '.join(down)}",
+            "Cilium likely refused the frontend registration. Confirm with:",
+            "  kubectl -n kube-system logs -l k8s-app=cilium -c cilium-agent \\",
+            "    | grep 'already owned by another service'",
+            "Recreating the pod re-registers it: kubectl delete pod -n NS NAME",
+        ]
+    return "\n".join(lines)
+
+
 def show_cluster_status_v2() -> int:
     """Aggregate node + etcd + Flux state for `noah cluster status`.
 
@@ -842,5 +906,8 @@ def show_cluster_status_v2() -> int:
     click.echo("\n== Flux HelmReleases ==")
     rc, out = _run(["flux", "get", "helmreleases", "--all-namespaces"])
     click.echo(out or "(no helmreleases)")
+
+    click.echo("\n== hostPort reachability ==")
+    click.echo(_host_port_report(_run))
 
     return 0

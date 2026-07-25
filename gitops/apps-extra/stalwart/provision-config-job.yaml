@@ -34,6 +34,8 @@ spec:
       volumes:
         - name: work
           emptyDir: {}
+        - name: tmp
+          emptyDir: {}
         - name: render-script
           configMap:
             name: stalwart-apply-plan
@@ -93,6 +95,15 @@ spec:
                 secretKeyRef:
                   name: stalwart-app
                   key: ADMIN_SECRET
+            # stalwart-cli writes under $HOME during `apply`; with
+            # readOnlyRootFilesystem the default HOME is not writable and the
+            # command dies with "Read-only file system (os error 30)" before
+            # contacting the server. A writable mount alone is not enough —
+            # HOME must point at it.
+            - name: HOME
+              value: /tmp
           volumeMounts:
             - name: work
               mountPath: /work
+            - name: tmp
+              mountPath: /tmp

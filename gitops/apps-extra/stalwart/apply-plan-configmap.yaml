@@ -86,6 +86,13 @@ data:
                             "domainId": "#dom0",
                             "roles": {"@type": "Custom",
                                       "roleIds": {"e": True}}}}},
+        # Announce a FQDN in the SMTP greeting instead of the pod hostname
+        # ("stalwart-0"). Receivers check that the HELO name is a FQDN
+        # consistent with the sending IP's PTR, so this must match the reverse
+        # DNS requested for the node. defaultDomainId is set alongside because
+        # the singleton refuses to validate without it.
+        {"@type": "update", "object": "SystemSettings",
+         "value": {"defaultHostname": f"mail.{DOMAIN}", "defaultDomainId": "#dom0"}},
         listener("http", 8080, "http", False, False),
         listener("smtp", 25, "smtp", True, False),
         listener("submission", 587, "smtp", True, False),

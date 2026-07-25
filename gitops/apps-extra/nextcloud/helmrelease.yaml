@@ -41,6 +41,17 @@ spec:
             'overwrite.cli.url' => 'https://nextcloud.${DOMAIN}',
             'trusted_proxies' => array('10.0.0.0/8', '127.0.0.1'),
           );
+        # Required for OIDC: CoreDNS resolves auth.${DOMAIN} to the ingress
+        # ClusterIP (10.43.0.0/16), and Nextcloud's SSRF guard refuses to fetch
+        # the discovery document from a private address — user_oidc then answers
+        # 404 on /apps/user_oidc/login/<id> and SSO cannot start at all. This
+        # deliberately relaxes that guard: server-side requests may reach
+        # private ranges, which is the accepted trade-off for in-cluster OIDC.
+        oidc.config.php: |-
+          <?php
+          $CONFIG = array (
+            'allow_local_remote_servers' => true,
+          );
       # OIDC client credentials for the before-starting hook below (from the
       # nextcloud-oidc Secret, same values the provision Job registers in
       # Authentik).

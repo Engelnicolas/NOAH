@@ -57,15 +57,7 @@ class SecureEnvLoader:
         self.noah_root = Path(root)
         self.sops_config = sops_config or Path(NOAH_PATHS['sops_config'])
         self.age_key_file = age_key_file or Path(NOAH_PATHS['age_key_file'])
-        
-    def check_sops_available(self) -> bool:
-        """Check if SOPS is available in the system."""
-        return SopsClient.is_available()
 
-    def check_age_key_available(self) -> bool:
-        """Check if Age key file exists and is readable"""
-        return self.age_key_file.exists() and self.age_key_file.is_file()
-    
     def decrypt_env_file(self, encrypted_file: Path) -> Optional[Dict[str, str]]:
         """Decrypt a SOPS-encrypted YAML env file and return flattened key-value pairs."""
         if not encrypted_file.exists():
@@ -141,29 +133,6 @@ class SecureEnvLoader:
             logger.error("SOPS encryption failed: %s", e)
             return False
 
-# Convenience functions for NOAH
-def load_noah_secure_env(noah_root: Optional[Path] = None, *, return_mapping: bool = False):
-    """Load NOAH secure environment variables.
-
-    If return_mapping=True, returns (mapping | None, success_bool) without mutating
-    the environment when mapping is None.
-    """
-    loader = SecureEnvLoader(noah_root)
-    if return_mapping:
-        mapping, err = loader.read_secure_env()
-        return mapping, err is None
-    return loader.load_secure_env()
-
-def create_noah_encrypted_env(source_env: Optional[Path] = None, 
-                             target_name: str = ".env.enc") -> bool:
-    """Create encrypted environment file for NOAH"""
-    noah_root = Path.cwd()
-    if source_env is None:
-        source_env = noah_root / ".env"
-    
-    target_file = noah_root / target_name
-    loader = SecureEnvLoader(noah_root)
-    return loader.create_encrypted_env(source_env, target_file)
 
 if __name__ == "__main__":
     # CLI usage for testing

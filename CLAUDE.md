@@ -92,7 +92,7 @@ python3 noah.py secrets rotate --service authentik
 | `Scripts/env_init/` | `setup initialize`: installs tools, generates Age key, Cloudflare DNS wizard |
 | `Scripts/cluster_create/` | K3s + FluxCD bootstrap via Ansible, HA mode, node addition |
 | `Scripts/cluster_destroy/` | Cluster teardown and kubectl cleanup |
-| `Scripts/security/` | Canonical secrets store, SOPS client, rotation CLI, Authentik provisioner |
+| `Scripts/security/` | Canonical secrets store, SOPS client, rotation CLI |
 | `Scripts/core_helm/` | Authentik credential retrieval and password management |
 | `Scripts/gitops/` | Domain/IP prep of `gitops/` for FluxCD; renders out-of-band Secret manifests from the canonical store |
 | `Scripts/utils/` | Config loader, Ansible runner, path resolution, dict utilities |
@@ -115,9 +115,12 @@ clusters/production/          ← Flux reconciliation root (written by flux boot
   apps.yaml                   ← Kustomization CR (dependsOn infrastructure)
 
 gitops/                       ← Actual Helm manifests reconciled by Flux
-  infrastructure/             ← cilium, cert-manager, cert-manager-issuers, external-dns, nginx-ingress
+  infrastructure/             ← cilium, cert-manager, cert-manager-issuers, coredns, external-dns, nginx-ingress
   apps/                       ← authentik, headlamp, hubble-auth
-  .sops.yaml                  ← Encryption rules (Age recipients)
+  apps-extra/                 ← nextcloud, stalwart
+  apps/authentik_provisioner.py ← OIDC client provisioner (run by a Job)
+
+.sops.yaml                    ← Encryption rules (Age recipients) — repo root, gitignored
 ```
 
 Reconciliation order enforced via `dependsOn`: external-dns → cert-manager → Cilium → nginx-ingress → Authentik → Hubble/Headlamp.

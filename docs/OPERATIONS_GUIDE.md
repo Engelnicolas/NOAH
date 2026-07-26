@@ -178,7 +178,7 @@ spec:
 
 Authentik is the OIDC identity provider. The clients for Headlamp and Hubble
 are **provisioned automatically** during reconciliation by
-`Scripts/security/authentik_provisioner.py` (idempotent) — there is no manual
+`gitops/apps/authentik_provisioner.py` (idempotent) — there is no manual
 Authentik configuration step.
 
 **Headlamp** authenticates via OIDC:
@@ -262,7 +262,7 @@ git add gitops/ && git commit -m "apps: move authentik to sso." && git push
 
 **Back up regularly:**
 ```bash
-tar -czf noah-backup-$(date +%Y%m%d).tar.gz Age/ Secrets/ gitops/.sops.yaml
+tar -czf noah-backup-$(date +%Y%m%d).tar.gz Age/ Secrets/ .sops.yaml
 ```
 
 ---

@@ -7,7 +7,6 @@ Test script to simulate GitHub Workflow actions and validate project structure.
 import os
 import sys
 import subprocess
-import yaml
 from pathlib import Path
 
 
@@ -84,66 +83,6 @@ def test_ansible_playbooks():
             failures.append(playbook.name)
     if failures:
         assert False, f"Ansible syntax failures: {', '.join(failures)}"
-    
-        # Always succeed
-
-
-def test_workflow_yaml():
-    """Test workflow YAML file validation."""
-    print("\n📍 Testing workflow YAML files...")
-    
-    workflows_dir = Path(".github/workflows")
-    if not workflows_dir.exists():
-        print("⚠️  .github/workflows directory not found (skipping)")
-        return
-    
-    success = True
-    for workflow_file in workflows_dir.glob("*.yml"):
-        try:
-            with open(workflow_file, 'r') as f:
-                yaml.safe_load(f)
-            print(f"✅ {workflow_file.name} valid YAML")
-        except Exception as e:
-            print(f"❌ {workflow_file.name} YAML error: {e}")
-            success = False
-    
-        # Always succeed
-
-
-def check_documentation():
-    """Check documentation files."""
-    print("\n📍 Checking documentation...")
-    
-    docs_dir = Path("Docs")
-    if not docs_dir.exists():
-        print("⚠️  Docs directory not found")
-        return
-    
-    doc_count = 0
-    for doc_file in docs_dir.glob("*.md"):
-        try:
-            line_count = len(doc_file.read_text().splitlines())
-            print(f"✅ {doc_file.name} exists ({line_count} lines)")
-            doc_count += 1
-        except Exception as e:
-            print(f"❌ Error reading {doc_file.name}: {e}")
-    
-    print(f"📚 Found {doc_count} documentation files")
-        # Always succeed
-
-
-def check_directory_structure():
-    """Check required directory structure."""
-    print("\n📍 Checking directory structure...")
-    
-    required_dirs = ["Scripts", "Ansible", "flux-repo", "Tests", ".github/workflows"]
-    
-    for directory in required_dirs:
-        dir_path = Path(directory)
-        if dir_path.exists():
-            print(f"✅ {directory}/ directory exists")
-        else:
-            print(f"⚠️  {directory}/ directory missing")
     
         # Always succeed
 

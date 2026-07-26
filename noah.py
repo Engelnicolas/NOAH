@@ -503,7 +503,7 @@ def generate(ctx, service, namespace):
 
 @secrets.command()
 @click.option('--service', required=True, help='Service to validate (authentik)')
-@click.option('--namespace', default='identity', help='Kubernetes namespace')
+@click.option('--namespace', default='authentik', help='Kubernetes namespace')
 @click.option('--fix', is_flag=True, help='Automatically fix inconsistencies')
 @click.pass_context
 def validate(ctx, service, namespace, fix):
@@ -554,7 +554,7 @@ def apply_secrets(ctx, domain):
 
 @secrets.command()
 @click.option('--service', required=True, help='Service to regenerate secrets for')
-@click.option('--namespace', default='identity', help='Kubernetes namespace')
+@click.option('--namespace', default='authentik', help='Kubernetes namespace')
 @click.pass_context
 def regenerate(ctx, service, namespace):
     """Regenerate secrets for a service (preserves existing passwords)"""

@@ -15,7 +15,7 @@ import pytest
 
 
 class AuthentikDeploymentVerifier:
-    def __init__(self, namespace: str = "identity"):
+    def __init__(self, namespace: str = "authentik"):
         """Initialize the deployment verifier"""
         self.namespace = namespace
         self.results = {
@@ -87,11 +87,11 @@ class AuthentikDeploymentVerifier:
         print("\n📋 Checking namespace...")
         success, _ = self.run_kubectl(['get', 'namespace', self.namespace])
         if success:
-            self.print_status('OK', "Identity namespace exists")
+            self.print_status('OK', f"Namespace {self.namespace} exists")
             self.results['namespace'].append("exists: OK")
             return True
         else:
-            self.print_status('ERROR', "Identity namespace not found")
+            self.print_status('ERROR', f"Namespace {self.namespace} not found")
             self.results['namespace'].append("exists: ERROR")
             return False
     
@@ -395,7 +395,7 @@ class AuthentikDeploymentVerifier:
 
 @pytest.mark.cluster
 def test_authentik_deployment():
-    namespace = os.getenv('NOAH_AUTHENTIK_NAMESPACE', 'identity')
+    namespace = os.getenv('NOAH_AUTHENTIK_NAMESPACE', 'authentik')
     assert AuthentikDeploymentVerifier(namespace=namespace).run_all_checks()
 
 
@@ -404,8 +404,8 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Verify Authentik OIDC deployment')
-    parser.add_argument('--namespace', default='identity',
-                       help='Kubernetes namespace (default: identity)')
+    parser.add_argument('--namespace', default='authentik',
+                       help='Kubernetes namespace (default: authentik)')
     
     args = parser.parse_args()
     

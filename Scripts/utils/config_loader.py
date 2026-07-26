@@ -55,7 +55,7 @@ class ConfigLoader:
         self.service_configs = {
             'authentik': {
                 'default_subdomain': 'auth',
-                'namespace': self.get('KUBERNETES_NAMESPACE_IDENTITY', 'identity'),
+                'namespace': self.get('KUBERNETES_NAMESPACE_IDENTITY', 'authentik'),
                 'port': 80,
                 'https_port': 443,
                 'path': '/',
@@ -78,8 +78,8 @@ class ConfigLoader:
                 }
             },
             'nextcloud': {
-                'default_subdomain': 'cloud',
-                'namespace': 'applications',
+                'default_subdomain': 'nextcloud',
+                'namespace': 'nextcloud',
                 'port': 80,
                 'https_port': 443,
                 'path': '/',
@@ -89,7 +89,7 @@ class ConfigLoader:
             },
             'headlamp': {
                 'default_subdomain': 'headlamp',
-                'namespace': 'kube-system',
+                'namespace': 'headlamp',
                 'port': 80,
                 'https_port': 443,
                 'path': '/',
@@ -123,7 +123,7 @@ class ConfigLoader:
         
         # Fallback to legacy mapping
         namespace_map = {
-            'authentik': self.get('KUBERNETES_NAMESPACE_IDENTITY', 'identity'),
+            'authentik': self.get('KUBERNETES_NAMESPACE_IDENTITY', 'authentik'),
             'cilium': self.get('KUBERNETES_NAMESPACE_NETWORK', 'kube-system')
         }
         return namespace_map.get(service, 'default')

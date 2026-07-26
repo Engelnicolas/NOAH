@@ -22,6 +22,8 @@ NOAH cluster status utilities
 
 import click
 
+from Scripts.core_helm.cluster_manager import MONITORED_NAMESPACES
+
 
 def show_cluster_status(ctx):
     """Show status of all deployed services with fallback messaging."""
@@ -40,7 +42,7 @@ def show_cluster_status(ctx):
     # (We could enhance ClusterManager to return data, but here we add a quick pass.)
     # This is a lightweight enhancement: check two target namespaces for emptiness.
     try:
-        namespaces = ['identity', 'kube-system']
+        namespaces = list(MONITORED_NAMESPACES)
         # A crude detection: we cannot easily know printed lines without intercepting stdout; so we
         # re-query and print an explicit message if both namespaces lack deployments.
         empty_all = True
@@ -51,7 +53,7 @@ def show_cluster_status(ctx):
                 empty_all = False
                 break
         if empty_all:
-            click.echo("(No deployments found in monitored namespaces: identity, kube-system)")
+            click.echo(f"(No deployments found in monitored namespaces: {', '.join(MONITORED_NAMESPACES)})")
             click.echo("💡 If you just created the cluster, deploy components: python noah.py deploy all")
     except Exception:
         # Swallow secondary errors silently to avoid clutter

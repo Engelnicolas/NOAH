@@ -32,7 +32,7 @@ class HeadlampSSOTester:
 
     def __init__(self, domain='noah-infra.com'):
         self.domain = domain
-        self.namespace = 'kube-system'
+        self.namespace = 'headlamp'
         self.headlamp_url = f'https://headlamp.{domain}'
         self.authentik_url = f'https://auth.{domain}'
         self.results = {

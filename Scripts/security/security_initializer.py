@@ -103,7 +103,7 @@ def _create_fresh_config_enc(config_path: Path, age_key_file: Path, domain: str)
         'noah': {'version': '0.0.4', 'domain': domain},
         'kubernetes': {
             'cluster_name': 'noah-cluster',
-            'namespace_identity': 'identity',
+            'namespace_identity': 'authentik',
             'namespace_network': 'kube-system',
             'api_version': '1.32',
         },

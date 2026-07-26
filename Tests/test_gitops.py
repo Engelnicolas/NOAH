@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -186,6 +187,32 @@ class TestRenderAppSecretManifests:
         for ns in ("external-dns", "cert-manager", "authentik", "headlamp"):
             assert f"namespace: {ns}" in out
 
+    def test_apps_extra_secrets_land_in_their_own_namespaces(self, project_root):
+        out = self._render(project_root)
+        # Nextcloud and Stalwart each own a namespace; their OIDC provisioning
+        # Secrets instead live in authentik, where the provisioner Job runs.
+        for ns in ("nextcloud", "stalwart", "flux-system"):
+            assert f"namespace: {ns}" in out
+
+    def test_nextcloud_secret_material_is_rendered(self, project_root):
+        out = self._render(project_root)
+        for value in ("nc-admin-pass", "nc-db-pass", "nc-db-root-pass",
+                      "nc-redis-pass", "nc-oidc-secret"):
+            assert value in out, value
+
+    def test_stalwart_secret_material_is_rendered(self, project_root):
+        out = self._render(project_root)
+        for value in ("st-admin-pass", "st-oidc-secret", "fake-dkim-pem"):
+            assert value in out, value
+
+    def test_stalwart_dkim_txt_is_delivered_to_flux_system(self, project_root):
+        """The DKIM public TXT rides the out-of-band channel as stalwart-dns-vars,
+        because apps-extra substitutes ${DKIM_TXT_VALUE} from it at apply time."""
+        out = self._render(project_root)
+        assert "name: stalwart-dns-vars" in out
+        assert "DKIM_TXT_VALUE:" in out
+        assert "v=DKIM1; k=rsa; p=fake" in out
+
 
 # ---------------------------------------------------------------------------
 # Unit tests — setup_gitops() end-to-end (in-place; SOPS + store mocked)
@@ -313,3 +340,52 @@ def test_sops_encrypt_integration(project_root, tmp_path):
     content = enc_file.read_text()
     assert "mysecret" not in content
     assert "ENC[" in content
+
+
+# ---------------------------------------------------------------------------
+# Structural checks on the committed apps-extra tree (Nextcloud + Stalwart).
+# These read the real repository, so they catch an app that was added to the
+# manifests but never wired into the Kustomization graph.
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+APPS_EXTRA = ('nextcloud', 'stalwart')
+
+
+def _load_yaml(path):
+    return yaml.safe_load(path.read_text())
+
+
+class TestAppsExtraWiring:
+    def test_kustomization_lists_every_app_directory(self):
+        listed = _load_yaml(REPO_ROOT / 'gitops/apps-extra/kustomization.yaml')['resources']
+        on_disk = sorted(
+            p.name for p in (REPO_ROOT / 'gitops/apps-extra').iterdir()
+            if p.is_dir() and not p.name.startswith('.')
+        )
+        assert sorted(listed) == on_disk
+
+    @pytest.mark.parametrize('app', APPS_EXTRA)
+    def test_app_is_listed(self, app):
+        listed = _load_yaml(REPO_ROOT / 'gitops/apps-extra/kustomization.yaml')['resources']
+        assert app in listed
+
+    @pytest.mark.parametrize('app', APPS_EXTRA)
+    def test_app_declares_its_own_namespace(self, app):
+        ns = _load_yaml(REPO_ROOT / f'gitops/apps-extra/{app}/namespace.yaml')
+        assert ns['kind'] == 'Namespace'
+        assert ns['metadata']['name'] == app
+
+    def test_flux_reconciles_apps_extra_after_apps(self):
+        """apps-extra must not race ahead of the Authentik OIDC clients it needs."""
+        k = _load_yaml(REPO_ROOT / 'clusters/production/apps-extra.yaml')
+        assert k['spec']['path'] == './gitops/apps-extra'
+        assert 'apps' in [d['name'] for d in k['spec']['dependsOn']]
+
+    def test_stalwart_dns_records_consume_the_substituted_dkim_value(self):
+        raw = (REPO_ROOT / 'gitops/apps-extra/stalwart/dns-records.yaml').read_text()
+        assert '${DKIM_TXT_VALUE}' in raw
+        substitute_from = _load_yaml(
+            REPO_ROOT / 'clusters/production/apps-extra.yaml'
+        )['spec']['postBuild']['substituteFrom']
+        assert 'stalwart-dns-vars' in [s['name'] for s in substitute_from]

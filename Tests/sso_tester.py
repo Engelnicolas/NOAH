@@ -91,7 +91,7 @@ class SSONetworkValidator:
         print("\n3. Checking required namespaces...")
         all_good = True
         
-        for ns in ['kube-system', 'identity']:
+        for ns in ["kube-system", "authentik"]:
             success, _ = self.run_kubectl(f"get namespace {ns}")
             if success:
                 self.print_status('OK', f"Namespace {ns} exists")
@@ -143,20 +143,20 @@ class SSONetworkValidator:
         print("\n5. Checking Authentik SSO...")
         
         # Check server deployment
-        success, _ = self.run_kubectl("get deployment authentik-server -n identity")
+        success, _ = self.run_kubectl("get deployment authentik-server -n authentik")
         if success:
             self.print_status('OK', "Authentik server deployment found")
-            success, server_ready = self.run_kubectl("get deployment authentik-server -n identity -o jsonpath='{.status.readyReplicas}'")
+            success, server_ready = self.run_kubectl("get deployment authentik-server -n authentik -o jsonpath='{.status.readyReplicas}'")
             server_ready = server_ready or "0"
         else:
             self.print_status('ERROR', "Authentik server deployment not found")
             server_ready = "0"
         
         # Check worker deployment
-        success, _ = self.run_kubectl("get deployment authentik-worker -n identity")
+        success, _ = self.run_kubectl("get deployment authentik-worker -n authentik")
         if success:
             self.print_status('OK', "Authentik worker deployment found")
-            success, worker_ready = self.run_kubectl("get deployment authentik-worker -n identity -o jsonpath='{.status.readyReplicas}'")
+            success, worker_ready = self.run_kubectl("get deployment authentik-worker -n authentik -o jsonpath='{.status.readyReplicas}'")
             worker_ready = worker_ready or "0"
         else:
             self.print_status('ERROR', "Authentik worker deployment not found")
@@ -167,7 +167,7 @@ class SSONetworkValidator:
             self.results['authentik'].append("server: 1/1 OK, worker: 1/1 OK")
             
             # Test Authentik API
-            success, output = self.run_kubectl("exec -n identity deployment/authentik-server -- python -c \"import urllib.request; response = urllib.request.urlopen('http://localhost:9000/-/health/ready/'); print(f'STATUS:{response.status}')\"")
+            success, output = self.run_kubectl("exec -n authentik deployment/authentik-server -- python -c \"import urllib.request; response = urllib.request.urlopen('http://localhost:9000/-/health/ready/'); print(f'STATUS:{response.status}')\"")
             if success and ("STATUS:200" in output or "STATUS:204" in output):
                 self.print_status('OK', "Authentik API is responding")
                 self.results['authentik'].append("api: OK")
@@ -185,7 +185,7 @@ class SSONetworkValidator:
         """Check network policies"""
         print("\n7. Checking network policies...")
         
-        success, output = self.run_kubectl("get networkpolicies -n identity --no-headers")
+        success, output = self.run_kubectl("get networkpolicies -n authentik --no-headers")
         if success and output:
             policies = output.strip().split('\n')
             policy_count = len([p for p in policies if p.strip()])
@@ -199,7 +199,7 @@ class SSONetworkValidator:
                     self.results['network_policies'].append(f"policy: {policy_name}")
             return True
         else:
-            self.print_status('WARN', "No network policies found in identity namespace")
+            self.print_status('WARN', "No network policies found in authentik namespace")
             self.results['network_policies'].append("count: 0 WARN")
             return False
     
@@ -209,7 +209,7 @@ class SSONetworkValidator:
         all_good = True
         
         # Test Authentik DNS resolution
-        success, output = self.run_kubectl("run test-dns --image=busybox --rm -i --restart=Never -- nslookup authentik-server.identity.svc.cluster.local")
+        success, output = self.run_kubectl("run test-dns --image=busybox --rm -i --restart=Never -- nslookup authentik-server.authentik.svc.cluster.local")
         if success and "Address:" in output:
             self.print_status('OK', "Authentik DNS resolution works")
             self.results['connectivity'].append("authentik-dns: OK")
@@ -219,7 +219,7 @@ class SSONetworkValidator:
             all_good = False
         
         # Test Authentik DNS resolution
-        success, output = self.run_kubectl("run test-dns --image=busybox --rm -i --restart=Never -- nslookup authentik-server.identity.svc.cluster.local")
+        success, output = self.run_kubectl("run test-dns --image=busybox --rm -i --restart=Never -- nslookup authentik-server.authentik.svc.cluster.local")
         if success and "Address:" in output:
             self.print_status('OK', "Authentik DNS resolution works")
             self.results['connectivity'].append("authentik-dns: OK")
@@ -235,13 +235,13 @@ class SSONetworkValidator:
         print("\n9. Testing Authentik internal connectivity...")
         
         # Test PostgreSQL connectivity by checking if Authentik can connect to DB
-        success, output = self.run_kubectl("exec -n identity deployment/authentik-server -- python -c \"import socket; sock = socket.socket(); sock.settimeout(5); result = sock.connect_ex(('authentik-postgresql', 5432)); sock.close(); print('CONNECTED' if result == 0 else 'FAILED')\"")
+        success, output = self.run_kubectl("exec -n authentik deployment/authentik-server -- python -c \"import socket; sock = socket.socket(); sock.settimeout(5); result = sock.connect_ex(('authentik-postgresql', 5432)); sock.close(); print('CONNECTED' if result == 0 else 'FAILED')\"")
         if success and "CONNECTED" in output:
             self.print_status('OK', "PostgreSQL is reachable from Authentik")
             self.results['connectivity'].append("postgresql-port: OK")
         else:
             # Fallback: Check if PostgreSQL pod is running
-            pg_success, _ = self.run_kubectl("get pods -n identity -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].status.phase}'")
+            pg_success, _ = self.run_kubectl("get pods -n authentik -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].status.phase}'")
             if pg_success:
                 self.print_status('OK', "PostgreSQL pod is running (connectivity assumed)")
                 self.results['connectivity'].append("postgresql-port: OK")
@@ -250,14 +250,14 @@ class SSONetworkValidator:
                 self.results['connectivity'].append("postgresql-port: WARN")
             
         # Test Redis connectivity 
-        success, output = self.run_kubectl("exec -n identity deployment/authentik-server -- python -c \"import socket; sock = socket.socket(); sock.settimeout(5); result = sock.connect_ex(('authentik-redis-master', 6379)); sock.close(); print('CONNECTED' if result == 0 else 'FAILED')\"")
+        success, output = self.run_kubectl("exec -n authentik deployment/authentik-server -- python -c \"import socket; sock = socket.socket(); sock.settimeout(5); result = sock.connect_ex(('authentik-redis-master', 6379)); sock.close(); print('CONNECTED' if result == 0 else 'FAILED')\"")
         if success and "CONNECTED" in output:
             self.print_status('OK', "Redis is reachable from Authentik")
             self.results['connectivity'].append("redis-port: OK")
             return True
         else:
             # Fallback: Check if Redis pod is running
-            redis_success, _ = self.run_kubectl("get pods -n identity -l app.kubernetes.io/name=redis -o jsonpath='{.items[0].status.phase}'")
+            redis_success, _ = self.run_kubectl("get pods -n authentik -l app.kubernetes.io/name=redis -o jsonpath='{.items[0].status.phase}'")
             if redis_success:
                 self.print_status('OK', "Redis pod is running (connectivity assumed)")
                 self.results['connectivity'].append("redis-port: OK")
@@ -363,7 +363,7 @@ class SSOTester:
         # Check if ingress exists for the domain
         try:
             result = subprocess.run(
-                ['kubectl', 'get', 'ingress', 'authentik', '-n', 'identity', '-o', 'jsonpath={.spec.rules[0].host}'],
+                ['kubectl', 'get', 'ingress', 'authentik', '-n', 'authentik', '-o', 'jsonpath={.spec.rules[0].host}'],
                 capture_output=True, text=True, timeout=10
             )
             if result.returncode == 0 and result.stdout.strip():
@@ -375,7 +375,7 @@ class SSOTester:
         from Scripts.core_helm.cluster_manager import ClusterManager
         cm = ClusterManager(self.config)
         
-        endpoint = cm.get_service_endpoint('authentik-server', 'identity')
+        endpoint = cm.get_service_endpoint('authentik-server', 'authentik')
         if endpoint:
             return f"http://{endpoint}"  # Use HTTP for internal service
         return None
@@ -418,18 +418,18 @@ class SSOTester:
         # Test Authentik API internally (more reliable for cluster testing)
         try:
             # Test via kubectl exec for internal connectivity
-            success, output = self.network_validator.run_kubectl("exec -n identity deployment/authentik-server -- python -c \"import urllib.request; import json; response = urllib.request.urlopen('http://localhost:9000/api/v3/root/config/'); data = response.read(); print('API_RESPONSE_OK' if response.status == 200 else 'API_RESPONSE_FAIL')\"")
+            success, output = self.network_validator.run_kubectl("exec -n authentik deployment/authentik-server -- python -c \"import urllib.request; import json; response = urllib.request.urlopen('http://localhost:9000/api/v3/root/config/'); data = response.read(); print('API_RESPONSE_OK' if response.status == 200 else 'API_RESPONSE_FAIL')\"")
             
             if success and "API_RESPONSE_OK" in output:
                 print("✅ Authentik API is accessible internally")
                 
                 # Test Authentik configuration
-                success2, output2 = self.network_validator.run_kubectl("exec -n identity deployment/authentik-server -- python -c \"import urllib.request; response = urllib.request.urlopen('http://localhost:9000/-/health/ready/'); print(f'HEALTH:{response.status}')\"")
+                success2, output2 = self.network_validator.run_kubectl("exec -n authentik deployment/authentik-server -- python -c \"import urllib.request; response = urllib.request.urlopen('http://localhost:9000/-/health/ready/'); print(f'HEALTH:{response.status}')\"")
                 if success2 and ("HEALTH:200" in output2 or "HEALTH:204" in output2):
                     print("✅ Authentik health check passed")
                     
                     # Check if admin user exists (indicates proper setup)
-                    success3, output3 = self.network_validator.run_kubectl("exec -n identity deployment/authentik-server -- python -c \"import os; print('BOOTSTRAP_CONFIG_OK' if os.getenv('AUTHENTIK_BOOTSTRAP_PASSWORD') else 'NO_BOOTSTRAP')\"")
+                    success3, output3 = self.network_validator.run_kubectl("exec -n authentik deployment/authentik-server -- python -c \"import os; print('BOOTSTRAP_CONFIG_OK' if os.getenv('AUTHENTIK_BOOTSTRAP_PASSWORD') else 'NO_BOOTSTRAP')\"")
                     if success3 and "BOOTSTRAP_CONFIG_OK" in output3:
                         print("✅ Authentik bootstrap configuration found")
                         print("✅ SSO system is properly configured and responsive")

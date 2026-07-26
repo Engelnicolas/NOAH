@@ -126,26 +126,19 @@ class NoahSecurityManager:
     # SERVICE-SPECIFIC SECRETS
     # ================================
     
-    def generate_service_secrets(self, service_name):
-        """Generate or retrieve deterministic secrets for a service.
+    def _service_generators(self, service_name) -> Dict[str, Callable[[], str]]:
+        """Per-service secret keys and the generator for each.
 
-        Secrets are now sourced from a canonical encrypted store to ensure
-        consistent values across Helm, Ansible, and any regeneration calls.
+        Single source of truth shared by generate_service_secrets() and
+        rotate_service_secrets_canonical(), so a service can never end up
+        generatable but silently not rotatable.
 
         Args:
-            service_name: Service name ('authentik', 'cilium', etc.)
+            service_name: Service name ('authentik', 'nextcloud', ...)
 
         Returns:
-            dict of service-specific secrets (stable once created)
+            mapping key -> generator, empty for an unknown service
         """
-        try:
-            from Scripts.security.canonical_store import get_canonical_store
-            store = get_canonical_store(self.project_root)
-        except Exception as e:
-            print(f"[WARNING] Canonical secrets store unavailable ({e}) - falling back to ephemeral generation")
-            store = None
-
-        # Define required secrets + generator per service
         required: Dict[str, Callable[[], str]] = {}
         if service_name == 'authentik':
             required = {
@@ -200,7 +193,31 @@ class NoahSecurityManager:
                 'api_token': lambda: '',
             }
         else:
-            # Unknown service -> return empty (extensibility point)
+            # Unknown service -> no keys (extensibility point)
+            return {}
+        return required
+
+    def generate_service_secrets(self, service_name):
+        """Generate or retrieve deterministic secrets for a service.
+
+        Secrets are now sourced from a canonical encrypted store to ensure
+        consistent values across Helm, Ansible, and any regeneration calls.
+
+        Args:
+            service_name: Service name ('authentik', 'cilium', etc.)
+
+        Returns:
+            dict of service-specific secrets (stable once created)
+        """
+        try:
+            from Scripts.security.canonical_store import get_canonical_store
+            store = get_canonical_store(self.project_root)
+        except Exception as e:
+            print(f"[WARNING] Canonical secrets store unavailable ({e}) - falling back to ephemeral generation")
+            store = None
+
+        required = self._service_generators(service_name)
+        if not required:
             return {}
 
         if store:
@@ -235,33 +252,10 @@ class NoahSecurityManager:
             print(f"[WARNING] No existing secrets for {service_name}; generating instead of rotating")
             return self.generate_service_secrets(service_name)
 
-        # Use normal generator definitions to reconstruct required map
-        self.generate_service_secrets(service_name)  # This will load existing; call again for generator map
-        # Build generator mapping again (inefficient but acceptable for small sets)
-        gen_mapping: Dict[str, Callable[[], str]] = {}
-        if service_name == 'authentik':
-            gen_mapping = {
-                'secret_key': lambda: self.generate_secure_password(50, include_special=False),
-                'bootstrap_password': lambda: self.generate_secure_password(24),
-                'bootstrap_token': lambda: self.generate_secure_password(50, include_special=False),
-                'postgresql_password': lambda: self.generate_secure_password(32),
-                'redis_password': lambda: self.generate_secure_password(32),
-                'oidc_client_secret': lambda: self.generate_secure_password(32, include_special=False),
-                'jwt_signing_key': lambda: self.generate_secure_password(64, include_special=False),
-                'session_secret': lambda: self.generate_secure_password(32),
-                'email_password': lambda: self.generate_secure_password(24)
-            }
-        elif service_name == 'cilium':
-            gen_mapping = {
-                'hubble_tls_key': lambda: self.generate_secure_password(32, include_special=False),
-                'cluster_mesh_key': lambda: self.generate_secure_password(32, include_special=False),
-                'ca_key_passphrase': lambda: self.generate_secure_password(24)
-            }
-        elif service_name == 'headlamp':
-            gen_mapping = {
-                'oidc_client_id': lambda: 'headlamp',  # Fixed client ID for Authentik provider
-                'oidc_client_secret': lambda: self.generate_secure_password(40, include_special=False),
-            }
+        # Ensure the service exists in the store, then reuse the single
+        # generator definition so every generatable service is rotatable.
+        self.generate_service_secrets(service_name)
+        gen_mapping = self._service_generators(service_name)
 
         targets = rotate_keys or list(gen_mapping.keys())
         rotated_count = 0
@@ -297,7 +291,7 @@ class NoahSecurityManager:
     # KUBERNETES SECRET MANAGEMENT
     # ================================
     
-    def create_kubernetes_secret_yaml(self, service_name, namespace="identity"):
+    def create_kubernetes_secret_yaml(self, service_name, namespace="authentik"):
         """Create Kubernetes secret YAML with secure passwords
         
         Args:
@@ -337,7 +331,7 @@ class NoahSecurityManager:
         
         return secret_yaml
     
-    def save_kubernetes_secret(self, service_name, namespace="identity"):
+    def save_kubernetes_secret(self, service_name, namespace="authentik"):
         """Save Kubernetes secret YAML to file
         
         Args:

@@ -25,6 +25,10 @@ import sys
 from pathlib import Path
 from typing import Any, Optional, List
 
+# Namespaces surfaced by `noah status`: the app namespaces created under
+# gitops/apps and gitops/apps-extra, plus kube-system for the CNI and Headlamp.
+MONITORED_NAMESPACES = ('authentik', 'headlamp', 'nextcloud', 'stalwart', 'kube-system')
+
 # Optional imports with graceful fallbacks
 client: Optional[Any] = None
 config: Optional[Any] = None
@@ -186,7 +190,7 @@ class ClusterManager:
 
         Sections:
           • Cluster Summary (context, nodes, version)
-          • Namespace Deployments (identity, kube-system)
+          • Namespace Deployments (see MONITORED_NAMESPACES)
           • Pod Health Totals
         Falls back to 'kubectl' if Python client not initialized.
         """
@@ -214,7 +218,7 @@ class ClusterManager:
             print(f"  (Cluster summary unavailable: {e})")
 
         # --- Namespace deployments ---
-        namespaces = ['identity', 'kube-system']
+        namespaces = list(MONITORED_NAMESPACES)
         total_ready = 0
         total_replicas = 0
         for ns in namespaces:
@@ -272,7 +276,7 @@ class ClusterManager:
             print(f"  Nodes:      {node_count}")
             print(f"  Kubelets:   {', '.join(sorted(versions)) if versions else 'n/a'}")
             # Namespaces quick list
-            for ns in ['identity', 'kube-system']:
+            for ns in MONITORED_NAMESPACES:
                 print(f"\nNamespace: {ns}")
                 dep_proc = subprocess.run(['kubectl', 'get', 'deploy', '-n', ns, '-o', 'json'], capture_output=True, text=True)
                 if dep_proc.returncode != 0:

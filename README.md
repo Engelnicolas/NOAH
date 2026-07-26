@@ -273,6 +273,6 @@ you must also offer those users the corresponding source code.
 
 ---
 
-Made with ❤️ by [![me](https://www.nicolasengel.fr)].
+Made with ❤️ by [me](https://www.nicolasengel.fr).
 
 </div>

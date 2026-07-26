@@ -95,39 +95,44 @@ class AuthentikDeploymentVerifier:
             self.results['namespace'].append("exists: ERROR")
             return False
     
+    # Secrets delivered out-of-band by Scripts/gitops/gitops_init.py. There is
+    # no single flat `authentik-secret`: the Helm values (secret_key,
+    # bootstrap_password, postgres passwords) ride in authentik-values under a
+    # single values.yaml key consumed via HelmRelease valuesFrom, and the
+    # provisioner token lives in its own Secret.
+    EXPECTED_SECRETS = {
+        'authentik-values': 'values.yaml',
+        'authentik-bootstrap-token': 'AUTHENTIK_TOKEN',
+    }
+
     def check_secrets(self) -> bool:
-        """Check if required secrets exist (standardized name authentik-secret)"""
+        """Check the out-of-band Secrets Authentik depends on."""
         print("\n🔐 Checking secrets...")
-        success, _ = self.run_kubectl(['get', 'secret', 'authentik-secret', '-n', self.namespace])
-        if not success:
-            self.print_status('ERROR', "Authentik secrets not found")
-            self.results['secrets'].append("authentik-secret: ERROR")
-            return False
-            
-        self.print_status('OK', "Authentik secrets found")
-        
-        # Check specific secret keys
-        print("   Checking secret keys...")
-        required_keys = [
-            'secret-key', 'bootstrap-password', 'postgresql-password', 
-            'redis-password', 'oidc-client-secret', 'jwt-signing-key'
-        ]
-        
-        all_keys_present = True
-        for key in required_keys:
-            success, _ = self.run_kubectl([
-                'get', 'secret', 'authentik-secret', '-n', self.namespace,
+
+        all_present = True
+        for secret_name, key in self.EXPECTED_SECRETS.items():
+            success, _ = self.run_kubectl(['get', 'secret', secret_name, '-n', self.namespace])
+            if not success:
+                self.print_status('ERROR', f"{secret_name} not found")
+                self.results['secrets'].append(f"{secret_name}: ERROR")
+                all_present = False
+                continue
+
+            # jsonpath on a missing key yields an empty string, not an error,
+            # so the presence of the key must be checked on the output itself.
+            key_success, value = self.run_kubectl([
+                'get', 'secret', secret_name, '-n', self.namespace,
                 '-o', f'jsonpath={{.data.{key}}}'
             ])
-            if success:
-                self.print_status('OK', f"   {key}")
-                self.results['secrets'].append(f"{key}: OK")
+            if key_success and value:
+                self.print_status('OK', f"{secret_name} (key {key})")
+                self.results['secrets'].append(f"{secret_name}.{key}: OK")
             else:
-                self.print_status('ERROR', f"   {key} missing")
-                self.results['secrets'].append(f"{key}: ERROR")
-                all_keys_present = False
-                
-        return all_keys_present
+                self.print_status('ERROR', f"{secret_name} missing key {key}")
+                self.results['secrets'].append(f"{secret_name}.{key}: ERROR")
+                all_present = False
+
+        return all_present
     
     def check_deployments(self) -> bool:
         """Check deployment status"""
@@ -177,16 +182,24 @@ class AuthentikDeploymentVerifier:
         """Check persistent volume claims"""
         print("\n💾 Checking persistent volumes...")
         
+        # Created by the bundled postgresql / redis subcharts, both enabled in
+        # the HelmRelease.
         expected_pvcs = [
-            'authentik-media',
             'data-authentik-postgresql-0',
             'redis-data-authentik-redis-master-0'
         ]
-        
+        # NOAH sets no persistence values, so whether a media PVC exists is the
+        # chart's decision — report it, but do not fail on it.
+        optional_pvcs = ['authentik-media']
+
         all_bound = True
-        for pvc in expected_pvcs:
+        for pvc in expected_pvcs + optional_pvcs:
             success, _ = self.run_kubectl(['get', 'pvc', pvc, '-n', self.namespace])
             if not success:
+                if pvc in optional_pvcs:
+                    self.print_status('INFO', f"{pvc} not present (optional)")
+                    self.results['pvcs'].append(f"{pvc}: SKIPPED")
+                    continue
                 self.print_status('ERROR', f"{pvc} not found")
                 self.results['pvcs'].append(f"{pvc}: ERROR")
                 all_bound = False

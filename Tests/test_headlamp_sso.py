@@ -391,7 +391,16 @@ class HeadlampSSOTester:
 # default run; use `pytest -m cluster` against a live cluster.
 # ---------------------------------------------------------------------------
 
-_CLUSTER_CHECKS = sorted(n for n in vars(HeadlampSSOTester) if n.startswith('test_'))
+# Checks that inspect the repository rather than the cluster, so they run in
+# the default suite.
+_CLUSTER_FREE = {'test_authentik_provisioner_import'}
+
+
+def _params(cls):
+    return [
+        pytest.param(name, marks=() if name in _CLUSTER_FREE else (pytest.mark.cluster,))
+        for name in sorted(n for n in vars(cls) if n.startswith('test_'))
+    ]
 
 
 @pytest.fixture(scope='module')
@@ -399,8 +408,7 @@ def headlamp_tester():
     return HeadlampSSOTester(domain=os.getenv('NOAH_DOMAIN', 'noah-infra.com'))
 
 
-@pytest.mark.cluster
-@pytest.mark.parametrize('check', _CLUSTER_CHECKS)
+@pytest.mark.parametrize('check', _params(HeadlampSSOTester))
 def test_headlamp_sso_check(headlamp_tester, check):
     assert getattr(headlamp_tester, check)(), f'{check} failed'
 

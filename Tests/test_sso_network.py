@@ -124,22 +124,26 @@ class SSONetworkTester:
         return False
 
     def test_headlamp_secret_has_provisioned_client_id(self) -> bool:
-        """Check that the Kubernetes headlamp-secret has a non-empty OIDC client ID."""
-        self._status('INFO', 'Checking headlamp-secret OIDC client ID…')
+        """Check that the headlamp-oidc Secret carries a non-empty OIDC client ID.
+
+        Rendered out-of-band into the headlamp namespace with env-format keys,
+        because the chart consumes it via envFrom (config.oidc.externalSecret).
+        """
+        self._status('INFO', 'Checking headlamp-oidc OIDC client ID…')
         ok, output = self._kubectl(
-            "get secret headlamp-secret -n kube-system "
-            "-o jsonpath='{.data.oidc-client-id}' 2>/dev/null"
+            "get secret headlamp-oidc -n headlamp "
+            "-o jsonpath='{.data.OIDC_CLIENT_ID}' 2>/dev/null"
         )
         if ok and output:
             import base64
             try:
                 client_id = base64.b64decode(output).decode()
-                self._status('OK', f'headlamp-secret oidc-client-id = "{client_id}"')
+                self._status('OK', f'headlamp-oidc OIDC_CLIENT_ID = "{client_id}"')
                 self.results['headlamp'].append(('secret_client_id', True, client_id))
                 return True
             except Exception:
                 pass
-        self._status('WARN', 'headlamp-secret not found or client ID empty')
+        self._status('WARN', 'headlamp-oidc not found or client ID empty')
         self.results['headlamp'].append(('secret_client_id', False, 'not found'))
         return False
 
@@ -375,7 +379,16 @@ class SSONetworkTester:
 # default run; use `pytest -m cluster` against a live cluster.
 # ---------------------------------------------------------------------------
 
-_CLUSTER_CHECKS = sorted(n for n in vars(SSONetworkTester) if n.startswith('test_'))
+# Checks that inspect the repository rather than the cluster, so they run in
+# the default suite.
+_CLUSTER_FREE = {'test_provisioner_oidc_app_methods', 'test_cloudflare_wizard_import'}
+
+
+def _params(cls):
+    return [
+        pytest.param(name, marks=() if name in _CLUSTER_FREE else (pytest.mark.cluster,))
+        for name in sorted(n for n in vars(cls) if n.startswith('test_'))
+    ]
 
 
 @pytest.fixture(scope='module')
@@ -383,8 +396,7 @@ def sso_network_tester():
     return SSONetworkTester(domain=os.getenv('NOAH_DOMAIN', 'noah-infra.com'))
 
 
-@pytest.mark.cluster
-@pytest.mark.parametrize('check', _CLUSTER_CHECKS)
+@pytest.mark.parametrize('check', _params(SSONetworkTester))
 def test_sso_network_check(sso_network_tester, check):
     assert getattr(sso_network_tester, check)(), f'{check} failed'
 

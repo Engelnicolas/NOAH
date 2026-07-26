@@ -195,16 +195,6 @@ def _is_sops_encrypted(path: Path) -> bool:
     return text.startswith("sops:") or "\nsops:" in text
 
 
-def _sops_decrypt(path: Path, age_key_file: Path) -> None:
-    env = {**os.environ, "SOPS_AGE_KEY_FILE": str(age_key_file)}
-    result = subprocess.run(
-        ["sops", "--decrypt", "--in-place", str(path)],
-        env=env, capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"SOPS decryption failed for {path}:\n{result.stderr}")
-
-
 # Plaintext templates for every *.enc.yaml file the gitops/ tree owns. Used to
 # regenerate a file when SOPS cannot decrypt it because the recipient on the
 # envelope no longer matches any locally available age identity (e.g. the

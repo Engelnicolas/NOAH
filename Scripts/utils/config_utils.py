@@ -143,21 +143,6 @@ def generate_helm_values(service, output=None, custom_values=None, ctx=None):
         return None
 
 
-def validate_service_configuration(service, ctx=None):
-    """
-    Validate service configuration and return issues.
-    
-    Args:
-        service (str): Service name
-        ctx: Click context (optional)
-    
-    Returns:
-        list: List of configuration issues
-    """
-    loader = ConfigLoader()
-    return loader.validate_service_configuration(service)
-
-
 def get_service_fqdn(service, component=None):
     """
     Get fully qualified domain name for a service.
@@ -171,22 +156,6 @@ def get_service_fqdn(service, component=None):
     """
     loader = ConfigLoader()
     return loader.get_service_fqdn(service, component)
-
-
-def get_all_service_fqdns():
-    """
-    Get FQDNs for all configured services.
-    
-    Returns:
-        dict: Dictionary mapping service names to FQDNs
-    """
-    loader = ConfigLoader()
-    fqdns = {}
-    
-    for service in loader.service_configs.keys():
-        fqdns[service] = loader.get_service_fqdn(service)
-    
-    return fqdns
 
 
 def override_service_configuration(service, domain=None, subdomain=None, namespace=None, ctx=None):
@@ -229,129 +198,4 @@ def override_service_configuration(service, domain=None, subdomain=None, namespa
     return loader.get_service_config(service)
 
 
-def export_all_helm_values(output_dir='./generated-values', services=None):
-    """
-    Export Helm values for all or specified services.
-    
-    Args:
-        output_dir (str): Output directory for values files
-        services (list, optional): List of services to export (default: all)
-    
-    Returns:
-        dict: Dictionary mapping service names to export results
-    """
-    loader = ConfigLoader()
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    
-    target_services = services if services else loader.service_configs.keys()
-    results = {}
-    
-    for service in target_services:
-        try:
-            values_file = output_path / f"{service}-values.yaml"
-            loader.export_helm_values_file(service, values_file)
-            results[service] = {
-                'success': True,
-                'file': str(values_file),
-                'message': f"Generated values for {service}"
-            }
-            click.echo(f"✅ Generated values for {service}")
-        except Exception as e:
-            results[service] = {
-                'success': False,
-                'error': str(e),
-                'message': f"Failed to generate values for {service}"
-            }
-            click.echo(f"❌ Failed to generate values for {service}: {e}", err=True)
-    
-    return results
-
-
-def get_ingress_configuration(service):
-    """
-    Get ingress configuration for a service.
-    
-    Args:
-        service (str): Service name
-    
-    Returns:
-        dict: Ingress configuration
-    """
-    loader = ConfigLoader()
-    return loader.get_service_ingress_config(service)
-
-
-def list_available_services():
-    """
-    List all available services with their configuration status.
-    
-    Returns:
-        dict: Dictionary with service information
-    """
-    loader = ConfigLoader()
-    services_info = {}
-    
-    for service in loader.service_configs.keys():
-        config = loader.get_service_config(service)
-        services_info[service] = {
-            'fqdn': config['fqdn'],
-            'namespace': config['namespace'],
-            'ingress_enabled': config['ingress']['enabled'],
-            'tls_enabled': config.get('tls_enabled', False),
-            'default_subdomain': config.get('default_subdomain', service)
-        }
-    
-    return services_info
-
-
 # Click command decorators for CLI integration
-def config_show_command():
-    """Click command decorator for show configuration"""
-    @click.option('--service', help='Show configuration for specific service')
-    @click.option('--format', type=click.Choice(['yaml', 'json', 'env']), default='yaml', help='Output format')
-    @click.pass_context
-    def show(ctx, service, format):
-        """Show current configuration"""
-        show_configuration(service, format, ctx)
-    return show
-
-
-def config_domains_command():
-    """Click command decorator for domains listing"""
-    @click.pass_context
-    def domains(ctx):
-        """List all service domains and FQDNs"""
-        show_domains(ctx)
-    return domains
-
-
-def config_helm_values_command():
-    """Click command decorator for Helm values generation"""
-    @click.argument('service')
-    @click.option('--output', '-o', help='Output file path')
-    @click.option('--custom-values', help='Custom values YAML file to merge')
-    @click.pass_context
-    def helm_values(ctx, service, output, custom_values):
-        """Generate Helm values for a service with dynamic domains"""
-        generate_helm_values(service, output, custom_values, ctx)
-    return helm_values
-
-
-def config_override_command():
-    """Click command decorator for configuration overrides"""
-    @click.argument('service')
-    @click.option('--domain', help='Override service domain')
-    @click.option('--subdomain', help='Override service subdomain') 
-    @click.option('--namespace', help='Override service namespace')
-    @click.pass_context
-    def override(ctx, service, domain, subdomain, namespace):
-        """Set service-specific configuration overrides"""
-        override_service_configuration(service, domain, subdomain, namespace, ctx)
-        
-        # Show updated configuration
-        config_data = ConfigLoader().get_service_config(service)
-        click.echo(f"\nUpdated configuration for {service}:")
-        click.echo(f"  FQDN: {config_data['fqdn']}")
-        click.echo(f"  Namespace: {config_data['namespace']}")
-    return override

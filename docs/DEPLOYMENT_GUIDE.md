@@ -192,9 +192,17 @@ kubectl logs -n external-dns -l app.kubernetes.io/name=external-dns
 nslookup auth.your-domain.com
 ```
 
-**DNS policy:** the default is `upsert-only` (creates/updates, never deletes).
-external-dns tracks ownership with a TXT registry (`txtOwnerId` derived from
-the domain), so multiple deployments can share one zone without interfering.
+> [!WARNING]
+> **DNS policy is `sync`, and it deletes.** external-dns runs with
+> `policy: sync` and `txtOwnerId: noah`, both hardcoded in
+> `gitops/infrastructure/external-dns/helmrelease.yaml`. It tracks ownership
+> with a TXT registry and removes records it owns once the matching Ingress or
+> DNSEndpoint disappears.
+>
+> Because the owner ID is the fixed string `noah` rather than a per-deployment
+> value, **two NOAH clusters pointed at the same Cloudflare zone would claim
+> each other's records and delete them.** Give each deployment its own zone, or
+> change `txtOwnerId` before the second one reconciles.
 
 ### Option B — Manual DNS
 

@@ -31,7 +31,6 @@ import os
 import subprocess
 import secrets
 import string
-import base64
 import yaml
 from pathlib import Path
 from typing import Dict, Optional, Callable
@@ -290,66 +289,6 @@ class NoahSecurityManager:
     # ================================
     # KUBERNETES SECRET MANAGEMENT
     # ================================
-    
-    def create_kubernetes_secret_yaml(self, service_name, namespace="authentik"):
-        """Create Kubernetes secret YAML with secure passwords
-        
-        Args:
-            service_name: Service name
-            namespace: Kubernetes namespace
-            
-        Returns:
-            Kubernetes Secret YAML dictionary
-        """
-        secrets = self.generate_service_secrets(service_name)
-        
-        # Convert to base64 for Kubernetes secret
-        secret_data = {}
-        for key, value in secrets.items():
-            secret_data[key.replace('_', '-')] = base64.b64encode(value.encode()).decode()
-        
-        secret_yaml = {
-            'apiVersion': 'v1',
-            'kind': 'Secret',
-            'metadata': {
-                'name': f'{service_name}-security-secrets',
-                'namespace': namespace,
-                'labels': {
-                    'app.kubernetes.io/name': service_name,
-                    'noah.infra.com/component': 'security',
-                    'noah.infra.com/managed-by': 'noah-security-manager'
-                },
-                'annotations': {
-                    'noah.infra.com/generated-at': self._get_timestamp(),
-                    'noah.infra.com/rotation-interval': '30d',
-                    'noah.infra.com/secret-type': 'credentials'
-                }
-            },
-            'type': 'Opaque',
-            'data': secret_data
-        }
-        
-        return secret_yaml
-    
-    def save_kubernetes_secret(self, service_name, namespace="authentik"):
-        """Save Kubernetes secret YAML to file
-        
-        Args:
-            service_name: Service name
-            namespace: Kubernetes namespace
-            
-        Returns:
-            Path to saved secret file
-        """
-        secret_yaml = self.create_kubernetes_secret_yaml(service_name, namespace)
-        
-        # Save to secrets directory
-        output_file = self.secrets_dir / f"{service_name}-security-secrets.yaml"
-        with open(output_file, 'w') as f:
-            yaml.dump(secret_yaml, f, default_flow_style=False, sort_keys=False)
-            
-        print(f"✅ Kubernetes secret saved: {output_file}")
-        return output_file
 
     # ================================
     # SOPS/AGE ENCRYPTION (Git Storage)
@@ -421,10 +360,6 @@ class NoahSecurityManager:
     # ================================
     # UTILITY METHODS
     # ================================
-    
-    def _get_timestamp(self):
-        """Get current timestamp for metadata"""
-        return datetime.now().isoformat() + "Z"
     
     
     def generate_tls_certificates(self, domain: str):

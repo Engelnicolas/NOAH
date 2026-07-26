@@ -21,7 +21,7 @@
 import os
 import yaml
 from pathlib import Path
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, Dict
 
 class ConfigLoader:
     """
@@ -377,127 +377,7 @@ class ConfigLoader:
         
         print(f"✅ Exported Helm values for {service} to {output_path}")
     
-    def validate_service_configuration(self, service: str) -> List[str]:
-        """
-        Validate service configuration and return list of issues.
-        """
-        issues = []
-        
-        if service not in self.service_configs:
-            issues.append(f"Unknown service: {service}")
-            return issues
-        
-        # Check domain configuration
-        domain = self.get_service_domain(service)
-        if not domain:
-            issues.append(f"Service {service} has no domain configured. Set NOAH_{service.upper()}_DOMAIN or NOAH_DOMAIN.")
-        
-        # Check namespace exists in environment
-        namespace = self.get_namespace(service)
-        if not namespace:
-            issues.append(f"No namespace configured for service {service}")
-        
-        # Check ingress configuration
-        service_config = self.service_configs[service]
-        if service_config.get('ingress_enabled') and not self.get('NOAH_INGRESS_CLASS'):
-            issues.append("No ingress class configured (NOAH_INGRESS_CLASS)")
-        
-        return issues
-    
     # DNS provider configuration methods
-
-    def get_dns_provider(self) -> str:
-        """
-        Get the configured DNS provider for external-dns.
-        Default: cloudflare
-        Supported: cloudflare, aws, azure, google, digitalocean
-        """
-        return self.get('NOAH_DNS_PROVIDER', 'cloudflare')
-
-    def get_cloudflare_api_token(self) -> str:
-        """Get Cloudflare API token for external-dns"""
-        return self.get('CLOUDFLARE_API_TOKEN', '')
-
-    def get_cloudflare_email(self) -> str:
-        """Get Cloudflare account email (legacy authentication)"""
-        return self.get('CLOUDFLARE_EMAIL', '')
-
-    def get_cloudflare_api_key(self) -> str:
-        """Get Cloudflare Global API key (legacy authentication)"""
-        return self.get('CLOUDFLARE_API_KEY', '')
-
-    def get_dns_zone_id_filter(self) -> List[str]:
-        """
-        Get zone ID filters for DNS provider.
-        Format: Comma-separated zone IDs
-        """
-        zone_filter = self.get('NOAH_DNS_ZONE_ID_FILTER', '')
-        if zone_filter:
-            return [z.strip() for z in zone_filter.split(',')]
-        return []
-
-    def get_external_dns_enabled(self) -> bool:
-        """Check if external-dns should be deployed"""
-        return self.get('NOAH_EXTERNAL_DNS_ENABLED', 'true').lower() == 'true'
-
-    def get_external_dns_namespace(self) -> str:
-        """Get namespace for external-dns deployment"""
-        return self.get('NOAH_EXTERNAL_DNS_NAMESPACE', 'kube-system')
-
-    def get_external_dns_policy(self) -> str:
-        """
-        Get external-dns policy (sync or upsert-only).
-        sync: Creates and deletes records
-        upsert-only: Only creates/updates records, never deletes
-        """
-        return self.get('NOAH_EXTERNAL_DNS_POLICY', 'upsert-only')
-
-    def validate_dns_configuration(self) -> List[str]:
-        """
-        Validate DNS configuration for external-dns deployment.
-        Returns list of validation issues.
-        """
-        issues = []
-
-        if not self.get_external_dns_enabled():
-            return issues  # DNS not enabled, skip validation
-
-        provider = self.get_dns_provider()
-
-        if provider == 'cloudflare':
-            api_token = self.get_cloudflare_api_token()
-            api_key = self.get_cloudflare_api_key()
-            email = self.get_cloudflare_email()
-
-            # Check for either token-based or legacy auth
-            if not api_token:
-                if not (api_key and email):
-                    issues.append(
-                        "Cloudflare authentication not configured. "
-                        "Set either CLOUDFLARE_API_TOKEN (recommended) "
-                        "or both CLOUDFLARE_API_KEY and CLOUDFLARE_EMAIL"
-                    )
-
-        elif provider in ['aws', 'azure', 'google', 'digitalocean']:
-            issues.append(
-                f"DNS provider '{provider}' is configured but not yet fully implemented. "
-                f"Only 'cloudflare' is currently supported."
-            )
-
-        else:
-            issues.append(
-                f"Unknown DNS provider: {provider}. "
-                f"Supported providers: cloudflare, aws, azure, google, digitalocean"
-            )
-
-        # Check domain configuration
-        domain = self.get_global_domain()
-        if not domain:
-            issues.append(
-                "No domain configured. Set NOAH_DOMAIN to your actual domain for external-dns to work."
-            )
-
-        return issues
 
     # Legacy compatibility methods
     def get_domain(self) -> str:

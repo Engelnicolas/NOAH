@@ -20,7 +20,6 @@
 
 import subprocess
 import json
-import time
 import sys
 from pathlib import Path
 from typing import Any, Optional, List
@@ -137,27 +136,6 @@ class ClusterManager:
         except Exception as e:
             print(f"Error deleting namespace: {e}")
             return False
-    
-    def wait_for_deployment(self, deployment_name: str, namespace: str, timeout: int = 300):
-        """Wait for a deployment to be ready"""
-        if self.apps_v1 is None:
-            print(f"⚠️  Warning: No Kubernetes cluster connected. Skipping deployment wait for {deployment_name}")
-            print("💡 To connect to a cluster, ensure kubectl is configured or run: python noah.py cluster create")
-            return True  # Skip the wait if no cluster is available
-        
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            try:
-                deployment = self.apps_v1.read_namespaced_deployment(
-                    name=deployment_name,
-                    namespace=namespace
-                )
-                if deployment.status.ready_replicas == deployment.spec.replicas:
-                    return True
-                time.sleep(5)
-            except Exception:
-                time.sleep(5)
-        return False
     
     def get_service_endpoint(self, service_name: str, namespace: str) -> Optional[str]:
         """Get the endpoint for a service"""

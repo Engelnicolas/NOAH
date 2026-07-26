@@ -230,10 +230,16 @@ python3 noah.py secrets rotate --service cloudflare --apply
 kubectl rollout restart deploy -n external-dns
 ```
 
-To switch from the default `upsert-only` to `sync` (which also deletes records
-external-dns owns), set `NOAH_EXTERNAL_DNS_POLICY=sync` before `setup gitops`.
-The TXT registry (`txtOwnerId`) ensures only owned records are touched, so this
-is safe even when sharing a Cloudflare zone.
+The policy and owner ID are set in
+`gitops/infrastructure/external-dns/helmrelease.yaml` (`policy: sync`,
+`txtOwnerId: noah`) — edit and push to change either. There is no environment
+variable for them.
+
+> [!WARNING]
+> `sync` deletes the records external-dns owns when their Ingress or
+> DNSEndpoint goes away, and the owner ID is the same constant in every NOAH
+> deployment. Two clusters sharing one Cloudflare zone will fight over the same
+> records. Use one zone per deployment unless you change `txtOwnerId` first.
 
 Subdomains are literals in the Ingress manifests (`auth.`, `headlamp.`,
 `hubble.` — only `${DOMAIN}` is substituted by Flux). To change one, edit the

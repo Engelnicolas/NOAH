@@ -26,7 +26,7 @@ Command references live in `.claude/skills/github/` and `.claude/skills/aws/`.
 
 NOAH (Network Operations & Automation Hub) is a Python CLI (`noah.py`) that provisions and manages a full Kubernetes infrastructure stack on K3s. It orchestrates: K3s cluster bootstrap via Ansible, FluxCD GitOps reconciliation, SOPS/Age-encrypted secrets, Authentik SSO, Cilium CNI, Headlamp dashboard, and Hubble UI.
 
-User-facing docs live in `docs/`: [`README.md`](docs/README.md) (overview + quickstart), [`DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md) (install, DNS, troubleshooting), [`OPERATIONS_GUIDE.md`](docs/OPERATIONS_GUIDE.md) (day-2: GitOps, secrets, SSO, DR).
+The root [`README.md`](README.md) is the project landing page (overview + quickstart). User-facing docs live in `docs/`: [`README.md`](docs/README.md) (docs index), [`DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md) (install, DNS, troubleshooting), [`OPERATIONS_GUIDE.md`](docs/OPERATIONS_GUIDE.md) (day-2: GitOps, secrets, SSO, DR).
 
 ## Commands
 

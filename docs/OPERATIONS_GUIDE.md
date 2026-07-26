@@ -1,6 +1,6 @@
 # NOAH Operations Guide
 
-**Version 0.0.8** — day-2 operations for a running cluster. For first-time
+**Version 0.0.9** — day-2 operations for a running cluster. For first-time
 installation see the [Deployment Guide](DEPLOYMENT_GUIDE.md).
 
 ---
@@ -46,11 +46,15 @@ gitops/
 │   ├── cert-manager/           # cert-manager controller
 │   ├── cert-manager-issuers/   # letsencrypt-prod / -staging ClusterIssuers
 │   ├── external-dns/           # Cloudflare DNS sync
+│   ├── coredns/                # cluster DNS overrides
 │   └── nginx-ingress/          # ingress controller (hostNetwork, 80/443)
-└── apps/
-    ├── authentik/              # SSO (HelmRelease; secrets applied out-of-band)
-    ├── headlamp/               # cluster UI (OIDC via Authentik)
-    └── hubble-auth/            # Hubble UI ingress + Authentik forward-auth
+├── apps/
+│   ├── authentik/              # SSO (HelmRelease; secrets applied out-of-band)
+│   ├── headlamp/               # cluster UI (OIDC via Authentik)
+│   └── hubble-auth/            # Hubble UI ingress + Authentik forward-auth
+└── apps-extra/
+    ├── nextcloud/              # file sync & share (OIDC via Authentik)
+    └── stalwart/               # mail server (SMTP/IMAP/JMAP)
 ```
 
 The Flux reconciliation root lives at the repo root in `clusters/production/`
@@ -61,6 +65,7 @@ The Flux reconciliation root lives at the repo root in `clusters/production/`
 external-dns → cert-manager → cilium → nginx-ingress
             → authentik → hubble-auth
                         → headlamp
+                        → apps-extra (nextcloud, stalwart)
 ```
 
 ---
@@ -206,7 +211,7 @@ A single-node cluster runs embedded etcd as a single member. To grow to a
 3-node quorum:
 
 ```bash
-python3 noah.py cluster add-nodes --nodes node2,node3 \
+python3 noah.py cluster add-nodes --primary <existing-node-ip> --nodes node2,node3 \
   --ssh-user ubuntu --ssh-key ~/.ssh/id_ed25519
 ```
 
@@ -230,9 +235,18 @@ external-dns owns), set `NOAH_EXTERNAL_DNS_POLICY=sync` before `setup gitops`.
 The TXT registry (`txtOwnerId`) ensures only owned records are touched, so this
 is safe even when sharing a Cloudflare zone.
 
-Custom subdomains are controlled via HelmRelease values
-(`NOAH_AUTHENTIK_SUBDOMAIN`, `NOAH_HEADLAMP_SUBDOMAIN`, `NOAH_CILIUM_SUBDOMAIN`
-— defaults `auth`, `headlamp`, `hubble`).
+Subdomains are literals in the Ingress manifests (`auth.`, `headlamp.`,
+`hubble.` — only `${DOMAIN}` is substituted by Flux). To change one, edit the
+manifest and push:
+
+```bash
+# e.g. gitops/apps/authentik/authentik-ingress.yaml → host: "sso.${DOMAIN}"
+git add gitops/ && git commit -m "apps: move authentik to sso." && git push
+```
+
+> `config override` and the `NOAH_*_SUBDOMAIN` variables only affect the
+> `config` command group's output (process-local); they do **not** change what
+> Flux deploys.
 
 ---
 

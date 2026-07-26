@@ -1,6 +1,6 @@
 # NOAH Deployment Guide
 
-**Version 0.0.8** — K3s with embedded etcd (no SQLite SPOF). The full
+**Version 0.0.9** — K3s with embedded etcd (no SQLite SPOF). The full
 application stack is reconciled by FluxCD from `gitops/` in this repository.
 There is no imperative `noah deploy <service>` — you provision with
 `noah cluster bootstrap` and operate with `noah flux …` (see the
@@ -46,6 +46,7 @@ There is no imperative `noah deploy <service>` — you provision with
 | 4 | Authentik SSO | ~7–10 min | PostgreSQL, Redis, Server + Worker (~2 GB RAM) |
 | 5 | Hubble auth | ~1–2 min | Forward-auth proxy auto-provisioned in Authentik |
 | 6 | Headlamp | ~3–5 min | OIDC client auto-registered in Authentik |
+| 7 | `apps-extra` | ~5–10 min | Nextcloud + Stalwart mail (`dependsOn: apps`) |
 
 ---
 
@@ -137,8 +138,9 @@ Every flag has a sensible default for the single-node case:
   the `noah` GitRepository source). Do **not** point it at a separate gitops
   repo.
 - **`--node`** defaults to the IP recorded in Step 2. Pass `--node <IP>` to
-  override; use `--node 127.0.0.1` when NOAH runs *on* the target node (see
-  the co-located note in the [README](README.md#quick-start)).
+  override; use `--node 127.0.0.1` (or the private IP) when NOAH runs *on* the
+  target node — an instance cannot SSH to its own public/Elastic IP, because
+  the AWS Internet Gateway does not hairpin it, so the default would time out.
 - **`$GITHUB_TOKEN` / `$GIT_TOKEN`** (or `--git-token`) auto-registers the SSH
   deploy key on your git provider (GitHub/GitLab/Gitea, detected from the URL).
   Without a token, NOAH pauses and prints the public key for you to add
@@ -261,10 +263,11 @@ Client notes:
   `admin` account.
 - A user must **log in once** (IMAP/JMAP) before their address can receive
   mail: Stalwart materializes OIDC accounts on first authentication.
-- Stalwart is pinned to **v0.15.x**, the last release configurable via a
-  declarative `config.toml` (v0.16 moved configuration into its datastore,
-  managed by `stalwart-cli`). Upgrading to v0.16 is a separate migration —
-  see `gitops/apps-extra/stalwart/configmap.yaml`.
+- Stalwart runs **v0.16.x**, which keeps its configuration in the datastore
+  rather than a declarative `config.toml`. NOAH applies that configuration with
+  `stalwart-cli` from a provisioning Job
+  (`gitops/apps-extra/stalwart/provision-config-job.yaml`), driven by the plan
+  in `apply-plan-configmap.yaml`.
 
 To rotate the Authentik admin password, see
 [Operations Guide → rotating secrets](OPERATIONS_GUIDE.md#rotating-a-secret).

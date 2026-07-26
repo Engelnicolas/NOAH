@@ -5,12 +5,10 @@ This test script verifies that Authentik is properly deployed with OIDC configur
 """
 
 import subprocess
-import json
 import time
 import requests
 import sys
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import List, Tuple
 
 
 class AuthentikDeploymentVerifier:
@@ -83,20 +81,20 @@ class AuthentikDeploymentVerifier:
     
     def check_namespace(self) -> bool:
         """Check if namespace exists"""
-        print(f"\n📋 Checking namespace...")
+        print("\n📋 Checking namespace...")
         success, _ = self.run_kubectl(['get', 'namespace', self.namespace])
         if success:
-            self.print_status('OK', f"Identity namespace exists")
+            self.print_status('OK', "Identity namespace exists")
             self.results['namespace'].append("exists: OK")
             return True
         else:
-            self.print_status('ERROR', f"Identity namespace not found")
+            self.print_status('ERROR', "Identity namespace not found")
             self.results['namespace'].append("exists: ERROR")
             return False
     
     def check_secrets(self) -> bool:
         """Check if required secrets exist (standardized name authentik-secret)"""
-        print(f"\n🔐 Checking secrets...")
+        print("\n🔐 Checking secrets...")
         success, _ = self.run_kubectl(['get', 'secret', 'authentik-secret', '-n', self.namespace])
         if not success:
             self.print_status('ERROR', "Authentik secrets not found")
@@ -130,7 +128,7 @@ class AuthentikDeploymentVerifier:
     
     def check_deployments(self) -> bool:
         """Check deployment status"""
-        print(f"\n🚢 Checking deployments...")
+        print("\n🚢 Checking deployments...")
         
         # Define resources to check
         resources = [
@@ -174,7 +172,7 @@ class AuthentikDeploymentVerifier:
     
     def check_persistent_volumes(self) -> bool:
         """Check persistent volume claims"""
-        print(f"\n💾 Checking persistent volumes...")
+        print("\n💾 Checking persistent volumes...")
         
         expected_pvcs = [
             'authentik-media',
@@ -213,7 +211,7 @@ class AuthentikDeploymentVerifier:
     
     def check_services(self) -> bool:
         """Check service status"""
-        print(f"\n🌐 Checking services...")
+        print("\n🌐 Checking services...")
         
         expected_services = [
             'authentik-server',
@@ -247,7 +245,7 @@ class AuthentikDeploymentVerifier:
     
     def check_ingress(self) -> bool:
         """Check ingress configuration"""
-        print(f"\n🔗 Checking ingress...")
+        print("\n🔗 Checking ingress...")
         
         success, _ = self.run_kubectl(['get', 'ingress', 'authentik', '-n', self.namespace])
         if success:
@@ -285,7 +283,7 @@ class AuthentikDeploymentVerifier:
     
     def check_endpoints(self) -> bool:
         """Test OIDC endpoints"""
-        print(f"\n🔍 Testing OIDC endpoints...")
+        print("\n🔍 Testing OIDC endpoints...")
         
         # Check if server is ready first
         ready_success, ready = self.run_kubectl([
@@ -341,7 +339,7 @@ class AuthentikDeploymentVerifier:
     
     def print_summary(self):
         """Print deployment summary"""
-        print(f"\n📋 Deployment Summary:")
+        print("\n📋 Deployment Summary:")
         print("=" * 30)
         print("✅ Configuration: Enhanced OIDC-ready setup")
         print("✅ Persistent Storage: PostgreSQL (20Gi), Redis (4Gi), Media (5Gi)")

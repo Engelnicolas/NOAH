@@ -28,10 +28,8 @@ def show_cluster_status(ctx):
     click.echo("[VERBOSE] Gathering system status information...")
     click.echo("NOAH System Status")
     click.echo("-" * 50)
-    before_count = ctx.obj.get('_status_lines_printed', 0)
     # Delegate to cluster manager
     ctx.obj['cluster'].show_status()
-    after_count = ctx.obj.get('_status_lines_printed', before_count)
     # If no cluster output occurred and no warnings were printed, show fallback
     # (ClusterManager.show_status already prints warnings if no client, so only fallback if completely quiet)
     # We'll implement a simple heuristic: if Kubernetes client is None and nothing else printed beyond header.
@@ -43,7 +41,6 @@ def show_cluster_status(ctx):
     # This is a lightweight enhancement: check two target namespaces for emptiness.
     try:
         namespaces = ['identity', 'kube-system']
-        printed_any = False
         # A crude detection: we cannot easily know printed lines without intercepting stdout; so we
         # re-query and print an explicit message if both namespaces lack deployments.
         empty_all = True

@@ -4,8 +4,6 @@ NOAH Workflow Test Simulation
 Test script to simulate GitHub Workflow actions and validate project structure.
 """
 
-import os
-import sys
 import subprocess
 from pathlib import Path
 
@@ -64,7 +62,8 @@ def test_ansible_playbooks():
         print("⚠️  Ansible directory not found")
         return
     
-    import shutil, subprocess
+    import shutil
+    import subprocess
     if shutil.which("ansible-playbook") is None:
         print("⚠️  ansible-playbook not installed; skipping syntax checks")
         return

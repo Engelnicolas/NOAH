@@ -77,28 +77,10 @@ class ConfigLoader:
                     'enabled': True
                 }
             },
-            'samba4': {
-                'default_subdomain': 'ldap',
-                'namespace': self.get('KUBERNETES_NAMESPACE_IDENTITY', 'identity'),
-                'port': 389,
-                'https_port': 636,
-                'tls_enabled': True,
-                'ingress_enabled': False  # LDAP doesn't use HTTP ingress
-            },
             'nextcloud': {
                 'default_subdomain': 'cloud',
                 'namespace': 'applications',
                 'port': 80,
-                'https_port': 443,
-                'path': '/',
-                'path_type': 'Prefix',
-                'tls_enabled': True,
-                'ingress_enabled': True
-            },
-            'grafana': {
-                'default_subdomain': 'monitoring',
-                'namespace': 'monitoring',
-                'port': 3000,
                 'https_port': 443,
                 'path': '/',
                 'path_type': 'Prefix',
@@ -142,8 +124,7 @@ class ConfigLoader:
         # Fallback to legacy mapping
         namespace_map = {
             'authentik': self.get('KUBERNETES_NAMESPACE_IDENTITY', 'identity'),
-            'cilium': self.get('KUBERNETES_NAMESPACE_NETWORK', 'kube-system'),
-            'samba4': self.get('KUBERNETES_NAMESPACE_IDENTITY', 'identity')
+            'cilium': self.get('KUBERNETES_NAMESPACE_NETWORK', 'kube-system')
         }
         return namespace_map.get(service, 'default')
     
@@ -314,8 +295,6 @@ class ConfigLoader:
             helm_values.update(self._get_authentik_helm_values())
         elif service == 'cilium':
             helm_values.update(self._get_cilium_helm_values())
-        elif service == 'grafana':
-            helm_values.update(self._get_grafana_helm_values())
         
         # Apply custom values if provided
         if custom_values:
@@ -369,21 +348,6 @@ class ConfigLoader:
                             }]
                         }
                     }
-                }
-            }
-        }
-    
-    def _get_grafana_helm_values(self) -> Dict[str, Any]:
-        """Generate Grafana-specific Helm values"""
-        return {
-            'grafana': {
-                'adminPassword': {
-                    'secretName': 'grafana-admin',
-                    'secretKey': 'password'
-                },
-                'persistence': {
-                    'enabled': True,
-                    'size': '10Gi'
                 }
             }
         }

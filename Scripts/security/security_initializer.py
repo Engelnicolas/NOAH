@@ -99,7 +99,6 @@ def _create_fresh_config_enc(config_path: Path, age_key_file: Path, domain: str)
     except Exception:
         pass
 
-    realm = domain.upper().replace('-', '_').replace('.', '-')
     config_data = {
         'noah': {'version': '0.0.4', 'domain': domain},
         'kubernetes': {
@@ -109,11 +108,6 @@ def _create_fresh_config_enc(config_path: Path, age_key_file: Path, domain: str)
             'api_version': '1.32',
         },
         'authentik': {'secret_key': authentik_secret_key},
-        'samba4': {
-            'admin_password': secrets.token_urlsafe(32),
-            'domain': domain,
-            'realm': realm,
-        },
         'certificates': {'ca_key_password': secrets.token_urlsafe(24)},
         'secrets': {'encryption_key': secrets.token_hex(32)},
         'paths': {'secrets_dir': 'Scripts/Secrets'},

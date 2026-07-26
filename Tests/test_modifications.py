@@ -5,7 +5,7 @@ Tests for noah.py CLI commands.
 
 import sys
 import os
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from click.testing import CliRunner
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

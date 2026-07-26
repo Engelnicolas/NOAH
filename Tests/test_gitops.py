@@ -150,7 +150,7 @@ class TestGetOrGenerateSecrets:
 
         assert result["REPLACE_WITH_CLOUDFLARE_TOKEN"] == "cf-tok"
         assert result["REPLACE_WITH_OIDC_CLIENT_ID"] == "headlamp"
-        assert result[f"admin@example.com"] == f"admin@{DOMAIN}"
+        assert result["admin@example.com"] == f"admin@{DOMAIN}"
 
 
 class TestRenderAppSecretManifests:

@@ -236,7 +236,7 @@ class NoahSecurityManager:
             return self.generate_service_secrets(service_name)
 
         # Use normal generator definitions to reconstruct required map
-        regen_all = self.generate_service_secrets(service_name)  # This will load existing; call again for generator map
+        self.generate_service_secrets(service_name)  # This will load existing; call again for generator map
         # Build generator mapping again (inefficient but acceptable for small sets)
         gen_mapping: Dict[str, Callable[[], str]] = {}
         if service_name == 'authentik':

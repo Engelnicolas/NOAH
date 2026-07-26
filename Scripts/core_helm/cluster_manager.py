@@ -26,15 +26,9 @@ from pathlib import Path
 from typing import Any, Optional, List
 
 # Optional imports with graceful fallbacks
-yaml: Optional[Any] = None
 client: Optional[Any] = None
 config: Optional[Any] = None
 ApiException: Optional[Any] = None
-
-try:
-    import yaml  # type: ignore
-except ImportError:
-    pass
 
 try:
     from kubernetes import client, config  # type: ignore

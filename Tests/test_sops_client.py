@@ -15,12 +15,10 @@ from __future__ import annotations
 
 import os
 import subprocess
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-import yaml
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

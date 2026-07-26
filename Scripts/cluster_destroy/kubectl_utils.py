@@ -46,8 +46,7 @@ def cleanup_kubectl_cache():
     """
     try:
         kube_dir = Path.home() / '.kube'
-        success = True
-        
+
         # Remove kubectl config file
         config_file = kube_dir / 'config'
         if config_file.exists():

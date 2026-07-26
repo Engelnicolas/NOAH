@@ -105,7 +105,7 @@ def diagnose_noah_environment(ctx):
                     if major < 3 or (major == 3 and minor < 8):
                         print_status("⚠ SOPS version is outdated (consider updating)", "WARNING")
                         issues.append("SOPS version outdated")
-                except:
+                except Exception:
                     pass
             else:
                 print_status("✗ SOPS version check failed", "WARNING")

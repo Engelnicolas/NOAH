@@ -6,7 +6,6 @@ Test script for NOAH deployment functionality
 import sys
 import os
 from unittest.mock import Mock, patch
-from pathlib import Path
 
 # Add the parent directory to Python path to access Scripts
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

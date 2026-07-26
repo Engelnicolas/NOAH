@@ -10,7 +10,6 @@ Run: python Tests/test_cli_rotate_secrets.py
 import sys
 import subprocess
 from pathlib import Path
-import json
 import yaml
 import os
 

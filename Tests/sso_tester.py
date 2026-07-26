@@ -2,12 +2,8 @@
 
 import requests
 import json
-import json
-import os
 import subprocess
-import sys
-import time
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, Tuple
 from urllib.parse import urljoin
 
 
@@ -57,7 +53,7 @@ class SSONetworkValidator:
         try:
             subprocess.run(['which', command], capture_output=True, check=True)
             return True
-        except:
+        except Exception:
             return False
     
     def check_prerequisites(self) -> bool:
@@ -148,7 +144,6 @@ class SSONetworkValidator:
         
         # Check server deployment
         success, _ = self.run_kubectl("get deployment authentik-server -n identity")
-        server_exists = success
         if success:
             self.print_status('OK', "Authentik server deployment found")
             success, server_ready = self.run_kubectl("get deployment authentik-server -n identity -o jsonpath='{.status.readyReplicas}'")
@@ -159,7 +154,6 @@ class SSONetworkValidator:
         
         # Check worker deployment
         success, _ = self.run_kubectl("get deployment authentik-worker -n identity")
-        worker_exists = success
         if success:
             self.print_status('OK', "Authentik worker deployment found")
             success, worker_ready = self.run_kubectl("get deployment authentik-worker -n identity -o jsonpath='{.status.readyReplicas}'")
@@ -170,7 +164,7 @@ class SSONetworkValidator:
         
         if server_ready == "1" and worker_ready == "1":
             self.print_status('OK', "Authentik deployments are ready")
-            self.results['authentik'].append(f"server: 1/1 OK, worker: 1/1 OK")
+            self.results['authentik'].append("server: 1/1 OK, worker: 1/1 OK")
             
             # Test Authentik API
             success, output = self.run_kubectl("exec -n identity deployment/authentik-server -- python -c \"import urllib.request; response = urllib.request.urlopen('http://localhost:9000/-/health/ready/'); print(f'STATUS:{response.status}')\"")
@@ -366,10 +360,6 @@ class SSOTester:
     
     def get_authentik_url(self) -> Optional[str]:
         """Get Authentik service URL"""
-        # First try to get the configured domain from environment
-        import os
-        domain = os.getenv('NOAH_DOMAIN', 'noah-infra.com')
-        
         # Check if ingress exists for the domain
         try:
             result = subprocess.run(
@@ -571,7 +561,7 @@ class SSOTester:
             except Exception as e:
                 print(f"❌ {test_name}: ERROR - {e}")
         
-        print(f"\n🎯 Test Summary")
+        print("\n🎯 Test Summary")
         print("=" * 20)
         print(f"Passed: {passed_tests}/{total_tests} tests")
         

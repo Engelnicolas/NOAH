@@ -194,13 +194,6 @@ def install_via_apt(package_name, print_status):
 def install_kubectl(print_status):
     """Install kubectl using official method"""
     try:
-        # Download and install kubectl
-        commands = [
-            ['curl', '-LO', 'https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl'],
-            ['sudo', 'install', '-o', 'root', '-g', 'root', '-m', '0755', 'kubectl', '/usr/local/bin/kubectl'],
-            ['rm', 'kubectl']
-        ]
-        
         # Use shell for the first command to handle $() substitution
         result = subprocess.run('curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"', 
                                shell=True, capture_output=True, text=True)

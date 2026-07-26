@@ -13,6 +13,8 @@ import json
 import os
 import subprocess
 import sys
+
+import pytest
 from pathlib import Path
 from typing import Tuple
 
@@ -258,6 +260,29 @@ class HubbleAuthTester:
         self.print_status('ERROR' if failed > 0 else 'OK', f'Failed: {failed}/{len(tests)}')
         print("=" * 60 + "\n")
         return failed == 0
+
+
+# ---------------------------------------------------------------------------
+# pytest wrappers
+#
+# The checks above live on a class with an __init__, which pytest cannot collect
+# directly. These wrappers expose each one as an individual test case. They shell
+# out to kubectl, so they carry the `cluster` marker and are excluded from the
+# default run; use `pytest -m cluster` against a live cluster.
+# ---------------------------------------------------------------------------
+
+_CLUSTER_CHECKS = sorted(n for n in vars(HubbleAuthTester) if n.startswith('test_'))
+
+
+@pytest.fixture(scope='module')
+def hubble_tester():
+    return HubbleAuthTester(domain=os.getenv('NOAH_DOMAIN', 'noah-infra.com'))
+
+
+@pytest.mark.cluster
+@pytest.mark.parametrize('check', _CLUSTER_CHECKS)
+def test_hubble_auth_check(hubble_tester, check):
+    assert getattr(hubble_tester, check)(), f'{check} failed'
 
 
 def main() -> int:

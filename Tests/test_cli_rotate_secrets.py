@@ -13,6 +13,8 @@ from pathlib import Path
 import yaml
 import os
 
+import pytest
+
 ROOT = Path(__file__).parent.parent
 NOAH = ROOT / 'noah.py'
 CANONICAL = ROOT / 'Secrets' / 'canonical-secrets.yaml'
@@ -74,6 +76,14 @@ def main():
 
     print('✅ CLI rotate secrets test passed')
     return 0
+
+
+# Shells out to `noah secrets` and rewrites the canonical store, so it carries
+# the `integration` marker and is excluded from the default run.
+@pytest.mark.integration
+def test_cli_rotate_secrets():
+    assert main() == 0
+
 
 if __name__ == '__main__':
     raise SystemExit(main())

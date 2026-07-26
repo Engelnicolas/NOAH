@@ -12,6 +12,8 @@ import importlib.util
 import os
 import sys
 import json
+
+import pytest
 import subprocess
 from pathlib import Path
 from typing import Tuple
@@ -362,6 +364,29 @@ class SSONetworkTester:
                                    and _ != 'no token')
         cloudflare_failures = sum(1 for _, ok, _ in self.results['cloudflare'] if not ok)
         return (provisioner_failures + cloudflare_failures) == 0
+
+
+# ---------------------------------------------------------------------------
+# pytest wrappers
+#
+# The checks above live on a class with an __init__, which pytest cannot collect
+# directly. These wrappers expose each one as an individual test case. They shell
+# out to kubectl, so they carry the `cluster` marker and are excluded from the
+# default run; use `pytest -m cluster` against a live cluster.
+# ---------------------------------------------------------------------------
+
+_CLUSTER_CHECKS = sorted(n for n in vars(SSONetworkTester) if n.startswith('test_'))
+
+
+@pytest.fixture(scope='module')
+def sso_network_tester():
+    return SSONetworkTester(domain=os.getenv('NOAH_DOMAIN', 'noah-infra.com'))
+
+
+@pytest.mark.cluster
+@pytest.mark.parametrize('check', _CLUSTER_CHECKS)
+def test_sso_network_check(sso_network_tester, check):
+    assert getattr(sso_network_tester, check)(), f'{check} failed'
 
 
 def main():

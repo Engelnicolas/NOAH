@@ -4,11 +4,14 @@ Authentik OIDC Deployment Verification Test
 This test script verifies that Authentik is properly deployed with OIDC configuration
 """
 
+import os
 import subprocess
 import time
 import requests
 import sys
 from typing import List, Tuple
+
+import pytest
 
 
 class AuthentikDeploymentVerifier:
@@ -379,6 +382,21 @@ class AuthentikDeploymentVerifier:
                 
         self.print_summary()
         return all_passed
+
+
+# ---------------------------------------------------------------------------
+# pytest wrapper
+#
+# AuthentikDeploymentVerifier has an __init__, so pytest cannot collect it
+# directly. The checks are sequential and share port-forward state, so they are
+# exposed as the single run_all_checks() entry point rather than individually.
+# Needs a live cluster; excluded from the default run via the `cluster` marker.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cluster
+def test_authentik_deployment():
+    namespace = os.getenv('NOAH_AUTHENTIK_NAMESPACE', 'identity')
+    assert AuthentikDeploymentVerifier(namespace=namespace).run_all_checks()
 
 
 def main():

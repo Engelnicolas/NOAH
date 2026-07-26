@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+import pytest
+
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -60,6 +62,14 @@ def main():
 
     print('✅ Authentik password rotation test passed')
     return 0
+
+
+# Rotates real credentials in the canonical store, so it carries the
+# `integration` marker and is excluded from the default run.
+@pytest.mark.integration
+def test_authentik_password_rotation():
+    assert main() == 0
+
 
 if __name__ == '__main__':
     raise SystemExit(main())

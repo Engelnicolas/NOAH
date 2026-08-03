@@ -257,14 +257,25 @@ ansible-lint Ansible/
 
 ## Contributing
 
-Issues and pull requests are welcome. Before opening a PR, please run the lint,
-security and test commands listed under [Development](#development).
+Issues and pull requests are welcome. Please read
+[`CONTRIBUTING.md`](CONTRIBUTING.md) first.
+
+NOAH uses the [Developer Certificate of Origin](DCO) — **no CLA, no paperwork**.
+Just sign off your commits with `git commit -s`. You keep your copyright, and
+your contribution is licensed to the project under the AGPL and nothing beyond
+it.
+
+Before opening a PR, please run the lint, security and test commands listed
+under [Development](#development).
 
 ## License
 
+Copyright (C) 2026 Nicolas Engel.
+
 NOAH is free software, licensed under the **GNU Affero General Public License,
 version 3 or later** (AGPL-3.0-or-later). The full text is in [`LICENSE`](LICENSE),
-and every source file carries a short notice.
+the project-level notice in [`COPYRIGHT`](COPYRIGHT), and every Python source
+file carries a short header.
 
 Under the AGPL, if you modify NOAH and make it available to users over a network,
 you must also offer those users the corresponding source code.

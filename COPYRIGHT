@@ -1,0 +1,71 @@
+NOAH — Network Operations & Automation Hub
+Copyright (C) 2026 Nicolas Engel <contact@nicolasengel.fr>
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+
+SCOPE
+-----
+
+This notice covers every file in this repository, unless that file carries a
+different notice of its own. Files that do carry their own notice are governed
+by it.
+
+NOAH is free software: you can redistribute it and/or modify it under the terms
+of the GNU Affero General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+NOAH is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+The full licence text is in LICENSE. If you did not receive a copy, see
+<https://www.gnu.org/licenses/>.
+
+
+CONTRIBUTIONS
+-------------
+
+Contributions are accepted under the Developer Certificate of Origin, version
+1.1. There is no Contributor License Agreement. Contributors certify the origin
+of their work by signing off each commit, and their contribution is licensed to
+the project under AGPL-3.0-or-later and nothing beyond it.
+
+  Certificate       : DCO
+  How to contribute : CONTRIBUTING.md
+
+Copyright in the project as a whole is held by Nicolas Engel. Copyright in each
+contribution remains with its author. No copyright is assigned or transferred to
+the publisher, and no contribution can be relicensed without its author's
+agreement.
+
+
+THIRD-PARTY COMPONENTS
+----------------------
+
+NOAH deploys and orchestrates third-party software — among others Garage
+(AGPL-3.0), CloudNativePG, Velero, OpenEBS and Harbor (Apache-2.0), and sanoid,
+PowerDNS and Forgejo (GPL). Each remains under its own licence, held by its own
+authors.
+
+Deploying such software constitutes aggregation, not the creation of a derived
+work, and imposes nothing on NOAH itself. Two cases are different and carry
+their own obligations:
+
+  - distributing an appliance image that bundles these components, which
+    triggers the duty to supply their licences and corresponding sources;
+  - modifying Garage as part of a managed offering, where the AGPL network
+    clause requires those modifications to be published.
+
+
+NAME AND BRANDING
+-----------------
+
+The AGPL grants rights in the software. It grants no rights in the name.
+
+"NOAH", the project name and any associated logo are not licensed under the
+AGPL and are reserved. No trademark is registered at this date. Forks and
+derived distributions are welcome under the AGPL but must not present
+themselves under this name in a way that suggests endorsement by, or origin
+from, this project.

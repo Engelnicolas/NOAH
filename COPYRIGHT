@@ -32,8 +32,8 @@ Contributions are accepted under the Developer Certificate of Origin, version
 of their work by signing off each commit, and their contribution is licensed to
 the project under AGPL-3.0-or-later and nothing beyond it.
 
-  Certificate       : DCO
-  How to contribute : CONTRIBUTING.md
+  Certificate       : docs/DCO
+  How to contribute : docs/CONTRIBUTING.md
 
 Copyright in the project as a whole is held by Nicolas Engel. Copyright in each
 contribution remains with its author. No copyright is assigned or transferred to

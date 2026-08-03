@@ -42,7 +42,7 @@ There is no imperative `noah deploy <service>` — you provision with
 | 0 | external-dns | ~2–3 min | Creates/updates Cloudflare A records |
 | 1 | cert-manager | ~2–3 min | `letsencrypt-prod` + `letsencrypt-staging` issuers |
 | 2 | Cilium CNI | ~5–7 min | Full eBPF config, Hubble Relay + UI |
-| 3 | nginx-ingress | ~2–3 min | DaemonSet, `hostNetwork: true`, ports 80/443 |
+| 3 | nginx-ingress | ~2–3 min | Deployment, `hostPort` :80/:443, single replica |
 | 4 | Authentik SSO | ~7–10 min | PostgreSQL, Redis, Server + Worker (~2 GB RAM) |
 | 5 | Hubble auth | ~1–2 min | Forward-auth proxy auto-provisioned in Authentik |
 | 6 | Headlamp | ~3–5 min | OIDC client auto-registered in Authentik |
@@ -53,13 +53,23 @@ There is no imperative `noah deploy <service>` — you provision with
 ## Requirements
 
 **System (per node):**
-- OS: Ubuntu 20.04+, Debian 11+, RHEL/CentOS 8+
+- OS: Ubuntu 20.04+, Debian 11+, RHEL/CentOS 8+ — Ubuntu Server 24.04 LTS is the
+  reference target
 - Kernel 5.10+ (Cilium eBPF)
-- 4 CPU / 8 GB RAM / 50 GB disk minimum
-- SSD for `/var/lib/rancher/k3s` (etcd is write-heavy)
+- **16 GB RAM minimum, 32 GB recommended** — 4 cores minimum, 8 recommended
+- **250 GB NVMe minimum**, 2 × 500 GB mirrored recommended
+- NVMe or SSD for `/var/lib/rancher/k3s` (etcd is write-heavy)
+- 1 GbE minimum, 2.5 GbE or better recommended
 - Internet connectivity
 
-**HA only:** inter-node latency < 10 ms.
+> **On the 16 GB floor.** Authentik alone — server, worker and Redis — takes
+> about 2 GB, before Nextcloud and its database, Cilium, Hubble and the ingress
+> controller. Earlier versions of this guide said 8 GB; that figure was wrong.
+
+**Multi-node:** inter-node latency < 10 ms. Note that additional servers give
+etcd quorum and scheduling capacity, **not high availability** — the ingress
+controller and every published DNS record still resolve to one node. See
+[On availability](../README.md#on-availability).
 
 **Workstation tools** (auto-installed by `setup initialize`): Python 3.8+,
 kubectl, FluxCD CLI, Ansible, `age`, `sops`.
@@ -147,7 +157,9 @@ Every flag has a sensible default for the single-node case:
   manually as a read-only deploy key, then continues on Enter.
 - **`--ssh-user` / `--ssh-key`** default to `ubuntu` and your standard SSH key
   resolution; pass them only for a different user or a non-default key path.
-- **3-node HA:** add `--ha --nodes node1,node2,node3`.
+- **Multi-node control plane:** add `--ha --nodes node1,node2,node3`. Despite the
+  flag's name this buys etcd quorum and scheduling capacity, **not a redundant
+  entry point** — see [Requirements](#requirements).
 
 ### Step 5 — Watch reconciliation
 
@@ -351,7 +363,7 @@ let external-dns retry.
 ```bash
 kubectl top nodes
 kubectl top pods -A
-# Minimum: 4 CPU, 8 GB RAM, 50 GB disk
+# Minimum: 4 cores, 16 GB RAM, 250 GB NVMe
 ```
 
 ### Full reset

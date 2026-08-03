@@ -9,12 +9,12 @@
 # Modes:
 #   ha_mode=false (default) — single-node K3s with embedded etcd
 #                              (--cluster-init, single-member etcd)
-#   ha_mode=true            — 3-node K3s server cluster, embedded etcd
+#   ha_mode=true            — 3+ node K3s server cluster, embedded etcd
 #                              quorum (first node --cluster-init,
 #                              remaining nodes --server <node1>:6443)
 #
 # Required extra-vars (passed by the noah CLI):
-#   k3s_nodes        list of node IPs (length 1 for single, >=3 odd for HA)
+#   k3s_nodes        list of node IPs (length 1 for single, >=3 odd for multi-node)
 #   ha_mode          bool
 #   domain           primary domain
 #   flux_repo        GitOps repository URL (or owner/repo for --personal)

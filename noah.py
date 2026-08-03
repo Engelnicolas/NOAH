@@ -181,8 +181,12 @@ def destroy(ctx, name, force, keep_secrets):
 
 @cluster.command()
 @click.option('--node', default=None, help='Single node IP (default single-node mode)')
-@click.option('--nodes', default=None, help='Comma-separated IPs for HA mode (>=3, odd)')
-@click.option('--ha', is_flag=True, default=False, help='Enable 3-node embedded-etcd HA mode')
+@click.option('--nodes', default=None,
+              help='Comma-separated IPs for multi-node mode (>=3, odd)')
+@click.option('--ha', is_flag=True, default=False,
+              help='Multi-node control plane: 3+ servers sharing embedded-etcd '
+                   'quorum. Buys quorum and scheduling capacity, not a redundant '
+                   'entry point — ingress and DNS still resolve to one node')
 @click.option('--domain', default=None,
               help='Primary domain for the cluster '
                    '(default: the domain recorded by `setup gitops`)')

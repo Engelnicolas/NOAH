@@ -19,13 +19,14 @@
 """
 NOAH v0.0.9 — `noah cluster bootstrap` implementation.
 
-Provisions a K3s cluster (single-node by default, --ha for 3-node
-embedded-etcd HA) and runs `flux bootstrap` against a GitOps
+Provisions a K3s cluster (single-node by default, --ha for a 3+ node
+embedded-etcd control plane — quorum and scheduling capacity, not a
+redundant entry point) and runs `flux bootstrap` against a GitOps
 repository. This replaces the v0.0.8 `noah cluster create` flow,
 which was SQLite-backed and had no continuous reconciliation layer.
 
 The Python side is intentionally thin: it
-  1. validates CLI inputs (HA needs an odd >=3 node count),
+  1. validates CLI inputs (multi-node needs an odd >=3 node count),
   2. writes a temporary Ansible inventory with k3s_primary / k3s_joiners
      groups derived from --node / --nodes,
   3. loads the Age private key from the canonical SOPS store,
@@ -714,7 +715,10 @@ def run_bootstrap(
         ansible_dir.parent, domain
     )
 
-    mode_label = "HA (3-node embedded etcd)" if ha else "single-node (embedded etcd)"
+    mode_label = (
+        "multi-node control plane (embedded etcd quorum)" if ha
+        else "single-node (embedded etcd)"
+    )
     click.echo(f"🚀 NOAH bootstrap — mode: {mode_label}")
     click.echo(f"   nodes:     {', '.join(node_list)}")
     click.echo(f"   domain:    {domain}")

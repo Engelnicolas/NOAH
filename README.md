@@ -54,12 +54,12 @@ python3 noah.py cluster bootstrap
 
 | Component | Role |
 |---|---|
-| **K3s** (embedded etcd) | Lightweight Kubernetes — single-node or 3-node HA |
+| **K3s** (embedded etcd) | Lightweight Kubernetes — multi-node control plane, single entry point |
 | **Cilium** | eBPF CNI with Hubble network observability |
 | **FluxCD** | Continuous GitOps reconciliation from `gitops/` |
 | **cert-manager** | Automatic TLS certificates via Let's Encrypt |
 | **external-dns** | Automatic Cloudflare DNS record management |
-| **nginx-ingress** | L7 ingress on `hostNetwork` (ports 80/443) |
+| **nginx-ingress** | L7 ingress bound to the node's :80/:443 via `hostPort` |
 | **Authentik** | SSO / OIDC identity provider |
 | **Headlamp** | Kubernetes dashboard, SSO-gated |
 | **Hubble UI** | Live network flows, SSO-gated via forward-auth |
@@ -68,9 +68,9 @@ python3 noah.py cluster bootstrap
 
 ## Quick start
 
-> **Prerequisites:** a Linux host you can SSH into (4 CPU / 8 GB RAM / 50 GB disk,
-> kernel 5.10+), a domain on Cloudflare, and a GitHub token. Everything else is
-> installed for you.
+> **Prerequisites:** a Linux host you can SSH into (4 CPU / 16 GB RAM / 250 GB
+> NVMe, kernel 5.10+ — see [Requirements](#requirements)), a domain on
+> Cloudflare, and a GitHub token. Everything else is installed for you.
 
 ```bash
 # 1. Clone and initialize — installs tooling, generates the Age key, runs the DNS wizard
@@ -111,7 +111,7 @@ python3 noah.py password show-password
                          │ HTTPS / TLS (Let's Encrypt)
                          ▼
 ┌──────────────────────────────────────────────────────────┐
-│        nginx-ingress (hostNetwork, ports 80/443)          │
+│        nginx-ingress (hostPort, ports 80/443)             │
 └────────────────────────┬─────────────────────────────────┘
         ┌────────────────┼────────────────┐
         ▼                ▼                ▼
@@ -193,15 +193,45 @@ an EIP PTR record. See the
 
 ## Requirements
 
-**Target node(s)**
+**Compute node**
 
-- Ubuntu 20.04+, Debian 11+, or RHEL/CentOS 8+
+| | Minimum | Recommended |
+|---|---|---|
+| CPU | 4 cores | 8 cores |
+| RAM | **16 GB** | **32 GB** |
+| Disk | 1 × NVMe 250 GB | 2 × NVMe 500 GB, mirrored |
+| Network | 1 GbE | 2.5 GbE or better |
+
+- Ubuntu 20.04+, Debian 11+, or RHEL/CentOS 8+ — Ubuntu Server 24.04 LTS is the
+  reference target
 - Kernel 5.10 or newer (required by Cilium's eBPF datapath)
-- Minimum 4 CPU / 8 GB RAM / 50 GB disk — recommended 8 CPU / 16 GB / 100 GB
+- NVMe or SSD for `/var/lib/rancher/k3s` — etcd is write-heavy
 - Outbound internet connectivity
+
+> **8 GB is not enough**, whatever older versions of this file said. Authentik
+> alone — server, worker and Redis — takes about 2 GB, before Nextcloud and its
+> database, Cilium, Hubble and the ingress controller. At 16 GB there is no
+> headroom left for anything you add on top.
 
 **Workstation** — Python 3.8+. `kubectl`, the FluxCD CLI, Ansible, `age` and `sops`
 are installed automatically by `setup initialize`.
+
+### On availability
+
+Adding nodes gives you **etcd quorum and scheduling capacity, not high
+availability.** Three properties of the current design make the entry point
+single:
+
+- the ingress controller is a single `Deployment` bound to `:80`/`:443` on one
+  node through `hostPort`, behind a `ClusterIP` service with `maxSurge: 0`;
+- every DNS record external-dns publishes points at one node's IP, pinned via
+  `publish-status-address`;
+- servers join through `--server https://<node1>:6443`, and the kubeconfig is
+  issued for that same address.
+
+Lose that node and the cluster survives — the traffic does not. **Planned
+maintenance means a planned interruption.** Real high availability needs a
+floating entry point and is not implemented today.
 
 ## Repository layout
 
@@ -258,9 +288,9 @@ ansible-lint Ansible/
 ## Contributing
 
 Issues and pull requests are welcome. Please read
-[`CONTRIBUTING.md`](CONTRIBUTING.md) first.
+[`CONTRIBUTING.md`](docs/CONTRIBUTING.md) first.
 
-NOAH uses the [Developer Certificate of Origin](DCO) — **no CLA, no paperwork**.
+NOAH uses the [Developer Certificate of Origin](docs/DCO) — **no CLA, no paperwork**.
 Just sign off your commits with `git commit -s`. You keep your copyright, and
 your contribution is licensed to the project under the AGPL and nothing beyond
 it.

@@ -47,7 +47,7 @@ gitops/
 │   ├── cert-manager-issuers/   # letsencrypt-prod / -staging ClusterIssuers
 │   ├── external-dns/           # Cloudflare DNS sync
 │   ├── coredns/                # cluster DNS overrides
-│   └── nginx-ingress/          # ingress controller (hostNetwork, 80/443)
+│   └── nginx-ingress/          # ingress controller (hostPort, 80/443)
 ├── apps/
 │   ├── authentik/              # SSO (HelmRelease; secrets applied out-of-band)
 │   ├── headlamp/               # cluster UI (OIDC via Authentik)

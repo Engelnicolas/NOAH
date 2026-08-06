@@ -25,6 +25,11 @@ from __future__ import annotations
 
 from typing import Optional, Any
 
+# Module-level so the `except InsecureStoreError: raise` clauses below always
+# resolve the name. Importing it inside the try blocks would leave it unbound
+# if the import itself failed, masking that error with an UnboundLocalError.
+from Scripts.security.canonical_store import InsecureStoreError
+
 # Services exposing an admin login: (service, canonical store key, ingress
 # subdomain, admin username, admin email local-part). Usernames are pinned by
 # the manifests rather than the store: 'akadmin' by the Authentik chart,
@@ -95,6 +100,10 @@ def get_admin_credentials(domain: str | None = None) -> tuple[list[dict[str, Any
         if not credentials:
             return None, "No admin passwords present in canonical store"
         return credentials, None
+    except InsecureStoreError:
+        # A refusal to write secrets in the clear must reach the operator, not
+        # be flattened into an error string the caller may ignore.
+        raise
     except Exception as e:  # noqa: BLE001
         return None, f"Error retrieving canonical credentials: {e}"
 
@@ -140,6 +149,8 @@ def get_authentik_credentials(domain: str | None = None) -> tuple[Optional[dict[
             'external_ip': external_ip,
             'resolution_status': resolution_status
         }, None)
+    except InsecureStoreError:
+        raise
     except Exception as e:  # noqa: BLE001
         return None, f"Error retrieving canonical credentials: {e}"
 
@@ -168,5 +179,7 @@ def regenerate_authentik_password():
             'new_password': new_password,
             'updated_file': str(store._active_path())
         }, None)
+    except InsecureStoreError:
+        raise
     except Exception as e:  # noqa: BLE001
         return None, f"Error regenerating canonical password: {e}"

@@ -157,9 +157,9 @@ Every flag has a sensible default for the single-node case:
   manually as a read-only deploy key, then continues on Enter.
 - **`--ssh-user` / `--ssh-key`** default to `ubuntu` and your standard SSH key
   resolution; pass them only for a different user or a non-default key path.
-- **Multi-node control plane:** add `--ha --nodes node1,node2,node3`. Despite the
-  flag's name this buys etcd quorum and scheduling capacity, **not a redundant
-  entry point** — see [Requirements](#requirements).
+- **Multi-node control plane:** add `--multi-node --nodes node1,node2,node3`.
+  This buys etcd quorum and scheduling capacity, **not a redundant entry
+  point** — see [Requirements](#requirements).
 
 ### Step 5 — Watch reconciliation
 

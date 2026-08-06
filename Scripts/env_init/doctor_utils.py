@@ -21,10 +21,20 @@ NOAH environment diagnosis utilities
 """
 
 import click
+import os
 import sys
 import subprocess
 from pathlib import Path
 from .environment_initializer import check_command_exists
+
+# The same helpers the store itself uses. Re-deriving the encryption mode here
+# is what let this check and the store drift apart in the first place; the
+# private name is imported deliberately, to keep one source of truth.
+from Scripts.security.canonical_store import (
+    _environment_is_locked,
+    plaintext_reason,
+    resolve_age_key_file,
+)
 
 
 def print_status(message, status="INFO"):
@@ -126,14 +136,33 @@ def diagnose_noah_environment(ctx):
             print_status(f"✗ {file_path} missing", "ERROR")
             issues.append(f"Missing {file_path}")
     
-    # Check Age keys
-    age_dir = Path("Age")
-    if age_dir.exists() and (any(age_dir.glob("*.key")) or (age_dir / "keys.txt").exists()):
-        print_status("✓ Age keys configured", "SUCCESS")
+    # Check the canonical store's effective encryption mode.
+    #
+    # This replaces a glob over Age/ for "*.key or keys.txt", which reported
+    # "✓ Age keys configured" for a key name the store never reads -- confirming
+    # a protection that was not there. Asking the store's own function removes
+    # the possibility of the two disagreeing again.
+    #
+    # Deliberately does NOT construct a store: in a locked environment the
+    # constructor raises in exactly the case this check exists to report, which
+    # would leave doctor silent precisely when it must speak.
+    age_key_file = resolve_age_key_file(Path.cwd())
+    reason = plaintext_reason(age_key_file)
+    store_insecure = False
+    if reason is None:
+        print_status(f"✓ Canonical store: encrypted (Age key: {age_key_file})", "SUCCESS")
     else:
-        print_status("⚠ Age keys not initialized", "WARNING")
-        issues.append("Age keys need initialization")
-    
+        declared = os.environ.get("NOAH_ENVIRONMENT") or "unset → treated as production"
+        if _environment_is_locked():
+            store_insecure = True
+            print_status(f"✗ Canonical store: PLAINTEXT — {reason.value}", "ERROR")
+            print_status(f"  Environment: {declared} — this configuration is refused at runtime.", "ERROR")
+            issues.append(f"Canonical store would be written in plaintext: {reason.value}")
+        else:
+            print_status(f"⚠ Canonical store: PLAINTEXT — {reason.value}", "WARNING")
+            print_status(f"  Allowed because NOAH_ENVIRONMENT={declared}.", "WARNING")
+            issues.append(f"Canonical store unencrypted: {reason.value}")
+
     # Summary
     click.echo("")
     if not issues:
@@ -144,3 +173,8 @@ def diagnose_noah_environment(ctx):
             click.echo(f"  • {issue}")
         click.echo("")
         click.echo("Run 'python noah.py setup initialize' to fix most issues automatically.")
+
+    # Fail the command outright: a plaintext store in a locked environment is
+    # not an advisory item, it is the condition that blocks every write.
+    if store_insecure:
+        sys.exit(1)

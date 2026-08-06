@@ -60,10 +60,13 @@ Extensibility:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Dict, Callable, Optional, Any
 import logging
 import os
+import sys
+import tempfile
 import yaml
 import hashlib
 from datetime import datetime, timezone
@@ -71,6 +74,7 @@ from datetime import datetime, timezone
 from Scripts.security.sops_client import (
     SopsClient,
     SopsDecryptionError,
+    SopsEncryptionError,
     SopsError,
     SopsKeyError,
 )
@@ -85,6 +89,103 @@ CANONICAL_FILENAME_PLAINTEXT = "canonical-secrets.yaml"
 # v2: { version:2, services: { svc: { key: { value: str, version: int, rotated_at: iso } } } }
 CURRENT_SCHEMA_VERSION = 2
 
+# Environments where a plaintext store is tolerated. Any other value -- unset,
+# empty or unrecognised -- locks it: a forgotten setting must refuse to write,
+# not silently write secrets in the clear.
+_UNLOCKED_ENVIRONMENTS = frozenset({"development", "dev", "test", "ci"})
+
+
+class InsecureStoreError(RuntimeError):
+    """The store would be written in plaintext in an environment that forbids it.
+
+    Deliberately NOT derived from SopsError: this is a policy refusal, not a SOPS
+    failure, and inheriting would expose it to the existing `except SopsError`
+    handlers.
+    """
+
+
+class PlaintextReason(Enum):
+    """Why encryption is off.
+
+    A boolean cannot carry three causes, and the three call for three different
+    remedies -- revoke an opt-out, restore a key, install a binary. Collapsing
+    them into one message forces a manual diagnosis at every incident.
+    """
+
+    OPT_OUT = "NOAH_DISABLE_SOPS is set"
+    KEY_MISSING = "Age key file not found"
+    SOPS_MISSING = "sops binary not available"
+
+
+def _environment_is_locked() -> bool:
+    """Whether plaintext writes are refused. Defaults to locked.
+
+    Reads os.environ directly rather than ConfigLoader: ConfigLoader.get() lets
+    the cached config take precedence over the environment, so a
+    `NOAH_ENVIRONMENT: development` sitting in a config file -- possibly
+    committed or shipped -- would unlock production. A security lock must not be
+    defeatable by a file.
+    """
+    env = os.environ.get("NOAH_ENVIRONMENT", "production").strip().lower()
+    return env not in _UNLOCKED_ENVIRONMENTS
+
+
+def resolve_age_key_file(project_root: Path) -> Path:
+    """AGE_KEY_FILE when set, else <project_root>/Age/keys.txt.
+
+    Honouring AGE_KEY_FILE is what lets the key live outside the repository
+    without silently downgrading the store to plaintext.
+
+    Not reusing paths.py's 'age_key_file': its './Age/keys.txt' default is
+    relative to the current working directory, which would break every test
+    building a store on a tmp_path project root.
+    """
+    env_key = os.environ.get("AGE_KEY_FILE")
+    return Path(env_key) if env_key else project_root / "Age" / "keys.txt"
+
+
+def plaintext_reason(age_key_file: Path) -> Optional[PlaintextReason]:
+    """None if encryption is active, otherwise the cause of the plaintext fallback.
+
+    A module-level function rather than a method because `setup doctor` must
+    report the effective mode WITHOUT constructing a store: in a locked
+    environment the constructor raises in precisely the case doctor needs to
+    report, so an instance method would make the diagnosis impossible.
+    """
+    if os.environ.get("NOAH_DISABLE_SOPS", "false").lower() in ("1", "true", "yes"):
+        return PlaintextReason.OPT_OUT
+    if not age_key_file.exists():
+        return PlaintextReason.KEY_MISSING
+    if not SopsClient.is_available():
+        return PlaintextReason.SOPS_MISSING
+    return None
+
+
+def _remediation_message(reason: PlaintextReason, age_key_file: Path) -> str:
+    """One actionable remedy per cause -- see PlaintextReason."""
+    remedy = {
+        PlaintextReason.OPT_OUT: (
+            "Unset NOAH_DISABLE_SOPS to restore encryption, or set "
+            "NOAH_ENVIRONMENT=development if plaintext is genuinely intended."
+        ),
+        PlaintextReason.KEY_MISSING: (
+            f"Restore the Age key at {age_key_file}, or point AGE_KEY_FILE at "
+            "wherever it lives. 'python3 noah.py setup initialize' creates one."
+        ),
+        PlaintextReason.SOPS_MISSING: (
+            "Install the sops binary ('python3 noah.py setup update-sops') and "
+            "make sure it is on PATH."
+        ),
+    }[reason]
+    declared = os.environ.get("NOAH_ENVIRONMENT") or "(unset -- treated as production)"
+    return (
+        "Refusing to write the canonical secrets store in plaintext: "
+        f"{reason.value}.\n"
+        f"  NOAH_ENVIRONMENT={declared}\n"
+        f"  {remedy}"
+    )
+
+
 @dataclass
 class CanonicalSecretsStore:
     project_root: Path = field(default_factory=lambda: Path.cwd())
@@ -95,18 +196,41 @@ class CanonicalSecretsStore:
 
     def __post_init__(self):
         self.secrets_dir = self.project_root / "Secrets"
-        self.secrets_dir.mkdir(exist_ok=True)
-        self.age_key_file = self.project_root / "Age" / "keys.txt"
-        self.encrypted = self._should_encrypt()
+        # 0o700 for the same reason the Age key is 0o600: nothing here is fit
+        # for other local users. Only applied when this call creates the dir.
+        self.secrets_dir.mkdir(mode=0o700, exist_ok=True)
+        self.age_key_file = resolve_age_key_file(self.project_root)
+
+        reason = self._plaintext_reason()
+        # Raise BEFORE _load(), and therefore before anything can be written: a
+        # file written in the clear stays on disk -- and probably in a backup --
+        # long after the setting is fixed. Warning after the fact undoes nothing.
+        if reason is not None and _environment_is_locked():
+            raise InsecureStoreError(_remediation_message(reason, self.age_key_file))
+
+        self.encrypted = reason is None
+        if reason is not None:
+            self._warn_plaintext(reason)
         self._load()
 
     # ---------------- Internal Helpers ----------------
-    def _should_encrypt(self) -> bool:
-        if os.environ.get("NOAH_DISABLE_SOPS", "false").lower() in ("1", "true", "yes"):  # explicit opt-out
-            return False
-        if not self.age_key_file.exists():
-            return False
-        return SopsClient.is_available()
+    def _plaintext_reason(self) -> Optional[PlaintextReason]:
+        return plaintext_reason(self.age_key_file)
+
+    def _warn_plaintext(self, reason: PlaintextReason) -> None:
+        """Outside a locked environment plaintext stays allowed, but must be
+        visible: a logger.warning alone drowns in the CLI output stream.
+
+        No click import here -- a security module must not depend on the
+        presentation layer, and must stay usable outside the CLI. Formatting
+        belongs to noah.py and doctor_utils.py, which already import click.
+        """
+        message = (
+            f"canonical secrets store is UNENCRYPTED ({reason.value}); "
+            f"secrets are written in plaintext to {self._plaintext_path()}"
+        )
+        logger.warning(message)
+        print(f"[WARNING] {message}", file=sys.stderr)
 
     def _encrypted_path(self) -> Path:
         return self.secrets_dir / CANONICAL_FILENAME_ENCRYPTED
@@ -205,7 +329,6 @@ class CanonicalSecretsStore:
     def _encrypt_in_place(self, path: Path) -> bool:
         if not self.encrypted:
             return True
-        from Scripts.security.sops_client import SopsEncryptionError
         try:
             with SopsClient(self.age_key_file) as sops:
                 sops.encrypt_in_place(path)
@@ -217,27 +340,52 @@ class CanonicalSecretsStore:
     # ---------------- Public API ----------------
     def save(self) -> bool:
         path = self._active_path()
-        # If switching encryption mode, remove previous variant to prevent confusion
-        try:
-            other = self._plaintext_path() if self.encrypted else self._encrypted_path()
-            if other.exists():
-                other.unlink()
-        except Exception:
-            pass
 
         # Refresh integrity before persisting
         self.data["integrity"] = self._compute_integrity()
         yaml_str = yaml.dump(self.data, default_flow_style=False, sort_keys=False)
-        path.write_text(yaml_str, encoding="utf-8")
-        if self.encrypted:
-            if not self._encrypt_in_place(path):
-                # Encryption failed — remove the plaintext file so a subsequent
-                # startup does not try (and fail) to SOPS-decrypt a plain YAML.
-                try:
-                    path.unlink(missing_ok=True)
-                except OSError:
-                    pass
+
+        # The content must never appear under its final name before it is in its
+        # final state. Write to a temp file in the SAME directory (os.replace is
+        # only atomic within one filesystem), then swap it in atomically.
+        #
+        # mkstemp creates the file O_EXCL at 0o600, so the mode is in force
+        # *before* any content is written -- a write_text() followed by a chmod
+        # would leave a real, if brief, world-readable window instead.
+        #
+        # The suffix mirrors the final name so SOPS' .sops.yaml creation rules
+        # match the temp file too. (encrypt_in_place makes its own .enc.yaml
+        # temp, so this is belt-and-braces rather than load-bearing today.)
+        suffix = ".enc.yaml" if self.encrypted else ".yaml"
+        fd, tmp_str = tempfile.mkstemp(
+            dir=self.secrets_dir, prefix=".canonical-", suffix=suffix
+        )
+        tmp = Path(tmp_str)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(yaml_str)
+            # No-op when not encrypted. On failure the definitive file is left
+            # untouched -- the previous state survives a failed save.
+            if not self._encrypt_in_place(tmp):
                 return False
+            os.replace(tmp, path)
+        except OSError as e:
+            logger.error("Failed to write canonical secrets to %s: %s", path.name, e)
+            return False
+        finally:
+            # No-op after a successful replace; the cleanup that matters is the
+            # failure path, which must not leave a temp file behind.
+            tmp.unlink(missing_ok=True)
+
+        # Only now that the new state is in place: drop the opposite-mode
+        # variant left by a previous run. Removing it first would destroy the
+        # old state before the new one exists.
+        try:
+            other = self._plaintext_path() if self.encrypted else self._encrypted_path()
+            if other.exists():
+                other.unlink()
+        except OSError:
+            pass
         return True
 
     def ensure_service(self, service: str):

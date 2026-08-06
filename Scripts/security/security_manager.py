@@ -35,6 +35,9 @@ import yaml
 from pathlib import Path
 from typing import Dict, Optional, Callable
 from datetime import datetime, timezone
+# Module-level so the `except InsecureStoreError: raise` clauses below always
+# resolve the name, even if a local import were to fail.
+from Scripts.security.canonical_store import InsecureStoreError
 
 
 class NoahSecurityManager:
@@ -211,6 +214,10 @@ class NoahSecurityManager:
         try:
             from Scripts.security.canonical_store import get_canonical_store
             store = get_canonical_store(self.project_root)
+        except InsecureStoreError:
+            # Falling back to "ephemeral generation" here would silently drop
+            # the very secrets the lock is protecting.
+            raise
         except Exception as e:
             print(f"[WARNING] Canonical secrets store unavailable ({e}) - falling back to ephemeral generation")
             store = None
@@ -238,6 +245,8 @@ class NoahSecurityManager:
         try:
             from Scripts.security.canonical_store import get_canonical_store
             store = get_canonical_store(self.project_root)
+        except InsecureStoreError:
+            raise
         except Exception as e:
             print(f"[ERROR] Cannot rotate canonical secrets (store unavailable): {e}")
             return {}

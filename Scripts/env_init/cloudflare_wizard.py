@@ -31,6 +31,10 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+# Module-level so the `except InsecureStoreError: raise` clause below always
+# resolves the name, even if a local import were to fail.
+from Scripts.security.canonical_store import InsecureStoreError
+
 try:
     import requests
 except ImportError:
@@ -321,6 +325,10 @@ class CloudflareWizard:
             }
             store.save()
             print("[SUCCESS] Cloudflare token stored in canonical secrets store.")
+        except InsecureStoreError:
+            # Writing the token in the clear is exactly what the lock forbids;
+            # degrading to the "run it manually" hint would hide that.
+            raise
         except Exception as exc:
             print(f"[WARNING] Could not write to canonical store: {exc}")
             print("[INFO] Run 'python3 Scripts/security/set_cloudflare_token.py <token>' manually if needed.")

@@ -19,7 +19,7 @@
 """
 NOAH v0.0.9 — `noah cluster bootstrap` implementation.
 
-Provisions a K3s cluster (single-node by default, --ha for a 3+ node
+Provisions a K3s cluster (single-node by default, --multi-node for a 3+ node
 embedded-etcd control plane — quorum and scheduling capacity, not a
 redundant entry point) and runs `flux bootstrap` against a GitOps
 repository. This replaces the v0.0.8 `noah cluster create` flow,
@@ -126,7 +126,7 @@ def _build_inventory(
 def _resolve_nodes(node: Optional[str], nodes: Optional[str], ha: bool) -> List[str]:
     if ha:
         if not nodes:
-            raise click.UsageError("--ha requires --nodes n1,n2,n3 (odd count >= 3).")
+            raise click.UsageError("--multi-node requires --nodes n1,n2,n3 (odd count >= 3).")
         node_list = _split_nodes(nodes)
         _validate_ha_nodes(node_list)
         return node_list
@@ -140,12 +140,12 @@ def _resolve_nodes(node: Optional[str], nodes: Optional[str], ha: bool) -> List[
         if len(node_list) != 1:
             raise click.UsageError(
                 "Single-node mode requires exactly one node. "
-                "Pass --ha to deploy multiple nodes."
+                "Pass --multi-node to deploy multiple nodes."
             )
         return node_list
     raise click.UsageError(
         "No node IP available. Pass --node <ip>, run `noah setup gitops --node-ip <ip>` "
-        "first (it records the IP in the canonical store), or use --ha --nodes n1,n2,n3."
+        "first (it records the IP in the canonical store), or use --multi-node --nodes n1,n2,n3."
     )
 
 

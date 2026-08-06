@@ -27,6 +27,9 @@ import json
 import os
 from pathlib import Path
 from Scripts.utils.paths import get_noah_paths  # reuse centralized implementation
+# Module-level so the `except InsecureStoreError: raise` clause below always
+# resolves the name, even if a local import were to fail.
+from Scripts.security.canonical_store import InsecureStoreError
 
 
 def get_security_config(domain=None):
@@ -96,6 +99,10 @@ def _create_fresh_config_enc(config_path: Path, age_key_file: Path, domain: str)
         stored = store.get_secret('authentik', 'secret_key')
         if stored:
             authentik_secret_key = stored
+    except InsecureStoreError:
+        # The broad handler below is a bare `pass`: without this clause a
+        # refusal to write in the clear would vanish without any trace at all.
+        raise
     except Exception:
         pass
 

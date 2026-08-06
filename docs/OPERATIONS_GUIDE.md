@@ -54,7 +54,7 @@ gitops/
 │   └── hubble-auth/            # Hubble UI ingress + Authentik forward-auth
 └── apps-extra/
     ├── nextcloud/              # file sync & share (OIDC via Authentik)
-    └── stalwart/               # mail server (SMTP/IMAP/JMAP)
+    └── stalwart/               # mail server (SMTP/IMAP/JMAP) — opt-in, see below
 ```
 
 The Flux reconciliation root lives at the repo root in `clusters/production/`
@@ -65,8 +65,15 @@ The Flux reconciliation root lives at the repo root in `clusters/production/`
 external-dns → cert-manager → cilium → nginx-ingress
             → authentik → hubble-auth
                         → headlamp
-                        → apps-extra (nextcloud, stalwart)
+                        → apps-extra (nextcloud, stalwart when opted in)
 ```
+
+Stalwart is the one component absent from a default install: it is listed in
+`gitops/apps-extra/kustomization.yaml` only when `setup gitops` is run with
+`--with-stalwart`. Because `apps-extra` reconciles with `prune: true`, dropping
+the flag on a later run deletes the `stalwart` namespace and everything in it.
+Its manifests and its entries in the canonical secrets store are untouched
+either way.
 
 ---
 

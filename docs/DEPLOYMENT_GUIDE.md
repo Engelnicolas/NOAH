@@ -46,7 +46,7 @@ There is no imperative `noah deploy <service>` — you provision with
 | 4 | Authentik SSO | ~7–10 min | PostgreSQL, Redis, Server + Worker (~2 GB RAM) |
 | 5 | Hubble auth | ~1–2 min | Forward-auth proxy auto-provisioned in Authentik |
 | 6 | Headlamp | ~3–5 min | OIDC client auto-registered in Authentik |
-| 7 | `apps-extra` | ~5–10 min | Nextcloud + Stalwart mail (`dependsOn: apps`) |
+| 7 | `apps-extra` | ~5–10 min | Nextcloud, plus Stalwart mail when opted in (`dependsOn: apps`) |
 
 ---
 
@@ -257,7 +257,7 @@ echo "$IP auth.your-domain.com headlamp.your-domain.com hubble.your-domain.com" 
 | Headlamp | `https://headlamp.your-domain.com` | "Sign in with OIDC" → Authentik |
 | Hubble UI | `https://hubble.your-domain.com` | Authentik forward-auth |
 | Nextcloud | `https://nextcloud.your-domain.com` | "Log in with Authentik" (OIDC) or local `admin` |
-| Stalwart mail (web admin) | `https://mail.your-domain.com` | break-glass `admin` (`secrets canonical --show`, service `stalwart`) |
+| Stalwart mail (web admin) *(opt-in)* | `https://mail.your-domain.com` | break-glass `admin` (`secrets canonical --show`, service `stalwart`) |
 
 Headlamp's OIDC client and Hubble's forward-auth proxy are **auto-provisioned**
 in Authentik during reconciliation; so are the Nextcloud and Stalwart OIDC
@@ -266,8 +266,22 @@ clients (`apps-extra`). See the
 
 ### Mail prerequisites (Stalwart)
 
-Stalwart reconciles like any other app, but **delivering real mail needs two
-AWS-side steps no manifest can do**:
+Stalwart is **opt-in and not part of a default install** — precisely because of
+the AWS-side prerequisites below. Enable it by re-running `setup gitops` with
+the flag, then committing and pushing so Flux picks it up:
+
+```bash
+python3 noah.py setup gitops --domain your-domain.com --with-stalwart
+git add gitops/ && git commit -m 'feat: enable Stalwart mail' && git push
+```
+
+The flag is **not sticky**: a later `setup gitops` run without it drops Stalwart
+from `gitops/apps-extra/kustomization.yaml`, and Flux prunes the namespace on the
+next reconcile. Its manifests and secrets stay in place either way, so toggling
+it back on needs no other change.
+
+Once enabled, Stalwart reconciles like any other app — but **delivering real
+mail needs two AWS-side steps no manifest can do**:
 
 1. **Outbound TCP 25 is blocked by default on EC2.** Ask AWS to lift it
    ("Request to Remove Email Sending Limitations" form), and open inbound

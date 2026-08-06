@@ -92,6 +92,42 @@ def _infer_previous_domain(gitops_dir: Path, current_domain: str) -> Optional[st
     return next(iter(candidates)) if len(candidates) == 1 else None
 
 
+_STALWART_ENTRY = "  - stalwart"
+
+
+def _set_stalwart_enabled(gitops_dir: Path, enabled: bool, print_status) -> None:
+    """Add or remove the `stalwart` entry in apps-extra/kustomization.yaml.
+
+    Stalwart is opt-in: a default install leaves it out of the Flux
+    reconciliation graph because delivering real mail needs AWS-level
+    prerequisites (outbound TCP 25, a PTR record) that no manifest provides.
+    Only the Kustomization entry is toggled — the manifests under
+    apps-extra/stalwart/ and the rendered stalwart-* Secrets are unaffected,
+    so enabling it later needs no other change.
+    """
+    kustomization = gitops_dir / "apps-extra" / "kustomization.yaml"
+    if not kustomization.exists():
+        raise RuntimeError(
+            f"{kustomization} not found — cannot toggle the Stalwart entry. "
+            "The gitops/ tree looks incomplete."
+        )
+
+    lines = kustomization.read_text().splitlines()
+    if enabled == (_STALWART_ENTRY in lines):
+        return
+
+    if enabled:
+        lines.append(_STALWART_ENTRY)
+    else:
+        lines.remove(_STALWART_ENTRY)
+    kustomization.write_text("\n".join(lines) + "\n")
+    print_status(
+        f"[SUCCESS] Stalwart {'added to' if enabled else 'removed from'} "
+        "apps-extra/kustomization.yaml",
+        "SUCCESS",
+    )
+
+
 def _indent_pem(pem: str, indent: str = "    ") -> str:
     """Re-indent a PEM block so it can replace a placeholder sitting inside a
     YAML block scalar (`|`). The first line inherits the placeholder's own
@@ -526,6 +562,7 @@ def setup_gitops(
     project_root: Path,
     print_status,
     node_public_ip: Optional[str] = None,
+    with_stalwart: bool = False,
 ) -> None:
     """
     Prepare the gitops/ subdirectory in-place: substitute domain, fill secrets,
@@ -535,6 +572,10 @@ def setup_gitops(
     When `node_public_ip` is provided, the ${NODE_PUBLIC_IP} placeholder (used by
     nginx-ingress' publish-status-address) is substituted too, so external-dns
     publishes DNS records pointing at the node's reachable public IP (EC2 EIP).
+
+    `with_stalwart` opts the mail server into the Flux reconciliation graph. It
+    is not sticky: the apps-extra Kustomization is rewritten to match on every
+    run, so a later run without the flag removes Stalwart again.
 
     After running, commit and push the NOAH repo so Flux can reconcile:
         git add gitops/ && git commit -m 'chore: update GitOps configuration'
@@ -546,6 +587,10 @@ def setup_gitops(
             "gitops/ directory not found in project root. "
             "Expected the GitOps manifests at gitops/."
         )
+
+    # Toggle the opt-in apps before touching any *.enc.yaml, so a broken
+    # gitops/ tree fails here rather than inside the plaintext window below.
+    _set_stalwart_enabled(gitops_dir, with_stalwart, print_status)
 
     age_key_file = project_root / "Age" / "keys.txt"
 

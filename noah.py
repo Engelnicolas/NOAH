@@ -665,8 +665,12 @@ def reset(force):
 @click.option('--node-ip', 'node_ip', default=None,
               help='Public IP (EC2 EIP) external-dns should publish; replaces '
                    '${NODE_PUBLIC_IP}. Defaults to the value stored in the canonical store.')
+@click.option('--with-stalwart', 'with_stalwart', is_flag=True,
+              help='Deploy the Stalwart mail server (opt-in: needs outbound TCP 25 '
+                   'and a PTR record on the node). Not sticky — a later run without '
+                   'this flag removes it from the reconciliation graph again.')
 @click.pass_context
-def gitops(ctx, domain, node_ip):
+def gitops(ctx, domain, node_ip, with_stalwart):
     """Prepare gitops/: substitute domain, fill secrets, encrypt. Then git push to GitHub."""
     from Scripts.gitops.gitops_init import setup_gitops
     from Scripts.security.canonical_store import get_canonical_store
@@ -681,6 +685,7 @@ def gitops(ctx, domain, node_ip):
     click.echo(f"  Domain  : {domain}")
     click.echo(f"  Node IP : {node_ip or '(none — ${NODE_PUBLIC_IP} left unsubstituted)'}")
     click.echo(f"  GitOps  : {project_root / 'gitops'}")
+    click.echo(f"  Stalwart: {'enabled' if with_stalwart else 'disabled (--with-stalwart to deploy mail)'}")
     click.echo("")
 
     try:
@@ -689,6 +694,7 @@ def gitops(ctx, domain, node_ip):
             project_root=project_root,
             print_status=print_status,
             node_public_ip=node_ip,
+            with_stalwart=with_stalwart,
         )
     except Exception as e:
         print_status(f"[ERROR] {e}", "ERROR")

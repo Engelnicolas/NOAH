@@ -64,7 +64,7 @@ python3 noah.py cluster bootstrap
 | **Headlamp** | Kubernetes dashboard, SSO-gated |
 | **Hubble UI** | Live network flows, SSO-gated via forward-auth |
 | **Nextcloud** | File sync & share, OIDC-integrated |
-| **Stalwart** | Mail server (SMTP / IMAP / JMAP) |
+| **Stalwart** | Mail server (SMTP / IMAP / JMAP) — **opt-in**, see below |
 
 ## Quick start
 
@@ -184,7 +184,11 @@ Every command supports `--help`.
 | Headlamp | `headlamp.your-domain.com` | Sign in with OIDC → Authentik |
 | Hubble UI | `hubble.your-domain.com` | Authentik forward-auth |
 | Nextcloud | `nextcloud.your-domain.com` | Log in with Authentik (OIDC), or local |
-| Stalwart mail | `mail.your-domain.com` | break-glass `admin` (`secrets canonical --show`) |
+| Stalwart mail *(opt-in)* | `mail.your-domain.com` | break-glass `admin` (`secrets canonical --show`) |
+
+Stalwart is **not deployed by default**. Add it with
+`python3 noah.py setup gitops --domain … --with-stalwart` (re-running without the
+flag removes it again), then commit and push.
 
 Mail protocols (SMTP 25/587/465, IMAP 143/993) bind the node's public IP directly.
 Sending real mail needs additional AWS-side steps — outbound port 25 unblocking and
@@ -247,7 +251,7 @@ NOAH/
 ├── gitops/                  # Helm/Kustomize manifests Flux reconciles
 │   ├── infrastructure/      # cilium, cert-manager, coredns, external-dns, nginx-ingress
 │   ├── apps/                # authentik, headlamp, hubble-auth
-│   └── apps-extra/          # nextcloud, stalwart
+│   └── apps-extra/          # nextcloud, stalwart (opt-in)
 └── docs/                    # documentation
 ```
 

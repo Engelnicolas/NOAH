@@ -117,7 +117,7 @@ clusters/production/          ← Flux reconciliation root (written by flux boot
 gitops/                       ← Actual Helm manifests reconciled by Flux
   infrastructure/             ← cilium, cert-manager, cert-manager-issuers, coredns, external-dns, nginx-ingress
   apps/                       ← authentik, headlamp, hubble-auth
-  apps-extra/                 ← nextcloud, stalwart
+  apps-extra/                 ← nextcloud, stalwart (opt-in: setup gitops --with-stalwart)
   apps/authentik_provisioner.py ← OIDC client provisioner (run by a Job)
 
 .sops.yaml                    ← Encryption rules (Age recipients) — repo root, gitignored

@@ -233,6 +233,47 @@ class TestRenderAppSecretManifests:
 
 
 # ---------------------------------------------------------------------------
+# Unit tests — the opt-in Stalwart toggle
+# ---------------------------------------------------------------------------
+
+class TestStalwartToggle:
+    """_set_stalwart_enabled rewrites apps-extra/kustomization.yaml to match the
+    requested state, so the flag is not sticky across runs."""
+
+    def _gitops_dir(self, tmp_path, resources):
+        extra = tmp_path / "apps-extra"
+        extra.mkdir(parents=True)
+        body = "".join(f"  - {r}\n" for r in resources)
+        (extra / "kustomization.yaml").write_text(
+            f"---\nkind: Kustomization\nresources:\n{body}"
+        )
+        return tmp_path
+
+    def _resources(self, gitops_dir):
+        return yaml.safe_load(
+            (gitops_dir / "apps-extra" / "kustomization.yaml").read_text()
+        )["resources"]
+
+    def test_disabling_removes_a_previously_added_entry(self, tmp_path):
+        from Scripts.gitops import gitops_init
+        d = self._gitops_dir(tmp_path, ["nextcloud", "stalwart"])
+        gitops_init._set_stalwart_enabled(d, False, _noop_print_status)
+        assert self._resources(d) == ["nextcloud"]
+
+    def test_enabling_twice_does_not_duplicate_the_entry(self, tmp_path):
+        from Scripts.gitops import gitops_init
+        d = self._gitops_dir(tmp_path, ["nextcloud"])
+        gitops_init._set_stalwart_enabled(d, True, _noop_print_status)
+        gitops_init._set_stalwart_enabled(d, True, _noop_print_status)
+        assert self._resources(d) == ["nextcloud", "stalwart"]
+
+    def test_missing_kustomization_raises(self, tmp_path):
+        from Scripts.gitops import gitops_init
+        with pytest.raises(RuntimeError, match="cannot toggle the Stalwart entry"):
+            gitops_init._set_stalwart_enabled(tmp_path, True, _noop_print_status)
+
+
+# ---------------------------------------------------------------------------
 # Unit tests — setup_gitops() end-to-end (in-place; SOPS + store mocked)
 # ---------------------------------------------------------------------------
 
@@ -242,7 +283,7 @@ class TestSetupGitopsInPlace:
     records the node IP in the canonical store, then SOPS-encrypts. SOPS, the
     canonical store and secret generation are mocked."""
 
-    def _run(self, project_root, node_public_ip=None):
+    def _run(self, project_root, node_public_ip=None, with_stalwart=False):
         from Scripts.gitops import gitops_init
 
         hr_dir = project_root / "gitops" / "infrastructure" / "nginx-ingress"
@@ -251,6 +292,13 @@ class TestSetupGitopsInPlace:
         hr.write_text(
             "host: auth.${DOMAIN}\n"
             "publish-status-address: ${NODE_PUBLIC_IP}\n"
+        )
+
+        # setup_gitops toggles the opt-in Stalwart entry here.
+        extra_dir = project_root / "gitops" / "apps-extra"
+        extra_dir.mkdir(parents=True)
+        (extra_dir / "kustomization.yaml").write_text(
+            "---\nkind: Kustomization\nresources:\n  - nextcloud\n"
         )
 
         store = MagicMock()
@@ -267,8 +315,22 @@ class TestSetupGitopsInPlace:
                 project_root=project_root,
                 print_status=_noop_print_status,
                 node_public_ip=node_public_ip,
+                with_stalwart=with_stalwart,
             )
         return hr, store
+
+    def _apps_extra_resources(self, project_root):
+        return yaml.safe_load(
+            (project_root / "gitops" / "apps-extra" / "kustomization.yaml").read_text()
+        )["resources"]
+
+    def test_stalwart_is_absent_by_default(self, project_root):
+        self._run(project_root)
+        assert self._apps_extra_resources(project_root) == ["nextcloud"]
+
+    def test_with_stalwart_adds_it_to_the_reconciliation_graph(self, project_root):
+        self._run(project_root, with_stalwart=True)
+        assert self._apps_extra_resources(project_root) == ["nextcloud", "stalwart"]
 
     def test_leaves_domain_placeholder_for_flux(self, project_root):
         hr, _ = self._run(project_root)
@@ -367,7 +429,10 @@ def test_sops_encrypt_integration(project_root, tmp_path):
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-APPS_EXTRA = ('nextcloud', 'stalwart')
+# Reconciled by default. Stalwart is opt-in (`setup gitops --with-stalwart`),
+# so its directory exists but must NOT be listed in the committed Kustomization.
+APPS_EXTRA = ('nextcloud',)
+OPTIONAL_APPS_EXTRA = ('stalwart',)
 
 
 def _load_yaml(path):
@@ -375,20 +440,29 @@ def _load_yaml(path):
 
 
 class TestAppsExtraWiring:
-    def test_kustomization_lists_every_app_directory(self):
+    def test_kustomization_lists_exactly_the_default_apps(self):
         listed = _load_yaml(REPO_ROOT / 'gitops/apps-extra/kustomization.yaml')['resources']
+        assert sorted(listed) == sorted(APPS_EXTRA)
+
+    def test_every_app_directory_is_default_or_optional(self):
+        """Catches an app added to the manifests but wired into neither list."""
         on_disk = sorted(
             p.name for p in (REPO_ROOT / 'gitops/apps-extra').iterdir()
             if p.is_dir() and not p.name.startswith('.')
         )
-        assert sorted(listed) == on_disk
+        assert on_disk == sorted(APPS_EXTRA + OPTIONAL_APPS_EXTRA)
 
     @pytest.mark.parametrize('app', APPS_EXTRA)
     def test_app_is_listed(self, app):
         listed = _load_yaml(REPO_ROOT / 'gitops/apps-extra/kustomization.yaml')['resources']
         assert app in listed
 
-    @pytest.mark.parametrize('app', APPS_EXTRA)
+    @pytest.mark.parametrize('app', OPTIONAL_APPS_EXTRA)
+    def test_optional_app_is_not_listed_by_default(self, app):
+        listed = _load_yaml(REPO_ROOT / 'gitops/apps-extra/kustomization.yaml')['resources']
+        assert app not in listed
+
+    @pytest.mark.parametrize('app', APPS_EXTRA + OPTIONAL_APPS_EXTRA)
     def test_app_declares_its_own_namespace(self, app):
         ns = _load_yaml(REPO_ROOT / f'gitops/apps-extra/{app}/namespace.yaml')
         assert ns['kind'] == 'Namespace'

@@ -1,6 +1,9 @@
 ---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+# Stalwart (mail) is opt-in, so it is absent here by default: delivering real
+# mail needs AWS-level prerequisites (outbound TCP 25, a PTR record for the EIP)
+# that no manifest can provide. Its manifests stay in stalwart/ either way —
+# `noah setup gitops --with-stalwart` adds the entry back below.
 resources:
   - nextcloud
-  - stalwart

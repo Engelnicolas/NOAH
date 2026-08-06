@@ -430,3 +430,29 @@ class TestAtomicSave:
         _stub_encrypt(monkeypatch, ok=True)
         assert store.save() is True
         assert not stale.exists()
+
+
+# ---------------------------------------------------------------------------
+# The store files must be un-committable. A per-file .gitignore rule once left
+# the plaintext variant and save()'s temp files exposed while only the
+# encrypted one was covered -- the inverse of what matters.
+# ---------------------------------------------------------------------------
+
+class TestStoreFilesAreGitIgnored:
+    @pytest.mark.parametrize("name", [
+        CANONICAL_FILENAME_ENCRYPTED,
+        CANONICAL_FILENAME_PLAINTEXT,
+        ".canonical-ab12cd.enc.yaml",   # save() temp, encrypted mode
+        ".canonical-ab12cd.yaml",       # save() temp, plaintext mode
+    ])
+    def test_every_store_file_is_ignored(self, name):
+        import subprocess
+        repo = Path(__file__).resolve().parent.parent
+        if not (repo / ".git").exists():
+            pytest.skip("not a git work tree")
+        result = subprocess.run(
+            ["git", "-C", str(repo), "check-ignore", "-q", f"Secrets/{name}"],
+        )
+        assert result.returncode == 0, (
+            f"Secrets/{name} is not git-ignored: a store file could be committed"
+        )

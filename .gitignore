@@ -64,6 +64,14 @@ Secrets/canonical-secrets.enc.yaml
 # Age key) — not committed.#
 ############################
 Age/
+# Whole directory, like Age/ above: Age/keys.txt and the canonical store are
+# the two halves of the only copy of secret material, and neither is ever
+# committed. A per-file rule left the *plaintext* variant
+# (Secrets/canonical-secrets.yaml) and save()'s crash-residue temp files
+# (Secrets/.canonical-*) exposed — the exact files that must never be pushed.
+# Directory exclusion also overrides the `!*.enc.yaml` un-ignore above, since
+# git cannot re-include a file whose parent directory is excluded.
+Secrets/
 *.agekey
 .sops.yaml
 

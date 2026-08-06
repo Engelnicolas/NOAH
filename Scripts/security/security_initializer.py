@@ -27,9 +27,6 @@ import json
 import os
 from pathlib import Path
 from Scripts.utils.paths import get_noah_paths  # reuse centralized implementation
-# Module-level so the `except InsecureStoreError: raise` clause below always
-# resolves the name, even if a local import were to fail.
-from Scripts.security.canonical_store import InsecureStoreError
 
 
 def get_security_config(domain=None):
@@ -91,21 +88,6 @@ def _create_fresh_config_enc(config_path: Path, age_key_file: Path, domain: str)
     import shutil
     import yaml  # type: ignore
 
-    # Pull authentik secret_key from canonical store if available
-    authentik_secret_key = secrets.token_urlsafe(38)
-    try:
-        from Scripts.security.canonical_store import get_canonical_store
-        store = get_canonical_store()
-        stored = store.get_secret('authentik', 'secret_key')
-        if stored:
-            authentik_secret_key = stored
-    except InsecureStoreError:
-        # The broad handler below is a bare `pass`: without this clause a
-        # refusal to write in the clear would vanish without any trace at all.
-        raise
-    except Exception:
-        pass
-
     config_data = {
         'noah': {'version': '0.0.4', 'domain': domain},
         'kubernetes': {
@@ -114,7 +96,12 @@ def _create_fresh_config_enc(config_path: Path, age_key_file: Path, domain: str)
             'namespace_network': 'kube-system',
             'api_version': '1.32',
         },
-        'authentik': {'secret_key': authentik_secret_key},
+        # No 'authentik' entry: Authentik's real secret_key travels from the
+        # canonical store to the Helm values Secret (REPLACE_WITH_50_CHAR_SECRET
+        # in gitops_init), never through this file. The key that used to sit
+        # here held an unrelated random value -- SecureEnvLoader flattens this
+        # mapping into os.environ on every noah.py start, so it published an
+        # AUTHENTIK_SECRET_KEY that no code read and that matched nothing.
         'certificates': {'ca_key_password': secrets.token_urlsafe(24)},
         'secrets': {'encryption_key': secrets.token_hex(32)},
         'paths': {'secrets_dir': 'Scripts/Secrets'},

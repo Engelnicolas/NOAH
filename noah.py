@@ -58,6 +58,7 @@ if _CONFIG_ENC.exists():
 # Import CLI utilities
 from Scripts.core_helm.cluster_manager import ClusterManager
 from Scripts.security.security_manager import NoahSecurityManager as SecretManager
+from Scripts.security.canonical_store import InsecureStoreError
 from Scripts.utils.ansible_runner import AnsibleRunner
 from Scripts.utils.config_loader import ConfigLoader
 from Scripts.env_init.environment_initializer import initialize_noah_environment, update_sops_version
@@ -862,4 +863,12 @@ def override(ctx, service, domain, subdomain, namespace):
         click.echo(f"  Namespace: {result['namespace']}")
 
 if __name__ == '__main__':
-    cli()  # type: ignore
+    try:
+        cli()  # type: ignore
+    except InsecureStoreError as e:
+        # The refusal already names the cause and the remedy it needs; a stack
+        # trace would only bury them. Still a non-zero exit, so callers and
+        # scripts see the failure exactly as before.
+        click.echo("", err=True)
+        click.echo(f"❌ {e}", err=True)
+        sys.exit(1)

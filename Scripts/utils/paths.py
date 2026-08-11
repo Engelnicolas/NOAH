@@ -37,14 +37,13 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Dict
 
 __all__ = [
-    'get_noah_paths',
-    'NOAH_PATHS'
+    'NOAH_PATHS',
+    'get_noah_paths'
 ]
 
-def get_noah_paths() -> Dict[str, Path]:
+def get_noah_paths() -> dict[str, Path]:
     """Resolve and return NOAH directory paths from environment variables.
 
     Each path falls back to a sane default relative to current working directory

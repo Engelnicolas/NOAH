@@ -28,6 +28,7 @@ The token is written once and reused by every subsequent deployment that
 needs CLOUDFLARE_API_TOKEN (external-dns, cert-manager DNS-01, etc.).
 """
 from __future__ import annotations
+
 import argparse
 import sys
 from pathlib import Path

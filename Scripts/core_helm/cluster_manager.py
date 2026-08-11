@@ -18,20 +18,20 @@
 
 """Kubernetes cluster management module"""
 
-import subprocess
 import json
+import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Optional, List
+from typing import Any
 
 # Namespaces surfaced by `noah status`: the app namespaces created under
 # gitops/apps and gitops/apps-extra, plus kube-system for the CNI and Headlamp.
 MONITORED_NAMESPACES = ('authentik', 'headlamp', 'nextcloud', 'stalwart', 'kube-system')
 
 # Optional imports with graceful fallbacks
-client: Optional[Any] = None
-config: Optional[Any] = None
-ApiException: Optional[Any] = None
+client: Any | None = None
+config: Any | None = None
+ApiException: Any | None = None
 
 try:
     from kubernetes import client, config  # type: ignore
@@ -56,7 +56,7 @@ class ClusterManager:
 
         if client is None or config is None:
             # Try to dynamically discover a local .venv if user forgot to activate it
-            venv_candidates: List[Path] = []
+            venv_candidates: list[Path] = []
             cwd = Path.cwd()
             venv_dir = cwd / '.venv'
             if venv_dir.exists():
@@ -82,8 +82,11 @@ class ClusterManager:
                     added_paths.append(p_str)
             if added_paths:
                 try:
-                    from kubernetes import client as k_client, config as k_config  # type: ignore
-                    from kubernetes.client.rest import ApiException as KApiException  # type: ignore
+                    from kubernetes import client as k_client  # type: ignore
+                    from kubernetes import config as k_config
+                    from kubernetes.client.rest import (
+                        ApiException as KApiException,  # type: ignore
+                    )
                     client, config, ApiException = k_client, k_config, KApiException
                 except Exception:
                     pass
@@ -137,7 +140,7 @@ class ClusterManager:
             print(f"Error deleting namespace: {e}")
             return False
     
-    def get_service_endpoint(self, service_name: str, namespace: str) -> Optional[str]:
+    def get_service_endpoint(self, service_name: str, namespace: str) -> str | None:
         """Get the endpoint for a service"""
         if self.core_v1 is None:
             print(f"⚠️  Warning: No Kubernetes cluster connected. Cannot get endpoint for {service_name}")
@@ -226,7 +229,7 @@ class ClusterManager:
     def _kubectl_exists(self) -> bool:
         return subprocess.run(['which', 'kubectl'], capture_output=True).returncode == 0
 
-    def _current_kube_context(self) -> Optional[str]:
+    def _current_kube_context(self) -> str | None:
         try:
             result = subprocess.run(['kubectl', 'config', 'current-context'], capture_output=True, text=True)
             if result.returncode == 0:

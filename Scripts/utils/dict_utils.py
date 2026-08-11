@@ -24,11 +24,12 @@ Currently provides:
 Used for converting nested configuration structures to flat environment style key maps.
 """
 from __future__ import annotations
-from typing import Any, Dict
+
+from typing import Any
 
 __all__ = ["flatten_mapping"]
 
-def flatten_mapping(data: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, str]:
+def flatten_mapping(data: dict[str, Any], parent_key: str = '', sep: str = '_') -> dict[str, str]:
     """Flatten a nested mapping into a single-level dict.
 
     Nested keys are concatenated using the provided separator and uppercased.

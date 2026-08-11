@@ -35,7 +35,6 @@ import socket
 import ssl
 import subprocess
 import time
-from typing import List, Optional, Tuple
 
 import click  # type: ignore
 
@@ -49,14 +48,14 @@ _SERVICE_SUBDOMAINS = ("auth", "headlamp", "hubble")
 _RULE = "─" * 60
 
 # (relative/name, ready, message)
-Row = Tuple[str, bool, str]
+Row = tuple[str, bool, str]
 
 
 def _kubectl_available() -> bool:
     return shutil.which("kubectl") is not None
 
 
-def _get_json(resource: str) -> Tuple[Optional[dict], str]:
+def _get_json(resource: str) -> tuple[dict | None, str]:
     """`kubectl get <resource> -A -o json`. Returns (parsed, error)."""
     r = subprocess.run(
         ["kubectl", "get", resource, "-A", "-o", "json"],
@@ -70,7 +69,7 @@ def _get_json(resource: str) -> Tuple[Optional[dict], str]:
         return None, str(exc)
 
 
-def _ready(item: dict) -> Tuple[bool, str]:
+def _ready(item: dict) -> tuple[bool, str]:
     """Read the Flux `Ready` condition of a single resource."""
     for cond in item.get("status", {}).get("conditions", []):
         if cond.get("type") == "Ready":
@@ -78,11 +77,11 @@ def _ready(item: dict) -> Tuple[bool, str]:
     return False, "no Ready condition yet (reconciling…)"
 
 
-def _collect(resource: str) -> Tuple[List[Row], str]:
+def _collect(resource: str) -> tuple[list[Row], str]:
     data, err = _get_json(resource)
     if data is None:
         return [], err
-    rows: List[Row] = []
+    rows: list[Row] = []
     for item in data.get("items", []):
         meta = item.get("metadata", {})
         name = f"{meta.get('namespace', '')}/{meta.get('name', '')}"
@@ -91,7 +90,7 @@ def _collect(resource: str) -> Tuple[List[Row], str]:
     return rows, ""
 
 
-def _all_ready(ks_rows: List[Row], hr_rows: List[Row]) -> bool:
+def _all_ready(ks_rows: list[Row], hr_rows: list[Row]) -> bool:
     # Require at least one of each so we don't declare success before the CRDs
     # have produced any objects.
     return (
@@ -101,7 +100,7 @@ def _all_ready(ks_rows: List[Row], hr_rows: List[Row]) -> bool:
     )
 
 
-def _node_internal_ips() -> List[str]:
+def _node_internal_ips() -> list[str]:
     """Node InternalIPs via kubectl — the DNS-independent connect targets for the
     URL probe. nginx binds the node's :443 (hostPort), so these reach the same
     ingress as the public hostname, yet unlike the public EIP they're reachable
@@ -109,7 +108,7 @@ def _node_internal_ips() -> List[str]:
     data, _ = _get_json("nodes")
     if not data:
         return []
-    ips: List[str] = []
+    ips: list[str] = []
     for item in data.get("items", []):
         for addr in item.get("status", {}).get("addresses", []):
             if addr.get("type") == "InternalIP" and addr.get("address"):
@@ -117,7 +116,7 @@ def _node_internal_ips() -> List[str]:
     return ips
 
 
-def _status_code(status_line: str) -> Optional[int]:
+def _status_code(status_line: str) -> int | None:
     """Parse the numeric status from an HTTP status line (`HTTP/1.1 200 OK`)."""
     parts = status_line.split()
     if len(parts) >= 2 and parts[0].startswith("HTTP/"):
@@ -128,7 +127,7 @@ def _status_code(status_line: str) -> Optional[int]:
     return None
 
 
-def _probe_host(host: str, connect_ips: List[str], timeout: int) -> Tuple[bool, str]:
+def _probe_host(host: str, connect_ips: list[str], timeout: int) -> tuple[bool, str]:
     """Probe https://host without DNS: connect to each candidate node-local IP in
     turn, always presenting `host` for SNI + the HTTP Host header so TLS validates
     against the service's Let's Encrypt cert and nginx routes by vhost. Returns
@@ -171,7 +170,7 @@ def _probe_host(host: str, connect_ips: List[str], timeout: int) -> Tuple[bool, 
     return False, last
 
 
-def _check_urls(domain: str, timeout: int = 10) -> List[Row]:
+def _check_urls(domain: str, timeout: int = 10) -> list[Row]:
     """Probe each service URL once; returns one (url, reachable, detail) Row each.
 
     DNS-independent: connects to node-local addresses (the node's InternalIP, then
@@ -181,7 +180,7 @@ def _check_urls(domain: str, timeout: int = 10) -> List[Row]:
     SNI/Host stays the service host so TLS still validates against the LE cert."""
     connect_ips = _node_internal_ips()
     connect_ips.append("127.0.0.1")
-    rows: List[Row] = []
+    rows: list[Row] = []
     for sub in _SERVICE_SUBDOMAINS:
         host = f"{sub}.{domain}"
         ok, detail = _probe_host(host, connect_ips, timeout)
@@ -189,7 +188,7 @@ def _check_urls(domain: str, timeout: int = 10) -> List[Row]:
     return rows
 
 
-def _all_urls_ok(url_rows: Optional[List[Row]]) -> bool:
+def _all_urls_ok(url_rows: list[Row] | None) -> bool:
     return bool(url_rows) and all(ok for _, ok, _ in url_rows)
 
 
@@ -199,7 +198,7 @@ def _print_node_side_help() -> None:
     click.echo("    flux get all --all-namespaces")
 
 
-def _print_admin_credentials(domain: Optional[str]) -> None:
+def _print_admin_credentials(domain: str | None) -> None:
     """Print the Authentik admin login provisioned during bootstrap (user
     `akadmin`). Best-effort: the password lives in the SOPS-encrypted canonical
     store, so this prints a hint instead when it can't be read (e.g. no Age key
@@ -222,8 +221,8 @@ def _print_admin_credentials(domain: Optional[str]) -> None:
         click.echo("   Retrieve them with: noah password show-password")
 
 
-def _print_summary(ks_rows: List[Row], hr_rows: List[Row], success: bool,
-                   url_rows: Optional[List[Row]], domain: Optional[str]) -> None:
+def _print_summary(ks_rows: list[Row], hr_rows: list[Row], success: bool,
+                   url_rows: list[Row] | None, domain: str | None) -> None:
     click.echo("\n" + _RULE)
     if success:
         msg = " ✅ Cluster deployed — components Ready" + (
@@ -234,7 +233,7 @@ def _print_summary(ks_rows: List[Row], hr_rows: List[Row], success: bool,
         click.echo(click.style(" ❌ Cluster NOT fully converged within the timeout", fg="red", bold=True))
     click.echo(_RULE)
 
-    def _emit(title: str, rows: List[Row], show_detail_when_ok: bool = False) -> None:
+    def _emit(title: str, rows: list[Row], show_detail_when_ok: bool = False) -> None:
         click.echo(click.style(f"\n {title}", bold=True))
         if not rows:
             click.echo(click.style("   (none found yet)", fg="yellow"))
@@ -263,7 +262,7 @@ def _print_summary(ks_rows: List[Row], hr_rows: List[Row], success: bool,
                 "controller or Let's Encrypt TLS issuance can take a few minutes.)", fg="bright_black"))
 
 
-def verify_deployment(domain: Optional[str] = None, timeout: int = 600,
+def verify_deployment(domain: str | None = None, timeout: int = 600,
                       poll_interval: int = 10, url_timeout: int = 300) -> bool:
     """Verify a deployment in two phases and return True only if both pass:
 
@@ -300,8 +299,8 @@ def verify_deployment(domain: Optional[str] = None, timeout: int = 600,
     click.echo(click.style(f"  timeout={timeout}s  poll={poll_interval}s\n", fg="bright_black"))
 
     deadline = time.monotonic() + timeout
-    ks_rows: List[Row] = []
-    hr_rows: List[Row] = []
+    ks_rows: list[Row] = []
+    hr_rows: list[Row] = []
     while True:
         ks_rows, _ = _collect(KUSTOMIZATION_RESOURCE)
         hr_rows, _ = _collect(HELMRELEASE_RESOURCE)
@@ -327,7 +326,7 @@ def verify_deployment(domain: Optional[str] = None, timeout: int = 600,
     # is issued), probing node-local addresses so it works on the node itself.
     # Only meaningful once Flux has converged and a domain is known; otherwise
     # url_rows stays None and the verdict is Flux-only.
-    url_rows: Optional[List[Row]] = None
+    url_rows: list[Row] | None = None
     if flux_ok and domain:
         click.echo(click.style(
             f"\n Flux converged — checking URL reachability (timeout={url_timeout}s)", bold=True))

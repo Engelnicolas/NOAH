@@ -25,11 +25,10 @@ and enables external-dns in the deployment configuration.
 """
 
 import os
-import sys
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 # Module-level so the `except InsecureStoreError: raise` clause below always
 # resolves the name, even if a local import were to fail.
@@ -53,12 +52,12 @@ class CloudflareWizard:
 
     CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4"
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or Path(__file__).parent.parent.parent
         self.config_file = self.project_root / "Config" / "config.enc.yaml"
-        self._token: Optional[str] = None
-        self._zone_id: Optional[str] = None
-        self._domain: Optional[str] = None
+        self._token: str | None = None
+        self._zone_id: str | None = None
+        self._domain: str | None = None
 
     # ------------------------------------------------------------------
     # Public entry-point
@@ -312,8 +311,9 @@ class CloudflareWizard:
     def _persist_to_canonical_store(self) -> None:
         """Write the validated token into the canonical secrets store (same as set_cloudflare_token.py)."""
         try:
-            from Scripts.security.canonical_store import get_canonical_store
             from datetime import datetime, timezone
+
+            from Scripts.security.canonical_store import get_canonical_store
 
             store = get_canonical_store(self.project_root)
             store.ensure_service("cloudflare")

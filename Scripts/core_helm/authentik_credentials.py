@@ -23,7 +23,7 @@ Extracted from noah.py to reduce main CLI size and improve reuse.
 """
 from __future__ import annotations
 
-from typing import Optional, Any
+from typing import Any
 
 # Module-level so the `except InsecureStoreError: raise` clauses below always
 # resolve the name. Importing it inside the try blocks would leave it unbound
@@ -108,7 +108,7 @@ def get_admin_credentials(domain: str | None = None) -> tuple[list[dict[str, Any
         return None, f"Error retrieving canonical credentials: {e}"
 
 
-def get_authentik_credentials(domain: str | None = None) -> tuple[Optional[dict[str, Any]], Optional[str]]:
+def get_authentik_credentials(domain: str | None = None) -> tuple[dict[str, Any] | None, str | None]:
     """Get Authentik admin credentials from canonical secrets store.
 
     Behavior:
@@ -158,8 +158,10 @@ def get_authentik_credentials(domain: str | None = None) -> tuple[Optional[dict[
 def regenerate_authentik_password():
     """Generate a new Authentik admin password and update canonical store (increments version)."""
     try:
-        from Scripts.security.security_manager import NoahSecurityManager  # type: ignore
         from Scripts.security.canonical_store import get_canonical_store  # type: ignore
+        from Scripts.security.security_manager import (
+            NoahSecurityManager,  # type: ignore
+        )
         sm = NoahSecurityManager()
         store = get_canonical_store()
         sm.generate_service_secrets('authentik')  # ensure base entries exist

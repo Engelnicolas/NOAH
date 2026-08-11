@@ -41,9 +41,10 @@ import logging
 import os
 import subprocess
 import tempfile
-import yaml
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -111,9 +112,9 @@ class SopsClient:
     def __init__(
         self,
         age_key_file: Path,
-        sops_config: Optional[Path] = None,
+        sops_config: Path | None = None,
         timeout: int = 30,
-        _runner: Optional[Callable[[list[str]], subprocess.CompletedProcess]] = None,
+        _runner: Callable[[list[str]], subprocess.CompletedProcess] | None = None,
     ) -> None:
         self.age_key_file = Path(age_key_file)
         self.sops_config = Path(sops_config) if sops_config else None
@@ -128,7 +129,7 @@ class SopsClient:
     # Context manager
     # ------------------------------------------------------------------
 
-    def __enter__(self) -> "SopsClient":
+    def __enter__(self) -> SopsClient:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
@@ -188,7 +189,7 @@ class SopsClient:
             If encryption fails.
         """
         path = Path(path)
-        tmp_path: Optional[Path] = None
+        tmp_path: Path | None = None
         try:
             # 1. Copy plaintext to a temp file in the same directory.
             # Suffix must match a .sops.yaml creation rule so SOPS can find the key.

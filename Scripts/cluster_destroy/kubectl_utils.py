@@ -25,8 +25,9 @@ Helps manage kubectl configuration, cache, and environment cleanup.
 
 import os
 import shutil
-import click
 from pathlib import Path
+
+import click
 
 
 def cleanup_kubectl_cache():

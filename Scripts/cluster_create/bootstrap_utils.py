@@ -44,17 +44,16 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import click  # type: ignore
 import yaml  # type: ignore
 
 
-def _split_nodes(nodes_csv: str) -> List[str]:
+def _split_nodes(nodes_csv: str) -> list[str]:
     return [n.strip() for n in nodes_csv.split(",") if n.strip()]
 
 
-def _validate_ha_nodes(nodes: List[str]) -> None:
+def _validate_ha_nodes(nodes: list[str]) -> None:
     if len(nodes) < 3 or len(nodes) % 2 == 0:
         raise click.UsageError(
             "HA mode requires an odd number of nodes >= 3 "
@@ -83,10 +82,10 @@ def _load_age_private_key(age_key_file: Path) -> str:
 
 
 def _build_inventory(
-    nodes: List[str],
+    nodes: list[str],
     ha_mode: bool,
     ssh_user: str,
-    ssh_key: Optional[str],
+    ssh_key: str | None,
 ) -> dict:
     """Construct the dynamic inventory consumed by bootstrap-k3s.yml.
 
@@ -123,7 +122,7 @@ def _build_inventory(
     }
 
 
-def _resolve_nodes(node: Optional[str], nodes: Optional[str], ha: bool) -> List[str]:
+def _resolve_nodes(node: str | None, nodes: str | None, ha: bool) -> list[str]:
     if ha:
         if not nodes:
             raise click.UsageError("--multi-node requires --nodes n1,n2,n3 (odd count >= 3).")
@@ -191,7 +190,7 @@ def _flux_ssh_url(flux_repo: str) -> str:
     return repo
 
 
-def _parse_git_url(flux_repo: str) -> Tuple[str, str, str]:
+def _parse_git_url(flux_repo: str) -> tuple[str, str, str]:
     """Extract (host, owner, repo) from any common Git URL format.
 
     Supports:
@@ -211,7 +210,7 @@ def _parse_git_url(flux_repo: str) -> Tuple[str, str, str]:
     raise ValueError(f"Cannot parse host/owner/repo from git URL: {flux_repo!r}")
 
 
-def _detect_provider(host: str, hint: Optional[str] = None) -> str:
+def _detect_provider(host: str, hint: str | None = None) -> str:
     """Return the git provider name for a given host.
 
     Known providers are detected automatically; pass *hint* to override
@@ -239,7 +238,7 @@ def _register_deploy_key(
     flux_repo: str,
     git_token: str,
     public_key: str,
-    provider_hint: Optional[str] = None,
+    provider_hint: str | None = None,
 ) -> bool:
     """Register the SSH deploy key with any supported git provider.
 
@@ -250,8 +249,8 @@ def _register_deploy_key(
     False on failure (caller falls back to the interactive manual prompt).
     """
     import json
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     KEY_TITLE = "NOAH FluxCD deploy key"
     key_body = public_key.strip().split()[1]   # base64 portion for duplicate check
@@ -428,7 +427,7 @@ def _key_is_accepted_by_remote(repo_url: str, key_file: Path) -> bool:
     return result.returncode == 0
 
 
-def _get_or_create_flux_deploy_key(key_file: Path) -> Tuple[str, str]:
+def _get_or_create_flux_deploy_key(key_file: Path) -> tuple[str, str]:
     """Return (private_key_content, public_key_content), generating if needed.
 
     The key is an ed25519 keypair stored under Age/ alongside the Age key so
@@ -623,21 +622,21 @@ def _run_ansible_with_progress(cmd: list, cwd: Path, env: dict) -> int:
 
 def run_bootstrap(
     *,
-    node: Optional[str],
-    nodes: Optional[str],
+    node: str | None,
+    nodes: str | None,
     ha: bool,
     domain: str,
     flux_repo: str,
     ssh_user: str,
-    ssh_key: Optional[str],
+    ssh_key: str | None,
     age_key_file: Path,
-    k3s_version: Optional[str],
+    k3s_version: str | None,
     flux_branch: str,
     flux_path: str,
     force_reset: bool,
     ansible_dir: Path,
-    git_token: Optional[str] = None,
-    git_provider: Optional[str] = None,
+    git_token: str | None = None,
+    git_provider: str | None = None,
 ) -> int:
     """Drive the bootstrap end-to-end. Returns the Ansible exit code."""
 
@@ -761,11 +760,11 @@ def run_bootstrap(
 def run_add_nodes(
     *,
     primary: str,
-    new_nodes: List[str],
+    new_nodes: list[str],
     ssh_user: str,
-    ssh_key: Optional[str],
+    ssh_key: str | None,
     ansible_dir: Path,
-    k3s_version: Optional[str],
+    k3s_version: str | None,
 ) -> int:
     """Scale a single-node cluster to HA by joining new server nodes.
 
@@ -883,7 +882,7 @@ def show_cluster_status_v2() -> int:
     if a tool is missing so this stays useful in partial-install
     debugging.
     """
-    def _run(cmd: List[str]) -> Tuple[int, str]:
+    def _run(cmd: list[str]) -> tuple[int, str]:
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             return r.returncode, (r.stdout + r.stderr).rstrip()

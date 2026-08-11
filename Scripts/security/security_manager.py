@@ -28,13 +28,15 @@ Comprehensive security management for NOAH infrastructure including:
 """
 
 import os
-import subprocess
 import secrets
 import string
-import yaml
-from pathlib import Path
-from typing import Dict, Optional, Callable
+import subprocess
+from collections.abc import Callable
 from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
+
 # Module-level so the `except InsecureStoreError: raise` clauses below always
 # resolve the name, even if a local import were to fail.
 from Scripts.security.canonical_store import InsecureStoreError
@@ -128,7 +130,7 @@ class NoahSecurityManager:
     # SERVICE-SPECIFIC SECRETS
     # ================================
     
-    def _service_generators(self, service_name) -> Dict[str, Callable[[], str]]:
+    def _service_generators(self, service_name) -> dict[str, Callable[[], str]]:
         """Per-service secret keys and the generator for each.
 
         Single source of truth shared by generate_service_secrets() and
@@ -141,7 +143,7 @@ class NoahSecurityManager:
         Returns:
             mapping key -> generator, empty for an unknown service
         """
-        required: Dict[str, Callable[[], str]] = {}
+        required: dict[str, Callable[[], str]] = {}
         if service_name == 'authentik':
             required = {
                 'secret_key': lambda: self.generate_secure_password(50, include_special=False),
@@ -233,7 +235,7 @@ class NoahSecurityManager:
             # Fallback (non-persistent) - generate all now
             return {k: gen() for k, gen in required.items()}
 
-    def rotate_service_secrets_canonical(self, service_name: str, rotate_keys: Optional[list] = None) -> Dict[str, str]:
+    def rotate_service_secrets_canonical(self, service_name: str, rotate_keys: list | None = None) -> dict[str, str]:
         """Rotate selected secrets in the canonical store.
 
         Args:
@@ -373,8 +375,8 @@ class NoahSecurityManager:
     
     def generate_tls_certificates(self, domain: str):
         """Generate self-signed TLS certificates for a domain using openssl"""
-        import subprocess
         import os
+        import subprocess
         
         certs_dir = self.project_root / "Certificates"
         certs_dir.mkdir(exist_ok=True)

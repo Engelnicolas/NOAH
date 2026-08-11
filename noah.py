@@ -21,11 +21,12 @@
 NOAH - Network Operations & Automation Hub
 Main CLI for deploying and managing Kubernetes-based information systems
 """
-# ruff: noqa: E402 — every module-level import below intentionally follows the
+
 # venv re-exec in _bootstrap_venv(), so it runs under the venv interpreter.
 
-import sys
 import os
+import sys
+
 
 # Re-exec under the venv interpreter as soon as possible so all subsequent
 # imports see the venv's packages.  Skip when:
@@ -42,10 +43,12 @@ def _bootstrap_venv():
 
 _bootstrap_venv()
 
-import click  # type: ignore
-import subprocess
 import shutil
+import subprocess
 from pathlib import Path
+
+import click  # type: ignore
+
 from Scripts.security.secure_env_loader import SecureEnvLoader
 
 # Load environment variables from encrypted configuration (best-effort on startup;
@@ -56,31 +59,42 @@ if _CONFIG_ENC.exists():
     secure_loader.load_secure_env(_CONFIG_ENC)
 
 # Import CLI utilities
-from Scripts.core_helm.cluster_manager import ClusterManager
-from Scripts.security.security_manager import NoahSecurityManager as SecretManager
-from Scripts.security.canonical_store import InsecureStoreError
-from Scripts.utils.ansible_runner import AnsibleRunner
-from Scripts.utils.config_loader import ConfigLoader
-from Scripts.env_init.environment_initializer import initialize_noah_environment, update_sops_version
-from Scripts.env_init.doctor_utils import print_status, diagnose_noah_environment
-from Scripts.security import ensure_security_initialized, get_security_config
-from Scripts.security.rotate_cli import register_rotate_command  # type: ignore
+from Scripts.cluster_create.bootstrap_utils import (
+    run_add_nodes as cluster_add_nodes,
+)
+from Scripts.cluster_create.bootstrap_utils import (
+    run_bootstrap as cluster_bootstrap,
+)
+from Scripts.cluster_create.bootstrap_utils import (
+    show_cluster_status_v2,
+)
+from Scripts.cluster_create.flux_utils import (
+    cmd_logs as flux_cmd_logs,
+)
+from Scripts.cluster_create.flux_utils import (
+    cmd_status as flux_cmd_status,
+)
+from Scripts.cluster_create.flux_utils import (
+    cmd_sync as flux_cmd_sync,
+)
+from Scripts.cluster_create.status_utils import show_cluster_status
+from Scripts.cluster_destroy.cluster_destroy_utils import destroy_cluster_command
 from Scripts.core_helm import (
     get_admin_credentials,
     regenerate_authentik_password,
 )
-from Scripts.cluster_create.status_utils import show_cluster_status
-from Scripts.cluster_create.bootstrap_utils import (
-    run_bootstrap as cluster_bootstrap,
-    run_add_nodes as cluster_add_nodes,
-    show_cluster_status_v2,
+from Scripts.core_helm.cluster_manager import ClusterManager
+from Scripts.env_init.doctor_utils import diagnose_noah_environment, print_status
+from Scripts.env_init.environment_initializer import (
+    initialize_noah_environment,
+    update_sops_version,
 )
-from Scripts.cluster_create.flux_utils import (
-    cmd_sync as flux_cmd_sync,
-    cmd_status as flux_cmd_status,
-    cmd_logs as flux_cmd_logs,
-)
-from Scripts.cluster_destroy.cluster_destroy_utils import destroy_cluster_command
+from Scripts.security import ensure_security_initialized, get_security_config
+from Scripts.security.canonical_store import InsecureStoreError
+from Scripts.security.rotate_cli import register_rotate_command  # type: ignore
+from Scripts.security.security_manager import NoahSecurityManager as SecretManager
+from Scripts.utils.ansible_runner import AnsibleRunner
+from Scripts.utils.config_loader import ConfigLoader
 
 VERSION = "0.0.9"
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', '')
@@ -161,7 +175,6 @@ def cli(ctx: click.Context) -> None:
 @click.pass_context
 def cluster(ctx):
     """Manage Kubernetes cluster lifecycle"""
-    pass
 
 @cluster.command()
 @click.option('--name', default='noah-cluster', help='Cluster name')
@@ -330,7 +343,6 @@ def cluster_verify(ctx, domain, timeout, url_timeout):
 @click.pass_context
 def flux(ctx):
     """Interact with the FluxCD GitOps controller."""
-    pass
 
 
 @flux.command('sync')
@@ -360,7 +372,6 @@ def flux_logs(ctx, follow, tail):
 @click.pass_context
 def certificates(ctx):
     """Manage TLS certificates"""
-    pass
 
 @certificates.command()
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for TLS certificates')
@@ -396,7 +407,6 @@ def deploy_manager(ctx, namespace):
 @click.pass_context
 def password(ctx):
     """Manage Authentik admin passwords"""
-    pass
 
 @password.command()
 @click.pass_context
@@ -463,13 +473,11 @@ def show_password(ctx, domain):
 @click.pass_context
 def setup(ctx):
     """Setup and initialize NOAH environment"""
-    pass
 
 @cli.group()  # type: ignore
 @click.pass_context
 def secrets(ctx):
     """Manage and validate service secrets"""
-    pass
 
 # Dynamically register rotate command (externalized) AFTER group definition
 register_rotate_command(secrets)
@@ -631,7 +639,7 @@ def reset(force):
 
     click.echo("The following will be permanently deleted:")
     for p, desc in existing:
-        click.echo(f"  {str(p):<20} ({desc})")
+        click.echo(f"  {p!s:<20} ({desc})")
     click.echo("")
 
     if not force and not click.confirm("Proceed?", default=False):
@@ -756,7 +764,6 @@ def doctor(ctx):
 @click.pass_context
 def test(ctx):
     """Test deployed services"""
-    pass
 
 @test.command()
 @click.pass_context
@@ -817,7 +824,6 @@ def status(ctx):
 @click.pass_context
 def config(ctx):
     """Configuration management with dynamic domain support"""
-    pass
 
 @config.command()
 @click.option('--service', help='Show configuration for specific service')

@@ -22,6 +22,7 @@
 Sépare la logique de rotation depuis noah.py afin d'alléger le fichier principal.
 """
 import click  # type: ignore
+
 from Scripts.security import ensure_security_initialized  # type: ignore
 from Scripts.security.canonical_store import get_canonical_store  # type: ignore
 
@@ -40,7 +41,7 @@ def register_rotate_command(secrets_group):
     @click.option('--show', is_flag=True, help='Afficher les métadonnées après rotation (valeurs masquées)')
     @click.option('--apply', 'do_apply', is_flag=True, help='Appliquer les secrets au cluster en cours (sans re-bootstrap)')
     @click.pass_context
-    def rotate_canonical(ctx, service, keys, show, do_apply):  # noqa: D401
+    def rotate_canonical(ctx, service, keys, show, do_apply):
         """Fait tourner un ou plusieurs secrets (store canonique)."""
         ensure_security_initialized(ctx)
         key_list = [k.strip() for k in keys.split(',')] if keys else None

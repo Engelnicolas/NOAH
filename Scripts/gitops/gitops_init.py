@@ -38,14 +38,12 @@ import base64
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _run(cmd: list[str], cwd: Optional[Path] = None, check: bool = True) -> subprocess.CompletedProcess:
+def _run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, check=check)
 
 
@@ -72,7 +70,7 @@ creation_rules:
     (target_dir / ".sops.yaml").write_text(content)
 
 
-def _infer_previous_domain(gitops_dir: Path, current_domain: str) -> Optional[str]:
+def _infer_previous_domain(gitops_dir: Path, current_domain: str) -> str | None:
     """Scan plain .yaml files for an `admin@<domain>` pattern to recover the
     previously-used domain when the canonical store doesn't have one yet —
     handles the migration case where existing files were filled with some
@@ -153,7 +151,7 @@ def _dkim_txt_value(private_key_pem: str) -> str:
 
 
 def _get_or_generate_secrets(
-    project_root: Path, domain: str, previous_domain: Optional[str] = None
+    project_root: Path, domain: str, previous_domain: str | None = None
 ) -> dict:
     """Return all secrets needed to fill the enc.yaml placeholders."""
     from Scripts.security.canonical_store import get_canonical_store
@@ -505,8 +503,8 @@ _SECRET_NAMESPACES = (
 
 
 def apply_app_secrets(
-    domain: Optional[str] = None,
-    project_root: Optional[Path] = None,
+    domain: str | None = None,
+    project_root: Path | None = None,
     print_status=None,
 ) -> None:
     """Render the application secrets and apply them directly to the running
@@ -517,9 +515,9 @@ def apply_app_secrets(
     Requires kubectl access (KUBECONFIG env, ~/.kube/config, or
     Kube/noah-cluster.yaml). Idempotent: namespaces and Secrets are applied.
     """
-    from Scripts.security.canonical_store import get_canonical_store
     # Reuses the kubeconfig resolution already used by `noah flux ...`.
     from Scripts.cluster_create.flux_utils import _require_kubeconfig
+    from Scripts.security.canonical_store import get_canonical_store
     from Scripts.utils.paths import NOAH_PATHS
 
     if project_root is None:
@@ -561,7 +559,7 @@ def setup_gitops(
     domain: str,
     project_root: Path,
     print_status,
-    node_public_ip: Optional[str] = None,
+    node_public_ip: str | None = None,
     with_stalwart: bool = False,
 ) -> None:
     """

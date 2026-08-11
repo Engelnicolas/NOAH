@@ -23,13 +23,9 @@ This module contains utilities for properly destroying Kubernetes clusters
 and cleaning up kubectl configuration to prevent connection issues.
 """
 
+from .cluster_destroy_utils import destroy_cluster, destroy_cluster_command
 from .kubectl_utils import (
     cleanup_kubectl_cache,
-)
-
-from .cluster_destroy_utils import (
-    destroy_cluster,
-    destroy_cluster_command
 )
 
 __all__ = [

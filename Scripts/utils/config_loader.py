@@ -19,9 +19,11 @@
 """Configuration loader module - Enhanced for dynamic domain management in Helm charts"""
 
 import os
-import yaml
 from pathlib import Path
-from typing import Any, Optional, Dict
+from typing import Any
+
+import yaml
+
 
 class ConfigLoader:
     """
@@ -29,7 +31,7 @@ class ConfigLoader:
     Provides hierarchical configuration with service-specific domain resolution.
     """
     
-    def __init__(self, env_file: Optional[str] = None):
+    def __init__(self, env_file: str | None = None):
         """
         Initialize ConfigLoader with enhanced domain management.
         Note: env_file parameter is kept for backward compatibility but ignored.
@@ -107,7 +109,7 @@ class ConfigLoader:
             }
         }
     
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
+    def get(self, key: str, default: Any | None = None) -> Any:
         """Get configuration value from environment or cached config"""
         return self.config.get(key, os.environ.get(key, default))
     
@@ -170,7 +172,7 @@ class ConfigLoader:
         # Fallback to global domain
         return self.get_global_domain()
     
-    def get_service_subdomain(self, service: str, component: Optional[str] = None) -> str:
+    def get_service_subdomain(self, service: str, component: str | None = None) -> str:
         """
         Get the subdomain for a service or service component.
         """
@@ -193,7 +195,7 @@ class ConfigLoader:
         # Ultimate fallback
         return service
     
-    def get_service_fqdn(self, service: str, component: Optional[str] = None) -> str:
+    def get_service_fqdn(self, service: str, component: str | None = None) -> str:
         """
         Get fully qualified domain name for a service.
         Format: {subdomain}.{domain}
@@ -202,7 +204,7 @@ class ConfigLoader:
         domain = self.get_service_domain(service)
         return f"{subdomain}.{domain}"
     
-    def get_service_ingress_config(self, service: str) -> Dict[str, Any]:
+    def get_service_ingress_config(self, service: str) -> dict[str, Any]:
         """
         Generate ingress configuration for a service.
         """
@@ -237,7 +239,7 @@ class ConfigLoader:
             }] if service_config.get('tls_enabled', True) else []
         }
     
-    def get_service_config(self, service: str) -> Dict[str, Any]:
+    def get_service_config(self, service: str) -> dict[str, Any]:
         """
         Get complete service configuration including domain, networking, and security.
         """
@@ -257,7 +259,7 @@ class ConfigLoader:
         
         return base_config
     
-    def generate_helm_values(self, service: str, custom_values: Optional[Dict] = None) -> Dict[str, Any]:
+    def generate_helm_values(self, service: str, custom_values: dict | None = None) -> dict[str, Any]:
         """
         Generate complete Helm values for a service with domain management.
         """
@@ -302,7 +304,7 @@ class ConfigLoader:
         
         return helm_values
     
-    def _get_authentik_helm_values(self) -> Dict[str, Any]:
+    def _get_authentik_helm_values(self) -> dict[str, Any]:
         """Generate Authentik-specific Helm values"""
         return {
             'authentik': {
@@ -325,7 +327,7 @@ class ConfigLoader:
             }
         }
     
-    def _get_cilium_helm_values(self) -> Dict[str, Any]:
+    def _get_cilium_helm_values(self) -> dict[str, Any]:
         """Generate Cilium-specific Helm values"""
         hubble_fqdn = self.get_service_fqdn('cilium', 'hubble')
         
@@ -352,7 +354,7 @@ class ConfigLoader:
             }
         }
     
-    def _deep_merge(self, base: Dict, override: Dict) -> Dict:
+    def _deep_merge(self, base: dict, override: dict) -> dict:
         """Deep merge two dictionaries"""
         result = base.copy()
         
@@ -364,7 +366,7 @@ class ConfigLoader:
         
         return result
     
-    def export_helm_values_file(self, service: str, output_path: Path, custom_values: Optional[Dict] = None):
+    def export_helm_values_file(self, service: str, output_path: Path, custom_values: dict | None = None):
         """
         Export Helm values to a YAML file for a specific service.
         """

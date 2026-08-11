@@ -22,15 +22,15 @@ NOAH Secure Environment Loader
 Loads environment variables from encrypted .env files using SOPS
 """
 
+import logging
 import os
 from pathlib import Path
-from typing import Dict, Optional, Tuple
-import logging
+
 import yaml
 
-from Scripts.utils.paths import NOAH_PATHS  # centralized path resolution
-from Scripts.utils.dict_utils import flatten_mapping  # shared flatten helper
 from Scripts.security.sops_client import SopsClient, SopsError
+from Scripts.utils.dict_utils import flatten_mapping  # shared flatten helper
+from Scripts.utils.paths import NOAH_PATHS  # centralized path resolution
 
 logger = logging.getLogger(__name__)
 
@@ -49,16 +49,16 @@ class SecureEnvLoader:
 
     def __init__(
         self,
-        noah_root: Optional[Path] = None,
-        age_key_file: Optional[Path] = None,
-        sops_config: Optional[Path] = None,
+        noah_root: Path | None = None,
+        age_key_file: Path | None = None,
+        sops_config: Path | None = None,
     ):
         root = noah_root or NOAH_PATHS['root_dir']
         self.noah_root = Path(root)
         self.sops_config = sops_config or Path(NOAH_PATHS['sops_config'])
         self.age_key_file = age_key_file or Path(NOAH_PATHS['age_key_file'])
 
-    def decrypt_env_file(self, encrypted_file: Path) -> Optional[Dict[str, str]]:
+    def decrypt_env_file(self, encrypted_file: Path) -> dict[str, str] | None:
         """Decrypt a SOPS-encrypted YAML env file and return flattened key-value pairs."""
         if not encrypted_file.exists():
             logger.warning("Encrypted file not found: %s", encrypted_file)
@@ -80,7 +80,7 @@ class SecureEnvLoader:
         logger.info("Successfully loaded %d environment variables from YAML", len(env_vars))
         return env_vars
     
-    def read_secure_env(self, encrypted_file: Optional[Path] = None) -> Tuple[Optional[Dict[str, str]], Optional[str]]:
+    def read_secure_env(self, encrypted_file: Path | None = None) -> tuple[dict[str, str] | None, str | None]:
         """Return decrypted environment mapping without mutating os.environ.
 
         Returns (env_dict, error_message). On success error_message is None.
@@ -103,7 +103,7 @@ class SecureEnvLoader:
             return None, f"Failed to decrypt: {encrypted_file}"
         return env_vars, None
 
-    def load_secure_env(self, encrypted_file: Optional[Path] = None) -> bool:
+    def load_secure_env(self, encrypted_file: Path | None = None) -> bool:
         """Load environment variables from encrypted file into os.environ."""
         env_vars, error = self.read_secure_env(encrypted_file)
         if env_vars is None:
@@ -136,8 +136,8 @@ class SecureEnvLoader:
 
 if __name__ == "__main__":
     # CLI usage for testing
-    import sys
     import argparse
+    import sys
     
     parser = argparse.ArgumentParser(description="NOAH Secure Environment Loader")
     parser.add_argument("--encrypt", metavar="SOURCE", 

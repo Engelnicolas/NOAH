@@ -18,10 +18,10 @@
 
 """Ansible playbook execution module"""
 
-import subprocess
 import os
+import subprocess
 from pathlib import Path
-from typing import Dict, Optional
+
 
 class AnsibleRunner:
     def __init__(self, config_loader):
@@ -29,7 +29,7 @@ class AnsibleRunner:
         self.playbook_dir = Path(self.config.get('ANSIBLE_PLAYBOOK_DIR', './Ansible')).resolve()
         self.ansible_dir = Path('./Ansible').resolve()
     
-    def run_playbook(self, playbook_name: str, extra_vars: Optional[Dict] = None):
+    def run_playbook(self, playbook_name: str, extra_vars: dict | None = None):
         """Execute an Ansible playbook"""
         playbook_path = self.playbook_dir / playbook_name
         

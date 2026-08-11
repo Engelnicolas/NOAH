@@ -23,10 +23,11 @@ Handles the complete initialization of NOAH development environment
 """
 
 import os
-import sys
 import subprocess
-import click
+import sys
 from pathlib import Path
+
+import click
 
 
 def check_command_exists(command):
@@ -395,8 +396,8 @@ def update_sops_version(print_status=None):
             return False
         print_status("[SUCCESS] SOPS checksum verified", "SUCCESS")
 
-        import tempfile
         import shutil
+        import tempfile
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name

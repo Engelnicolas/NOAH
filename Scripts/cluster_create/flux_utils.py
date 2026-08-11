@@ -31,7 +31,6 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List
 
 import click  # type: ignore
 
@@ -63,7 +62,7 @@ def _require_kubeconfig() -> None:
     )
 
 
-def _run(cmd: List[str]) -> int:
+def _run(cmd: list[str]) -> int:
     return subprocess.run(cmd).returncode
 
 

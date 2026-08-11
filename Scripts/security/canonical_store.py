@@ -59,17 +59,19 @@ Extensibility:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
-from typing import Dict, Callable, Optional, Any
+import hashlib
 import logging
 import os
 import sys
 import tempfile
-import yaml
-import hashlib
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
+from pathlib import Path
+from typing import Any
+
+import yaml
 
 from Scripts.security.sops_client import (
     SopsClient,
@@ -144,7 +146,7 @@ def resolve_age_key_file(project_root: Path) -> Path:
     return Path(env_key) if env_key else project_root / "Age" / "keys.txt"
 
 
-def plaintext_reason(age_key_file: Path) -> Optional[PlaintextReason]:
+def plaintext_reason(age_key_file: Path) -> PlaintextReason | None:
     """None if encryption is active, otherwise the cause of the plaintext fallback.
 
     A module-level function rather than a method because `setup doctor` must
@@ -192,7 +194,7 @@ class CanonicalSecretsStore:
     secrets_dir: Path = field(init=False)
     age_key_file: Path = field(init=False)
     encrypted: bool = field(init=False)
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         self.secrets_dir = self.project_root / "Secrets"
@@ -214,7 +216,7 @@ class CanonicalSecretsStore:
         self._load()
 
     # ---------------- Internal Helpers ----------------
-    def _plaintext_reason(self) -> Optional[PlaintextReason]:
+    def _plaintext_reason(self) -> PlaintextReason | None:
         return plaintext_reason(self.age_key_file)
 
     def _warn_plaintext(self, reason: PlaintextReason) -> None:
@@ -241,7 +243,7 @@ class CanonicalSecretsStore:
     def _active_path(self) -> Path:
         return self._encrypted_path() if self.encrypted else self._plaintext_path()
 
-    def _decrypt_file(self, path: Path) -> Optional[str]:
+    def _decrypt_file(self, path: Path) -> str | None:
         if not path.exists():
             return None
         if not self.encrypted:
@@ -393,7 +395,7 @@ class CanonicalSecretsStore:
             self.data["services"] = {}
         self.data["services"].setdefault(service, {})
 
-    def ensure_service_entries(self, service: str, required_keys: Dict[str, Callable[[], str]]) -> Dict[str, str]:
+    def ensure_service_entries(self, service: str, required_keys: dict[str, Callable[[], str]]) -> dict[str, str]:
         """Ensure required secret keys for a service exist.
 
         Args:
@@ -430,7 +432,7 @@ class CanonicalSecretsStore:
         # Return simplified dict {key: value}
         return {k: (v.get('value') if isinstance(v, dict) else v) for k, v in svc.items()}
 
-    def get_service_secrets(self, service: str) -> Dict[str, str]:
+    def get_service_secrets(self, service: str) -> dict[str, str]:
         svc = self.data.get("services", {}).get(service, {})
         result = {}
         for k, v in svc.items():
@@ -444,7 +446,7 @@ class CanonicalSecretsStore:
     # service secrets so `setup gitops` has a single source of truth for
     # "what domain did the previous run use" without needing a separate
     # state file. Not covered by the integrity hash (only `services` is).
-    def get_cluster_domain(self) -> Optional[str]:
+    def get_cluster_domain(self) -> str | None:
         return self.data.get("cluster", {}).get("domain")
 
     def set_cluster_domain(self, domain: str) -> bool:
@@ -452,7 +454,7 @@ class CanonicalSecretsStore:
         self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
         return self.save()
 
-    def get_node_public_ip(self) -> Optional[str]:
+    def get_node_public_ip(self) -> str | None:
         return self.data.get("cluster", {}).get("node_public_ip")
 
     def set_node_public_ip(self, node_public_ip: str) -> bool:
@@ -487,9 +489,9 @@ class CanonicalSecretsStore:
                 pass
 
 # Convenience accessor (lazy singleton pattern if desired)
-_store_instance: Optional[CanonicalSecretsStore] = None
+_store_instance: CanonicalSecretsStore | None = None
 
-def get_canonical_store(project_root: Optional[Path] = None) -> CanonicalSecretsStore:
+def get_canonical_store(project_root: Path | None = None) -> CanonicalSecretsStore:
     global _store_instance
     if _store_instance is None:
         _store_instance = CanonicalSecretsStore(project_root or Path.cwd())

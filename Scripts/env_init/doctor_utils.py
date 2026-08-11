@@ -20,12 +20,12 @@
 NOAH environment diagnosis utilities
 """
 
-import click
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
-from .environment_initializer import check_command_exists
+
+import click
 
 # The same helpers the store itself uses. Re-deriving the encryption mode here
 # is what let this check and the store drift apart in the first place; the
@@ -35,6 +35,8 @@ from Scripts.security.canonical_store import (
     plaintext_reason,
     resolve_age_key_file,
 )
+
+from .environment_initializer import check_command_exists
 
 
 def print_status(message, status="INFO"):

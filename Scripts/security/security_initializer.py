@@ -22,10 +22,12 @@ NOAH Security Initializer
 Handles initialization of security infrastructure including Age keys, SOPS, and TLS certificates
 """
 
-import click
 import json
 import os
 from pathlib import Path
+
+import click
+
 from Scripts.utils.paths import get_noah_paths  # reuse centralized implementation
 
 
@@ -68,8 +70,8 @@ def _config_enc_readable(config_path: Path, age_key_file: Path) -> bool:
     """Return True if config_path exists and can be decrypted with the current age key."""
     if not config_path.exists():
         return False
-    import subprocess
     import os
+    import subprocess
     env = os.environ.copy()
     env['SOPS_AGE_KEY_FILE'] = str(age_key_file)
     result = subprocess.run(
@@ -81,11 +83,12 @@ def _config_enc_readable(config_path: Path, age_key_file: Path) -> bool:
 
 def _create_fresh_config_enc(config_path: Path, age_key_file: Path, domain: str):
     """Create a new config.enc.yaml encrypted with the current age key."""
-    import subprocess
     import os
     import secrets
-    import tempfile
     import shutil
+    import subprocess
+    import tempfile
+
     import yaml  # type: ignore
 
     config_data = {

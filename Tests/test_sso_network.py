@@ -189,7 +189,8 @@ class SSONetworkTester:
 
         required_annotation = 'nginx.ingress.kubernetes.io/auth-url'
         auth_url_path_segments = urlparse(annotations.get(required_annotation, '')).path.split('/')
-        if required_annotation in annotations and 'outpost.goauthentik.io' in auth_url_path_segments:
+        has_outpost_segment = any(segment == 'outpost.goauthentik.io' for segment in auth_url_path_segments)
+        if required_annotation in annotations and has_outpost_segment:
             self._status('OK', 'Hubble UI ingress has Authentik forward-auth annotations')
             self.results['hubble'].append(('ingress_annotations', True, annotations[required_annotation]))
             return True

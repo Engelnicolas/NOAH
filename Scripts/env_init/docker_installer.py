@@ -32,6 +32,8 @@ import subprocess
 import platform
 from pathlib import Path
 
+import requests
+
 
 class DockerInstaller:
     """Docker installation manager for NOAH environment"""
@@ -82,25 +84,28 @@ class DockerInstaller:
                         return line.split('=')[1].strip().strip('"')
         return ""
 
-    def _run_command(self, cmd, description=None, check=True, shell=False):
-        """Execute a command with optional dry-run mode"""
+    def _detect_os_codename(self):
+        """Detect the distribution release codename (e.g. 'noble')"""
+        os_release_file = Path('/etc/os-release')
+        if os_release_file.exists():
+            with open(os_release_file) as f:
+                for line in f:
+                    if line.startswith('VERSION_CODENAME='):
+                        return line.split('=')[1].strip().strip('"')
+        return ""
+
+    def _run_command(self, cmd, description=None, check=True):
+        """Execute a command (argument list) with optional dry-run mode"""
         if description:
             print(f"[INFO] {description}")
 
         if self.dry_run:
-            print(f"[DRY-RUN] Would execute: {cmd if isinstance(cmd, str) else ' '.join(cmd)}")
+            print(f"[DRY-RUN] Would execute: {' '.join(cmd)}")
             return True
 
         try:
-            if shell:
-                # shell=True is only used with hardcoded install commands
-                # (apt / `curl … | gpg …` pipes); no external input is
-                # interpolated into cmd, so there is no injection surface.
-                result = subprocess.run(cmd, shell=True, check=check,  # nosec B602
-                                       capture_output=True, text=True)
-            else:
-                result = subprocess.run(cmd, check=check,
-                                       capture_output=True, text=True)
+            result = subprocess.run(cmd, check=check,
+                                   capture_output=True, text=True)
 
             if result.stdout:
                 print(result.stdout)
@@ -163,34 +168,47 @@ class DockerInstaller:
         )
 
         # Add Docker's official GPG key
+        keyrings_dir = Path('/etc/apt/keyrings')
+        keyring = keyrings_dir / 'docker.gpg'
         self._run_command(
-            'install -m 0755 -d /etc/apt/keyrings',
-            "Creating keyrings directory",
-            shell=True
+            ['install', '-m', '0755', '-d', str(keyrings_dir)],
+            "Creating keyrings directory"
         )
 
-        self._run_command(
-            'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | '
-            'gpg --dearmor -o /etc/apt/keyrings/docker.gpg',
-            "Adding Docker GPG key",
-            shell=True
-        )
+        # Fetch the armored key and dearmor it via stdin rather than a
+        # `curl … | gpg …` shell pipeline.
+        print("[INFO] Adding Docker GPG key")
+        if self.dry_run:
+            print(f"[DRY-RUN] Would write {keyring}")
+        else:
+            resp = requests.get(
+                'https://download.docker.com/linux/ubuntu/gpg', timeout=60
+            )
+            resp.raise_for_status()
+            subprocess.run(
+                ['gpg', '--batch', '--yes', '--dearmor', '-o', str(keyring)],
+                input=resp.content, check=True, capture_output=True
+            )
+            # World-readable: apt reads the keyring as the _apt user.
+            os.chmod(keyring, 0o644)
 
-        self._run_command(
-            'chmod a+r /etc/apt/keyrings/docker.gpg',
-            "Setting GPG key permissions",
-            shell=True
+        # Add Docker repository. The architecture and release codename are
+        # resolved in Python instead of `$(…)` command substitution.
+        arch = subprocess.run(
+            ['dpkg', '--print-architecture'],
+            check=True, capture_output=True, text=True
+        ).stdout.strip()
+        codename = self._detect_os_codename()
+        repo_line = (
+            f"deb [arch={arch} signed-by={keyring}] "
+            f"https://download.docker.com/linux/ubuntu {codename} stable\n"
         )
-
-        # Add Docker repository
-        repo_cmd = (
-            'echo "deb [arch=$(dpkg --print-architecture) '
-            'signed-by=/etc/apt/keyrings/docker.gpg] '
-            'https://download.docker.com/linux/ubuntu '
-            '$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | '
-            'tee /etc/apt/sources.list.d/docker.list > /dev/null'
-        )
-        self._run_command(repo_cmd, "Adding Docker repository", shell=True)
+        sources_file = Path('/etc/apt/sources.list.d/docker.list')
+        print("[INFO] Adding Docker repository")
+        if self.dry_run:
+            print(f"[DRY-RUN] Would write {sources_file}: {repo_line.strip()}")
+        else:
+            sources_file.write_text(repo_line)
 
         # Update package index again
         self._run_command(

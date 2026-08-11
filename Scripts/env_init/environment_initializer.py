@@ -194,25 +194,48 @@ def install_via_apt(package_name, print_status):
 def install_kubectl(print_status):
     """Install kubectl using official method"""
     try:
-        # Use shell for the first command to handle $() substitution
-        result = subprocess.run('curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"', 
-                               shell=True, capture_output=True, text=True)
-        if result.returncode != 0:
+        import hashlib
+        import tempfile
+
+        import requests
+
+        # Resolve the stable release, then download the binary and its digest.
+        # Previously a `curl -LO "…$(curl …)…"` shell pipeline staging the
+        # binary in the current working directory.
+        stable = requests.get('https://dl.k8s.io/release/stable.txt', timeout=30)
+        stable.raise_for_status()
+        version = stable.text.strip()
+
+        base = f"https://dl.k8s.io/release/{version}/bin/linux/amd64/kubectl"
+        binary = requests.get(base, timeout=180)
+        binary.raise_for_status()
+        digest = requests.get(f"{base}.sha256", timeout=30)
+        digest.raise_for_status()
+
+        expected = digest.text.strip()
+        actual = hashlib.sha256(binary.content).hexdigest()
+        if actual != expected:
+            print_status(
+                f"[WARNING] kubectl checksum mismatch — refusing to install.\n"
+                f"  expected: {expected}\n  actual:   {actual}",
+                "WARNING"
+            )
             return False
-            
-        # Install kubectl
-        if os.geteuid() != 0:
-            result = subprocess.run(['sudo', 'install', '-o', 'root', '-g', 'root', '-m', '0755', 'kubectl', '/usr/local/bin/kubectl'], 
-                                   capture_output=True, text=True)
-        else:
-            result = subprocess.run(['install', '-o', 'root', '-g', 'root', '-m', '0755', 'kubectl', '/usr/local/bin/kubectl'], 
-                                   capture_output=True, text=True)
-        
-        # Clean up
-        subprocess.run(['rm', '-f', 'kubectl'], capture_output=True)
-        
+
+        # Stage in a private temp dir rather than the current directory.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            staged = os.path.join(tmp_dir, 'kubectl')
+            with open(staged, 'wb') as fh:
+                fh.write(binary.content)
+
+            install_cmd = ['install', '-o', 'root', '-g', 'root', '-m', '0755',
+                           staged, '/usr/local/bin/kubectl']
+            if os.geteuid() != 0:
+                install_cmd.insert(0, 'sudo')
+            result = subprocess.run(install_cmd, capture_output=True, text=True)
+
         return result.returncode == 0
-        
+
     except Exception as e:
         print_status(f"[WARNING] kubectl installation failed: {e}", "WARNING")
         return False
@@ -313,12 +336,12 @@ def update_sops_version(print_status=None):
             print_status("[INFO] SOPS not found or version not detected", "INFO")
 
         print_status("[INFO] Fetching latest SOPS version...", "INFO")
-        import urllib.request
-        import json as _json
-        with urllib.request.urlopen(
+        import requests
+        resp = requests.get(
             'https://api.github.com/repos/getsops/sops/releases/latest', timeout=30
-        ) as resp:
-            latest_release = _json.loads(resp.read().decode())
+        )
+        resp.raise_for_status()
+        latest_release = resp.json()
         latest_version = latest_release['tag_name'].lstrip('v')
 
         print_status(f"[INFO] Latest SOPS version: {latest_version}", "INFO")
@@ -338,16 +361,18 @@ def update_sops_version(print_status=None):
         download_url = f"{release_base}/{asset_name}"
 
         print_status(f"[INFO] Downloading SOPS {latest_version}...", "INFO")
-        with urllib.request.urlopen(download_url, timeout=120) as resp:
-            content = resp.read()
+        resp = requests.get(download_url, timeout=120)
+        resp.raise_for_status()
+        content = resp.content
 
         # Verify the binary against the checksums published with the release
         # before it is made executable and installed onto PATH. Without this an
         # intercepted or corrupted download is executed as root.
         print_status("[INFO] Verifying SOPS checksum...", "INFO")
         checksums_url = f"{release_base}/sops-v{latest_version}.checksums.txt"
-        with urllib.request.urlopen(checksums_url, timeout=30) as resp:
-            checksums = resp.read().decode()
+        resp = requests.get(checksums_url, timeout=30)
+        resp.raise_for_status()
+        checksums = resp.text
 
         expected = None
         for line in checksums.splitlines():
@@ -375,12 +400,16 @@ def update_sops_version(print_status=None):
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
-        os.chmod(tmp_path, 0o755)
+        # Keep the staged binary private while it sits in the temp directory;
+        # the world-executable bit is only granted once it reaches its final
+        # system-wide location below.
+        os.chmod(tmp_path, 0o700)
 
         sops_path = "/usr/local/bin/sops"
         installed = False
         if os.geteuid() == 0:
             shutil.move(tmp_path, sops_path)
+            subprocess.run(['chmod', '0755', sops_path], capture_output=True)
             installed = True
         else:
             result = subprocess.run(['sudo', 'mv', tmp_path, sops_path], capture_output=True)
@@ -392,7 +421,8 @@ def update_sops_version(print_status=None):
             local_bin.mkdir(parents=True, exist_ok=True)
             sops_path = str(local_bin / 'sops')
             shutil.move(tmp_path, sops_path)
-            os.chmod(sops_path, 0o755)
+            # Per-user install: only the owner needs to execute it.
+            os.chmod(sops_path, 0o700)
 
         print_status(f"[SUCCESS] SOPS {latest_version} installed to {sops_path}", "SUCCESS")
         print_status("[SUCCESS] SOPS update completed successfully", "SUCCESS")
@@ -836,13 +866,17 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
         print_status("[INFO] pip not found in venv — bootstrapping via get-pip.py...", "INFO")
         try:
             import tempfile
-            import urllib.request
+
+            import requests
             # Private (0o700) directory: a fixed /tmp path is world-writable and
             # predictable, so a local user could pre-create or symlink it and get
             # their code executed by the interpreter call below.
             with tempfile.TemporaryDirectory() as tmp_dir:
                 get_pip_path = os.path.join(tmp_dir, "get-pip.py")
-                urllib.request.urlretrieve("https://bootstrap.pypa.io/get-pip.py", get_pip_path)
+                resp = requests.get("https://bootstrap.pypa.io/get-pip.py", timeout=60)
+                resp.raise_for_status()
+                with open(get_pip_path, "wb") as fh:
+                    fh.write(resp.content)
                 subprocess.run([str(venv_python), get_pip_path], check=True, capture_output=True)
             print_status("[SUCCESS] pip bootstrapped", "SUCCESS")
         except Exception as e:

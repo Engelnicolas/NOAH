@@ -333,14 +333,42 @@ def update_sops_version(print_status=None):
         arch_map = {'x86_64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}
         arch = arch_map.get(platform.machine(), 'amd64')
 
-        download_url = (
-            f"https://github.com/getsops/sops/releases/download/v{latest_version}"
-            f"/sops-v{latest_version}.linux.{arch}"
-        )
+        asset_name = f"sops-v{latest_version}.linux.{arch}"
+        release_base = f"https://github.com/getsops/sops/releases/download/v{latest_version}"
+        download_url = f"{release_base}/{asset_name}"
 
         print_status(f"[INFO] Downloading SOPS {latest_version}...", "INFO")
         with urllib.request.urlopen(download_url, timeout=120) as resp:
             content = resp.read()
+
+        # Verify the binary against the checksums published with the release
+        # before it is made executable and installed onto PATH. Without this an
+        # intercepted or corrupted download is executed as root.
+        print_status("[INFO] Verifying SOPS checksum...", "INFO")
+        checksums_url = f"{release_base}/sops-v{latest_version}.checksums.txt"
+        with urllib.request.urlopen(checksums_url, timeout=30) as resp:
+            checksums = resp.read().decode()
+
+        expected = None
+        for line in checksums.splitlines():
+            parts = line.split()
+            if len(parts) == 2 and parts[1] == asset_name:
+                expected = parts[0]
+                break
+        if expected is None:
+            print_status(f"[ERROR] No checksum published for {asset_name}", "ERROR")
+            return False
+
+        import hashlib
+        actual = hashlib.sha256(content).hexdigest()
+        if actual != expected:
+            print_status(
+                f"[ERROR] SOPS checksum mismatch — refusing to install.\n"
+                f"  expected: {expected}\n  actual:   {actual}",
+                "ERROR"
+            )
+            return False
+        print_status("[SUCCESS] SOPS checksum verified", "SUCCESS")
 
         import tempfile
         import shutil
@@ -807,10 +835,15 @@ def initialize_noah_environment(ctx, skip_deps=False, skip_tests=False, print_st
     if pip_check.returncode != 0:
         print_status("[INFO] pip not found in venv — bootstrapping via get-pip.py...", "INFO")
         try:
+            import tempfile
             import urllib.request
-            get_pip_path = "/tmp/get-pip.py"
-            urllib.request.urlretrieve("https://bootstrap.pypa.io/get-pip.py", get_pip_path)
-            subprocess.run([str(venv_python), get_pip_path], check=True, capture_output=True)
+            # Private (0o700) directory: a fixed /tmp path is world-writable and
+            # predictable, so a local user could pre-create or symlink it and get
+            # their code executed by the interpreter call below.
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                get_pip_path = os.path.join(tmp_dir, "get-pip.py")
+                urllib.request.urlretrieve("https://bootstrap.pypa.io/get-pip.py", get_pip_path)
+                subprocess.run([str(venv_python), get_pip_path], check=True, capture_output=True)
             print_status("[SUCCESS] pip bootstrapped", "SUCCESS")
         except Exception as e:
             print_status(f"[ERROR] Could not bootstrap pip: {e}", "ERROR")

@@ -35,6 +35,7 @@ import pytest
 import subprocess
 from pathlib import Path
 from typing import Tuple
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -187,7 +188,8 @@ class SSONetworkTester:
             annotations = {}
 
         required_annotation = 'nginx.ingress.kubernetes.io/auth-url'
-        if required_annotation in annotations and 'outpost.goauthentik.io' in annotations[required_annotation]:
+        auth_url_path_segments = urlparse(annotations.get(required_annotation, '')).path.split('/')
+        if required_annotation in annotations and 'outpost.goauthentik.io' in auth_url_path_segments:
             self._status('OK', 'Hubble UI ingress has Authentik forward-auth annotations')
             self.results['hubble'].append(('ingress_annotations', True, annotations[required_annotation]))
             return True

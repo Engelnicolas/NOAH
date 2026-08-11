@@ -137,6 +137,7 @@ def _probe_host(host: str, connect_ips: list[str], timeout: int) -> tuple[bool, 
     only connection/TLS failures count as a miss. TLS is verified (default context),
     so a not-yet-issued cert surfaces as unreachable until issuance completes."""
     ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     last = "no node-local address to probe"
     for ip in connect_ips:
         try:

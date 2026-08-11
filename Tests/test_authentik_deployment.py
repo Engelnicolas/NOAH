@@ -118,7 +118,7 @@ class AuthentikDeploymentVerifier:
     # bootstrap_password, postgres passwords) ride in authentik-values under a
     # single values.yaml key consumed via HelmRelease valuesFrom, and the
     # provisioner token lives in its own Secret.
-    EXPECTED_SECRETS = {
+    EXPECTED_K8S_RESOURCE_NAMES = {
         'authentik-values': 'values.yaml',
         'authentik-bootstrap-token': 'AUTHENTIK_TOKEN',
     }
@@ -128,26 +128,26 @@ class AuthentikDeploymentVerifier:
         print("\n🔐 Checking secrets...")
 
         all_present = True
-        for secret_name, key in self.EXPECTED_SECRETS.items():
-            success, _ = self.run_kubectl(['get', 'secret', secret_name, '-n', self.namespace])
+        for resource_name, key in self.EXPECTED_K8S_RESOURCE_NAMES.items():
+            success, _ = self.run_kubectl(['get', 'secret', resource_name, '-n', self.namespace])
             if not success:
-                self.print_status('ERROR', f"{secret_name} not found")
-                self.results['secrets'].append(f"{secret_name}: ERROR")
+                self.print_status('ERROR', f"{resource_name} not found")
+                self.results['secrets'].append(f"{resource_name}: ERROR")
                 all_present = False
                 continue
 
             # jsonpath on a missing key yields an empty string, not an error,
             # so the presence of the key must be checked on the output itself.
             key_success, value = self.run_kubectl([
-                'get', 'secret', secret_name, '-n', self.namespace,
+                'get', 'secret', resource_name, '-n', self.namespace,
                 '-o', f'jsonpath={{.data.{key}}}'
             ])
             if key_success and value:
-                self.print_status('OK', f"{secret_name} (key {key})")
-                self.results['secrets'].append(f"{secret_name}.{key}: OK")
+                self.print_status('OK', f"{resource_name} (key {key})")
+                self.results['secrets'].append(f"{resource_name}.{key}: OK")
             else:
-                self.print_status('ERROR', f"{secret_name} missing key {key}")
-                self.results['secrets'].append(f"{secret_name}.{key}: ERROR")
+                self.print_status('ERROR', f"{resource_name} missing key {key}")
+                self.results['secrets'].append(f"{resource_name}.{key}: ERROR")
                 all_present = False
 
         return all_present

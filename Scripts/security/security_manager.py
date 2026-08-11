@@ -585,7 +585,8 @@ class NoahSecurityManager:
     def list_secrets(self):
         """List all secret files in the project"""
         print("📁 NOAH Secret Files:")
-        print(f"   Kubernetes secrets: {self.secrets_dir}")
+        k8s_manifests_dir = self.secrets_dir
+        print(f"   Kubernetes secrets: {k8s_manifests_dir}")
         for file in self.secrets_dir.glob("*.yaml"):
             print(f"     - {file.name}")
             

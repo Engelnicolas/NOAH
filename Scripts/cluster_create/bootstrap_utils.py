@@ -224,11 +224,12 @@ def _detect_provider(host: str, hint: str | None = None) -> str:
     if hint:
         return hint.lower().strip()
     h = host.lower()
-    if "github.com" in h:
+    labels = h.split(".")
+    if h == "github.com" or h.endswith(".github.com"):
         return "github"
-    if "gitlab.com" in h or "gitlab." in h:
+    if h == "gitlab.com" or h.endswith(".gitlab.com") or "gitlab" in labels:
         return "gitlab"
-    if "bitbucket.org" in h:
+    if h == "bitbucket.org" or h.endswith(".bitbucket.org"):
         return "bitbucket"
     # Default: Gitea/Forgejo-compatible API (same shape as GitHub's for deploy keys)
     return "gitea"

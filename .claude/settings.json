@@ -25,36 +25,5 @@
       "Bash(sudo -E kubectl logs -n headlamp deploy/headlamp --tail=40)",
       "Bash(sudo -E kubectl get pods -n headlamp -o wide)"
     ]
-  },
-  "mcpServers": {
-    "aws-docs": {
-      "command": "uvx",
-      "args": [
-        "awslabs.aws-documentation-mcp-server@latest"
-      ],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      }
-    },
-    "aws-eks": {
-      "command": "uvx",
-      "args": [
-        "awslabs.eks-mcp-server@latest"
-      ],
-      "env": {
-        "AWS_REGION": "eu-west-3",
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      }
-    },
-    "aws-pricing": {
-      "command": "uvx",
-      "args": [
-        "awslabs.aws-pricing-mcp-server@latest"
-      ],
-      "env": {
-        "AWS_REGION": "eu-west-3",
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      }
-    }
   }
 }

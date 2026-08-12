@@ -1,6 +1,6 @@
 # NOAH Operations Guide
 
-**Version 0.0.9** — day-2 operations for a running cluster. For first-time
+**Version 0.1.0** — day-2 operations for a running cluster. For first-time
 installation see the [Deployment Guide](DEPLOYMENT_GUIDE.md).
 
 ---

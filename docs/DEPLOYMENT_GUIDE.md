@@ -1,6 +1,6 @@
 # NOAH Deployment Guide
 
-**Version 0.0.9** — K3s with embedded etcd (no SQLite SPOF). The full
+**Version 0.1.0** — K3s with embedded etcd (no SQLite SPOF). The full
 application stack is reconciled by FluxCD from `gitops/` in this repository.
 There is no imperative `noah deploy <service>` — you provision with
 `noah cluster bootstrap` and operate with `noah flux …` (see the

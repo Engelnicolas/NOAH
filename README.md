@@ -13,7 +13,7 @@
 **A production-grade Kubernetes platform — SSO, TLS, DNS, GitOps and observability — from a single command.**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.0.9-green.svg)](https://github.com/Engelnicolas/NOAH/releases)
+[![Release](https://img.shields.io/badge/release-v0.1.0-green.svg)](https://github.com/Engelnicolas/NOAH/releases)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-K3s-326CE5.svg?logo=kubernetes&logoColor=white)](https://k3s.io/)
 [![GitOps](https://img.shields.io/badge/GitOps-FluxCD-5468FF.svg)](https://fluxcd.io/)

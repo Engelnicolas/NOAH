@@ -96,7 +96,7 @@ from Scripts.security.security_manager import NoahSecurityManager as SecretManag
 from Scripts.utils.ansible_runner import AnsibleRunner
 from Scripts.utils.config_loader import ConfigLoader
 
-VERSION = "0.0.9"
+VERSION = "0.1.0"
 DEFAULT_DOMAIN = os.environ.get('NOAH_DOMAIN', '')
 
 

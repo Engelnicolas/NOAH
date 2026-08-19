@@ -41,6 +41,8 @@
   when: item != inventory_hostname
   run_once: true
   changed_when: false
+  register: garage_connect
+  until: garage_connect is succeeded
   retries: 3
   delay: 5
 
@@ -83,12 +85,21 @@
   run_once: true
 
 - name: Apply the layout
-  # The version number must be the one `layout show` announces; parsed from the
-  # staged output rather than counted, because a re-run does not start from 1.
+  # The version number comes from the line `layout show` prints for exactly
+  # this purpose ("garage layout apply --version N"), NOT from any "version N"
+  # in the output: the first such match is "Current cluster layout version",
+  # and applying THAT number fails. When no changes are staged the line is
+  # absent, and a re-run must then be a no-op rather than an error — which is
+  # what makes `garage deploy` replayable.
   shell: |
     set -euo pipefail
-    version=$({{ garage_binary_path }} layout show | \
-      grep -oE 'version [0-9]+' | tail -1 | grep -oE '[0-9]+')
+    version=$({{ garage_binary_path }} layout show \
+      | grep -oE 'layout apply --version[[:space:]]+[0-9]+' \
+      | grep -oE '[0-9]+$' | tail -1)
+    if [ -z "${version}" ]; then
+      echo "NOAH: no staged layout change"
+      exit 0
+    fi
     {{ garage_binary_path }} layout apply --version "${version}"
   args:
     executable: /bin/bash
@@ -96,10 +107,7 @@
     GARAGE_CONFIG_FILE: /etc/garage/garage.toml
   register: garage_layout_apply
   run_once: true
-  changed_when: "'No changes' not in (garage_layout_apply.stdout | default(''))"
-  failed_when:
-    - garage_layout_apply.rc != 0
-    - "'No changes to apply' not in (garage_layout_apply.stderr | default(''))"
+  changed_when: "'no staged layout change' not in (garage_layout_apply.stdout | default(''))"
 
 - name: Wait for the cluster to converge
   command: "{{ garage_binary_path }} status"

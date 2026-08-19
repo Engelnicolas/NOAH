@@ -166,7 +166,7 @@ def load_infra_inventory(path: Path) -> dict:
 
     _reject_secrets(data, path)
 
-    for field in ("provider", "compute_node", "garage_cidr", "garage_nodes"):
+    for field in ("provider", "compute_node", "bastion", "garage_cidr", "garage_nodes"):
         if field not in data:
             # A MISSING field reads as an oversight of the generator, a null
             # one as a topology decision. Only the second is admitted (§16.3).
@@ -451,8 +451,16 @@ def run_deploy(
     compute_ssh_key: str | None,
     project_root: Path,
     ansible_dir: Path,
+    nat_only: bool = False,
 ) -> int:
-    """Drive the Garage deployment end to end. Returns the Ansible exit code."""
+    """Drive the Garage deployment end to end. Returns the Ansible exit code.
+
+    *nat_only* restricts the run to the compute-node play. `noah garage nat`
+    needs it: egress routing is a BOOTSTRAP PREREQUISITE run before the Garage
+    nodes can install anything, so running the full playbook there would drive
+    the storage roles against machines that still have no way out — and they
+    fail by hanging, not by refusing.
+    """
 
     # --- Refusals, all of them BEFORE anything touches a machine ------------
     #
@@ -557,6 +565,10 @@ def run_deploy(
             "deploy-garage.yml",
             "--extra-vars", f"@{vars_path}",
         ]
+        if nat_only:
+            # The garage_nodes plays then match no host and are skipped, which
+            # is exactly the intent: configure the router first, entirely.
+            cmd += ["--limit", "compute_node"]
         env = os.environ.copy()
         env.setdefault("ANSIBLE_HOST_KEY_CHECKING", "False")
         env["ANSIBLE_NOCOLOR"] = "1"

@@ -567,7 +567,7 @@ def garage_nat_cmd(ctx, from_infra, ssh_user, compute_ssh_key):
         bastion_user=None, replication_factor=None, domain=DEFAULT_DOMAIN,
         capacity='20G', data_device=None, zones=None, tls_enabled=True,
         skip_nat=False, compute_ssh_key=compute_ssh_key,
-        project_root=root, ansible_dir=root / 'Ansible',
+        project_root=root, ansible_dir=root / 'Ansible', nat_only=True,
     ))
 
 

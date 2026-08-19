@@ -1,7 +1,10 @@
 ---
+- name: reload sysctl
+  command: sysctl --system
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
 - name: reload noah nat
-  shell: |
-    set -euo pipefail
-    nft -f /etc/nftables.d/noah-garage-nat.nft
-  args:
-    executable: /bin/bash
+  command: /usr/sbin/nft -f /etc/nftables.d/noah-garage-nat.nft

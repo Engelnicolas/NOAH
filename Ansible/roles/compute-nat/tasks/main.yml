@@ -17,14 +17,25 @@
 # machine contents.
 
 - name: Enable IPv4 forwarding on the compute node
-  ansible.posix.sysctl:
-    name: net.ipv4.ip_forward
-    value: "1"
-    sysctl_file: /etc/sysctl.d/99-noah-garage-nat.conf
-    state: present
-    reload: yes
+  # Same shape as the `common` role: a file under /etc/sysctl.d plus a handler.
+  # NOT ansible.posix.sysctl — that collection is nowhere declared or installed
+  # in this project, and the only thing that ever installed collections was
+  # removed with AnsibleRunner (§8.1). A role whose first task needs an
+  # uninstalled collection fails before it can explain why.
+  copy:
+    dest: /etc/sysctl.d/99-noah-garage-nat.conf
+    mode: "0644"
+    content: |
+      # Managed by NOAH — Ansible role compute-nat (Garage.md G19).
+      # The Garage nodes have no public address; their egress is routed here.
+      net.ipv4.ip_forward = 1
+  notify: reload sysctl
 
-- name: Install nftables and the persistence helper
+- name: Apply the forwarding setting now
+  command: sysctl --system
+  changed_when: false
+
+- name: Install nftables
   apt:
     name:
       - nftables
@@ -76,9 +87,13 @@
 # ---------------------------------------------------------------------------
 # Masquerading proper
 # ---------------------------------------------------------------------------
-# Its own table, so nothing here collides with the chains Cilium and K3s
-# manage: a rule added to a shared chain is a rule someone else's flush
-# removes.
+# Its OWN table, loaded by its OWN unit, and neither of those is fussiness.
+#
+# Ubuntu's /etc/nftables.conf opens with `flush ruleset`. Enabling
+# nftables.service on this machine would therefore wipe, at every boot and at
+# every restart, the iptables-nft rules K3s and Cilium install — taking the
+# cluster datapath down to lay a NAT rule. A dedicated oneshot unit adds
+# `table ip noah_nat` and touches nothing else.
 
 - name: Create the nftables include directory
   file:
@@ -86,13 +101,18 @@
     state: directory
     mode: "0755"
 
-- name: Install the NOAH NAT table for the Garage subnet
+- name: Install the NOAH NAT table
   copy:
     dest: /etc/nftables.d/noah-garage-nat.nft
     mode: "0644"
     content: |
       # Managed by NOAH — Ansible role compute-nat (Garage.md G19).
       # Egress translation for the Garage nodes, which have no public address.
+      #
+      # `destroy table` rather than `flush ruleset`: this file must be
+      # reloadable without disturbing the iptables-nft rules of K3s and Cilium.
+      # (destroy is a no-op when the table does not exist, where delete errors.)
+      destroy table ip noah_nat
       table ip noah_nat {
         chain postrouting {
           type nat hook postrouting priority srcnat; policy accept;
@@ -101,27 +121,52 @@
       }
   notify: reload noah nat
 
-- name: Make sure nftables loads the NOAH table at boot
-  lineinfile:
-    path: /etc/nftables.conf
-    line: 'include "/etc/nftables.d/noah-garage-nat.nft"'
-    create: yes
+- name: Install the unit that loads it at boot
+  copy:
+    dest: /etc/systemd/system/noah-garage-nat.service
     mode: "0644"
-  notify: reload noah nat
+    content: |
+      # Managed by NOAH — Ansible role compute-nat.
+      # Deliberately NOT nftables.service: that one runs /etc/nftables.conf,
+      # which begins with `flush ruleset` and would wipe the cluster datapath.
+      [Unit]
+      Description=NOAH egress NAT for the Garage subnet
+      After=network-online.target
+      Wants=network-online.target
 
-- name: Enable and start nftables
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/sbin/nft -f /etc/nftables.d/noah-garage-nat.nft
+      ExecStop=/usr/sbin/nft destroy table ip noah_nat
+
+      [Install]
+      WantedBy=multi-user.target
+  notify:
+    - reload systemd
+    - reload noah nat
+
+- name: Enable and start the NAT unit
   systemd:
-    name: nftables
+    name: noah-garage-nat
     enabled: yes
     state: started
+    daemon_reload: yes
 
-- name: Load the NOAH NAT table now
-  shell: |
-    set -euo pipefail
-    nft -f /etc/nftables.d/noah-garage-nat.nft
-  args:
-    executable: /bin/bash
+- name: Verify the table is loaded
+  # The rule is the whole point of the role; asserting it exists costs one
+  # command and turns "applied without error" into "in force".
+  command: nft list table ip noah_nat
+  register: noah_nat_table
   changed_when: false
+
+- name: Fail when the masquerade rule is not in force
+  fail:
+    msg: >-
+      table ip noah_nat is loaded but carries no masquerade rule for
+      {{ garage_cidr }}. The Garage nodes would have no egress, and the
+      symptom downstream is a bootstrap that hangs rather than one that fails.
+  when: "'masquerade' not in noah_nat_table.stdout"
 
 # The counterpart of source_dest_check = false, which Infra/aws/ carries: the
 # VPC drops packets whose source address is not the instance's own, and the

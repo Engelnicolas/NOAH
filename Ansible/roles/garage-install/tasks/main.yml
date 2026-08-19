@@ -53,8 +53,11 @@
         mode: "0755"
         timeout: 120
       register: garage_download
-      # A hang here is almost always the missing egress route (G19), not a slow
-      # mirror. Fail rather than retry forever so the cause is visible.
+      # `until` is what makes retries happen at all — Ansible ignores `retries`
+      # without it. Two attempts, no more: a hang here is almost always the
+      # missing egress route (G19), not a slow mirror, and retrying a routing
+      # problem only buries the cause.
+      until: garage_download is succeeded
       retries: 2
       delay: 5
 

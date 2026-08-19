@@ -715,6 +715,18 @@ class TestInfraInventory:
         ok.write_text(json.dumps(_infra(bastion=None, public_ips=True)))
         load_infra_inventory(ok)   # must not raise
 
+    def test_a_missing_bastion_is_refused(self, tmp_path):
+        """`bastion` is part of the schema. Null means "reachable directly";
+        absent means the generator forgot, and the two must not look alike."""
+        from Scripts.garage.garage_deploy import GarageDeployError, load_infra_inventory
+
+        data = _infra()
+        del data["bastion"]
+        path = tmp_path / "nobastion.json"
+        path.write_text(json.dumps(data))
+        with pytest.raises(GarageDeployError, match="never a missing one"):
+            load_infra_inventory(path)
+
     def test_three_node_infra_file(self, tmp_path):
         from Scripts.garage.garage_deploy import (
             derive_replication_factor,
@@ -797,6 +809,63 @@ class TestAnsibleAssets:
         hosts = [play["hosts"] for play in plays]
         assert hosts[0] == "compute_node"
         assert hosts[1:] == ["garage_nodes"] * (len(hosts) - 1)
+
+    def test_roles_use_only_collections_the_project_installs(self):
+        """No new collection dependency.
+
+        The project declares no requirements.yml, and the one thing that ever
+        installed collections went away with AnsibleRunner (§8.1). A role whose
+        first task needs an uninstalled collection fails before it can explain
+        why — so the Garage roles stay inside ansible.builtin plus the
+        community.general the `common` role already relies on.
+        """
+        import re as _re
+        allowed = {"ansible.builtin", "community.general"}
+        for path in (REPO_ROOT / "Ansible/roles").glob("*/tasks/main.yml"):
+            if not (path.parent.parent.name.startswith("garage-")
+                    or path.parent.parent.name == "compute-nat"):
+                continue
+            used = set(_re.findall(r"^\s+([a-z_]+\.[a-z_]+)\.[a-z_]+:",
+                                  path.read_text(), _re.M))
+            assert used <= allowed, f"{path.parent.parent.name}: {used - allowed}"
+
+    def test_nat_role_does_not_hijack_nftables_service(self):
+        """Ubuntu's /etc/nftables.conf opens with `flush ruleset`.
+
+        Enabling nftables.service on the compute node would wipe the
+        iptables-nft rules K3s and Cilium install, at every boot — taking the
+        cluster datapath down in order to lay one NAT rule. The role ships its
+        own oneshot unit instead.
+        """
+        raw = (REPO_ROOT / "Ansible/roles/compute-nat/tasks/main.yml").read_text()
+        # Comments deliberately NAME the hazard so it is not re-invented; the
+        # assertion must read the tasks, not the prose explaining them.
+        code = "\n".join(line.split("#", 1)[0] for line in raw.splitlines())
+        assert "noah-garage-nat.service" in code
+        assert "name: nftables" not in code      # never enabled as a service
+        assert "flush ruleset" not in code
+
+    def test_every_retry_has_an_until(self):
+        """Ansible ignores `retries` without `until`, so a retry written
+        without one is a retry that never happens."""
+        for path in (REPO_ROOT / "Ansible/roles").glob("*/tasks/main.yml"):
+            tasks = yaml.safe_load(path.read_text())
+            stack = list(tasks or [])
+            while stack:
+                task = stack.pop()
+                if not isinstance(task, dict):
+                    continue
+                stack.extend(task.get("block", []))
+                if "retries" in task:
+                    assert "until" in task, f"{path}: {task.get('name')}"
+
+    def test_layout_apply_reads_the_version_garage_suggests(self):
+        """`layout show` prints "Current cluster layout version: N" BEFORE the
+        "layout apply --version N+1" line it means for this. Matching any
+        "version N" would pick the first and apply a stale version."""
+        role = (REPO_ROOT / "Ansible/roles/garage-cluster/tasks/main.yml").read_text()
+        assert "layout apply --version[[:space:]]+[0-9]+" in role
+        assert "no staged layout change" in role   # a replay is a no-op
 
     def test_admin_api_binds_to_the_loopback(self):
         """Flow G5 forbids the cluster the administration API; binding it to

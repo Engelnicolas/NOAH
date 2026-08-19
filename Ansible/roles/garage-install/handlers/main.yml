@@ -1,0 +1,10 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart garage
+  systemd:
+    name: garage
+    state: restarted
+    enabled: yes

@@ -42,6 +42,26 @@ import yaml
 from Scripts.security.canonical_store import InsecureStoreError
 
 
+# Garage S3 consumers: service name in the canonical store -> bucket (§6.1).
+#
+# ONE KEY PER BUCKET, NEVER A SHARED KEY. Garage distinguishes only read /
+# write / owner: granting write grants deletion. Per-key partitioning limits
+# the blast radius of a compromise; it does not cancel it — that is what the
+# ZFS snapshots are for.
+#
+# These keys are DELIVERED TO THE CLUSTER on purpose: that is their reason for
+# being, and their compromise is an accepted risk covered by §10 of the state
+# map. They are not to be confused with the `owner` key, which stays in secret
+# domain 3 (Scripts/garage/admin_store.py).
+GARAGE_S3_SERVICES: dict[str, str] = {
+    "garage-nextcloud": "nextcloud-objects",   # primary object storage, lot 5
+    "garage-pgwal":     "pg-wal",              # CNPG / Barman WAL, lot 4
+    "garage-velero":    "velero",              # cluster backups, lot 8
+    "garage-gitmirror": "git-mirror",          # §13.1 — keeps gitops/ in class R
+    "garage-logs":      "logs",                # audit retention, lot 13
+}
+
+
 class NoahSecurityManager:
     """Unified security manager for NOAH infrastructure"""
     
@@ -108,6 +128,23 @@ class NoahSecurityManager:
         # Shuffle the password
         secrets.SystemRandom().shuffle(password)
         return ''.join(password)
+
+    def generate_garage_access_key_id(self):
+        """Garage-shaped S3 access key id: `GK` + 24 hex characters (§6.2).
+
+        generate_secure_password() emits arbitrary alphanumerics and DOES NOT
+        fit: `garage key import` is fed these values verbatim, and a value
+        outside the shape Garage itself emits risks being refused at import
+        (reservation V6b). The flow is deliberately inverted with respect to
+        `key create` — NOAH generates, persists, then imposes on Garage, so
+        the canonical store stays the source of truth and no secret can ever
+        become unreadable after creation.
+        """
+        return "GK" + secrets.token_hex(12)
+
+    def generate_garage_secret_key(self):
+        """Garage-shaped S3 secret key: 64 hex characters (§6.2)."""
+        return secrets.token_hex(32)
 
     def generate_dkim_private_key(self):
         """Generate an RSA-2048 private key (PEM) for DKIM signing.
@@ -190,6 +227,18 @@ class NoahSecurityManager:
                 'oidc_client_id': lambda: 'stalwart',  # Fixed client ID for Authentik provider
                 'oidc_client_secret': lambda: self.generate_secure_password(40, include_special=False),
                 'dkim_private_key': self.generate_dkim_private_key,
+            }
+        elif service_name in GARAGE_S3_SERVICES:
+            # Generated HERE and imported into Garage afterwards (G2). What
+            # this removes is the fragile point the specification set out to
+            # avoid: an S3 secret is NOT readable back after creation, so any
+            # interruption between `key create` and persistence would leave a
+            # permanently inaccessible bucket. That failure mode does not exist
+            # here — if the import fails, the secret is already in the store and
+            # the operation replays identically.
+            required = {
+                'access_key_id': self.generate_garage_access_key_id,
+                'secret_access_key': self.generate_garage_secret_key,
             }
         elif service_name == 'cloudflare':
             # api_token cannot be auto-generated — stored empty until set via set-cloudflare-token

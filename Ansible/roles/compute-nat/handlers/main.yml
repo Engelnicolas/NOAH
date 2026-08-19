@@ -1,0 +1,7 @@
+---
+- name: reload noah nat
+  shell: |
+    set -euo pipefail
+    nft -f /etc/nftables.d/noah-garage-nat.nft
+  args:
+    executable: /bin/bash

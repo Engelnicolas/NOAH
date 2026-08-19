@@ -1,0 +1,36 @@
+{
+  "provider": "baremetal",
+  "compute_node": {
+    "name": "noah-compute",
+    "public_ip": "192.0.2.10",
+    "private_ip": "10.42.0.10"
+  },
+  "bastion": null,
+  "garage_cidr": "10.42.2.0/24",
+  "garage_nodes": [
+    {
+      "name": "garage-a",
+      "public_ip": "10.42.2.11",
+      "private_ip": "10.42.2.11",
+      "zone": "site-a",
+      "capacity": "2T",
+      "data_device": "/dev/disk/by-id/ata-SAMSUNG_MZ7L31T9HBLT_S665NX0T512345"
+    },
+    {
+      "name": "garage-b",
+      "public_ip": "10.42.2.12",
+      "private_ip": "10.42.2.12",
+      "zone": "site-a",
+      "capacity": "2T",
+      "data_device": "/dev/disk/by-id/ata-SAMSUNG_MZ7L31T9HBLT_S665NX0T567890"
+    },
+    {
+      "name": "garage-c",
+      "public_ip": "10.42.2.13",
+      "private_ip": "10.42.2.13",
+      "zone": "site-b",
+      "capacity": "2T",
+      "data_device": "/dev/disk/by-id/ata-SAMSUNG_MZ7L31T9HBLT_S665NX0T598765"
+    }
+  ]
+}

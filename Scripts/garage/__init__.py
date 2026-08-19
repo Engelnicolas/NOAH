@@ -16,28 +16,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""
-NOAH Scripts Utilities
-Utility functions and helpers for NOAH configuration management
-"""
+"""Garage object storage — deployment, provisioning and admin secret domain.
 
-# Import modules for direct access
-from . import config_loader
-from .config_utils import (
-    generate_helm_values,
-    get_service_fqdn,
-    override_service_configuration,
-    show_configuration,
-    show_domains,
-)
+Garage is the one component of the target that lives OUTSIDE the cluster and
+out of reach of the compute node. That double externality is what gives the
+ZFS-snapshot immutability strategy its value, so it is a property of the code
+here, not merely of the deployment:
 
-__all__ = [
-    # Core utility functions
-    'show_configuration',
-    'show_domains',
-    'generate_helm_values',
-    'get_service_fqdn',
-    'override_service_configuration',
-    # Modules
-    'config_loader',
-]
+  * admin_store      — secret domain 3, encrypted to its own Age identity,
+                       never handed to any node (§3.1)
+  * garage_deploy    — inventory construction + Ansible/deploy-garage.yml
+  * garage_provision — layout, buckets, S3 keys (generated here, imported
+                       into Garage — never the other way round, §6.2)
+
+See Specs/To-do/Garage.md.
+"""

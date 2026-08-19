@@ -703,9 +703,16 @@ def run_bootstrap(
     # NODE_PUBLIC_IP into cluster-vars and Flux substitutes ${NODE_PUBLIC_IP}
     # into nginx's publish-status-address at apply time.
     from Scripts.security.canonical_store import get_canonical_store
-    declared_ip = get_canonical_store(ansible_dir.parent).get_node_public_ip()
+    store = get_canonical_store(ansible_dir.parent)
+    declared_ip = store.get_node_public_ip()
     if declared_ip:
         extra_vars["node_public_ip"] = declared_ip
+
+    # Record which SSH key the cluster uses, so `noah garage deploy` can refuse
+    # that same key (Garage.md T2): condition 3 of §10.2 falls the moment the
+    # storage tier and the compute node share one.
+    if ssh_key:
+        store.set_cluster_ssh_key_file(ssh_key)
 
     # Render application secrets from the canonical store and deliver them
     # out-of-band (the app-secrets role kubectl-applies this manifest). Secrets

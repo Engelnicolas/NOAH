@@ -1,0 +1,12 @@
+---
+# NOAH role: compute-nat — defaults.
+
+# Prefix of the Garage segment. Supplied by the noah CLI from the `garage_cidr`
+# field of infra-inventory.json (§16.3) — produced by the layer that creates
+# the subnet, never entered by hand, so it cannot drift from the real one.
+garage_cidr: "10.0.2.0/24"
+
+# Interface carrying the default route, i.e. the one the translated traffic
+# leaves by. Derived from facts rather than hard-coded: the name differs
+# between substrates (ens5 on Nitro, eth0 elsewhere).
+compute_egress_interface: "{{ ansible_default_ipv4.interface }}"

@@ -1,0 +1,156 @@
+---
+# NOAH role: garage-install
+#
+# Binary, system user, systemd unit. Nothing here knows about the cluster
+# topology or holds a secret — garage-config writes the configuration,
+# garage-cluster forms the cluster.
+#
+# On the AWS target this role is where a missing compute-nat shows up: the
+# nodes have no egress until the compute node routes for them, and the download
+# below HANGS rather than failing. The playbook orders the two plays
+# accordingly.
+
+- name: Install the packages the Garage nodes need
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - chrony        # NTP: §5.1 and trial V3 measure snapshot skew tolerance
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Make sure the clock is disciplined
+  # Common NTP across the nodes is a requirement of §1.1, not a nicety: V3
+  # measures how much skew between snapshots Garage tolerates, and an
+  # undisciplined clock would make that measurement meaningless.
+  systemd:
+    name: chrony
+    enabled: yes
+    state: started
+
+- name: Create the garage system user
+  user:
+    name: "{{ garage_user }}"
+    system: yes
+    shell: /usr/sbin/nologin
+    home: /var/lib/garage
+    create_home: yes
+
+- name: Check the installed version
+  command: "{{ garage_binary_path }} --version"
+  register: garage_installed_version
+  changed_when: false
+  failed_when: false
+
+- name: Download the Garage binary
+  when: garage_version not in (garage_installed_version.stdout | default(''))
+  block:
+    - name: Fetch the release binary
+      get_url:
+        url: "{{ garage_download_url }}"
+        dest: /tmp/garage.bin
+        mode: "0755"
+        timeout: 120
+      register: garage_download
+      # A hang here is almost always the missing egress route (G19), not a slow
+      # mirror. Fail rather than retry forever so the cause is visible.
+      retries: 2
+      delay: 5
+
+    - name: Verify the checksum when one is pinned
+      # Skipped when garage_sha256 is empty, so an operator can bootstrap a
+      # version whose checksum has not been recorded yet — but a pinned
+      # checksum is what makes the supply-chain path of §16.5 (path D: an
+      # attacker with root on the routing compute node) an alteration that
+      # fails rather than one that installs.
+      stat:
+        path: /tmp/garage.bin
+        checksum_algorithm: sha256
+        get_checksum: yes
+      register: garage_bin_stat
+      when: garage_sha256 | length > 0
+
+    - name: Refuse a binary whose checksum does not match
+      fail:
+        msg: >-
+          Checksum mismatch on the Garage binary: expected {{ garage_sha256 }},
+          got {{ garage_bin_stat.stat.checksum }}. The Garage nodes reach the
+          internet THROUGH the compute node (G19), which puts that node on the
+          software-supply path of the storage tier — path D of §16.5. A
+          mismatch here is exactly the alteration that path allows.
+      when:
+        - garage_sha256 | length > 0
+        - garage_bin_stat.stat.checksum != garage_sha256
+
+    - name: Install the binary
+      copy:
+        src: /tmp/garage.bin
+        dest: "{{ garage_binary_path }}"
+        remote_src: yes
+        mode: "0755"
+        owner: root
+        group: root
+      notify: restart garage
+
+    - name: Drop the download
+      file:
+        path: /tmp/garage.bin
+        state: absent
+
+- name: Create the configuration directory
+  file:
+    path: /etc/garage
+    state: directory
+    mode: "0750"
+    owner: root
+    group: "{{ garage_user }}"
+
+- name: Make sure the data and metadata directories belong to garage
+  # Created by garage-zfs as dataset mountpoints; ownership is set here so the
+  # storage role stays about storage.
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ garage_user }}"
+    group: "{{ garage_user }}"
+    mode: "0700"
+  loop:
+    - "{{ garage_metadata_dir }}"
+    - "{{ garage_data_dir }}"
+
+- name: Install the systemd unit
+  copy:
+    dest: /etc/systemd/system/garage.service
+    mode: "0644"
+    content: |
+      # Managed by NOAH — Ansible role garage-install.
+      [Unit]
+      Description=Garage object storage
+      After=network-online.target zfs-mount.service
+      Wants=network-online.target
+      # The pool must be mounted before Garage starts: started on an unmounted
+      # mountpoint it would write to the root filesystem and rebuild an empty
+      # store on top of intact data.
+      RequiresMountsFor={{ garage_metadata_dir }} {{ garage_data_dir }}
+
+      [Service]
+      Type=simple
+      User={{ garage_user }}
+      Group={{ garage_user }}
+      ExecStart={{ garage_binary_path }} server
+      Environment=GARAGE_CONFIG_FILE=/etc/garage/garage.toml
+      Restart=on-failure
+      RestartSec=5
+      LimitNOFILE=65536
+      NoNewPrivileges=true
+      ProtectSystem=strict
+      ProtectHome=true
+      PrivateTmp=true
+      ReadWritePaths={{ garage_metadata_dir }} {{ garage_data_dir }}
+
+      [Install]
+      WantedBy=multi-user.target
+  notify:
+    - reload systemd
+    - restart garage

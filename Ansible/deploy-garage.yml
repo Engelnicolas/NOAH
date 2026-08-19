@@ -1,0 +1,83 @@
+---
+# NOAH — Garage deployment (Specs/To-do/Garage.md)
+#
+# Garage is the ONE component of the target that lives outside the cluster and
+# out of reach of the compute node. That double externality is not a deployment
+# detail: it is what makes ZFS-snapshot immutability (D6) worth anything. A
+# deployment that relaxed it would produce a working Garage and a backup
+# strategy with no value.
+#
+# Driven by Scripts/garage/garage_deploy.py, which builds a temporary inventory
+# and passes the extra-vars in a 0600 file. Never run against
+# Ansible/inventory/hosts.yml — it holds localhost only.
+#
+# Groups the inventory provides:
+#   compute_node  — 0 or 1 host. Present only on substrates where the Garage
+#                   nodes sit in a private subnet and go out through it (G19).
+#   garage_nodes  — 2 hosts in development, 3 in production (G7).
+#
+# Required extra-vars (all supplied by the CLI):
+#   garage_replication_factor  DERIVED from the node count, never entered (G8)
+#   garage_rpc_secret          32 bytes hex, identical on every node — domain 3
+#   garage_admin_token         administration API token — domain 3
+#   garage_domain              domain under which the S3 endpoint is published
+#   garage_cidr                prefix of the Garage segment, for the NAT rule
+#
+# Per-host variables carried by the inventory: garage_zone, garage_capacity,
+# garage_data_device, and ansible_ssh_common_args when a jump host is in play.
+
+# ---------------------------------------------------------------------------
+# Phase 1 — routing on the compute node (G19)
+# ---------------------------------------------------------------------------
+# BLOCKING, AND IT DOES NOT SHOW. On the AWS target the Garage nodes are in a
+# private subnet: they have NO egress until the compute node routes for them.
+# Phases 2 and 3 — installing ZFS, downloading the Garage binary, fetching
+# Ubuntu packages — all fail until this one has passed, and they fail by
+# HANGING rather than by refusing. This is a bootstrap prerequisite, not an
+# operation to catch up on later.
+#
+# The play is skipped when the inventory has no compute_node group, which is
+# the case on physical machines where the whole question is moot.
+- name: NOAH Garage — phase 1, egress routing on the compute node
+  hosts: compute_node
+  become: yes
+  gather_facts: yes
+  roles:
+    - role: compute-nat
+
+# ---------------------------------------------------------------------------
+# Phase 2 — storage foundation
+# ---------------------------------------------------------------------------
+- name: NOAH Garage — phase 2, ZFS pool and datasets
+  hosts: garage_nodes
+  become: yes
+  gather_facts: yes
+  roles:
+    - role: garage-zfs
+
+# ---------------------------------------------------------------------------
+# Phase 3 — binary, configuration, TLS termination
+# ---------------------------------------------------------------------------
+- name: NOAH Garage — phase 3, install and configure Garage
+  hosts: garage_nodes
+  become: yes
+  gather_facts: yes
+  roles:
+    - role: garage-install
+    - role: garage-config
+    - role: garage-proxy
+
+# ---------------------------------------------------------------------------
+# Phase 4 — cluster formation
+# ---------------------------------------------------------------------------
+# Buckets and keys are NOT created here. They belong to garage_provision.py:
+# NOAH generates the credentials, persists them, THEN imposes them on Garage
+# with `key import` (§6.2, G2). Creating them from the playbook would invert
+# the flow and reintroduce the one failure this specification exists to remove
+# — an S3 secret that cannot be read back after creation.
+- name: NOAH Garage — phase 4, form the cluster
+  hosts: garage_nodes
+  become: yes
+  gather_facts: no
+  roles:
+    - role: garage-cluster

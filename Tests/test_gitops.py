@@ -64,6 +64,16 @@ FAKE_SECRETS = {
     "REPLACE_WITH_STALWART_OIDC_CLIENT_SECRET":  "st-oidc-secret",
     "REPLACE_WITH_STALWART_DKIM_KEY_PEM":  "fake-dkim-pem",
     "REPLACE_WITH_STALWART_DKIM_TXT":      "v=DKIM1; k=rsa; p=fake",
+    # Garage S3 consumption keys (Garage.md §7). garage-gitmirror has no
+    # placeholder on purpose: it has no consuming namespace and no manifest.
+    "REPLACE_WITH_GARAGE_NEXTCLOUD_KEY_ID": "GK" + "0" * 24,
+    "REPLACE_WITH_GARAGE_NEXTCLOUD_SECRET": "1" * 64,
+    "REPLACE_WITH_GARAGE_PGWAL_KEY_ID":     "GK" + "2" * 24,
+    "REPLACE_WITH_GARAGE_PGWAL_SECRET":     "3" * 64,
+    "REPLACE_WITH_GARAGE_VELERO_KEY_ID":    "GK" + "4" * 24,
+    "REPLACE_WITH_GARAGE_VELERO_SECRET":    "5" * 64,
+    "REPLACE_WITH_GARAGE_LOGS_KEY_ID":      "GK" + "6" * 24,
+    "REPLACE_WITH_GARAGE_LOGS_SECRET":      "7" * 64,
     "admin@example.com":                   f"admin@{DOMAIN}",
     "example.com":                         DOMAIN,
 }
@@ -161,6 +171,11 @@ class TestGetOrGenerateSecrets:
             "headlamp":   {"oidc_client_id": "headlamp", "oidc_client_secret": "os"},
             "nextcloud":  {"oidc_client_id": "nextcloud"},
             "stalwart":   {"oidc_client_id": "stalwart", "dkim_private_key": ""},
+            "garage-nextcloud": {"access_key_id": "GK1", "secret_access_key": "s1"},
+            "garage-pgwal":     {"access_key_id": "GK2", "secret_access_key": "s2"},
+            "garage-velero":    {"access_key_id": "GK3", "secret_access_key": "s3"},
+            "garage-gitmirror": {"access_key_id": "GK4", "secret_access_key": "s4"},
+            "garage-logs":      {"access_key_id": "GK5", "secret_access_key": "s5"},
         }[svc]
 
         with patch("Scripts.security.canonical_store.get_canonical_store", return_value=mock_store), \
@@ -189,9 +204,12 @@ class TestRenderAppSecretManifests:
     def test_renders_twelve_secret_documents(self, project_root):
         # 6 core (cloudflare ×2, authentik ×2, headlamp ×2)
         # + 6 apps-extra (nextcloud ×3, stalwart ×3)
+        # + 4 Garage S3 (nextcloud, pg-wal, velero, logs — Garage.md §7).
+        #   NOT five: garage-gitmirror is consumed outside the cluster and
+        #   deliberately has no manifest.
         out = self._render(project_root)
-        assert out.count("apiVersion: v1") == 12
-        assert out.count("kind: Secret") == 12
+        assert out.count("apiVersion: v1") == 16
+        assert out.count("kind: Secret") == 16
         assert "\n---\n" in out  # multi-document stream
 
     def test_all_placeholders_filled(self, project_root):

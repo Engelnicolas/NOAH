@@ -1,0 +1,137 @@
+---
+# NOAH role: compute-nat
+#
+# Turns the compute node into the single egress point of the platform (decision
+# G19). Applies ONLY where the Garage nodes sit in a private subnet; on
+# physical machines it is moot and is skipped.
+#
+# THIS IS A BOOTSTRAP PREREQUISITE, NOT A DAY-2 OPERATION, and that does not
+# show. In the private-subnet topology the Garage nodes have NO egress at all
+# until this role has run: installing ZFS, downloading the Garage binary,
+# fetching Ubuntu packages all fail — and they fail by HANGING, not by
+# refusing. Every garage-* role therefore depends on this one having passed.
+#
+# OpenTofu does not do this. G15 forbids it from configuring anything, and the
+# split is deliberate: source_dest_check and the route table belong to the
+# machine lifecycle, connection tracking and address translation belong to the
+# machine contents.
+
+- name: Enable IPv4 forwarding on the compute node
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_file: /etc/sysctl.d/99-noah-garage-nat.conf
+    state: present
+    reload: yes
+
+- name: Install nftables and the persistence helper
+  apt:
+    name:
+      - nftables
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+# ---------------------------------------------------------------------------
+# N9 — the dependency nobody guesses (cilium_sso.md §6.7)
+# ---------------------------------------------------------------------------
+# The compute node runs the cluster, so Cilium owns its datapath. Checked
+# against the upstream source: Cilium's masquerading correctly ignores transit
+# traffic in BOTH modes — in eBPF it hands the packet back to the stack for
+# want of a local endpoint to source from, and in iptables its rule is bounded
+# by the pod CIDR and lives in its own chain. The rule laid down below is
+# therefore reached and does apply.
+#
+# But eBPF HOST ROUTING "bypasses netfilter in the host namespace": enabled, it
+# would stop this rule from running and cut the Garage nodes' egress WITH NO
+# MESSAGE AT ALL. It has exactly two prerequisites — kube-proxy replacement and
+# eBPF masquerading — and the first is already set in the project's HelmRelease.
+#
+# A role that lays down masquerading is the right place to refuse to run when
+# the datapath would bypass it.
+
+- name: Read the Cilium masquerading mode
+  shell: |
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+      kubectl -n kube-system get configmap cilium-config \
+      -o jsonpath='{.data.enable-bpf-masquerade}' 2>/dev/null || true
+  args:
+    executable: /bin/bash
+  register: cilium_bpf_masquerade
+  changed_when: false
+  failed_when: false
+
+- name: Refuse to install NAT while eBPF masquerading is enabled
+  fail:
+    msg: >-
+      Cilium has bpf.masquerade=true. Combined with kubeProxyReplacement, which
+      this project already sets, that enables eBPF host routing, whose
+      documented limitation is that packets no longer hit the netfilter tables
+      in the host namespace. The masquerading rule below would silently stop
+      applying and the Garage nodes would lose all egress WITHOUT ANY SIGNAL.
+      Set bpf.masquerade back to false (cilium_sso.md decision N9) before
+      deploying Garage. This is a constraint of G19, not a Cilium tuning knob.
+  when: cilium_bpf_masquerade.stdout | default('') | trim == 'true'
+
+# ---------------------------------------------------------------------------
+# Masquerading proper
+# ---------------------------------------------------------------------------
+# Its own table, so nothing here collides with the chains Cilium and K3s
+# manage: a rule added to a shared chain is a rule someone else's flush
+# removes.
+
+- name: Create the nftables include directory
+  file:
+    path: /etc/nftables.d
+    state: directory
+    mode: "0755"
+
+- name: Install the NOAH NAT table for the Garage subnet
+  copy:
+    dest: /etc/nftables.d/noah-garage-nat.nft
+    mode: "0644"
+    content: |
+      # Managed by NOAH — Ansible role compute-nat (Garage.md G19).
+      # Egress translation for the Garage nodes, which have no public address.
+      table ip noah_nat {
+        chain postrouting {
+          type nat hook postrouting priority srcnat; policy accept;
+          ip saddr {{ garage_cidr }} oifname "{{ compute_egress_interface }}" masquerade
+        }
+      }
+  notify: reload noah nat
+
+- name: Make sure nftables loads the NOAH table at boot
+  lineinfile:
+    path: /etc/nftables.conf
+    line: 'include "/etc/nftables.d/noah-garage-nat.nft"'
+    create: yes
+    mode: "0644"
+  notify: reload noah nat
+
+- name: Enable and start nftables
+  systemd:
+    name: nftables
+    enabled: yes
+    state: started
+
+- name: Load the NOAH NAT table now
+  shell: |
+    set -euo pipefail
+    nft -f /etc/nftables.d/noah-garage-nat.nft
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+# The counterpart of source_dest_check = false, which Infra/aws/ carries: the
+# VPC drops packets whose source address is not the instance's own, and the
+# symptom is a bootstrap that hangs with no usable error. Reported here rather
+# than checked, because from inside the instance the setting is not visible.
+- name: Remind that source_dest_check must be off on the compute node
+  debug:
+    msg: >-
+      NAT is in place for {{ garage_cidr }} out of
+      {{ compute_egress_interface }}. On a cloud substrate the instance must
+      also have source/destination checking DISABLED (Infra/aws/ sets
+      source_dest_check = false). Without it the VPC drops the routed packets
+      and the Garage nodes' bootstrap hangs with no error message.

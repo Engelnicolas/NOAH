@@ -39,8 +39,7 @@ def test_cluster_create_removed():
 
     with patch('noah.ConfigLoader'), \
          patch('noah.ClusterManager'), \
-         patch('noah.SecretManager'), \
-         patch('noah.AnsibleRunner'):
+         patch('noah.SecretManager'):
 
         result = runner.invoke(noah.cli, ['cluster', 'create', '--help'])
         assert result.exit_code != 0, "cluster create should not exist"
@@ -56,8 +55,7 @@ def test_deploy_group_removed():
 
     with patch('noah.ConfigLoader'), \
          patch('noah.ClusterManager'), \
-         patch('noah.SecretManager'), \
-         patch('noah.AnsibleRunner'):
+         patch('noah.SecretManager'):
 
         result = runner.invoke(noah.cli, ['deploy', '--help'])
         assert result.exit_code != 0, "deploy group should not exist"
@@ -81,7 +79,6 @@ def test_verbose_output_presence():
         with patch('noah.ConfigLoader'), \
              patch('noah.ClusterManager'), \
              patch('noah.SecretManager'), \
-             patch('noah.AnsibleRunner'), \
              patch('noah.ensure_security_initialized'):
 
             result = runner.invoke(noah.cli, cmd)

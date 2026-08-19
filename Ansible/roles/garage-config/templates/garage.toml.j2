@@ -1,0 +1,58 @@
+{{ ansible_managed | comment }}
+# NOAH — /etc/garage/garage.toml
+# Fields confirmed against the upstream Garage documentation (Garage.md §5).
+
+metadata_dir = "{{ garage_metadata_dir }}"
+data_dir     = "{{ garage_data_dir }}"
+
+# lmdb is the upstream default, and it is the C2 index of §5.2 of the state
+# map: a ZFS snapshot must capture meta AND data together for the restore to
+# be coherent.
+db_engine = "lmdb"
+
+# DERIVED FROM THE NODE COUNT, NEVER ENTERED SEPARATELY (G8).
+# Garage requires replication_factor <= node count, and the quorums follow from
+# it. At two nodes, factor 2 gives a write quorum of 2: LOSING A NODE STOPS
+# WRITES. That is acceptable in development — where a mechanism is being
+# validated, not an availability figure — and would be unacceptable in
+# production. Moving to three nodes is a change of inventory variable and of
+# `garage layout assign`, not a rewrite.
+replication_factor = {{ garage_replication_factor }}
+
+# `consistent` EVEN IN DEVELOPMENT. The `degraded` mode relaxes the read quorum
+# and would mask precisely the divergences trials V2 and V3 exist to observe. A
+# development Garage that forgives inconsistency validates nothing.
+consistency_mode = "consistent"
+
+# Does NOT replace the ZFS snapshots of §10 of the state map. Garage's own
+# snapshot protects the metadata engine against its own corruption; it is on
+# the same machine, in the same failure domain, and it is not what immutability
+# rests on.
+metadata_auto_snapshot_interval = "6h"
+
+rpc_bind_addr   = "[::]:3901"
+rpc_public_addr = "{{ garage_rpc_public_addr }}:3901"
+# 32 bytes hex, IDENTICAL ON EVERY NODE. Whoever holds it joins the Garage
+# cluster, so it belongs to secret domain 3 and never to the canonical store
+# (§3.1). The task that writes this file is no_log: true.
+rpc_secret      = "{{ garage_rpc_secret }}"
+
+[s3_api]
+# Behind the TLS proxy — Garage does not terminate TLS itself (§5.2).
+api_bind_addr = "[::]:3900"
+s3_region     = "{{ garage_s3_region }}"
+root_domain   = ".s3.{{ garage_domain }}"
+
+[s3_web]
+bind_addr   = "[::]:3902"
+root_domain = ".web.{{ garage_domain }}"
+index       = "index.html"
+
+[admin]
+# Bound to the loopback ONLY. Flow G5 of cilium_sso.md §7.2 forbids the cluster
+# ports 22, 3901 "and the administration API" — a port §5 had not yet fixed.
+# It is 3903, and binding it to the loopback is what makes the refusal
+# structural rather than a firewall rule: garage_provision.py reaches it over
+# SSH, from the operator workstation, and nothing else can.
+api_bind_addr = "127.0.0.1:3903"
+admin_token   = "{{ garage_admin_token }}"

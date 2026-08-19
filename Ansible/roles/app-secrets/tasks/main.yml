@@ -23,6 +23,9 @@
           KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
       args:
         executable: /bin/bash
+      # KEEP IN STEP with _SECRET_NAMESPACES in Scripts/gitops/gitops_init.py
+      # and with the Garage flow matrix of cilium_sso.md §7.2 — three lists
+      # that must coincide, tied together by Tests/test_garage.py.
       loop:
         - external-dns
         - cert-manager
@@ -30,6 +33,12 @@
         - headlamp
         - nextcloud
         - stalwart
+        # Garage S3 consumers (Garage.md §7). Created here although the
+        # workloads arrive in later lots: the credentials are delivered by
+        # lot 3, and a Secret cannot land in a namespace that does not exist.
+        - cnpg-system
+        - velero
+        - observability
       changed_when: false
 
     - name: Write application secrets manifest to a temp file on the primary

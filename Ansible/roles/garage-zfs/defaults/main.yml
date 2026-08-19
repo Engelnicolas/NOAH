@@ -1,0 +1,20 @@
+---
+# NOAH role: garage-zfs — defaults.
+
+# ZFS pool name. `rpool` in appendix A.3; kept as a variable so a node that
+# already carries a root pool of that name does not collide with it.
+garage_zpool: rpool
+
+# Deterministic path to the data disk, supplied per host by the noah CLI from
+# the `data_device` field of infra-inventory.json. The default is deliberately
+# a short name that the role REFUSES: a wrong default that fails loudly beats a
+# plausible one that creates the pool on the root disk.
+garage_data_device: "/dev/CHANGE-ME"
+
+garage_metadata_dir: /srv/garage/meta
+garage_data_dir: /srv/garage/data
+
+# The GA/HWE kernel check is a refusal, not a warning: an HWE kernel ahead of
+# OpenZFS support makes the pool unreachable at the next reboot. Set to true
+# only when the kernel/OpenZFS pairing has genuinely been verified.
+garage_allow_hwe_kernel: false

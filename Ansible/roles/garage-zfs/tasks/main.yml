@@ -1,0 +1,148 @@
+---
+# NOAH role: garage-zfs
+#
+# Creates the ZFS pool and the two datasets that carry Garage, per appendix A.3
+# of the state map (§5.1). This is the foundation of D6: the immutability
+# strategy rests on ZFS snapshots of `data` AND `meta`, taken on machines the
+# compute node cannot reach.
+#
+# Two tuning choices are load-bearing rather than cosmetic:
+#   * recordsize 16K on meta, 1M on data — LMDB writes small records, Garage
+#     writes large blocks;
+#   * compression OFF on data. Garage already compresses with zstd before
+#     replication, so it also shrinks network traffic; enabling both spends CPU
+#     for nothing.
+
+- name: Refuse to run on a kernel newer than the OpenZFS packages support
+  block:
+    - name: Read the running kernel flavour
+      command: uname -r
+      register: garage_kernel
+      changed_when: false
+
+    - name: Fail on an HWE kernel
+      fail:
+        msg: >-
+          The running kernel ({{ garage_kernel.stdout }}) looks like an HWE
+          kernel. A kernel upgrade running ahead of OpenZFS support makes the
+          POOL UNREACHABLE AT THE NEXT REBOOT — the failure is not degraded
+          service, it is data that will not mount. Pin the GA kernel on the
+          Garage nodes (§5.1, §18) before continuing, or set
+          garage_allow_hwe_kernel=true if the pairing has genuinely been
+          verified.
+      when:
+        - not (garage_allow_hwe_kernel | bool)
+        - "'-hwe-' in garage_kernel.stdout"
+
+- name: Install ZFS
+  apt:
+    name:
+      - zfsutils-linux
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Refuse a short device name for the data disk
+  fail:
+    msg: >-
+      garage_data_device is {{ garage_data_device }}. A short device name is
+      PROSCRIBED: on Nitro instances the NVMe enumeration order is not
+      guaranteed, so the data volume shows up as nvme1n1 or nvme2n1 depending
+      on attachment order — and this role would create the pool ON THE ROOT
+      DISK. Pass the deterministic path
+      (/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol…, or
+      /dev/disk/by-id/virtio-… on a virtio host). infra-inventory.json emits it
+      already (§16.3).
+  when: not garage_data_device.startswith('/dev/disk/by-id/')
+
+- name: Check the data device exists
+  stat:
+    path: "{{ garage_data_device }}"
+    follow: yes
+  register: garage_data_device_stat
+
+- name: Fail when the data device is absent
+  fail:
+    msg: >-
+      {{ garage_data_device }} does not exist on this node. On a cloud
+      substrate the volume may still be attaching; on physical machines check
+      the by-id path. The pool is NOT created on a fallback device.
+  when: not garage_data_device_stat.stat.exists
+
+- name: Check whether the pool already exists
+  command: zpool list -H -o name {{ garage_zpool }}
+  register: garage_zpool_check
+  changed_when: false
+  failed_when: false
+
+- name: Create the ZFS pool on the data device
+  # Idempotent by the guard rather than by the module: importing an existing
+  # pool must never be confused with creating a new one over live data.
+  #
+  # NO MIRROR IN DEVELOPMENT (§5.1). Appendix A.2 requires two disks per Garage
+  # node in production, because snapshots are local and Garage does not
+  # replicate them; in development, losing one VM's snapshot history is only a
+  # trial to replay. One 20 GiB disk per node is enough — PROVIDED the gap is
+  # never carried into production, where it would destroy the point of the
+  # mirror.
+  shell: |
+    set -euo pipefail
+    zpool create -f \
+      -o ashift=12 \
+      -O atime=off \
+      -O xattr=sa \
+      -O acltype=posixacl \
+      -O compression=lz4 \
+      -O mountpoint=none \
+      {{ garage_zpool }} {{ garage_data_device }}
+  args:
+    executable: /bin/bash
+  when: garage_zpool_check.rc != 0
+
+- name: Refuse deduplication anywhere on the pool
+  # Never dedup: the memory cost is unbounded and the benefit on already
+  # compressed object data is nil.
+  command: zfs set dedup=off {{ garage_zpool }}
+  changed_when: false
+
+- name: Create the metadata dataset
+  # 16K records: LMDB — the C2 index of §5.2 of the state map — writes small
+  # pages, and a 128K default record would amplify every write eightfold.
+  shell: |
+    set -euo pipefail
+    zfs list -H -o name {{ garage_zpool }}/meta >/dev/null 2>&1 || \
+      zfs create -o recordsize=16K \
+                 -o compression=lz4 \
+                 -o mountpoint={{ garage_metadata_dir }} \
+                 {{ garage_zpool }}/meta
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Create the data dataset
+  # compression=off ON PURPOSE, and it is not an oversight: Garage compresses
+  # with zstd before replication. Doubling the compression spends CPU without
+  # gain.
+  shell: |
+    set -euo pipefail
+    zfs list -H -o name {{ garage_zpool }}/data >/dev/null 2>&1 || \
+      zfs create -o recordsize=1M \
+                 -o compression=off \
+                 -o mountpoint={{ garage_data_dir }} \
+                 {{ garage_zpool }}/data
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Report the resulting layout
+  shell: |
+    set -euo pipefail
+    zfs list -o name,recordsize,compression,mountpoint -r {{ garage_zpool }}
+  args:
+    executable: /bin/bash
+  register: garage_zfs_layout
+  changed_when: false
+
+- name: Show the resulting layout
+  debug:
+    var: garage_zfs_layout.stdout_lines

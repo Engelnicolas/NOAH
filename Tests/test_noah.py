@@ -34,7 +34,6 @@ def test_noah_imports():
     try:
         from Scripts.core_helm.cluster_manager import ClusterManager  # noqa: F401
         from Scripts.security.security_manager import NoahSecurityManager  # noqa: F401
-        from Scripts.utils.ansible_runner import AnsibleRunner  # noqa: F401
         from Scripts.utils.config_loader import ConfigLoader  # noqa: F401
         print("✓ All imports successful")
     except Exception as e:
@@ -89,8 +88,7 @@ def test_verbose_functionality():
         # Test status command for verbose output
         with patch('noah.ConfigLoader'), \
              patch('noah.ClusterManager') as mock_cluster, \
-             patch('noah.SecretManager'), \
-             patch('noah.AnsibleRunner'):
+             patch('noah.SecretManager'):
 
             mock_cluster_instance = Mock()
             mock_cluster.return_value = mock_cluster_instance

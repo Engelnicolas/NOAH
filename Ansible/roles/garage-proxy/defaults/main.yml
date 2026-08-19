@@ -1,0 +1,11 @@
+---
+# NOAH role: garage-proxy — defaults.
+
+# Explicit, never implicit (G6, §5.2).
+garage_tls_enabled: true
+
+# Supply a real certificate in production. Left empty, the role generates a
+# self-signed one and says so: it encrypts the segment but authenticates
+# nothing.
+garage_tls_certificate: ""
+garage_tls_private_key: ""

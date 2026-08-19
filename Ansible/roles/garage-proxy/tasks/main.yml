@@ -1,0 +1,140 @@
+---
+# NOAH role: garage-proxy
+#
+# Garage does not terminate TLS (§5.2). This role puts a reverse proxy in front
+# of api_bind_addr so the S3 credentials do not travel in the clear between the
+# cluster and the storage tier.
+#
+# The whole role is conditioned on garage_tls_enabled, and that variable is
+# EXPLICIT BY DESIGN (G6). Cleartext on a dedicated LAN segment remains a
+# legitimate choice; it must be a stated one. A silent default is the failure
+# mode lot 6 corrected on the store side, and there is no reason to reintroduce
+# it here.
+
+- name: Skip TLS termination — cleartext was chosen explicitly
+  debug:
+    msg: >-
+      garage_tls_enabled is false: no TLS proxy is installed and the S3 API is
+      served in the clear on port 3900. S3 credentials travel unencrypted on
+      this segment. The cluster egress rules must target 3900 rather than 443
+      (cilium_sso.md §7.2).
+  when: not (garage_tls_enabled | bool)
+
+- name: Terminate TLS in front of the S3 API
+  when: garage_tls_enabled | bool
+  block:
+    - name: Install nginx
+      apt:
+        name:
+          - nginx
+        state: present
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Create the certificate directory
+      file:
+        path: /etc/garage/tls
+        state: directory
+        mode: "0750"
+        owner: root
+        group: root
+
+    - name: Install the certificate
+      copy:
+        content: "{{ garage_tls_certificate }}"
+        dest: /etc/garage/tls/garage.crt
+        mode: "0644"
+        owner: root
+        group: root
+      when: garage_tls_certificate | length > 0
+      notify: reload nginx
+
+    - name: Install the private key
+      copy:
+        content: "{{ garage_tls_private_key }}"
+        dest: /etc/garage/tls/garage.key
+        mode: "0600"
+        owner: root
+        group: root
+      when: garage_tls_private_key | length > 0
+      no_log: true
+      notify: reload nginx
+
+    - name: Generate a self-signed certificate when none was supplied
+      # Development only, and it is stated as such. A self-signed certificate
+      # encrypts the segment but authenticates nothing: it does not protect
+      # against an attacker who can intercept, only against one who can only
+      # listen. Supply a real certificate in production.
+      shell: |
+        set -euo pipefail
+        openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+          -keyout /etc/garage/tls/garage.key \
+          -out /etc/garage/tls/garage.crt \
+          -subj "/CN={{ inventory_hostname }}" \
+          -addext "subjectAltName=IP:{{ ansible_host }},DNS:{{ inventory_hostname }}"
+        chmod 0600 /etc/garage/tls/garage.key
+      args:
+        executable: /bin/bash
+        creates: /etc/garage/tls/garage.crt
+      when:
+        - garage_tls_certificate | length == 0
+        - garage_tls_private_key | length == 0
+      notify: reload nginx
+
+    - name: Configure the reverse proxy
+      copy:
+        dest: /etc/nginx/sites-available/garage-s3
+        mode: "0644"
+        content: |
+          # Managed by NOAH — Ansible role garage-proxy.
+          server {
+            listen 443 ssl;
+            listen [::]:443 ssl;
+            server_name _;
+
+            ssl_certificate     /etc/garage/tls/garage.crt;
+            ssl_certificate_key /etc/garage/tls/garage.key;
+            ssl_protocols       TLSv1.2 TLSv1.3;
+
+            # Object storage: no request body limit, and no buffering — an
+            # 8 GiB upload must not be spooled to the proxy's disk first.
+            client_max_body_size 0;
+            proxy_request_buffering off;
+            proxy_buffering off;
+            proxy_read_timeout 900s;
+
+            location / {
+              proxy_pass http://127.0.0.1:3900;
+              proxy_http_version 1.1;
+              # The S3 signature covers the Host header: rewriting it would
+              # invalidate every signed request.
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto https;
+            }
+          }
+      notify: reload nginx
+
+    - name: Enable the site
+      file:
+        src: /etc/nginx/sites-available/garage-s3
+        dest: /etc/nginx/sites-enabled/garage-s3
+        state: link
+      notify: reload nginx
+
+    - name: Remove the default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: reload nginx
+
+    - name: Validate the nginx configuration
+      command: nginx -t
+      changed_when: false
+
+    - name: Enable and start nginx
+      systemd:
+        name: nginx
+        enabled: yes
+        state: started

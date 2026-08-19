@@ -93,7 +93,6 @@ from Scripts.security import ensure_security_initialized, get_security_config
 from Scripts.security.canonical_store import InsecureStoreError
 from Scripts.security.rotate_cli import register_rotate_command  # type: ignore
 from Scripts.security.security_manager import NoahSecurityManager as SecretManager
-from Scripts.utils.ansible_runner import AnsibleRunner
 from Scripts.utils.config_loader import ConfigLoader
 
 VERSION = "0.1.0"
@@ -169,7 +168,6 @@ def cli(ctx: click.Context) -> None:
     ctx.obj['config'] = ConfigLoader()
     ctx.obj['cluster'] = ClusterManager(ctx.obj['config'])
     ctx.obj['secrets'] = SecretManager(ctx.obj['config'])
-    ctx.obj['ansible'] = AnsibleRunner(ctx.obj['config'])
 
 @cli.group()  # type: ignore
 @click.pass_context
@@ -366,6 +364,323 @@ def flux_status_cmd(ctx):
 def flux_logs(ctx, follow, tail):
     """Aggregate logs from the Flux controllers."""
     sys.exit(flux_cmd_logs(follow=follow, tail=tail))
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Garage — object storage OUTSIDE the cluster (Specs/To-do/Garage.md)
+# ──────────────────────────────────────────────────────────────────────
+#
+# Garage is the one component that lives outside the cluster and out of reach
+# of the compute node. That double externality is what makes ZFS-snapshot
+# immutability worth anything, so the refusals below are not ergonomics: a
+# shared SSH key, an administration secret in the canonical store, or a
+# replication factor above the node count each undo it, and only the last one
+# would ever announce itself.
+
+@cli.group()  # type: ignore
+@click.pass_context
+def garage(ctx):
+    """Deploy and provision Garage object storage (outside the cluster)"""
+
+
+@garage.group('admin')  # type: ignore
+@click.pass_context
+def garage_admin(ctx):
+    """Secret domain 3 — never readable from the compute node"""
+
+
+@garage_admin.command('init')
+@click.option('--force', is_flag=True, default=False,
+              help='Regenerate the identity. DESTROYS access to every secret already filed under it.')
+@click.pass_context
+def garage_admin_init(ctx, force):
+    """Create Age/garage-admin.txt, the second Age identity.
+
+    It is never transmitted to any node and never leaves the operator
+    workstation. Everything that grants access to the Garage data is encrypted
+    to it: node SSH key, rpc_secret, admin token, owner S3 key, cloud provider
+    credentials, OpenTofu state passphrase.
+    """
+    from Scripts.garage.admin_store import create_admin_identity, ensure_admin_secrets, get_admin_store
+    root = Path.cwd()
+    click.echo("[VERBOSE] Creating the Garage administration secret domain...")
+    key_file = create_admin_identity(root, force=force)
+    click.echo(f"✅ Administration identity: {key_file}")
+    ensure_admin_secrets(get_admin_store(root))
+    click.echo("✅ Administration secrets filed in Secrets/garage-admin.enc.yaml")
+    click.echo("")
+    click.echo("⚠️  Back this identity up OFFLINE. It is the only copy, and the")
+    click.echo("   cluster's Age key cannot decrypt what it protects — which is")
+    click.echo("   the entire point (Garage.md §3.1).")
+
+
+@garage_admin.command('show')
+@click.option('--field', default=None,
+              help='Print one field raw (for scripting). Without it, only key names are listed.')
+@click.pass_context
+def garage_admin_show(ctx, field):
+    """List the administration secret NAMES, or print one value."""
+    from Scripts.garage.admin_store import ADMIN_SERVICE, get_admin_store
+    store = get_admin_store(Path.cwd())
+    secrets_map = store.get_service_secrets(ADMIN_SERVICE)
+    if field:
+        if field not in secrets_map:
+            raise click.UsageError(
+                f"No `{field}` in the administration store. Available: "
+                f"{', '.join(sorted(secrets_map))}"
+            )
+        click.echo(secrets_map[field], nl=False)
+        return
+    # Names only by default: printing an administration secret because someone
+    # typed `show` is how it ends up in a scrollback buffer, then in a paste.
+    click.echo("Garage administration secrets (values hidden — use --field):")
+    for name in sorted(secrets_map):
+        click.echo(f"  {name}")
+
+
+@garage_admin.command('set-cloud')
+@click.option('--provider', default='aws', show_default=True)
+@click.option('--access-key-id', default=None)
+@click.option('--secret-access-key', default=None)
+@click.option('--region', default=None)
+@click.pass_context
+def garage_admin_set_cloud(ctx, provider, access_key_id, secret_access_key, region):
+    """File the cloud provider API credentials in secret domain 3 (G13).
+
+    A token able to snapshot the Garage volumes reads all of Garage without
+    ever touching a machine. It therefore has exactly the status of the
+    administration SSH key — never ~/.aws/credentials, never a .tfvars.
+    """
+    from Scripts.garage.admin_store import get_admin_store, set_cloud_credentials
+    values = {}
+    if access_key_id:
+        values['access_key_id'] = access_key_id
+    if secret_access_key:
+        values['secret_access_key'] = secret_access_key
+    if region:
+        values['region'] = region
+    if not values:
+        raise click.UsageError("Nothing to set. Pass at least --access-key-id and --secret-access-key.")
+    set_cloud_credentials(get_admin_store(Path.cwd()), provider, **values)
+    click.echo(f"✅ {provider} credentials filed in Secrets/garage-admin.enc.yaml")
+
+
+@garage.command('deploy')
+@click.option('--nodes', default=None,
+              help='Comma-separated node addresses (manual form, used on physical machines)')
+@click.option('--from-infra', default=None,
+              help='Path to infra-inventory.json produced by Infra/<target>/ (§16.3)')
+@click.option('--ssh-user', default='ubuntu', show_default=True)
+@click.option('--ssh-key', default=None,
+              help='SSH private key. Omit it: NOAH materialises the domain-3 key. A key shared with the cluster is REFUSED.')
+@click.option('--bastion-user', default=None, help='SSH user on the jump host (defaults to --ssh-user)')
+@click.option('--replication-factor', type=int, default=None,
+              help='Force a factor BELOW the node count (legitimate trial). Above it is refused.')
+@click.option('--domain', default=None, help='Domain publishing the S3 endpoint')
+@click.option('--capacity', default='20G', show_default=True, help='Capacity advertised per node (manual form)')
+@click.option('--data-device', default=None,
+              help='Deterministic /dev/disk/by-id/... path (manual form). A short name is refused.')
+@click.option('--zones', default=None, help='Comma-separated Garage zones (defaults per §4.1)')
+@click.option('--tls/--no-tls', 'tls_enabled', default=True, show_default=True,
+              help='--no-tls serves S3 in the clear. Explicit by design (G6): never an implicit default.')
+@click.option('--skip-nat', is_flag=True, default=False,
+              help='Skip the compute-node routing play (physical machines, where it is moot)')
+@click.option('--compute-ssh-key', default=None, help='SSH key for the compute node (cluster key, not the Garage one)')
+@click.pass_context
+def garage_deploy_cmd(ctx, nodes, from_infra, ssh_user, ssh_key, bastion_user,
+                      replication_factor, domain, capacity, data_device, zones,
+                      tls_enabled, skip_nat, compute_ssh_key):
+    """Deploy Garage on its nodes (ZFS, binary, config, cluster)."""
+    from Scripts.garage.garage_deploy import run_deploy
+    from Scripts.security.canonical_store import get_canonical_store
+
+    click.echo("[VERBOSE] Starting Garage deployment...")
+    root = Path.cwd()
+    if not domain:
+        domain = get_canonical_store(root).get_cluster_domain() or DEFAULT_DOMAIN
+
+    sys.exit(run_deploy(
+        nodes=nodes, from_infra=from_infra, ssh_user=ssh_user, ssh_key=ssh_key,
+        bastion_user=bastion_user, replication_factor=replication_factor,
+        domain=domain, capacity=capacity, data_device=data_device, zones=zones,
+        tls_enabled=tls_enabled, skip_nat=skip_nat, compute_ssh_key=compute_ssh_key,
+        project_root=root, ansible_dir=root / 'Ansible',
+    ))
+
+
+@garage.command('provision')
+@click.option('--nodes', default=None, help='Comma-separated node addresses')
+@click.option('--from-infra', default=None, help='Path to infra-inventory.json')
+@click.option('--ssh-user', default='ubuntu', show_default=True)
+@click.option('--ssh-key', default=None, help='SSH private key (defaults to the domain-3 key)')
+@click.option('--bastion-user', default=None)
+@click.pass_context
+def garage_provision_cmd(ctx, nodes, from_infra, ssh_user, ssh_key, bastion_user):
+    """Create the buckets and import the S3 keys.
+
+    The credentials are generated by NOAH, persisted in the canonical store,
+    THEN imposed on Garage by `key import` (§6.2, G2) — never the other way
+    round. A replay creates no duplicate key and modifies no bucket.
+    """
+    from Scripts.garage.garage_provision import run_provision
+    click.echo("[VERBOSE] Starting Garage provisioning...")
+    sys.exit(run_provision(
+        nodes=nodes, from_infra=from_infra, ssh_user=ssh_user, ssh_key=ssh_key,
+        bastion_user=bastion_user, project_root=Path.cwd(),
+    ))
+
+
+@garage.command('status')
+@click.option('--nodes', default=None, help='Comma-separated node addresses')
+@click.option('--from-infra', default=None, help='Path to infra-inventory.json')
+@click.option('--ssh-user', default='ubuntu', show_default=True)
+@click.option('--ssh-key', default=None)
+@click.option('--bastion-user', default=None)
+@click.pass_context
+def garage_status_cmd(ctx, nodes, from_infra, ssh_user, ssh_key, bastion_user):
+    """Show the cluster state, the applied layout and the buckets."""
+    from Scripts.garage.garage_deploy import run_status
+    click.echo("[VERBOSE] Gathering Garage status information...")
+    sys.exit(run_status(
+        nodes=nodes, from_infra=from_infra, ssh_user=ssh_user, ssh_key=ssh_key,
+        bastion_user=bastion_user, project_root=Path.cwd(),
+    ))
+
+
+@garage.command('nat')
+@click.option('--from-infra', required=True, help='Path to infra-inventory.json')
+@click.option('--ssh-user', default='ubuntu', show_default=True)
+@click.option('--compute-ssh-key', default=None, help='SSH key for the compute node (the CLUSTER key)')
+@click.pass_context
+def garage_nat_cmd(ctx, from_infra, ssh_user, compute_ssh_key):
+    """Route the Garage nodes' egress through the compute node (G19).
+
+    A BOOTSTRAP PREREQUISITE, not a day-2 operation: in the private-subnet
+    topology the Garage nodes have no egress at all until this has run, and the
+    roles that need it fail by hanging rather than by refusing.
+    """
+    from Scripts.garage.garage_deploy import run_deploy
+    root = Path.cwd()
+    click.echo("[VERBOSE] Configuring egress routing on the compute node...")
+    sys.exit(run_deploy(
+        nodes=None, from_infra=from_infra, ssh_user=ssh_user, ssh_key=None,
+        bastion_user=None, replication_factor=None, domain=DEFAULT_DOMAIN,
+        capacity='20G', data_device=None, zones=None, tls_enabled=True,
+        skip_nat=False, compute_ssh_key=compute_ssh_key,
+        project_root=root, ansible_dir=root / 'Ansible',
+    ))
+
+
+@garage.group('infra')  # type: ignore
+@click.pass_context
+def garage_infra(ctx):
+    """OpenTofu wrapper feeding Infra/<target>/ from secret domain 3"""
+
+
+def _tofu(subcommand: list, target: str, extra_args: list | None = None) -> int:
+    """Run `tofu` in Infra/<target>/ with the domain-3 environment.
+
+    The state passphrase (G14) and the cloud credentials (G13) arrive through
+    the environment, read from Secrets/garage-admin.enc.yaml. Neither ever
+    touches a .tfvars — that file is gitignored precisely because it is where
+    they would otherwise end up.
+    """
+    from Scripts.garage.admin_store import get_admin_store, require_admin_identity, tofu_environment
+    root = Path.cwd()
+    require_admin_identity(root)
+    infra_dir = root / 'Infra' / target
+    if not infra_dir.exists():
+        raise click.UsageError(
+            f"{infra_dir} does not exist. Targets written so far: aws, baremetal "
+            "(the latter has no code — write infra-inventory.json by hand). "
+            "scaleway/ and ovh/ come after a complete AWS deployment has "
+            "exercised the §16.3 contract (§16.8)."
+        )
+    env = {**os.environ, **tofu_environment(get_admin_store(root), provider=target)}
+    if not env.get('TF_VAR_state_passphrase'):
+        raise click.UsageError(
+            "No state passphrase in the administration store. Run "
+            "`noah garage admin init` first: without it OpenTofu would write "
+            "the whole topology to disk in the clear (G14)."
+        )
+    cmd = ['tofu', *subcommand, *(extra_args or [])]
+    return subprocess.run(cmd, cwd=infra_dir, env=env).returncode
+
+
+@garage_infra.command('init')
+@click.option('--target', default='aws', show_default=True)
+@click.pass_context
+def garage_infra_init(ctx, target):
+    """tofu init"""
+    sys.exit(_tofu(['init'], target))
+
+
+@garage_infra.command('plan')
+@click.option('--target', default='aws', show_default=True)
+@click.option('--operator-cidr', required=True,
+              help='Prefix the operator reaches SSH from. 0.0.0.0/0 is refused (§16.7).')
+@click.option('--node-count', type=int, default=2, show_default=True, help='2 (development) or 3 (production)')
+@click.pass_context
+def garage_infra_plan(ctx, target, operator_cidr, node_count):
+    """tofu plan"""
+    sys.exit(_tofu(['plan'], target, [
+        '-var', f'operator_cidr={operator_cidr}', '-var', f'node_count={node_count}',
+    ]))
+
+
+@garage_infra.command('apply')
+@click.option('--target', default='aws', show_default=True)
+@click.option('--operator-cidr', required=True)
+@click.option('--node-count', type=int, default=2, show_default=True)
+@click.option('--auto-approve', is_flag=True, default=False)
+@click.pass_context
+def garage_infra_apply(ctx, target, operator_cidr, node_count, auto_approve):
+    """tofu apply"""
+    args = ['-var', f'operator_cidr={operator_cidr}', '-var', f'node_count={node_count}']
+    if auto_approve:
+        args.append('-auto-approve')
+    sys.exit(_tofu(['apply'], target, args))
+
+
+@garage_infra.command('power')
+@click.argument('state', type=click.Choice(['running', 'stopped']))
+@click.option('--target', default='aws', show_default=True)
+@click.option('--operator-cidr', required=True)
+@click.option('--node-count', type=int, default=2, show_default=True)
+@click.pass_context
+def garage_infra_power(ctx, state, target, operator_cidr, node_count):
+    """Stop or start the machines without destroying anything (G12).
+
+    Stopping is NOT free: most of the monthly cost — EBS volumes and the public
+    IPv4 address — runs with the machines off. `destroy` is the
+    end-of-campaign lever, and it is safe because everything is
+    reconstructible.
+    """
+    sys.exit(_tofu(['apply'], target, [
+        '-var', f'operator_cidr={operator_cidr}',
+        '-var', f'node_count={node_count}',
+        '-var', f'power_state={state}',
+        '-auto-approve',
+    ]))
+
+
+@garage_infra.command('destroy')
+@click.option('--target', default='aws', show_default=True)
+@click.option('--operator-cidr', required=True)
+@click.pass_context
+def garage_infra_destroy(ctx, target, operator_cidr):
+    """tofu destroy — then CHECK that no Spot request survived."""
+    click.confirm(f"Destroy every machine of Infra/{target}?", abort=True)
+    rc = _tofu(['destroy'], target, ['-var', f'operator_cidr={operator_cidr}'])
+    click.echo("")
+    click.echo("⚠️  Now check that no persistent Spot request survived:")
+    click.echo("     aws ec2 describe-spot-instance-requests \\")
+    click.echo("         --filters Name=state,Values=open,active --region eu-west-3")
+    click.echo("   It must return nothing. An uncancelled request relaunches an")
+    click.echo("   instance OUTSIDE the state that bills until someone notices.")
+    click.echo("   The provider cancels it from 5.86.0 on — the floor pinned in")
+    click.echo("   required_providers (§16.2, V11).")
+    sys.exit(rc)
 
 
 @cli.group()  # type: ignore

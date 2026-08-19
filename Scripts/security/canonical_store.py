@@ -97,6 +97,39 @@ CURRENT_SCHEMA_VERSION = 2
 _UNLOCKED_ENVIRONMENTS = frozenset({"development", "dev", "test", "ci"})
 
 
+# --- Secret domain separation (Specs/To-do/Garage.md §3.1) -----------------
+#
+# The cluster's Age private key is handed to the compute node as the `sops-age`
+# Secret, so everything this store holds is readable from the compute node by
+# design. Garage administration credentials must therefore never land here:
+# they live in Secrets/garage-admin.enc.yaml, encrypted to a second Age
+# identity that no node ever receives (Scripts/garage/admin_store.py).
+#
+# Enforced rather than documented, because the failure is invisible: a Garage
+# deployed with its rpc_secret in this store still works, and only the
+# isolation guarantee (D6) is silently gone.
+ADMIN_ONLY_SERVICES = frozenset({"garage-admin"})
+ADMIN_ONLY_KEYS = frozenset({
+    "rpc_secret",
+    "admin_token",
+    "ssh_private_key",
+    "ssh_public_key",
+    "owner_access_key_id",
+    "owner_secret_key",
+    "cloud_access_key_id",
+    "cloud_secret_access_key",
+    "tofu_state_passphrase",
+})
+
+
+class AdminSecretLeakError(RuntimeError):
+    """A domain-3 (Garage administration) secret was about to enter this store.
+
+    Like InsecureStoreError, a policy refusal rather than a SOPS failure, and
+    deliberately not a SopsError so the existing handlers do not swallow it.
+    """
+
+
 class InsecureStoreError(RuntimeError):
     """The store would be written in plaintext in an environment that forbids it.
 
@@ -201,7 +234,7 @@ class CanonicalSecretsStore:
         # 0o700 for the same reason the Age key is 0o600: nothing here is fit
         # for other local users. Only applied when this call creates the dir.
         self.secrets_dir.mkdir(mode=0o700, exist_ok=True)
-        self.age_key_file = resolve_age_key_file(self.project_root)
+        self.age_key_file = self._resolve_age_key_file()
 
         reason = self._plaintext_reason()
         # Raise BEFORE _load(), and therefore before anything can be written: a
@@ -216,6 +249,42 @@ class CanonicalSecretsStore:
         self._load()
 
     # ---------------- Internal Helpers ----------------
+    # Which secrets this store refuses to hold. Overridden to the empty set by
+    # the domain-3 store, which is precisely where they belong.
+    # Deliberately unannotated: an annotation here would make @dataclass treat
+    # them as fields and hand them to __init__, where a subclass override would
+    # be silently overwritten by the parent's default.
+    _forbidden_services = ADMIN_ONLY_SERVICES
+    _forbidden_keys = ADMIN_ONLY_KEYS
+
+    def _resolve_age_key_file(self) -> Path:
+        return resolve_age_key_file(self.project_root)
+
+    def _check_domain_separation(self) -> None:
+        """Refuse to hold a Garage administration secret -- see §3.1.
+
+        Called from ensure_service() so the refusal lands before a generator
+        runs, and again from save() so a caller writing straight into .data
+        cannot get round it.
+        """
+        for service, secrets_map in (self.data.get("services") or {}).items():
+            if service in self._forbidden_services:
+                raise AdminSecretLeakError(
+                    f"Service {service!r} belongs to the Garage administration "
+                    "secret domain and must not enter the canonical store: it "
+                    "would be readable from the compute node via the sops-age "
+                    "Secret. Use Scripts/garage/admin_store.py "
+                    "(Secrets/garage-admin.enc.yaml)."
+                )
+            offending = sorted(set(secrets_map or {}) & self._forbidden_keys)
+            if offending:
+                raise AdminSecretLeakError(
+                    f"Key(s) {', '.join(offending)} under service {service!r} "
+                    "belong to the Garage administration secret domain and must "
+                    "not enter the canonical store. Use "
+                    "Scripts/garage/admin_store.py (Secrets/garage-admin.enc.yaml)."
+                )
+
     def _plaintext_reason(self) -> PlaintextReason | None:
         return plaintext_reason(self.age_key_file)
 
@@ -341,6 +410,7 @@ class CanonicalSecretsStore:
 
     # ---------------- Public API ----------------
     def save(self) -> bool:
+        self._check_domain_separation()
         path = self._active_path()
 
         # Refresh integrity before persisting
@@ -391,6 +461,11 @@ class CanonicalSecretsStore:
         return True
 
     def ensure_service(self, service: str):
+        if service in self._forbidden_services:
+            raise AdminSecretLeakError(
+                f"Service {service!r} belongs to the Garage administration "
+                "secret domain (§3.1) and must not enter the canonical store."
+            )
         if "services" not in self.data:
             self.data["services"] = {}
         self.data["services"].setdefault(service, {})
@@ -405,6 +480,13 @@ class CanonicalSecretsStore:
           dict of the service's secrets after ensuring
         """
         self.ensure_service(service)
+        offending = sorted(set(required_keys) & self._forbidden_keys)
+        if offending:
+            raise AdminSecretLeakError(
+                f"Key(s) {', '.join(offending)} belong to the Garage "
+                "administration secret domain (§3.1) and must not enter the "
+                "canonical store."
+            )
         svc = self.data["services"][service]
         changed = False
         for key, gen in required_keys.items():
@@ -451,6 +533,22 @@ class CanonicalSecretsStore:
 
     def set_cluster_domain(self, domain: str) -> bool:
         self.data.setdefault("cluster", {})["domain"] = domain
+        self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        return self.save()
+
+    def get_cluster_ssh_key_file(self) -> str | None:
+        """Path of the SSH key `cluster bootstrap` last used, if any.
+
+        Recorded so `noah garage deploy` can REFUSE that same key (T2): a key
+        shared between the cluster and the Garage nodes hands the storage tier
+        to whoever gets root on the compute node, which is precisely what
+        condition 3 of §10.2 forbids. Comparing against a recorded fact beats
+        guessing at conventional paths.
+        """
+        return self.data.get("cluster", {}).get("ssh_key_file")
+
+    def set_cluster_ssh_key_file(self, ssh_key_file: str) -> bool:
+        self.data.setdefault("cluster", {})["ssh_key_file"] = str(ssh_key_file)
         self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
         return self.save()
 

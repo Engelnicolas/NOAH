@@ -64,7 +64,6 @@ def test_module_imports():
         from Scripts.utils.config_loader import ConfigLoader  # noqa: F401
         from Scripts.security.security_manager import NoahSecurityManager  # noqa: F401
         from Scripts.core_helm.cluster_manager import ClusterManager  # noqa: F401
-        from Scripts.utils.ansible_runner import AnsibleRunner  # noqa: F401
         from Scripts.gitops.gitops_init import setup_gitops  # noqa: F401
         print("✅ Module imports successful")
     except Exception as e:

@@ -1,0 +1,21 @@
+---
+# NOAH role: garage-install — defaults.
+
+garage_user: garage
+garage_binary_path: /usr/local/bin/garage
+
+# Pinned version. Reproducibility matters more here than freshness: a Garage
+# reconstructed from scratch (§12 of the state map) must come back on the same
+# version as the snapshots it restores.
+garage_version: "v1.0.1"
+garage_arch: "x86_64-unknown-linux-musl"
+garage_download_url: "https://garagehq.deuxfleurs.fr/_releases/{{ garage_version }}/{{ garage_arch }}/garage"
+
+# SHA-256 of the binary above. Empty means "not pinned yet, do not verify" —
+# fill it in from the upstream release page. It is what turns path D of §16.5
+# (an attacker with root on the routing compute node altering the download)
+# into a failure rather than an install.
+garage_sha256: ""
+
+garage_metadata_dir: /srv/garage/meta
+garage_data_dir: /srv/garage/data

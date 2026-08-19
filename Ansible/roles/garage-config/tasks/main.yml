@@ -1,0 +1,69 @@
+---
+# NOAH role: garage-config
+#
+# Writes /etc/garage/garage.toml and settles the TLS question.
+#
+# EVERY TASK THAT TOUCHES A SECRET IS no_log: true (acceptance criterion 8).
+# rpc_secret grants membership of the Garage cluster; the admin token grants
+# its administration API. Neither must appear in an Ansible log, a CLI output
+# or a systemd journal — and Ansible prints the rendered content of a template
+# on a diff run unless told not to.
+
+- name: Refuse to write a configuration with no replication factor
+  fail:
+    msg: >-
+      garage_replication_factor is not set. It is DERIVED from the node count
+      by the noah CLI (§4.1, G8) and never entered by hand: a factor greater
+      than the node count is only refused by `garage layout apply`, AFTER this
+      file has been written on every machine.
+  when: garage_replication_factor is not defined
+
+- name: Refuse a replication factor greater than the node count
+  fail:
+    msg: >-
+      replication_factor {{ garage_replication_factor }} exceeds the
+      {{ groups['garage_nodes'] | length }} node(s) in the inventory. Garage
+      would accept this file and then refuse `layout apply` — the machines
+      already written to. The CLI refuses it first (T8b); this is the second
+      line of defence.
+  when: garage_replication_factor | int > (groups['garage_nodes'] | length)
+
+- name: Write garage.toml
+  template:
+    src: garage.toml.j2
+    dest: /etc/garage/garage.toml
+    owner: root
+    group: "{{ garage_user }}"
+    mode: "0640"
+  no_log: true          # the file carries rpc_secret and the admin token
+  notify: restart garage
+
+- name: Decide on TLS, explicitly
+  # §5.2 and decision G6. Cleartext on a dedicated LAN segment stays possible,
+  # but it has to be a STATED variable, never an implicit default: a silent
+  # default is exactly the failure mode lot 6 corrected on the store side. The
+  # message below is the trace of that decision in the run log.
+  debug:
+    msg: >-
+      {% if garage_tls_enabled | bool %}
+      TLS ENABLED: the garage-proxy role terminates TLS in front of
+      api_bind_addr; the cluster reaches S3 on 443.
+      {% else %}
+      TLS DISABLED BY EXPLICIT DECISION (garage_tls_enabled=false): the S3 API
+      is served in the clear on port 3900. Acceptable only on a dedicated LAN
+      segment — S3 credentials travel in the clear on it. The Cilium egress
+      rules must then target 3900 rather than 443 (cilium_sso.md §7.2).
+      {% endif %}
+
+- name: Enable the Garage service
+  systemd:
+    name: garage
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Wait for the RPC port to answer
+  wait_for:
+    port: 3901
+    host: "{{ garage_rpc_public_addr }}"
+    timeout: 60

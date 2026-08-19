@@ -1,0 +1,9 @@
+---
+# NOAH role: garage-cluster — defaults.
+
+garage_binary_path: /usr/local/bin/garage
+
+# Per host, set by the noah CLI from the inventory (§4.1): site-a / site-b and
+# the capacity advertised to the layout.
+garage_zone: site-a
+garage_capacity: "20G"

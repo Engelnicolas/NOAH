@@ -1,0 +1,22 @@
+---
+# NOAH role: garage-config — defaults.
+
+garage_user: garage
+garage_metadata_dir: /srv/garage/meta
+garage_data_dir: /srv/garage/data
+
+# Address the other nodes reach this one on. Per host, set by the noah CLI from
+# the inventory (the PRIVATE address on the AWS target: RPC never leaves the
+# VPC).
+garage_rpc_public_addr: "{{ ansible_host }}"
+
+# Garage advertises a region name; anything consistent will do, and clients
+# must agree with it.
+garage_s3_region: garage
+
+garage_domain: "localhost"
+
+# TLS is EXPLICIT, never implicit (G6, §5.2). Left true so that turning it off
+# is a deliberate act recorded in an inventory, not something that happens by
+# forgetting.
+garage_tls_enabled: true

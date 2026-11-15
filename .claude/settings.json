@@ -1,5 +1,21 @@
 {
   "permissions": {
-    "allow": []
+    "allow": [
+      "Bash(.venv/bin/bandit -r Scripts/ noah.py -ll)",
+      "Bash(.venv/bin/ruff check Scripts/ noah.py)",
+      "Bash(NOAH_SKIP_ANSIBLE=true .venv/bin/python -m pytest Tests/ -q)",
+      "Bash(aws ec2 describe-*)",
+      "Bash(aws sts get-caller-identity *)",
+      "Bash(aws sts get-caller-identity)",
+      "Bash(dig *)",
+      "Bash(flux get *)",
+      "Bash(kubectl describe *)",
+      "Bash(kubectl get *)",
+      "Bash(kubectl logs *)",
+      "Bash(tofu -chdir=Infra/aws fmt -check)",
+      "Bash(tofu -chdir=Infra/aws plan *)",
+      "Bash(tofu -chdir=Infra/aws validate)",
+      "Bash(xmllint --noout *)"
+    ]
   }
 }

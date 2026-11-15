@@ -35,9 +35,10 @@ from Scripts.security.canonical_store import InsecureStoreError
 # the manifests rather than the store: 'akadmin' by the Authentik chart,
 # 'admin' by the nextcloud-app Secret and by STALWART_RECOVERY_ADMIN on the
 # StatefulSet. Only Authentik seeds an admin email (bootstrap_email, rewritten
-# to admin@<domain> by gitops_init); None means the account has no address.
+# to akadmin@<domain> by gitops_init — admin@<domain> is taken by the Stalwart
+# group principal of the Authentik `admin` group); None means no address.
 _ADMIN_SERVICES: tuple[tuple[str, str, str, str, str | None], ...] = (
-    ('authentik', 'bootstrap_password', 'auth', 'akadmin', 'admin'),
+    ('authentik', 'bootstrap_password', 'auth', 'akadmin', 'akadmin'),
     ('nextcloud', 'admin_password', 'nextcloud', 'admin', None),
     ('stalwart', 'admin_password', 'mail', 'admin', None),
 )

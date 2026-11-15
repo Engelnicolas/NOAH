@@ -164,3 +164,15 @@ variable "name_prefix" {
   type        = string
   default     = "noah"
 }
+
+variable "mail_enabled" {
+  description = "Open the inbound mail ports (25, 465, 587, 143, 993) on the compute node, for the opt-in Stalwart server. Off by default: a default install publishes no mail service. Outbound TCP 25 stays throttled by AWS until the account-level removal request is granted; no resource here can lift it."
+  type        = bool
+  default     = false
+}
+
+variable "mail_ptr_domain" {
+  description = "Reverse DNS name to set on the Elastic IP, e.g. mail.example.com. Empty leaves the PTR untouched. AWS only accepts it once a forward A record with that name already resolves to the address, so set it after external-dns has published the mail record."
+  type        = string
+  default     = ""
+}

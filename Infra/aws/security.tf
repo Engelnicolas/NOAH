@@ -228,3 +228,39 @@ resource "aws_iam_instance_profile" "compute" {
 # See the comment on aws_instance.garage in spot.tf: an instance profile
 # granted to them "for SSM convenience" would put stealable credentials back on
 # the storage tier, and IMDS would be the way to steal them.
+
+# --- Mail (opt-in, Stalwart) --------------------------------------------------
+#
+# Stalwart binds these with hostPort on the compute node (see
+# gitops/apps-extra/stalwart/statefulset.yaml). Created only when
+# var.mail_enabled is true, so a default install exposes none of them.
+
+locals {
+  mail_ports = var.mail_enabled ? {
+    smtp        = 25
+    submissions = 465
+    submission  = 587
+    imap        = 143
+    imaps       = 993
+  } : {}
+}
+
+resource "aws_vpc_security_group_ingress_rule" "compute_mail" {
+  for_each = local.mail_ports
+
+  security_group_id = aws_security_group.compute.id
+  description       = "Stalwart mail, ${each.key}"
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = each.value
+  to_port           = each.value
+  ip_protocol       = "tcp"
+}
+
+# PTR for the Elastic IP. Receivers reject or spam-folder mail whose sending
+# address has no matching reverse record.
+resource "aws_eip_domain_name" "mail" {
+  count = var.mail_ptr_domain != "" ? 1 : 0
+
+  allocation_id = aws_eip.compute.id
+  domain_name   = var.mail_ptr_domain
+}

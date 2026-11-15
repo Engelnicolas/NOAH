@@ -7,3 +7,4 @@ kind: Kustomization
 # `noah setup gitops --with-stalwart` adds the entry back below.
 resources:
   - nextcloud
+  - stalwart

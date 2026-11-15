@@ -111,14 +111,23 @@ the pod network (`10.0.0.0/8`, Cilium's cluster pool). Without it, Stalwart
 attributes every web request to the ingress controller pod, and the first
 Internet scanner gets that pod banned — the web UI then answers 502.
 
-> **Known limit — SSO users have no web interface.** The Stalwart login page
-> (`/login`, used by `/account/` and `/admin/`) checks a password against
-> Stalwart's own directory. Authentik users have no password there and the page
-> offers no redirect to Authentik, so only the break-glass `admin` can sign in
-> to the web UI. SSO users reach their mail with an Authentik access token
-> (OAUTHBEARER/XOAUTH2 over IMAP/SMTP, or JMAP), which few mail clients can
-> obtain from a self-hosted Authentik. The redirect URI registered for the
-> `stalwart` provider (`/auth/callback`) is not served by Stalwart.
+**Web interface sign-in (`/account/`, `/admin/`).** The plan sets
+`Application.oauthClientId` to the `stalwart` Authentik client, which is a
+**public** client (PKCE, no secret) registered with the two web interface
+callbacks (`/admin/oauth/callback`, `/account/oauth/callback`). The user types
+an address, the web interface discovers the provider for its domain
+(`/api/discover/<address>`) and sends the browser to Authentik with that
+address as `login_hint`. Like the relay listener, the client id only reaches
+the served pages after a Stalwart restart following the first plan run.
+
+> **Sign in with the Authentik email address, not the mailbox address.**
+> Authentik identifies the user from `login_hint` by email or username, while
+> the Stalwart mailbox is `<preferred_username>@<domain>`. For the bootstrap
+> admin these differ (`admin@<domain>` in Authentik, mailbox
+> `akadmin@<domain>`): typing the mailbox address ends on Authentik's password
+> page with "Invalid password". Typing the Authentik email works. The same
+> mismatch means mail Authentik sends to the admin (password reset, alerts)
+> goes to `admin@<domain>`, which has no mailbox.
 
 > **Known limit — client addresses on the mail ports.** The mail ports are
 > `hostPort`s, and connections reach Stalwart source-NATed to a pod-network

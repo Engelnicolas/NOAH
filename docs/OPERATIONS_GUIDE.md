@@ -11,12 +11,13 @@ installation see the [Deployment Guide](DEPLOYMENT_GUIDE.md).
 2. [Anatomy of `gitops/`](#anatomy-of-gitops)
 3. [Secrets](#secrets)
 4. [Garage object storage](#garage-object-storage)
-5. [Common operations](#common-operations)
-6. [SSO and OIDC](#sso)
-7. [Scaling to HA](#scaling-to-ha)
-8. [DNS day-2](#dns-day-2)
-9. [Disaster recovery](#disaster-recovery)
-10. [Command reference](#command-reference)
+5. [Mail (Stalwart)](#mail-stalwart)
+6. [Common operations](#common-operations)
+7. [SSO](#sso)
+8. [Scaling to HA](#scaling-to-ha)
+9. [DNS day-2](#dns-day-2)
+10. [Disaster recovery](#disaster-recovery)
+11. [Command reference](#command-reference)
 
 ---
 
@@ -76,75 +77,13 @@ the flag on a later run deletes the `stalwart` namespace and everything in it.
 Its manifests and its entries in the canonical secrets store are untouched
 either way.
 
-### Stalwart: configuration and notification relay
-
-**Changing the configuration.** Stalwart's settings live in its datastore and
-are applied by the `stalwart-config` Job from the plan in
-`gitops/apps-extra/stalwart/apply-plan-configmap.yaml`. Flux re-creates that Job
-only when the Job itself changes, so **every edit of the plan must also bump
-`noah/apply-plan-revision`** in `provision-config-job.yaml` — otherwise the new
-plan is silently never applied.
-
-**Notifications.** Authentik (`authentik.email` values) and Nextcloud
-(`mail.config.php`) send their mail through an in-cluster relay listener of
-Stalwart on port **2525**, published only by the `stalwart` ClusterIP Service
-(no `hostPort`). On that port alone Stalwart accepts mail without
-authentication and relays it; the rules are keyed on the port, not on the
-client address, because external connections reach Stalwart masqueraded
-behind a pod-network address. Consequences:
-
-- any pod in the cluster can send mail through the relay;
-- relay mail is not spam-filtered (like authenticated submission); otherwise
-  notifications from our own domain fail SPF/DMARC and land in Junk;
-- the public port 25 still refuses to relay (`5.1.2 Relay not allowed`);
-- the relay answers only after Stalwart has restarted once following its first
-  configuration run (see the Deployment Guide).
-
-Test it:
-
-```bash
-kubectl -n authentik exec deploy/authentik-worker -- ak test_email <address>
-```
-
-**Web UI behind the ingress.** The plan sets `useXForwarded` and allow-lists
-the pod network (`10.0.0.0/8`, Cilium's cluster pool). Without it, Stalwart
-attributes every web request to the ingress controller pod, and the first
-Internet scanner gets that pod banned — the web UI then answers 502.
-
-**Web interface sign-in (`/account/`, `/admin/`).** The plan sets
-`Application.oauthClientId` to the `stalwart` Authentik client, which is a
-**public** client (PKCE, no secret) registered with the two web interface
-callbacks (`/admin/oauth/callback`, `/account/oauth/callback`). The user types
-an address, the web interface discovers the provider for its domain
-(`/api/discover/<address>`) and sends the browser to Authentik with that
-address as `login_hint`. Like the relay listener, the client id only reaches
-the served pages after a Stalwart restart following the first plan run.
-
-**The mailbox address is the Authentik email.** Stalwart's OIDC directory
-reads the `email` claim, so a user's mailbox is exactly the address set on
-their Authentik account. That is also what makes the web sign-in work (the
-typed address, passed as `login_hint`, identifies the user in Authentik) and
-what makes mail Authentik sends to a user land in their mailbox. Consequences:
-
-- to give someone a NOAH mailbox, set their Authentik email to
-  `<name>@<domain>`; a user whose Authentik email is elsewhere (Gmail, …) has
-  no mailbox;
-- the bootstrap admin is `akadmin@<domain>` (`bootstrap_email`), not
-  `admin@<domain>`;
-- **Authentik group names become Stalwart group principals** (`claimGroups`):
-  the `admin` group occupies `admin@<domain>`. A user whose email equals
-  `<group name>@<domain>` cannot sign in ("Account ID from directory does not
-  correspond to a user account") — keep group names and mailbox names apart.
-
-> **Known limit — client addresses on the mail ports.** The mail ports are
-> `hostPort`s, and connections reach Stalwart source-NATed to a pod-network
-> address. Stalwart therefore never sees the real sender address on SMTP/IMAP:
-> SPF checks on inbound mail and automatic IP bans cannot work there. Fixing it
-> needs `hostNetwork` or the PROXY protocol; not done yet.
-
 ---
 
 ## Secrets
+
+<p align="center">
+  <img src="images/secrets.svg" alt="Cluster secrets are encrypted to the cluster Age key and applied out of band; Garage administration secrets are encrypted to a second Age key that never reaches any node; both identities are escrowed offline on separate media; Git holds no secret." width="100%">
+</p>
 
 The single source of truth is the SOPS/Age-encrypted
 `Secrets/canonical-secrets.enc.yaml`. `Scripts/security/canonical_store.py`
@@ -355,6 +294,83 @@ Also required before production, and not delivered by moving to three nodes:
 
 ---
 
+## Mail (Stalwart)
+
+Stalwart is opt-in (`setup gitops --with-stalwart`); first-time prerequisites (ports,
+PTR, outbound 25, the one restart) are in the
+[Deployment Guide](DEPLOYMENT_GUIDE.md#mail-prerequisites-stalwart).
+
+**Giving someone a mailbox.** Create the user in Authentik with the email
+`<name>@<domain>`. The mailbox appears in Stalwart the first time they sign in (web
+interface, IMAP or JMAP); mail sent to them before that bounces. They
+sign in at `https://mail.<domain>/account/` with that address.
+
+**Changing the configuration.** Stalwart's settings live in its datastore and
+are applied by the `stalwart-config` Job from the plan in
+`gitops/apps-extra/stalwart/apply-plan-configmap.yaml`. Flux re-creates that Job
+only when the Job itself changes, so **every edit of the plan must also bump
+`noah/apply-plan-revision`** in `provision-config-job.yaml` — otherwise the new
+plan is silently never applied.
+
+**Notifications.** Authentik (`authentik.email` values) and Nextcloud
+(`mail.config.php`) send their mail through an in-cluster relay listener of
+Stalwart on port **2525**, published only by the `stalwart` ClusterIP Service
+(no `hostPort`). On that port alone Stalwart accepts mail without
+authentication and relays it; the rules are keyed on the port, not on the
+client address, because external connections reach Stalwart masqueraded
+behind a pod-network address. Consequences:
+
+- any pod in the cluster can send mail through the relay;
+- relay mail is not spam-filtered (like authenticated submission); otherwise
+  notifications from our own domain fail SPF/DMARC and land in Junk;
+- the public port 25 still refuses to relay (`5.1.2 Relay not allowed`);
+- the relay answers only after Stalwart has restarted once following its first
+  configuration run (see the Deployment Guide).
+
+Test it:
+
+```bash
+kubectl -n authentik exec deploy/authentik-worker -- ak test_email <address>
+```
+
+**Web UI behind the ingress.** The plan sets `useXForwarded` and allow-lists
+the pod network (`10.0.0.0/8`, Cilium's cluster pool). Without it, Stalwart
+attributes every web request to the ingress controller pod, and the first
+Internet scanner gets that pod banned — the web UI then answers 502.
+
+**Web interface sign-in (`/account/`, `/admin/`).** The plan sets
+`Application.oauthClientId` to the `stalwart` Authentik client, which is a
+**public** client (PKCE, no secret) registered with the two web interface
+callbacks (`/admin/oauth/callback`, `/account/oauth/callback`). The user types
+an address, the web interface discovers the provider for its domain
+(`/api/discover/<address>`) and sends the browser to Authentik with that
+address as `login_hint`. Like the relay listener, the client id only reaches
+the served pages after a Stalwart restart following the first plan run.
+
+**The mailbox address is the Authentik email.** Stalwart's OIDC directory
+reads the `email` claim, so a user's mailbox is exactly the address set on
+their Authentik account. That is also what makes the web sign-in work (the
+typed address, passed as `login_hint`, identifies the user in Authentik) and
+what makes mail Authentik sends to a user land in their mailbox. Consequences:
+
+- to give someone a NOAH mailbox, set their Authentik email to
+  `<name>@<domain>`; a user whose Authentik email is elsewhere (Gmail, …) has
+  no mailbox;
+- the bootstrap admin is `akadmin@<domain>` (`bootstrap_email`), not
+  `admin@<domain>`;
+- **Authentik group names become Stalwart group principals** (`claimGroups`):
+  the `admin` group occupies `admin@<domain>`. A user whose email equals
+  `<group name>@<domain>` cannot sign in ("Account ID from directory does not
+  correspond to a user account") — keep group names and mailbox names apart.
+
+> **Known limit — client addresses on the mail ports.** The mail ports are
+> `hostPort`s, and connections reach Stalwart source-NATed to a pod-network
+> address. Stalwart therefore never sees the real sender address on SMTP/IMAP:
+> SPF checks on inbound mail and automatic IP bans cannot work there. Fixing it
+> needs `hostNetwork` or the PROXY protocol; not done yet.
+
+---
+
 ## Common operations
 
 ### Add an application
@@ -412,32 +428,34 @@ spec:
 
 ## SSO
 
-Authentik is the OIDC identity provider. The clients for Headlamp and Hubble
-are **provisioned automatically** during reconciliation by
-`gitops/apps/authentik_provisioner.py` (idempotent) — there is no manual
-Authentik configuration step.
+Authentik is the identity provider. Every client is **provisioned automatically** during
+reconciliation by `gitops/apps/authentik_provisioner.py`, run from one Job per service;
+it is idempotent and there is no manual Authentik step. The bootstrap admin is
+`akadmin`, email `akadmin@<domain>`.
 
-**Headlamp** authenticates via OIDC:
+| Service | Mechanism | Authentik provider | Notes |
+|---|---|---|---|
+| Headlamp | OIDC, confidential | `headlamp-oidc` | callback `/oidc-callback`; no cluster-admin binding by default, so a "Forbidden" view before sign-in is expected |
+| Hubble UI | forward-auth (proxy provider) | `hubble-proxy` | defined in `gitops/apps/hubble-auth/`; Hubble's own ingress is disabled |
+| Nextcloud | OIDC, confidential (`user_oidc`) | `nextcloud-oidc` | local `admin` stays as break-glass |
+| Stalwart | OIDC, **public** (PKCE) | `stalwart-oidc` | web interface callbacks `/admin/oauth/callback` and `/account/oauth/callback`; tokens also accepted over IMAP/SMTP (OAUTHBEARER) and JMAP |
 
-- Provider `Headlamp Provider`, `client_id=headlamp`
-- Redirect URI `https://headlamp.your-domain.com/oidc-callback`
-- Scopes `openid profile email`
-- No cluster-admin binding by default — users authenticate with their own
-  Authentik identity. A "Forbidden" view before sign-in is expected.
+The Nextcloud provisioning Job also creates an Authentik group `admin` holding `akadmin`;
+Nextcloud maps the `groups` claim, so its members are Nextcloud administrators. Stalwart
+does not inherit roles from groups: its plan gives `akadmin` the administrator role
+directly.
 
-**Hubble UI** has no native auth; access is gated by an Authentik forward-auth
-proxy provider defined in `gitops/apps/hubble-auth/`. Hubble's built-in ingress
-is disabled in favour of this proxy.
+Verify:
 
-Verify SSO:
 ```bash
-python3 noah.py test sso
-python3 noah.py test headlamp --domain your-domain.com
-python3 noah.py test hubble --domain your-domain.com
-
-# Authentik OIDC discovery endpoint:
+AUTHENTIK_BOOTSTRAP_TOKEN=<token> python3 noah.py test headlamp --domain your-domain.com
+AUTHENTIK_BOOTSTRAP_TOKEN=<token> python3 noah.py test hubble --domain your-domain.com
 curl https://auth.your-domain.com/application/o/headlamp/.well-known/openid-configuration
 ```
+
+The token is `bootstrap_token` of the `authentik` service in the canonical store
+(`secrets canonical --show`). `noah test sso` expects to run on the node: it needs
+`helm` and in-cluster Redis access.
 
 ---
 

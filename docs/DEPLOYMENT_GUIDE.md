@@ -1,356 +1,371 @@
 # NOAH Deployment Guide
 
-**Version 0.1.0** — K3s with embedded etcd (no SQLite SPOF). The full
-application stack is reconciled by FluxCD from `gitops/` in this repository.
-There is no imperative `noah deploy <service>` — you provision with
-`noah cluster bootstrap` and operate with `noah flux …` (see the
-[Operations Guide](OPERATIONS_GUIDE.md)).
+**Version 0.1.0.** From nothing to a running platform. For day-2 work (GitOps
+changes, secrets, SSO, Garage, mail, recovery) see the [Operations Guide](OPERATIONS_GUIDE.md).
 
----
+<p align="center">
+  <img src="images/deployment-flow.svg" alt="Once: setup initialize and garage admin init. Storage tier, cloud target only: 1 garage infra apply, 2 garage nat, 3 garage deploy and provision. Cluster, every target: 4 setup gitops and git push, 5 cluster bootstrap, 6 cluster verify." width="100%">
+</p>
 
 ## Contents
 
-1. [Overview](#overview)
+1. [Two ways to deploy](#two-ways-to-deploy)
 2. [Requirements](#requirements)
-3. [Deployment steps](#deployment-steps)
-4. [DNS configuration](#dns-configuration)
-5. [Accessing services](#accessing-services)
-6. [Troubleshooting](#troubleshooting)
-7. [Validation checklist](#validation-checklist)
+3. [Prepare the workstation](#prepare-the-workstation)
+4. [Storage tier on AWS (steps 1 to 3)](#storage-tier-on-aws-steps-1-to-3)
+5. [Cluster (steps 4 to 6)](#cluster-steps-4-to-6)
+6. [DNS configuration](#dns-configuration)
+7. [Accessing services](#accessing-services)
+8. [Mail prerequisites (Stalwart)](#mail-prerequisites-stalwart)
+9. [Tearing down](#tearing-down)
+10. [Troubleshooting](#troubleshooting)
+11. [Validation checklist](#validation-checklist)
 
 ---
 
-## Overview
+## Two ways to deploy
 
-`noah cluster bootstrap` does the following on the target node(s):
+| | AWS target | Existing host |
+|---|---|---|
+| Machines | created by OpenTofu (`Infra/aws/`): one compute node, two Garage nodes in a private subnet, one Elastic IP | yours; for Garage on physical machines, write `Infra/baremetal/infra-inventory.json` by hand |
+| Steps | 1 to 6 | 4 to 6 (plus `garage deploy` / `provision` if you run Garage) |
+| Status | validated end to end on 15 November 2026 (eu-west-3) | the original path |
 
-1. Installs K3s with embedded etcd.
-2. Deploys the local-path storage provisioner and writes `~/.kube/config`.
-3. Installs Cilium CNI (bootstrap pass).
-4. Bootstraps FluxCD, pointing it at `clusters/production/` in this repo.
-5. Delivers application secrets out-of-band (the `app-secrets` Ansible role
-   `kubectl apply`s manifests rendered from the canonical store — secrets are
-   never committed to Git).
-6. FluxCD then reconciles the full stack from `gitops/`.
-
-**Total time:** ~25–45 minutes.
-
-### Reconciliation order and timing
-
-| Phase | Component | Duration | Notes |
-|---|---|---|---|
-| 0 | external-dns | ~2–3 min | Creates/updates Cloudflare A records |
-| 1 | cert-manager | ~2–3 min | `letsencrypt-prod` + `letsencrypt-staging` issuers |
-| 2 | Cilium CNI | ~5–7 min | Full eBPF config, Hubble Relay + UI |
-| 3 | nginx-ingress | ~2–3 min | Deployment, `hostPort` :80/:443, single replica |
-| 4 | Authentik SSO | ~7–10 min | PostgreSQL, Redis, Server + Worker (~2 GB RAM) |
-| 5 | Hubble auth | ~1–2 min | Forward-auth proxy auto-provisioned in Authentik |
-| 6 | Headlamp | ~3–5 min | OIDC client auto-registered in Authentik |
-| 7 | `apps-extra` | ~5–10 min | Nextcloud, plus Stalwart mail when opted in (`dependsOn: apps`) |
+**Run every command from the repository root and from the operator workstation**, not
+from the compute node: the workstation is the only machine allowed to hold the Garage
+administration key (see [Secrets](OPERATIONS_GUIDE.md#secrets)).
 
 ---
 
 ## Requirements
 
-**System (per node):**
-- OS: Ubuntu 20.04+, Debian 11+, RHEL/CentOS 8+ — Ubuntu Server 24.04 LTS is the
-  reference target
-- Kernel 5.10+ (Cilium eBPF)
-- **16 GB RAM minimum, 32 GB recommended** — 4 cores minimum, 8 recommended
-- **250 GB NVMe minimum**, 2 × 500 GB mirrored recommended
-- NVMe or SSD for `/var/lib/rancher/k3s` (etcd is write-heavy)
-- 1 GbE minimum, 2.5 GbE or better recommended
-- Internet connectivity
+**Compute node**
 
-> **On the 16 GB floor.** Authentik alone — server, worker and Redis — takes
-> about 2 GB, before Nextcloud and its database, Cilium, Hubble and the ingress
-> controller. Earlier versions of this guide said 8 GB; that figure was wrong.
+| | Minimum | Recommended |
+|---|---|---|
+| CPU | 4 cores | 8 cores (AWS: `m6a.2xlarge`) |
+| RAM | **16 GB** | **32 GB** |
+| Disk | 250 GB NVMe | 2 × 500 GB NVMe, mirrored |
 
-**Multi-node:** inter-node latency < 10 ms. Note that additional servers give
-etcd quorum and scheduling capacity, **not high availability** — the ingress
-controller and every published DNS record still resolve to one node. See
-[On availability](../README.md#on-availability).
+- Ubuntu Server 24.04 LTS is the reference. The Ansible roles use `apt` only, so the
+  nodes must be Debian-family; RHEL-family systems are not supported.
+- Kernel 5.10+ (Cilium eBPF). NVMe or SSD for `/var/lib/rancher/k3s`: etcd is
+  write-heavy.
+- **16 GB is the floor.** Authentik alone (server, worker, Redis) takes about 2 GB before
+  Nextcloud, its database, Cilium, Hubble and the ingress controller.
+- Multi-node: latency < 10 ms between servers. Extra servers give etcd quorum and
+  scheduling capacity, **not high availability**; see
+  [On availability](../README.md#on-availability).
 
-**Workstation tools** (auto-installed by `setup initialize`): Python 3.8+,
-kubectl, FluxCD CLI, Ansible, `age`, `sops`.
+**Garage nodes** (if you run the storage tier): 2 vCPU, 4 GB RAM, one dedicated data
+disk (two, mirrored, in production), GA kernel (never HWE: ZFS must keep up with it).
 
-> **`setup initialize` installs system packages with `apt` only.** On any other
-> workstation (Fedora, macOS, …) it warns and continues without them. Install
-> `kubectl`, `flux`, `age`, `sops` and — for the AWS target — `tofu` yourself
-> (user-space binaries in `~/.local/bin` are enough), then let
-> `setup initialize --skip-deps` create the venv; Ansible comes from the venv.
+**Workstation**
 
-**DNS:** Cloudflare (automatic via external-dns), or any provider with manual
-A records, or `/etc/hosts` for local testing — see
-[DNS configuration](#dns-configuration).
+- Python 3.12+ (required by the pinned `ansible-core`).
+- `kubectl`, `flux`, `age`, `sops`, and `tofu` (OpenTofu ≥ 1.10) for the AWS target.
+  Ansible comes from the venv.
+- `setup initialize` installs the system tools with **`apt` only**. On any other
+  workstation (Fedora, macOS…) it warns and continues: install the binaries yourself
+  (user-space copies in `~/.local/bin` are enough), then run
+  `setup initialize --skip-deps`.
+
+**Accounts and tokens**
+
+- A domain on **Cloudflare** and an API token with `Zone → DNS → Edit` and
+  `Zone → Zone → Read` on that zone only. Never a Global API key.
+- A **GitHub** token (`repo` scope) so NOAH can register Flux's read-only deploy key.
+  `gh auth token` works.
+- For the AWS target, **AWS credentials**: `aws login` (short-lived, preferred) or
+  `noah garage admin set-cloud`, which files keys in the Garage administration store.
 
 ---
 
-## Deployment steps
-
-### Step 1 — Initialize the environment
+## Prepare the workstation
 
 ```bash
-python3 noah.py setup initialize
+python3 noah.py setup initialize     # venv, dependencies, Age key, SOPS config, DNS wizard
+python3 noah.py garage admin init    # second Age identity + Garage administration secrets
+python3 noah.py setup doctor         # check the result
 ```
 
-This checks Python ≥ 3.8, creates `.venv/`, installs dependencies, validates
-the kernel for Cilium, installs system packages (`age`, kubectl, helm,
-ansible), generates the Age key (`Age/keys.txt`), writes the SOPS config, and
-runs the interactive Cloudflare DNS wizard.
+`setup initialize` creates `.venv/`, generates `Age/keys.txt`, writes `.sops.yaml` and
+runs the interactive Cloudflare wizard, which files the token in the canonical store.
+Skipped the wizard (`--skip-dns-wizard`)? File the token afterwards:
 
 ```bash
-python3 noah.py setup initialize --skip-dns-wizard   # configure Cloudflare later
-python3 noah.py setup doctor                          # diagnose the environment
-python3 noah.py setup reset                           # remove venv, Age key, secrets, SOPS config
+python3 Scripts/security/set_cloudflare_token.py '<token>'
 ```
 
-> **`setup reset` changes the Age key.** Anything previously encrypted with the
-> old key can no longer be decrypted. Re-run `setup gitops` afterwards.
+`garage admin init` creates `Age/garage-admin.txt` and `Secrets/garage-admin.enc.yaml`
+(node SSH key, `rpc_secret`, admin token, owner S3 key, OpenTofu state passphrase).
+**Back up both identities offline, on separate media**, before going further.
 
-### Step 2 — Prepare gitops/ for your domain
+> **`setup reset` changes the Age key.** Anything encrypted with the old key can no
+> longer be decrypted. Re-run `setup gitops` afterwards.
+
+---
+
+## Storage tier on AWS (steps 1 to 3)
+
+Skip this section on an existing host. Background, costs and the inventory contract:
+[`Infra/README.md`](../Infra/README.md).
+
+### Step 1: machines
 
 ```bash
-python3 noah.py setup gitops --domain your-domain.com --node-ip <NODE_PUBLIC_IP>
+export TF_VAR_compute_ssh_public_key="$(cat ~/.ssh/id_ed25519.pub)"
+export TF_VAR_garage_ssh_public_key="$(.venv/bin/python - <<'EOF'
+from pathlib import Path
+from Scripts.garage.admin_store import ensure_ssh_key, get_admin_store
+print(ensure_ssh_key(get_admin_store(Path.cwd()))[1].strip())
+EOF
+)"
+
+python3 noah.py garage infra init
+python3 noah.py garage infra plan  --operator-cidr <your-ip>/32
+python3 noah.py garage infra apply --operator-cidr <your-ip>/32
 ```
 
-This records your domain and the node's public IP in the canonical store and
-prepares the `gitops/` tree. `${DOMAIN}` and `${NODE_PUBLIC_IP}` are substituted
-by Flux at apply time from the `cluster-vars` ConfigMap (seeded by the
-flux-bootstrap role), so committed manifests stay environment-agnostic.
+- The wrapper supplies the state passphrase and any credentials filed with `set-cloud`;
+  it does **not** supply the two SSH public keys, hence the exports. Without them
+  OpenTofu stops to prompt.
+- `--operator-cidr` is the only address allowed to reach SSH and the Kubernetes API.
+  `0.0.0.0/0` is refused.
+- The result is `Infra/aws/infra-inventory.json`: the compute node's public IP, the
+  Garage nodes' private IPs and data disks. It contains no secret.
+- Planning to run mail? Add `TF_VAR_mail_enabled=true` now, see
+  [Mail prerequisites](#mail-prerequisites-stalwart).
 
-`--node-ip` is optional on later runs — it falls back to the IP already in the
-canonical store. That recorded IP is the single entry-point address:
-single-node `cluster bootstrap` reuses it as the default `--node`.
-
-> Application secrets are **not** written into `gitops/`. They live only in the
-> canonical store and are delivered out-of-band (Step 4 / `secrets apply`).
-> See the [Operations Guide](OPERATIONS_GUIDE.md#secrets).
-
-### Step 3 — Commit and push
+### Step 2: egress for the private subnet
 
 ```bash
-git add gitops/ && git commit -m "chore: configure domain and secrets"
-git push origin main
+python3 noah.py garage nat --from-infra Infra/aws/infra-inventory.json
 ```
 
-Flux reconciles from the pushed repository, so the `gitops/` changes must be on
-the branch Flux tracks (`--flux-branch`, default `main`).
+The Garage nodes have no public address and **no egress at all** until the compute
+node routes for them. Skip this and step 3 hangs instead of failing.
 
-> **`--flux-branch` only moves half of the sources.** It sets the branch of the
-> `flux-system` GitRepository, but `clusters/production/noah-source.yaml` (the
-> source that serves `gitops/`) hardcodes `branch: main`. To validate a branch
-> end to end, change that file on the branch too — and revert it before merging.
-
-### Step 4 — Bootstrap the cluster
+### Step 3: Garage
 
 ```bash
-export GITHUB_TOKEN=ghp_xxx
-python3 noah.py cluster bootstrap
+python3 noah.py garage deploy    --from-infra Infra/aws/infra-inventory.json --domain your-domain.com
+python3 noah.py garage provision --from-infra Infra/aws/infra-inventory.json
+python3 noah.py garage status    --from-infra Infra/aws/infra-inventory.json
 ```
 
-Every flag has a sensible default for the single-node case:
+`deploy` installs ZFS, the Garage binary, its configuration and the TLS proxy, then forms
+the cluster (replication factor derived from the node count). `provision` creates the
+buckets and imports one S3 key per bucket, generated in the canonical store first.
+Both are idempotent. The S3 credentials reach the cluster with the other secrets at
+step 5.
 
-- **`--domain`** defaults to the domain recorded in Step 2; pass it to
-  override.
-- **`--flux-repo`** defaults to this repo's `origin` remote — the NOAH
-  mono-repo, which is exactly what Flux must track (it reads
-  `clusters/production/` at the root and pulls manifests from `gitops/` via
-  the `noah` GitRepository source). Do **not** point it at a separate gitops
-  repo.
-- **`--node`** defaults to the IP recorded in Step 2. Pass `--node <IP>` to
-  override; use `--node 127.0.0.1` (or the private IP) when NOAH runs *on* the
-  target node — an instance cannot SSH to its own public/Elastic IP, because
-  the AWS Internet Gateway does not hairpin it, so the default would time out.
-- **`$GITHUB_TOKEN` / `$GIT_TOKEN`** (or `--git-token`) auto-registers the SSH
-  deploy key on your git provider (GitHub/GitLab/Gitea, detected from the URL).
-  Without a token, NOAH pauses and prints the public key for you to add
-  manually as a read-only deploy key, then continues on Enter.
-- **`--ssh-user` / `--ssh-key`** default to `ubuntu` and your standard SSH key
-  resolution; pass them only for a different user or a non-default key path.
-- **Multi-node control plane:** add `--multi-node --nodes node1,node2,node3`.
-  This buys etcd quorum and scheduling capacity, **not a redundant entry
-  point** — see [Requirements](#requirements).
+---
 
-**Driving the bootstrap from a remote workstation** (the normal case on AWS,
-where NOAH cannot run on the compute node without breaking the Garage
-isolation): the default `--node` is the Elastic IP, port 6443 is open to the
-operator CIDR only, the Cilium bootstrap pass talks to the local API server
-(`127.0.0.1`), and the kubeconfig written to `Kube/` targets the address you
-bootstrapped through. Decrypt it with
-`sops -d Kube/noah-cluster.enc.yaml > ~/.kube/config`.
+## Cluster (steps 4 to 6)
 
-### Step 5 — Watch reconciliation
+### Step 4: GitOps tree
 
 ```bash
-python3 noah.py cluster verify --domain your-domain.com   # wait + print verdict
-# or watch manually:
-watch kubectl get kustomization,helmrelease -A
-python3 noah.py flux logs -f
+python3 noah.py setup gitops --domain your-domain.com --node-ip <node-public-ip>
+git add gitops/ && git commit -m "chore: configure domain" && git push origin main
 ```
 
-### Step 6 — Get credentials
+`setup gitops` records the domain and the node's public IP in the canonical store and
+prepares `gitops/`. `${DOMAIN}` and `${NODE_PUBLIC_IP}` stay placeholders in Git: Flux
+substitutes them at apply time from the `cluster-vars` ConfigMap seeded at bootstrap.
+`--node-ip` can be omitted on later runs; on AWS it is `compute_node.public_ip` from the
+inventory. Add `--with-stalwart` for mail.
+
+Application secrets are **not** written into `gitops/`; they are delivered at step 5.
+Flux reads the pushed repository, so the commit must be on the branch it tracks.
+
+> **Testing a branch other than `main`?** `cluster bootstrap --flux-branch <branch>`
+> moves the `flux-system` source only. `clusters/production/noah-source.yaml`, which
+> serves `gitops/`, hardcodes `branch: main`: change it on the branch too, and revert
+> that commit (and the one `flux bootstrap` adds to `gotk-sync.yaml`) before merging.
+
+### Step 5: bootstrap the cluster
 
 ```bash
-python3 noah.py password show-password
+GITHUB_TOKEN=<token> python3 noah.py cluster bootstrap
 ```
+
+Installs K3s (embedded etcd), a first Cilium pass, the kubeconfig, FluxCD pointed at
+`clusters/production/`, then applies the application secrets out of band. Defaults:
+
+- **`--node`**: the IP recorded at step 4. When NOAH runs *on* the node itself, pass
+  `--node 127.0.0.1`: an EC2 instance cannot reach its own Elastic IP.
+- **`--domain`**: the recorded domain. **`--flux-repo`**: this repository's `origin`
+  remote, which is what Flux must track. **`--flux-branch`**: `main`.
+- **`$GITHUB_TOKEN` / `$GIT_TOKEN`** (or `--git-token`) registers the read-only deploy
+  key on GitHub, GitLab or Gitea. Without it, NOAH prints the key and waits.
+- **`--ssh-user` / `--ssh-key`**: `ubuntu` and your default key.
+- **Multi-node:** `--multi-node --nodes a,b,c` (three or more, odd).
+
+From a remote workstation, which is the normal case on AWS, the kubeconfig is written
+encrypted to `Kube/noah-cluster.enc.yaml` and targets the address you bootstrapped
+through:
+
+```bash
+sops -d Kube/noah-cluster.enc.yaml > ~/.kube/config
+```
+
+### Step 6: wait for convergence
+
+```bash
+python3 noah.py cluster verify          # waits for Flux, then probes the public URLs
+python3 noah.py password show-password  # Authentik admin: akadmin
+```
+
+Flux reconciles in four ordered stages, about 15 to 45 minutes in all:
+
+| Stage | Kustomization | Contents |
+|---|---|---|
+| 1 | `infrastructure` | Cilium (full configuration), ingress-nginx, cert-manager, external-dns, CoreDNS |
+| 2 | `cert-manager-issuers` | Let's Encrypt production and staging issuers |
+| 3 | `apps` | Authentik, Headlamp, Hubble forward-auth, their OIDC clients |
+| 4 | `apps-extra` | Nextcloud, plus Stalwart when opted in |
+
+Watch it with `watch kubectl get kustomization,helmrelease -A` or
+`python3 noah.py flux logs -f`.
 
 ---
 
 ## DNS configuration
 
-Three options. Configure DNS **before** bootstrap so external-dns (Phase 0) can
-publish records immediately.
+Configure DNS **before** bootstrap so external-dns can publish records as soon as the
+ingresses exist.
 
-### Option A — Automatic (Cloudflare)
+### Option A: automatic (Cloudflare)
 
-external-dns watches Ingress resources and creates/updates A records in
-Cloudflare automatically.
+external-dns watches Ingress and DNSEndpoint resources and writes the A, MX and TXT
+records in Cloudflare. The token comes from the canonical store (wizard or
+`set_cloudflare_token.py`, see [Prepare the workstation](#prepare-the-workstation)).
 
-1. **Create a scoped API token** at Cloudflare → Profile → API Tokens →
-   "Edit zone DNS" template. Permissions: `Zone → DNS → Edit` and
-   `Zone → Zone → Read`, scoped to your zone. Never use a Global API key.
-2. **Store it.** The token is captured by the DNS wizard during
-   `setup initialize` and stored SOPS/Age-encrypted in the canonical store.
-   If you skipped the wizard, export it before bootstrap:
-   ```bash
-   export CLOUDFLARE_API_TOKEN='your-token'
-   ```
-
-Verify after bootstrap:
 ```bash
 kubectl logs -n external-dns -l app.kubernetes.io/name=external-dns
-nslookup auth.your-domain.com
+dig +short auth.your-domain.com
 ```
 
 > [!WARNING]
-> **DNS policy is `sync`, and it deletes.** external-dns runs with
-> `policy: sync` and `txtOwnerId: noah`, both hardcoded in
-> `gitops/infrastructure/external-dns/helmrelease.yaml`. It tracks ownership
-> with a TXT registry and removes records it owns once the matching Ingress or
-> DNSEndpoint disappears.
->
-> Because the owner ID is the fixed string `noah` rather than a per-deployment
-> value, **two NOAH clusters pointed at the same Cloudflare zone would claim
-> each other's records and delete them.** Give each deployment its own zone, or
-> change `txtOwnerId` before the second one reconciles.
+> **DNS policy is `sync`, and it deletes.** external-dns runs with `policy: sync` and
+> `txtOwnerId: noah`, both set in `gitops/infrastructure/external-dns/helmrelease.yaml`.
+> It removes the records it owns once the matching Ingress or DNSEndpoint disappears.
+> Because the owner ID is the same constant everywhere, **two NOAH clusters on one
+> Cloudflare zone delete each other's records.** One zone per deployment, or change
+> `txtOwnerId` first.
 
-### Option B — Manual DNS
+### Option B: manual DNS
 
-After bootstrap, point your records at the node's public IP. Create A records:
-
-| Hostname | Type | Value | TTL |
-|---|---|---|---|
-| `auth.your-domain.com` | A | `<node-public-ip>` | 300 |
-| `headlamp.your-domain.com` | A | `<node-public-ip>` | 300 |
-| `hubble.your-domain.com` | A | `<node-public-ip>` | 300 |
-| `nextcloud.your-domain.com` | A | `<node-public-ip>` | 300 |
-| `mail.your-domain.com` | A | `<node-public-ip>` | 300 |
-
-With automatic DNS (Option A), the mail MX/SPF/DKIM/DMARC records are also
-published by external-dns (`DNSEndpoint` CRs in `gitops/apps-extra/stalwart/`).
-With manual DNS, create them yourself — the DKIM TXT value comes from
+Create A records pointing at the node's public IP, TTL 300: `auth`, `headlamp`,
+`hubble`, `nextcloud`, and `mail` if Stalwart is enabled. With manual DNS the mail
+MX/SPF/DKIM/DMARC records are yours to create too; the DKIM value is in
 `kubectl -n flux-system get secret stalwart-dns-vars -o jsonpath='{.data.DKIM_TXT_VALUE}' | base64 -d`.
 
-Verify:
-```bash
-nslookup auth.your-domain.com
-curl -I https://auth.your-domain.com
-```
-
-### Option C — Local testing (`/etc/hosts`)
+### Option C: local testing (`/etc/hosts`)
 
 ```bash
-IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.externalIPs[0]}')
-echo "$IP auth.your-domain.com headlamp.your-domain.com hubble.your-domain.com" | sudo tee -a /etc/hosts
-# clean up: sudo sed -i '/your-domain.com/d' /etc/hosts
+echo "<node-ip> auth.your-domain.com headlamp.your-domain.com hubble.your-domain.com" | sudo tee -a /etc/hosts
 ```
+
+Let's Encrypt cannot validate names that only exist in `/etc/hosts`: expect certificate
+errors.
 
 ---
 
 ## Accessing services
 
-| Service | URL | Login |
+| Service | URL | Sign-in |
 |---|---|---|
-| Authentik SSO | `https://auth.your-domain.com` | `admin` + `password show-password` |
+| Authentik | `https://auth.your-domain.com` | `akadmin` + `password show-password` |
 | Headlamp | `https://headlamp.your-domain.com` | "Sign in with OIDC" → Authentik |
 | Hubble UI | `https://hubble.your-domain.com` | Authentik forward-auth |
-| Nextcloud | `https://nextcloud.your-domain.com` | "Log in with Authentik" (OIDC) or local `admin` |
-| Stalwart mail (web admin) *(opt-in)* | `https://mail.your-domain.com` | break-glass `admin` (`secrets canonical --show`, service `stalwart`) |
+| Nextcloud | `https://nextcloud.your-domain.com` | "Log in with Authentik", or local `admin` |
+| Stalwart *(opt-in)* | `https://mail.your-domain.com/account/` | your Authentik email → Authentik |
+| Stalwart console | `https://mail.your-domain.com/admin/` | Authentik, or break-glass `admin` (`secrets canonical --show`, service `stalwart`) |
 
-Headlamp's OIDC client and Hubble's forward-auth proxy are **auto-provisioned**
-in Authentik during reconciliation; so are the Nextcloud and Stalwart OIDC
-clients (`apps-extra`). See the
-[Operations Guide](OPERATIONS_GUIDE.md#sso) for how SSO is wired.
+The OIDC clients (Headlamp, Nextcloud, Stalwart) and the Hubble forward-auth proxy are
+**provisioned automatically** in Authentik during reconciliation. The Authentik admin's
+email is `akadmin@your-domain.com`.
 
-### Mail prerequisites (Stalwart)
+---
 
-Stalwart is **opt-in and not part of a default install** — precisely because of
-the AWS-side prerequisites below. Enable it by re-running `setup gitops` with
-the flag, then committing and pushing so Flux picks it up:
+## Mail prerequisites (Stalwart)
+
+Stalwart is **opt-in**. Enable it, then push:
 
 ```bash
 python3 noah.py setup gitops --domain your-domain.com --with-stalwart
 git add gitops/ && git commit -m 'feat: enable Stalwart mail' && git push
 ```
 
-The flag is **not sticky**: a later `setup gitops` run without it drops Stalwart
-from `gitops/apps-extra/kustomization.yaml`, and Flux prunes the namespace on the
-next reconcile. Its manifests and secrets stay in place either way, so toggling
-it back on needs no other change.
+The flag is **not sticky**: a later `setup gitops` without it removes Stalwart from
+`gitops/apps-extra/kustomization.yaml`, and Flux prunes the namespace. Its manifests and
+secrets stay in place either way.
 
-Once enabled, Stalwart reconciles like any other app — but **delivering real
-mail needs two AWS-side steps no manifest can do**:
+Delivering real mail needs three things no manifest can do:
 
-1. **Outbound TCP 25 is blocked by default on EC2.** Ask AWS to lift it
-   ("Request to Remove Email Sending Limitations" form, account level). No
-   resource in `Infra/aws/` can do it.
-2. **Inbound mail ports and PTR (reverse DNS) for the EIP.** Both are opt-in
-   variables of `Infra/aws/`, off by default:
+1. **Inbound ports and reverse DNS.** Both are opt-in variables of `Infra/aws/`:
 
    ```bash
-   export TF_VAR_mail_enabled=true                         # opens 25/465/587/143/993
-   export TF_VAR_mail_ptr_domain=mail.your-domain.com      # PTR on the Elastic IP
+   export TF_VAR_mail_enabled=true                      # opens 25, 465, 587, 143, 993
+   export TF_VAR_mail_ptr_domain=mail.your-domain.com   # PTR of the Elastic IP
    python3 noah.py garage infra apply --operator-cidr <cidr>
    ```
 
-   AWS accepts the PTR only once `mail.your-domain.com` already resolves to the
-   EIP, so apply it after external-dns has published the record. Without a
-   matching PTR (plus SPF/DKIM/DMARC), Gmail/Outlook will reject or
+   AWS accepts the PTR only once `mail.your-domain.com` already resolves to the Elastic
+   IP: apply it after external-dns has published the record. Without a matching PTR
+   (plus SPF, DKIM and DMARC, which external-dns publishes), Gmail and Outlook reject or
    spam-folder your mail.
-3. **Restart Stalwart once after its first configuration run:**
-   `kubectl -n stalwart rollout restart statefulset/stalwart`. Stalwart does not
-   start a listener added at runtime, and the in-cluster notification relay
-   (`:2525`, see the Operations Guide) is such a listener.
+2. **Outbound TCP 25.** EC2 blocks it by default. Ask AWS to lift it with the
+   "Request to Remove Email Sending Limitations" form; it is an account-level request.
+   Until then Stalwart receives mail and queues what it sends outside.
+3. **One Stalwart restart after its first configuration run:**
+   `kubectl -n stalwart rollout restart statefulset/stalwart`. Stalwart starts neither
+   the in-cluster relay listener (`:2525`) nor the web sign-in through Authentik until
+   it restarts.
 
-Client notes:
-- IMAP/SMTP clients authenticate with **OAUTHBEARER/XOAUTH2** using an
-  Authentik access token for the `stalwart` OIDC app (client OAuth support
-  varies — see the Operations Guide). The web admin uses the break-glass
-  `admin` account.
-- A user must **log in once** (IMAP/JMAP) before their address can receive
-  mail: Stalwart materializes OIDC accounts on first authentication.
-- Stalwart runs **v0.16.27**, which keeps its configuration in the datastore
-  rather than a declarative `config.toml`. NOAH applies that configuration with
-  `stalwart-cli` from a provisioning Job
-  (`gitops/apps-extra/stalwart/provision-config-job.yaml`), driven by the plan
-  in `apply-plan-configmap.yaml`. Earlier 0.16 builds (0.16.13 included) reject
-  the stock anti-spam rules on reload, and the Job never completes.
+How users get a mailbox, how the notification relay works and the known limits:
+[Operations Guide → Mail](OPERATIONS_GUIDE.md#mail-stalwart).
 
-To rotate the Authentik admin password, see
-[Operations Guide → rotating secrets](OPERATIONS_GUIDE.md#rotating-a-secret).
+---
+
+## Tearing down
+
+```bash
+python3 noah.py garage infra destroy --operator-cidr <cidr>
+aws ec2 describe-spot-instance-requests --filters Name=state,Values=open,active --region eu-west-3
+```
+
+Keep the step 1 `TF_VAR_*` exports (and the mail ones, if set): `destroy` needs the same
+variables. The second command must return nothing: a persistent Spot request that survives
+relaunches an instance outside the state. The AWS provider ≥ 5.86.0 (pinned) cancels it.
+
+**DNS records outlive the cluster.** external-dns deletes records only while it runs;
+once the machines are gone, the A records still point at the released Elastic IP, which
+AWS can hand to someone else. Delete them in Cloudflare, or delete the Ingresses and
+DNSEndpoints and let external-dns clean up *before* destroying.
+
+To reset only the cluster: `python3 noah.py cluster destroy --force`, then
+`cluster bootstrap`. `destroy` keeps the canonical store, so the domain, node IP and
+Cloudflare token survive; `--purge-secrets` wipes them too.
 
 ---
 
 ## Troubleshooting
 
-### Services unreachable
+### Node `NotReady`, Cilium in `Init:CrashLoopBackOff`
 
-```bash
-kubectl get pods -A
-kubectl get svc ingress-nginx-controller -n ingress-nginx
-nslookup auth.your-domain.com
-```
+The Cilium agent cannot reach the API server. The bootstrap pass uses `127.0.0.1`; an
+older clone used the node's inventory address, which the security group blocks for
+anything but the operator CIDR. Fix it on the node:
+`cilium upgrade --reuse-values --set k8sServiceHost=127.0.0.1`.
+
+### `garage infra apply` fails with `InvalidParameterValue: Invalid rule description`
+
+EC2 accepts only `a-zA-Z0-9. _-:/()#,@[]+=&;{}!$*` in security group rule descriptions.
+An em dash or a `§` stops the apply half-way; fix the description and re-apply.
 
 ### Kustomizations not progressing
 
@@ -359,95 +374,75 @@ kubectl get kustomization -A
 kubectl describe kustomization infrastructure -n flux-system
 ```
 
-- **`GitRepository "noah" not found`** — `noah-source.yaml` is missing from
+- **`GitRepository "noah" not found`**: `noah-source.yaml` is missing from
   `clusters/production/`. Re-run bootstrap.
-- **Dependency not ready** — `apps` waits on `infrastructure`; this is normal
-  during the initial rollout.
-- **SOPS decryption failed** — see below.
+- **Dependency not ready**: normal during the first rollout; stages wait on each other.
+- **Stuck for 30 minutes on the health checks of an older revision** (a failed Job, for
+  instance): `kubectl -n flux-system rollout restart deploy/kustomize-controller`.
+- **SOPS decryption failed** (`no identity matched any of the recipients`): the material
+  was encrypted with another Age key (after `setup reset`, or from a fresh clone).
+  Re-run `setup gitops`, push, then `flux reconcile kustomization flux-system --with-source`.
 
-### SOPS decryption failed (`no identity matched any of the recipients`)
-
-The `cluster-vars` / sops-age material was encrypted with a different Age key
-than the one in `Age/keys.txt` (happens after `setup reset` or from a fresh
-clone). Re-run `setup gitops`, push, and reconcile:
-
-```bash
-python3 noah.py setup gitops --domain your-domain.com
-git add gitops/ && git commit -m "fix: re-encrypt with current Age key" && git push
-flux reconcile kustomization flux-system --with-source
-```
-
-### Pods not starting
+### Services unreachable
 
 ```bash
-kubectl get events -A --sort-by=.metadata.creationTimestamp | tail -20
-kubectl logs -n authentik deployment/authentik-server
-kubectl logs -n kube-system ds/cilium
+kubectl get pods -A
+kubectl get ingress -A
+dig +short auth.your-domain.com
 ```
+
+`cluster verify` run from the workstation probes the published address; run on the node
+it probes the node's own addresses, because an EC2 instance cannot reach its Elastic IP.
 
 ### Certificate errors
 
 ```bash
 kubectl get certificate -A
-kubectl describe challenge -A    # ACME HTTP-01 status
+kubectl describe challenge -A
 ```
 
-Certificates require resolvable DNS — ensure A records resolve before
-expecting valid TLS (allow ~5 min after first issuance).
+Certificates need resolvable DNS; allow about five minutes after the records appear.
 
-### DNS records not created (external-dns)
+### DNS records not created
 
 ```bash
 kubectl logs -n external-dns -l app.kubernetes.io/name=external-dns
 # "authentication error" → invalid token   "permission denied" → token scope
 ```
 
-The token needs `Zone → DNS → Edit` and `Zone → Zone → Read`. After fixing it
-in Cloudflare, re-run `setup gitops` (or re-export `CLOUDFLARE_API_TOKEN`) and
-let external-dns retry.
+### Stalwart
+
+| Symptom | Cause and fix |
+|---|---|
+| Web UI answers 502 | the ingress pod got banned as a "port scanner"; the plan trusts forwarded headers and allow-lists the pod network. Check with `stalwart-cli query BlockedIp` |
+| `stalwart-config` Job never re-runs after a plan change | bump `noah/apply-plan-revision` in `provision-config-job.yaml` |
+| Authentik or Nextcloud mail fails, `Connection refused` on 2525 | restart Stalwart once after the first configuration |
+| SSO user gets "Invalid password" on Authentik from the Stalwart login | the typed address is not their Authentik email |
 
 ### Resource shortfall
 
 ```bash
 kubectl top nodes
 kubectl top pods -A
-# Minimum: 4 cores, 16 GB RAM, 250 GB NVMe
 ```
-
-### Full reset
-
-```bash
-python3 noah.py password show-password > backup-credentials.txt
-python3 noah.py cluster destroy --force
-python3 noah.py cluster bootstrap
-```
-
-`destroy` keeps the canonical store by default, so the domain, node IP, and
-Cloudflare token recorded earlier survive the teardown — `bootstrap` reuses
-them and needs no flags. For a clean-slate teardown that also wipes the store,
-secrets, and certificates, add `--purge-secrets`; you then re-supply the
-Cloudflare token via `setup gitops` and pass `--domain` to bootstrap.
 
 ---
 
 ## Validation checklist
 
 ```bash
-kubectl get pods -A             # all Running
+kubectl get pods -A             # all Running or Completed
 kubectl get kustomization -A    # all Ready=True
 kubectl get helmrelease -A      # all Ready
-kubectl top nodes               # resource headroom
+kubectl get certificate -A      # all Ready
 ```
 
-- [ ] All pods `Running`
-- [ ] All kustomizations and HelmReleases `Ready`
-- [ ] DNS resolves to the node IP
-- [ ] HTTPS works with a valid Let's Encrypt cert
-- [ ] Authentik login succeeds (`admin`)
-- [ ] Headlamp authenticates via Authentik OIDC
-- [ ] Hubble UI prompts for Authentik login (no anonymous access)
-
----
-
-See the [Operations Guide](OPERATIONS_GUIDE.md) for day-2 work: GitOps
-changes, secret rotation, SSO details, scaling to HA, and disaster recovery.
+- [ ] All Kustomizations and HelmReleases `Ready`
+- [ ] DNS resolves to the node IP; HTTPS has a valid Let's Encrypt certificate
+- [ ] Authentik login succeeds (`akadmin`)
+- [ ] Headlamp signs in through Authentik; Hubble asks for an Authentik login
+- [ ] Nextcloud offers "Log in with Authentik"
+- [ ] `garage status` shows every node healthy and the five buckets
+- [ ] Stalwart *(if enabled)*: ports 465 and 993 present a valid certificate, and
+      `kubectl -n authentik exec deploy/authentik-worker -- ak test_email <your address>`
+      lands in the Inbox

@@ -71,28 +71,28 @@ cannot be merged — the check is mechanical, not a judgement of the change.
 
 ## 2. Before you open a pull request
 
-Install the dependencies:
+Set up the environment once (the venv is what `noah.py` uses):
 
 ```bash
-pip install -r Scripts/utils/requirements.txt
+python3 noah.py setup initialize --skip-dns-wizard
 ```
 
 Run the checks:
 
 ```bash
-# Tests
-pytest Tests/ -v                          # unit tests (integration excluded)
-pytest Tests/ -v -m integration           # include integration (needs a real sops)
-NOAH_SKIP_ANSIBLE=true pytest Tests/ -q   # skip Ansible
-
-# Lint and security scan
-ruff check Scripts/ noah.py
-bandit -r Scripts/ noah.py -ll
-ansible-lint Ansible/
+NOAH_SKIP_ANSIBLE=true .venv/bin/python -m pytest Tests/ -q   # unit tests
+.venv/bin/python -m pytest Tests/ -v -m integration           # needs a real sops binary
+.venv/bin/ruff check Scripts/ noah.py                         # add no new finding
+.venv/bin/bandit -r Scripts/ noah.py -ll
+tofu -chdir=Infra/aws fmt -check                              # if you touched Infra/
+ansible-lint Ansible/                                         # if you touched Ansible/
 ```
 
-`noah.py` re-execs itself under `.venv/bin/python3` when the venv exists, so
-`python3 noah.py` always runs with the right interpreter.
+CodeQL and GitGuardian run on the pull request itself; there is no other CI.
+
+If your change alters a behaviour, a command or a version, update the guide that
+describes it, and the diagram in `docs/images/` if it shows it (conventions in
+[`docs/README.md`](README.md#diagrams)).
 
 ---
 

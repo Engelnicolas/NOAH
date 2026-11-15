@@ -93,6 +93,17 @@ data:
         # the singleton refuses to validate without it.
         {"@type": "update", "object": "SystemSettings",
          "value": {"defaultHostname": f"mail.{DOMAIN}", "defaultDomainId": "#dom0"}},
+        # The web UI is only reached through ingress-nginx. Without these two,
+        # Stalwart attributes every request to the ingress pod: the first
+        # Internet scanner probing the mail hostname gets that pod banned for
+        # "port scanning" and the UI answers 502 from then on. useXForwarded
+        # restores the real client address; the allow-list covers a ban taken
+        # before this plan first ran (an allowed address overrides a block).
+        # 10.0.0.0/8 is Cilium's cluster-pool pod CIDR (its chart default).
+        {"@type": "update", "object": "Http", "value": {"useXForwarded": True}},
+        {"@type": "upsert", "object": "AllowedIp", "matchOn": ["address"],
+         "value": {"ip0": {"address": "10.0.0.0/8",
+                           "reason": "cluster pod network (ingress controller)"}}},
         listener("http", 8080, "http", False, False),
         listener("smtp", 25, "smtp", True, False),
         listener("submission", 587, "smtp", True, False),

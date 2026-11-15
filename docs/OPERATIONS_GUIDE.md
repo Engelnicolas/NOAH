@@ -135,7 +135,7 @@ the ZFS-snapshot immutability strategy worth anything. Operate it as if that
 separation were the feature, because it is — a Garage reachable from the
 compute node works perfectly and protects nothing.
 
-Specification: [`Specs/To-do/Garage.md`](../../Specs/To-do/Garage.md).
+Specification: [`Specs/Garage.md`](../../Specs/Garage.md).
 Infrastructure: [`Infra/README.md`](../Infra/README.md).
 
 ### The three secret domains

@@ -29,5 +29,5 @@ here, not merely of the deployment:
   * garage_provision — layout, buckets, S3 keys (generated here, imported
                        into Garage — never the other way round, §6.2)
 
-See Specs/To-do/Garage.md.
+See Specs/Garage.md.
 """

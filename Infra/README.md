@@ -1,7 +1,7 @@
 # `Infra/` — machine provisioning
 
 Infrastructure as code for the machines NOAH runs on. Engine: **OpenTofu**
-(decision G10). Specification: [`Specs/To-do/Garage.md`](../../Specs/To-do/Garage.md) §16.
+(decision G10). Specification: [`Specs/Garage.md`](../../Specs/Garage.md) §16.
 
 ```
 Infra/

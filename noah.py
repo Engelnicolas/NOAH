@@ -367,7 +367,7 @@ def flux_logs(ctx, follow, tail):
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Garage — object storage OUTSIDE the cluster (Specs/To-do/Garage.md)
+# Garage — object storage OUTSIDE the cluster (Specs/Garage.md)
 # ──────────────────────────────────────────────────────────────────────
 #
 # Garage is the one component that lives outside the cluster and out of reach

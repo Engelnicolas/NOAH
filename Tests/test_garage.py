@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Tests for the Garage lot (Specs/To-do/Garage.md §9).
+"""Tests for the Garage lot (Specs/Garage.md §9).
 
 T3 IS THE TEST THAT MATTERS. Without it a regression reopens the path by which
 the compute node reaches the storage tier, and no other test would blink: a

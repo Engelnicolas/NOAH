@@ -94,6 +94,8 @@ client address, because external connections reach Stalwart masqueraded
 behind a pod-network address. Consequences:
 
 - any pod in the cluster can send mail through the relay;
+- relay mail is not spam-filtered (like authenticated submission); otherwise
+  notifications from our own domain fail SPF/DMARC and land in Junk;
 - the public port 25 still refuses to relay (`5.1.2 Relay not allowed`);
 - the relay answers only after Stalwart has restarted once following its first
   configuration run (see the Deployment Guide).
@@ -108,6 +110,15 @@ kubectl -n authentik exec deploy/authentik-worker -- ak test_email <address>
 the pod network (`10.0.0.0/8`, Cilium's cluster pool). Without it, Stalwart
 attributes every web request to the ingress controller pod, and the first
 Internet scanner gets that pod banned — the web UI then answers 502.
+
+> **Known limit — SSO users have no web interface.** The Stalwart login page
+> (`/login`, used by `/account/` and `/admin/`) checks a password against
+> Stalwart's own directory. Authentik users have no password there and the page
+> offers no redirect to Authentik, so only the break-glass `admin` can sign in
+> to the web UI. SSO users reach their mail with an Authentik access token
+> (OAUTHBEARER/XOAUTH2 over IMAP/SMTP, or JMAP), which few mail clients can
+> obtain from a self-hosted Authentik. The redirect URI registered for the
+> `stalwart` provider (`/auth/callback`) is not served by Stalwart.
 
 > **Known limit — client addresses on the mail ports.** The mail ports are
 > `hostPort`s, and connections reach Stalwart source-NATed to a pod-network

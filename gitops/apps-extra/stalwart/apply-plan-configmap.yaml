@@ -110,6 +110,19 @@ data:
         listener("submissions", 465, "smtp", True, True),
         listener("imap", 143, "imap", True, False),
         listener("imaps", 993, "imap", True, True),
+        # In-cluster relay for application notifications (Authentik, Nextcloud).
+        # Port 2525 has no hostPort and is only published by the ClusterIP
+        # Service, so it is unreachable from outside the cluster. The two rules
+        # below are keyed on that port, NOT on the client address: external
+        # connections arrive masqueraded behind a pod-network address, so an
+        # address-based rule would turn the public port 25 into an open relay.
+        listener("relay", 2525, "smtp", False, False),
+        {"@type": "update", "object": "MtaStageAuth",
+         "value": {"require": {"match": {},
+                               "else": "local_port != 25 && local_port != 2525"}}},
+        {"@type": "update", "object": "MtaStageRcpt",
+         "value": {"allowRelaying": {"match": {},
+                                     "else": "!is_empty(authenticated_as) || local_port == 2525"}}},
         {"@type": "upsert", "object": "Certificate", "matchOn": ["certificate"],
          "value": {"cert0": {"certificate": {"@type": "Text", "value": tls_crt},
                              "privateKey": {"@type": "Text", "secret": tls_key}}}},

@@ -41,6 +41,20 @@ spec:
             'overwrite.cli.url' => 'https://nextcloud.${DOMAIN}',
             'trusted_proxies' => array('10.0.0.0/8', '127.0.0.1'),
           );
+        # Outgoing mail through the in-cluster Stalwart relay (no auth, no
+        # TLS: the hop never leaves the cluster). Stalwart is opt-in; without
+        # it Nextcloud simply cannot send, as before.
+        mail.config.php: |-
+          <?php
+          $CONFIG = array (
+            'mail_smtpmode' => 'smtp',
+            'mail_smtphost' => 'stalwart.stalwart.svc.cluster.local',
+            'mail_smtpport' => 2525,
+            'mail_smtpsecure' => '',
+            'mail_smtpauth' => false,
+            'mail_from_address' => 'nextcloud',
+            'mail_domain' => '${DOMAIN}',
+          );
         # Required for OIDC: CoreDNS resolves auth.${DOMAIN} to the ingress
         # ClusterIP (10.43.0.0/16), and Nextcloud's SSRF guard refuses to fetch
         # the discovery document from a private address — user_oidc then answers

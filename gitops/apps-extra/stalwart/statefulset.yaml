@@ -61,6 +61,9 @@ spec:
             - name: imaps
               containerPort: 993
               hostPort: 993
+            # In-cluster notification relay: deliberately no hostPort.
+            - name: relay
+              containerPort: 2525
             # webadmin + JMAP: cluster-internal only, exposed via nginx-ingress.
             - name: http
               containerPort: 8080

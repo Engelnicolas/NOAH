@@ -76,6 +76,45 @@ the flag on a later run deletes the `stalwart` namespace and everything in it.
 Its manifests and its entries in the canonical secrets store are untouched
 either way.
 
+### Stalwart: configuration and notification relay
+
+**Changing the configuration.** Stalwart's settings live in its datastore and
+are applied by the `stalwart-config` Job from the plan in
+`gitops/apps-extra/stalwart/apply-plan-configmap.yaml`. Flux re-creates that Job
+only when the Job itself changes, so **every edit of the plan must also bump
+`noah/apply-plan-revision`** in `provision-config-job.yaml` — otherwise the new
+plan is silently never applied.
+
+**Notifications.** Authentik (`authentik.email` values) and Nextcloud
+(`mail.config.php`) send their mail through an in-cluster relay listener of
+Stalwart on port **2525**, published only by the `stalwart` ClusterIP Service
+(no `hostPort`). On that port alone Stalwart accepts mail without
+authentication and relays it; the rules are keyed on the port, not on the
+client address, because external connections reach Stalwart masqueraded
+behind a pod-network address. Consequences:
+
+- any pod in the cluster can send mail through the relay;
+- the public port 25 still refuses to relay (`5.1.2 Relay not allowed`);
+- the relay answers only after Stalwart has restarted once following its first
+  configuration run (see the Deployment Guide).
+
+Test it:
+
+```bash
+kubectl -n authentik exec deploy/authentik-worker -- ak test_email <address>
+```
+
+**Web UI behind the ingress.** The plan sets `useXForwarded` and allow-lists
+the pod network (`10.0.0.0/8`, Cilium's cluster pool). Without it, Stalwart
+attributes every web request to the ingress controller pod, and the first
+Internet scanner gets that pod banned — the web UI then answers 502.
+
+> **Known limit — client addresses on the mail ports.** The mail ports are
+> `hostPort`s, and connections reach Stalwart source-NATed to a pod-network
+> address. Stalwart therefore never sees the real sender address on SMTP/IMAP:
+> SPF checks on inbound mail and automatic IP bans cannot work there. Fixing it
+> needs `hostNetwork` or the PROXY protocol; not done yet.
+
 ---
 
 ## Secrets

@@ -6,6 +6,9 @@ Infrastructure as code for the machines NOAH runs on. Engine: **OpenTofu**
 ```
 Infra/
   aws/         ← default target: development, Spot, eu-west-3     (written)
+    launch-templates/  ← reference copies of the pre-OpenTofu EC2 launch
+                         templates, identifiers replaced by REMPLACER-*;
+                         nothing reads them
   baremetal/   ← production A.2: inventory written by hand, no IaC (written)
   scaleway/    ← second target, Europe                             (not written — see below)
   ovh/         ← second target, subject to V8                      (not written — see below)
@@ -110,6 +113,31 @@ python3 noah.py garage infra init
 python3 noah.py garage infra plan  --operator-cidr 203.0.113.4/32
 python3 noah.py garage infra apply --operator-cidr 203.0.113.4/32
 ```
+
+**Two variables are not supplied by the wrapper** and have no default: the
+public halves of the cluster and Garage SSH keys. Export them before
+`plan`/`apply`, or OpenTofu stops to prompt for them:
+
+```bash
+export TF_VAR_compute_ssh_public_key="$(cat ~/.ssh/id_ed25519.pub)"
+export TF_VAR_garage_ssh_public_key="$(python3 - <<'EOF'
+from pathlib import Path
+from Scripts.garage.admin_store import ensure_ssh_key, get_admin_store
+print(ensure_ssh_key(get_admin_store(Path.cwd()))[1].strip())
+EOF
+)"
+```
+
+When no credentials were filed with `garage admin set-cloud`, the AWS provider
+falls back to the standard credential chain (`AWS_PROFILE`, `aws login`, …).
+
+**Mail (opt-in).** `mail_enabled` opens 25/465/587/143/993 on the compute node
+and `mail_ptr_domain` sets the reverse DNS of the Elastic IP, for Stalwart —
+see the Deployment Guide, *Mail prerequisites*. Both default to off.
+
+**Resource descriptions must stay in the EC2 character set**
+(`a-zA-Z0-9. _-:/()#,@[]+=&;{}!$*`). An em dash or a `§` in a security group
+rule description makes `apply` fail half-way with `InvalidParameterValue`.
 
 Raw `tofu` works too, provided the passphrase is exported by hand:
 

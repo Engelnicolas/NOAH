@@ -131,6 +131,13 @@ data:
         {"@type": "update", "object": "MtaStageRcpt",
          "value": {"allowRelaying": {"match": {},
                                      "else": "!is_empty(authenticated_as) || local_port == 2525"}}},
+        # The spam filter runs on unauthenticated sessions, which includes the
+        # relay: application mail from our own domain then fails SPF (the pod
+        # address is not the MX) and DMARC (p=quarantine), and lands in Junk.
+        # Exempt the relay the same way authenticated submission is exempt.
+        {"@type": "update", "object": "MtaStageData",
+         "value": {"enableSpamFilter": {"match": {},
+                                        "else": "is_empty(authenticated_as) && local_port != 2525"}}},
         {"@type": "upsert", "object": "Certificate", "matchOn": ["certificate"],
          "value": {"cert0": {"certificate": {"@type": "Text", "value": tls_crt},
                              "privateKey": {"@type": "Text", "secret": tls_key}}}},

@@ -25,7 +25,7 @@ spec:
         # BUMP when apply-plan-configmap.yaml changes. Flux only re-creates the
         # Job when the Job itself differs; a new plan in the ConfigMap alone
         # leaves the previous run "Complete" and is never applied.
-        noah/apply-plan-revision: "4"
+        noah/apply-plan-revision: "5"
     spec:
       restartPolicy: OnFailure
       securityContext:

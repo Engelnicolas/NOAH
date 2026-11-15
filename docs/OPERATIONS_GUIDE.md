@@ -120,14 +120,21 @@ an address, the web interface discovers the provider for its domain
 address as `login_hint`. Like the relay listener, the client id only reaches
 the served pages after a Stalwart restart following the first plan run.
 
-> **Sign in with the Authentik email address, not the mailbox address.**
-> Authentik identifies the user from `login_hint` by email or username, while
-> the Stalwart mailbox is `<preferred_username>@<domain>`. For the bootstrap
-> admin these differ (`admin@<domain>` in Authentik, mailbox
-> `akadmin@<domain>`): typing the mailbox address ends on Authentik's password
-> page with "Invalid password". Typing the Authentik email works. The same
-> mismatch means mail Authentik sends to the admin (password reset, alerts)
-> goes to `admin@<domain>`, which has no mailbox.
+**The mailbox address is the Authentik email.** Stalwart's OIDC directory
+reads the `email` claim, so a user's mailbox is exactly the address set on
+their Authentik account. That is also what makes the web sign-in work (the
+typed address, passed as `login_hint`, identifies the user in Authentik) and
+what makes mail Authentik sends to a user land in their mailbox. Consequences:
+
+- to give someone a NOAH mailbox, set their Authentik email to
+  `<name>@<domain>`; a user whose Authentik email is elsewhere (Gmail, …) has
+  no mailbox;
+- the bootstrap admin is `akadmin@<domain>` (`bootstrap_email`), not
+  `admin@<domain>`;
+- **Authentik group names become Stalwart group principals** (`claimGroups`):
+  the `admin` group occupies `admin@<domain>`. A user whose email equals
+  `<group name>@<domain>` cannot sign in ("Account ID from directory does not
+  correspond to a user account") — keep group names and mailbox names apart.
 
 > **Known limit — client addresses on the mail ports.** The mail ports are
 > `hostPort`s, and connections reach Stalwart source-NATed to a pod-network

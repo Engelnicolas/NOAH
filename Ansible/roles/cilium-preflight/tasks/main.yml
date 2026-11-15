@@ -37,7 +37,7 @@
     set -euo pipefail
     KUBECONFIG=/etc/rancher/k3s/k3s.yaml cilium install \
       --set kubeProxyReplacement=true \
-      --set k8sServiceHost="{{ node1_ip }}" \
+      --set k8sServiceHost=127.0.0.1 \
       --set k8sServicePort=6443 \
       --set operator.replicas=1 \
       --set hubble.enabled=false

@@ -108,6 +108,19 @@ data:
         {"@type": "upsert", "object": "AllowedIp", "matchOn": ["address"],
          "value": {"ip0": {"address": "10.0.0.0/8",
                            "reason": "cluster pod network (ingress controller)"}}},
+        # Web interface sign-in through Authentik. Without oauthClientId the
+        # login page only checks a password against Stalwart's own directory,
+        # which SSO users do not have: only the break-glass admin could sign in.
+        # With it, the web interface sends users to Authentik with the
+        # `stalwart` public client (PKCE). All fields are restated so the
+        # upsert cannot reset the URL prefixes the application is served on.
+        {"@type": "upsert", "object": "Application", "matchOn": ["description"],
+         "value": {"app0": {"description": "Stalwart Web Interface",
+                            "enabled": True,
+                            "urlPrefix": {"/admin": True, "/account": True},
+                            "resourceUrl": "https://github.com/stalwartlabs/webui/releases/latest/download/webui.zip",
+                            "autoUpdateFrequency": 2592000000,
+                            "oauthClientId": "stalwart"}}},
         listener("http", 8080, "http", False, False),
         listener("smtp", 25, "smtp", True, False),
         listener("submission", 587, "smtp", True, False),

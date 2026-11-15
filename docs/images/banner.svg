@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="t d">
+  <title id="t">NOAH: Network Operations and Automation Hub</title>
+  <desc id="d">A Python CLI that turns bare machines and a domain into an SSO-protected, GitOps-reconciled Kubernetes platform with object storage kept out of the cluster's reach.</desc>
+  <defs>
+    <radialGradient id="glow" cx="0.17" cy="0.5" r="0.55">
+      <stop offset="0" stop-color="#22D3EE" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#05070B"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#FFFFFF" stroke-opacity="0.035"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="420" rx="28" fill="url(#bg)"/>
+  <rect width="1280" height="420" rx="28" fill="url(#grid)"/>
+  <rect width="1280" height="420" rx="28" fill="url(#glow)"/>
+
+  <!-- Logo: a hexagonal cluster of nodes, one of them held apart (the storage tier) -->
+  <g transform="translate(220 210)">
+    <polygon points="0,-118 102,-59 102,59 0,118 -102,59 -102,-59" fill="none" stroke="#22D3EE" stroke-width="6" stroke-linejoin="round"/>
+    <g stroke="#22D3EE" stroke-width="4" stroke-opacity="0.55">
+      <path d="M0 -50L-44 26M0 -50L44 26M-44 26H44"/>
+    </g>
+    <g fill="#22D3EE">
+      <circle cx="0" cy="-50" r="16"/>
+      <circle cx="-44" cy="26" r="16"/>
+      <circle cx="44" cy="26" r="16"/>
+    </g>
+    <circle cx="0" cy="-50" r="6" fill="#111827"/>
+    <circle cx="-44" cy="26" r="6" fill="#111827"/>
+    <circle cx="44" cy="26" r="6" fill="#111827"/>
+    <!-- detached storage node -->
+    <rect x="118" y="70" width="40" height="40" rx="9" fill="#A78BFA"/>
+    <path d="M126 82h24M126 90h24M126 98h24" stroke="#111827" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" fill="#FFFFFF">
+    <text x="430" y="150" font-size="96" font-weight="800" letter-spacing="8">NOAH</text>
+    <text x="434" y="200" font-size="30" font-weight="600" fill="#E5E7EB">Network Operations <tspan fill="#22D3EE">&amp;</tspan> Automation Hub</text>
+    <text x="434" y="248" font-size="22" fill="#9CA3AF">Bare machines and a domain in, an SSO-protected Kubernetes</text>
+    <text x="434" y="278" font-size="22" fill="#9CA3AF">platform out. Git for the manifests, never for the secrets.</text>
+
+    <g font-size="18" font-weight="600">
+      <rect x="434" y="314" width="150" height="40" rx="20" fill="#22D3EE"/>
+      <text x="509" y="340" text-anchor="middle" fill="#0B1220">K3s · Cilium</text>
+      <rect x="598" y="314" width="190" height="40" rx="20" fill="none" stroke="#4B5563"/>
+      <text x="693" y="340" text-anchor="middle" fill="#E5E7EB">FluxCD GitOps</text>
+      <rect x="802" y="314" width="190" height="40" rx="20" fill="none" stroke="#4B5563"/>
+      <text x="897" y="340" text-anchor="middle" fill="#E5E7EB">Authentik SSO</text>
+      <rect x="1006" y="314" width="190" height="40" rx="20" fill="none" stroke="#A78BFA"/>
+      <text x="1101" y="340" text-anchor="middle" fill="#DDD6FE">Garage S3</text>
+    </g>
+  </g>
+</svg>

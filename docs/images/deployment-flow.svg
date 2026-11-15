@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="560" viewBox="0 0 1280 560" role="img" aria-labelledby="t d">
+  <title id="t">NOAH deployment, step by step</title>
+  <desc id="d">Once: setup initialize and garage admin init. Storage tier, cloud target only: 1 garage infra apply creates the machines with OpenTofu, 2 garage nat routes the private subnet through the compute node, 3 garage deploy and garage provision install Garage and create the buckets and keys. Cluster, every target: 4 setup gitops and git push, 5 cluster bootstrap installs K3s, Cilium and Flux and delivers the secrets, 6 cluster verify waits for Flux to converge. On an existing host, start at step 4.</desc>
+  <defs>
+    <marker id="aCyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#22D3EE"/>
+    </marker>
+    <marker id="aViolet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#A78BFA"/>
+    </marker>
+  </defs>
+  <rect width="1280" height="560" rx="28" fill="#0B1220"/>
+
+  <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <!-- Once -->
+    <rect x="40" y="30" width="1200" height="52" rx="14" fill="#111827" stroke="#374151"/>
+    <text x="62" y="62" font-size="16" font-weight="700" fill="#FFFFFF">Once, on the workstation</text>
+    <text x="290" y="62" font-size="15" fill="#22D3EE" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">setup initialize</text>
+    <text x="440" y="62" font-size="15" fill="#9CA3AF">tools, venv, cluster Age key, Cloudflare token</text>
+    <text x="808" y="62" font-size="15" fill="#A78BFA" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">garage admin init</text>
+    <text x="968" y="62" font-size="15" fill="#9CA3AF">Garage admin Age key</text>
+
+    <!-- Row labels -->
+    <text x="40" y="124" font-size="15" font-weight="700" fill="#C4B5FD">STORAGE TIER · cloud target only</text>
+    <text x="40" y="344" font-size="15" font-weight="700" fill="#A5F3FC">CLUSTER · every target</text>
+    <text x="1240" y="344" text-anchor="end" font-size="14" fill="#9CA3AF">On an existing host, start at step 4.</text>
+
+    <!-- Row 1 -->
+    <g>
+      <rect x="40" y="140" width="368" height="150" rx="18" fill="#1E1533" stroke="#A78BFA" stroke-width="2"/>
+      <circle cx="78" cy="180" r="20" fill="#A78BFA"/>
+      <text x="78" y="187" text-anchor="middle" font-size="20" font-weight="800" fill="#0B1220">1</text>
+      <text x="112" y="188" font-size="22" font-weight="800" fill="#FFFFFF">Machines</text>
+      <text x="62" y="232" font-size="16" fill="#DDD6FE" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">garage infra apply</text>
+      <text x="62" y="262" font-size="14" fill="#9CA3AF">OpenTofu: VPC, compute node, 2 Garage</text>
+      <text x="62" y="280" font-size="14" fill="#9CA3AF">nodes, data volumes, Elastic IP</text>
+
+      <rect x="456" y="140" width="368" height="150" rx="18" fill="#1E1533" stroke="#A78BFA" stroke-width="2"/>
+      <circle cx="494" cy="180" r="20" fill="#A78BFA"/>
+      <text x="494" y="187" text-anchor="middle" font-size="20" font-weight="800" fill="#0B1220">2</text>
+      <text x="528" y="188" font-size="22" font-weight="800" fill="#FFFFFF">Egress</text>
+      <text x="478" y="232" font-size="16" fill="#DDD6FE" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">garage nat</text>
+      <text x="478" y="262" font-size="14" fill="#9CA3AF">The compute node routes the private</text>
+      <text x="478" y="280" font-size="14" fill="#9CA3AF">subnet. Skip it and step 3 hangs.</text>
+
+      <rect x="872" y="140" width="368" height="150" rx="18" fill="#1E1533" stroke="#A78BFA" stroke-width="2"/>
+      <circle cx="910" cy="180" r="20" fill="#A78BFA"/>
+      <text x="910" y="187" text-anchor="middle" font-size="20" font-weight="800" fill="#0B1220">3</text>
+      <text x="944" y="188" font-size="22" font-weight="800" fill="#FFFFFF">Object storage</text>
+      <text x="894" y="232" font-size="16" fill="#DDD6FE" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">garage deploy · provision</text>
+      <text x="894" y="262" font-size="14" fill="#9CA3AF">ZFS, Garage, cluster layout; then the</text>
+      <text x="894" y="280" font-size="14" fill="#9CA3AF">buckets and one S3 key per bucket</text>
+    </g>
+    <path d="M410 215H450" stroke="#A78BFA" stroke-width="3" marker-end="url(#aViolet)"/>
+    <path d="M826 215H866" stroke="#A78BFA" stroke-width="3" marker-end="url(#aViolet)"/>
+    <path d="M1056 292V316H224V354" fill="none" stroke="#6B7280" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#aCyan)"/>
+
+    <!-- Row 2 -->
+    <g>
+      <rect x="40" y="360" width="368" height="150" rx="18" fill="#062A33" stroke="#22D3EE" stroke-width="2"/>
+      <circle cx="78" cy="400" r="20" fill="#22D3EE"/>
+      <text x="78" y="407" text-anchor="middle" font-size="20" font-weight="800" fill="#0B1220">4</text>
+      <text x="112" y="408" font-size="22" font-weight="800" fill="#FFFFFF">GitOps tree</text>
+      <text x="62" y="452" font-size="16" fill="#A5F3FC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">setup gitops · git push</text>
+      <text x="62" y="482" font-size="14" fill="#9CA3AF">Domain and node IP recorded once;</text>
+      <text x="62" y="500" font-size="14" fill="#9CA3AF">manifests pushed for Flux to read</text>
+
+      <rect x="456" y="360" width="368" height="150" rx="18" fill="#062A33" stroke="#22D3EE" stroke-width="2"/>
+      <circle cx="494" cy="400" r="20" fill="#22D3EE"/>
+      <text x="494" y="407" text-anchor="middle" font-size="20" font-weight="800" fill="#0B1220">5</text>
+      <text x="528" y="408" font-size="22" font-weight="800" fill="#FFFFFF">Cluster</text>
+      <text x="478" y="452" font-size="16" fill="#A5F3FC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">cluster bootstrap</text>
+      <text x="478" y="482" font-size="14" fill="#9CA3AF">K3s, Cilium, Flux; application secrets</text>
+      <text x="478" y="500" font-size="14" fill="#9CA3AF">applied out of band, never through Git</text>
+
+      <rect x="872" y="360" width="368" height="150" rx="18" fill="#062A33" stroke="#22D3EE" stroke-width="2"/>
+      <circle cx="910" cy="400" r="20" fill="#22D3EE"/>
+      <text x="910" y="407" text-anchor="middle" font-size="20" font-weight="800" fill="#0B1220">6</text>
+      <text x="944" y="408" font-size="22" font-weight="800" fill="#FFFFFF">Converge</text>
+      <text x="894" y="452" font-size="16" fill="#A5F3FC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">cluster verify</text>
+      <text x="894" y="482" font-size="14" fill="#9CA3AF">Flux reconciles the whole stack,</text>
+      <text x="894" y="500" font-size="14" fill="#9CA3AF">DNS and certificates: 15 to 45 min</text>
+    </g>
+    <path d="M410 435H450" stroke="#22D3EE" stroke-width="3" marker-end="url(#aCyan)"/>
+    <path d="M826 435H866" stroke="#22D3EE" stroke-width="3" marker-end="url(#aCyan)"/>
+
+    <text x="640" y="542" text-anchor="middle" font-size="14" fill="#6B7280">Every command is <tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9CA3AF">python3 noah.py …</tspan>, run from the repository root.</text>
+  </g>
+</svg>

@@ -1,209 +1,154 @@
-<div align="center">
+<p align="center">
+  <img src="docs/images/banner.svg" alt="NOAH: Network Operations & Automation Hub" width="100%">
+</p>
 
-```
-   _   _   ___      _     _   _
-  | \ | | / _ \    / \   | | | |
-  |  \| || | | |  / _ \  | |_| |
-  | |\  || |_| | / ___ \ |  _  |
-  |_| \_| \___/ /_/   \_\|_| |_|
-```
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0"></a>
+  <a href="https://github.com/Engelnicolas/NOAH/releases"><img src="https://img.shields.io/badge/release-v0.1.0-22D3EE" alt="Release v0.1.0"></a>
+  <img src="https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12+">
+  <img src="https://img.shields.io/badge/K3s-embedded%20etcd-FFC61C?logo=k3s&logoColor=black" alt="K3s">
+  <img src="https://img.shields.io/badge/GitOps-FluxCD-5468FF?logo=flux&logoColor=white" alt="FluxCD">
+  <img src="https://img.shields.io/badge/IaC-OpenTofu-FFDA18?logo=opentofu&logoColor=black" alt="OpenTofu">
+</p>
 
-### Network Operations & Automation Hub
+# NOAH: a Kubernetes platform from one CLI
 
-**A production-grade Kubernetes platform — SSO, TLS, DNS, GitOps and observability — from a single command.**
+**Give NOAH a domain and machines; get back an SSO-protected, HTTPS-terminated,
+GitOps-reconciled Kubernetes platform, with its object storage kept out of the cluster's
+reach.** One Python CLI drives OpenTofu for the machines, Ansible for their contents and
+FluxCD for everything that runs on the cluster. Git holds the manifests; the secrets never
+go near it.
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.1.0-green.svg)](https://github.com/Engelnicolas/NOAH/releases)
-[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
-[![Kubernetes](https://img.shields.io/badge/kubernetes-K3s-326CE5.svg?logo=kubernetes&logoColor=white)](https://k3s.io/)
-[![GitOps](https://img.shields.io/badge/GitOps-FluxCD-5468FF.svg)](https://fluxcd.io/)
+<p align="center">
+  <a href="#getting-started"><b>Getting started</b></a>
+  &nbsp;·&nbsp;
+  <a href="docs/DEPLOYMENT_GUIDE.md">Deployment Guide</a>
+  &nbsp;·&nbsp;
+  <a href="docs/OPERATIONS_GUIDE.md">Operations Guide</a>
+  &nbsp;·&nbsp;
+  <a href="docs/README.md">All docs</a>
+</p>
 
-[Quick start](#quick-start) · [Architecture](#architecture) · [CLI](#cli-reference) · [Docs](docs/)
+## Why NOAH
 
-</div>
-
----
-
-## Overview
-
-Standing up a real Kubernetes platform means wiring together a CNI, an ingress
-controller, certificate automation, DNS, an identity provider and a GitOps engine —
-then keeping every secret out of Git while still getting it into the cluster.
-
-NOAH is a single Python CLI that does that wiring. Give it a bare Linux host and a
-domain; get back a reconciling, SSO-protected, HTTPS-terminated cluster.
-
-```bash
-python3 noah.py cluster bootstrap
-```
-
-**Design principles**
-
-- **One entry point.** The node IP and domain are recorded once, then reused as
-  defaults by every later command.
-- **Git is the source of truth — except for secrets.** Flux reconciles `gitops/`
-  continuously; secrets live in a SOPS/Age-encrypted store and are applied
-  out-of-band, so they are never committed.
-- **No hidden state.** Everything NOAH knows is in the repo or in the encrypted
-  canonical store, both readable and backupable.
-
-| Component | Role |
+| | |
 |---|---|
-| **K3s** (embedded etcd) | Lightweight Kubernetes control plane |
-| **Cilium** | eBPF CNI with Hubble network observability |
-| **FluxCD** | Continuous GitOps reconciliation from `gitops/` |
-| **cert-manager** | Automatic TLS certificates via Let's Encrypt |
-| **external-dns** | Automatic Cloudflare DNS records |
-| **nginx-ingress** | L7 ingress bound to the node's :80/:443 via `hostPort` |
-| **Authentik** | SSO / OIDC identity provider |
-| **Headlamp** | Kubernetes dashboard, SSO-gated |
-| **Hubble UI** | Live network flows, SSO-gated via forward-auth |
-| **Nextcloud** | File sync & share, OIDC-integrated |
-| **Stalwart** | Mail server (SMTP / IMAP / JMAP) — **opt-in** |
+| 🧭 **One entry point** | `python3 noah.py` for everything. The domain and node IP are recorded once, then reused as defaults by every later command. |
+| 🔁 **GitOps for real** | FluxCD reconciles `gitops/` continuously. You change the platform with `git push`, not `kubectl apply`. |
+| 🔐 **Secrets never in Git** | A SOPS/Age-encrypted store is the single source of truth; secrets reach the cluster out of band. |
+| 🪪 **Single sign-on everywhere** | Authentik fronts Headlamp, Hubble, Nextcloud and Stalwart: one login, OIDC or forward-auth. |
+| 🌐 **DNS and TLS on autopilot** | external-dns writes the Cloudflare records, cert-manager gets Let's Encrypt certificates. |
+| 🛡️ **Storage out of reach** | Garage, the S3 tier, runs on separate machines in a private subnet with its own keys. A compromised cluster cannot erase its backups. |
+| ☁️ **Machines as code** | OpenTofu creates the AWS target (Spot, one zone, encrypted state); bare metal uses the same hand-written inventory file. |
+| ✉️ **Mail, if you want it** | Stalwart (SMTP, IMAP, JMAP) is opt-in, signs users in through Authentik and relays the platform's notifications. |
 
-## Quick start
+## How it works
 
-> **Prerequisites:** a Linux host you can SSH into (4 CPU / 16 GB RAM / 250 GB NVMe,
-> kernel 5.10+), a domain on Cloudflare, and a GitHub token. Everything else is
-> installed for you.
+<p align="center">
+  <img src="docs/images/how-it-works.svg" alt="The operator workstation runs the NOAH CLI: OpenTofu creates the machines, Ansible installs K3s, Cilium and Flux on the compute node and reaches the Garage nodes through it. The workstation pushes the manifests to GitHub and Flux pulls them into the cluster. external-dns and cert-manager handle Cloudflare DNS and Let's Encrypt. Users reach the cluster over HTTPS and the mail ports. The cluster stores its objects in Garage, in a private subnet." width="100%">
+</p>
+
+The **workstation** is the only place that holds every key. It creates the machines with
+OpenTofu, then configures them with Ansible over SSH: K3s, Cilium and Flux on the
+**compute node**, ZFS and Garage on the **storage nodes**, which it reaches through the
+compute node as a jump host with a key the cluster never sees.
+
+From then on, **Git drives the cluster.** Flux pulls `clusters/production/` and `gitops/`
+from GitHub and reconciles them in four ordered stages: infrastructure, certificate
+issuers, applications, extra applications. Application secrets are rendered from the
+encrypted store and applied directly, never committed.
+
+**Every web application signs in through Authentik.** external-dns publishes each
+hostname in Cloudflare, cert-manager obtains its certificate, and ingress-nginx serves it
+on the node's ports 80 and 443. Applications that need object storage get one S3 key per
+bucket on Garage, over TLS; granting write in Garage grants delete, which is why the
+Garage nodes keep ZFS snapshots the cluster cannot touch.
+
+## What gets deployed
+
+| Component | Role | Version |
+|---|---|---|
+| **K3s** | Kubernetes, embedded etcd | v1.30.5+k3s1 |
+| **Cilium** | eBPF CNI, Hubble network observability | chart ≥ 1.20.4 |
+| **FluxCD** | GitOps reconciliation | v2.10.0 |
+| **ingress-nginx** | L7 ingress on the node's :80/:443 (`hostPort`) | chart ≥ 4.15.1 |
+| **cert-manager** | Let's Encrypt certificates | chart ≥ 1.21.3 |
+| **external-dns** | Cloudflare DNS records | chart ≥ 1.23.0 |
+| **Authentik** | SSO, OIDC and forward-auth provider | chart ≥ 2026.8.5 |
+| **Headlamp** | Kubernetes dashboard, OIDC | chart ≥ 0.46.0 |
+| **Hubble UI** | Live network flows, forward-auth | with Cilium |
+| **Nextcloud** | File sync and share, OIDC | chart ≥ 9.4.4 |
+| **Stalwart** *(opt-in)* | Mail server: SMTP, IMAP, JMAP | v0.16.27 |
+| **Garage** | S3 object storage, outside the cluster | v1.0.1 |
+
+Chart versions are ranges (`>=floor <next-major`), so Flux picks up minor releases on its
+own. Where each version is pinned: [`.claude/CLAUDE.md`](.claude/CLAUDE.md#where-versions-are-pinned).
+
+## Getting started
+
+<p align="center">
+  <img src="docs/images/deployment-flow.svg" alt="Once: setup initialize and garage admin init. Storage tier, cloud target only: 1 garage infra apply, 2 garage nat, 3 garage deploy and provision. Cluster, every target: 4 setup gitops and git push, 5 cluster bootstrap, 6 cluster verify." width="100%">
+</p>
+
+You need a domain on Cloudflare with an API token scoped to it, a GitHub token for the
+deploy key and, for the AWS target, an AWS account (`aws login`). Run every command
+**from the repository root**.
 
 ```bash
-# 1. Clone and initialize — installs tooling, generates the Age key, runs the DNS wizard
 git clone https://github.com/Engelnicolas/NOAH.git && cd NOAH
-python3 noah.py setup initialize
+python3 noah.py setup initialize            # tools, venv, Age key, Cloudflare token
+python3 noah.py garage admin init           # second Age identity, Garage secrets
 
-# 2. Point the GitOps tree at your domain and record the node's public IP
-python3 noah.py setup gitops --domain your-domain.com --node-ip <NODE_PUBLIC_IP>
+# 1-3. Storage tier (AWS target; on bare metal, write Infra/baremetal/infra-inventory.json)
+python3 noah.py garage infra init
+python3 noah.py garage infra apply --operator-cidr <your-ip>/32
+python3 noah.py garage nat       --from-infra Infra/aws/infra-inventory.json
+python3 noah.py garage deploy    --from-infra Infra/aws/infra-inventory.json --domain your-domain.com
+python3 noah.py garage provision --from-infra Infra/aws/infra-inventory.json
 
-# 3. Commit and push, so Flux has something to reconcile
-git add gitops/ && git commit -m "chore: configure domain" && git push origin main
-
-# 4. Provision K3s and bootstrap FluxCD (domain, IP and Git remote reused as defaults)
-export GITHUB_TOKEN=ghp_xxx
-python3 noah.py cluster bootstrap
-
-# 5. Wait for the stack to converge, then print the verdict (~25–45 min)
-python3 noah.py cluster verify --domain your-domain.com
-
-# 6. Retrieve the Authentik admin credentials
-python3 noah.py password show-password
+# 4-6. Cluster (on an existing host, start here)
+python3 noah.py setup gitops --domain your-domain.com --node-ip <node-public-ip>
+git add gitops/ && git commit -m "chore: configure domain" && git push
+GITHUB_TOKEN=<token> python3 noah.py cluster bootstrap
+python3 noah.py cluster verify              # 15 to 45 minutes
+python3 noah.py password show-password      # Authentik admin: akadmin
 ```
 
 > [!IMPORTANT]
-> NOAH must always be run **from the repository root** — it checks that `Scripts/`,
-> `Ansible/` and `noah.py` are present before doing anything.
-
-## Architecture
-
-### Request path
-
-```
-                          Internet
-                             │
-                             │  external-dns publishes every record
-                             │  in Cloudflare → NODE_PUBLIC_IP
-                             ▼
-             nginx-ingress · single Deployment · hostPort :80/:443
-                             │  TLS terminated with Let's Encrypt certs
-                             │  issued by cert-manager
-         ┌───────────────────┼───────────────────┐
-         ▼                   ▼                   ▼
-    ┌──────────┐       ┌──────────┐       ┌────────────┐
-    │Authentik │◄──────┤ Headlamp │       │ Hubble UI  │
-    │SSO / OIDC│ OIDC  └──────────┘       └──────┬─────┘
-    └────┬─────┘                                 │ forward-auth
-         │                                       └──► Authentik
-    PostgreSQL + Redis
-─────────────────────────────────────────────────────────────────
-  Cilium (eBPF datapath + Hubble)   ·   CoreDNS   ·   cert-manager
-─────────────────────────────────────────────────────────────────
-                    K3s — embedded etcd
-```
-
-### GitOps reconciliation
-
-Two trees, two jobs. `clusters/production/` holds the Flux `Kustomization` custom
-resources — the control plane of the reconciliation. `gitops/` holds the actual Helm
-and Kustomize manifests they point at.
-
-```
-clusters/production/            ← Flux reconciliation root
-├── noah-source.yaml            GitRepository → gitops/
-├── infrastructure.yaml         → gitops/infrastructure/
-├── cert-manager-issuers.yaml   → gitops/infrastructure/cert-manager-issuers/
-├── apps.yaml                   → gitops/apps/
-├── apps-extra.yaml             → gitops/apps-extra/
-└── flux-system/                written by `flux bootstrap`
-```
-
-Ordering is declared **only between those four Kustomizations**, through `dependsOn`:
-
-```
-infrastructure → cert-manager-issuers → apps → apps-extra
-```
-
-Nothing under `gitops/` declares a `dependsOn`. The components inside
-`gitops/infrastructure/` — Cilium, nginx-ingress, cert-manager, external-dns, CoreDNS —
-carry no ordering between them and converge independently. The four-stage chain is what
-guarantees that issuers exist before apps request certificates, and that the slow
-second-phase apps (Nextcloud, Stalwart) can never block or time out the core ones.
-
-### Secrets
-
-The part most GitOps setups get wrong, stated plainly:
-
-- **Single source of truth:** `Secrets/canonical-secrets.enc.yaml`, encrypted with SOPS/Age.
-- **Never committed, never reconciled by Flux.** NOAH renders Kubernetes `Secret`
-  manifests from the canonical store and applies them to the cluster directly — at
-  bootstrap, on demand via `noah secrets apply`, and on rotation.
-- **Two files are your entire recovery story:** `Age/keys.txt` and
-  `Secrets/canonical-secrets.enc.yaml`. Back both up offline.
-
-See the [Operations Guide](docs/OPERATIONS_GUIDE.md) for rotation and recovery.
-
-## CLI reference
-
-```
-noah.py
-├── setup         initialize · gitops · doctor · update-sops · reset
-├── cluster       bootstrap · verify · status · add-nodes · destroy
-├── flux          sync · status · logs
-├── secrets       canonical · apply · rotate · generate · validate · regenerate · init
-├── password      show-password · new
-├── certificates  generate-certs · list · deploy-manager
-├── config        show · domains · helm-values · override
-├── test          sso · headlamp · hubble
-└── status        overall status of deployed services
-```
-
-```bash
-python3 noah.py setup doctor                     # diagnose the environment
-python3 noah.py cluster status                   # nodes, etcd quorum, Flux state
-python3 noah.py flux sync                        # force immediate reconciliation
-python3 noah.py secrets canonical --show         # inspect the canonical store
-python3 noah.py secrets rotate --service authentik --apply
-```
-
-Every command supports `--help`.
+> `garage infra plan/apply` also needs the two SSH public keys as `TF_VAR_*` variables,
+> and `setup initialize` installs system packages with `apt` only. Both are covered, with
+> every other prerequisite, in the [Deployment Guide](docs/DEPLOYMENT_GUIDE.md).
 
 ## Service access
 
-| Service | URL | Authentication |
+| Service | URL | Sign-in |
 |---|---|---|
-| Authentik SSO | `auth.your-domain.com` | `admin` + `noah password show-password` |
-| Headlamp | `headlamp.your-domain.com` | Sign in with OIDC → Authentik |
-| Hubble UI | `hubble.your-domain.com` | Authentik forward-auth |
-| Nextcloud | `nextcloud.your-domain.com` | Authentik (OIDC), or local |
-| Stalwart mail *(opt-in)* | `mail.your-domain.com` | break-glass `admin` (`secrets canonical --show`) |
+| Authentik | `https://auth.<domain>` | `akadmin` + `noah password show-password` |
+| Headlamp | `https://headlamp.<domain>` | Sign in with OIDC → Authentik |
+| Hubble UI | `https://hubble.<domain>` | Authentik forward-auth |
+| Nextcloud | `https://nextcloud.<domain>` | Log in with Authentik, or local `admin` |
+| Stalwart *(opt-in)* | `https://mail.<domain>/account/` | your Authentik email address → Authentik |
+| Stalwart console | `https://mail.<domain>/admin/` | Authentik, or break-glass `admin` |
 
-Stalwart is **not deployed by default**. Add it with
-`python3 noah.py setup gitops --domain … --with-stalwart` (re-running without the flag
-removes it again), then commit and push. Mail protocols (SMTP 25/587/465, IMAP 143/993)
-bind the node's public IP directly, and sending real mail needs AWS-side steps — outbound
-port 25 unblocking and an EIP PTR record (the inbound ports and the PTR are opt-in
-variables of `Infra/aws/`). Once enabled, Authentik and Nextcloud send their
-notifications through an in-cluster Stalwart relay. See the
-[Deployment Guide](docs/DEPLOYMENT_GUIDE.md#mail-prerequisites-stalwart).
+**Mail is opt-in:** `setup gitops --with-stalwart`, then push. In Stalwart a user's mailbox
+is their Authentik email, so give people a `<name>@<domain>` address in Authentik. Sending
+to the outside world from AWS needs AWS to lift its outbound port 25 block; see
+[Mail prerequisites](docs/DEPLOYMENT_GUIDE.md#mail-prerequisites-stalwart).
+
+## Secrets
+
+<p align="center">
+  <img src="docs/images/secrets.svg" alt="Cluster secrets are encrypted to the cluster Age key and applied out of band; Garage administration secrets are encrypted to a second Age key that never reaches any node; both identities are escrowed offline on separate media; Git holds no secret." width="100%">
+</p>
+
+- **Two identities, two stores.** `Age/keys.txt` protects the cluster secrets,
+  `Age/garage-admin.txt` the Garage administration secrets. The second one never leaves
+  the workstation, and the canonical store refuses Garage administration keys outright.
+- **Never committed, never reconciled by Flux.** NOAH renders Kubernetes `Secret`
+  manifests from the store and applies them directly: at bootstrap, with
+  `noah secrets apply`, and on rotation with `noah secrets rotate --apply`.
+- **Back up both identities offline, separately.** Losing one makes everything it
+  protects unrecoverable, and neither can decrypt the other's store.
 
 ## Requirements
 
@@ -214,105 +159,88 @@ notifications through an in-cluster Stalwart relay. See the
 | Disk | 1 × NVMe 250 GB | 2 × NVMe 500 GB, mirrored |
 | Network | 1 GbE | 2.5 GbE or better |
 
-- Ubuntu 20.04+, Debian 11+, or RHEL/CentOS 8+ — Ubuntu Server 24.04 LTS is the reference
-- Kernel 5.10 or newer (required by Cilium's eBPF datapath)
-- NVMe or SSD for `/var/lib/rancher/k3s` — etcd is write-heavy
-
-**8 GB is not enough.** Authentik alone — server, worker and Redis — takes about 2 GB,
-before Nextcloud and its database, Cilium, Hubble and the ingress controller.
-
-**Workstation** — Python 3.12+ (set by the pinned `ansible-core`; `click>=8.3.3` already
-rules out 3.9 and below). `kubectl`, the FluxCD CLI, Ansible, `age` and `sops` are
-installed by `setup initialize`.
+- **Nodes:** Ubuntu Server 24.04 LTS is the reference. The Ansible roles install packages
+  with `apt` only, so Debian-family systems; RHEL-family nodes are not supported. Kernel
+  5.10 or newer for Cilium's eBPF datapath, NVMe or SSD for
+  `/var/lib/rancher/k3s`. Garage nodes: 2 vCPU, 4 GB, one data disk (two, mirrored, in
+  production).
+- **Workstation:** Python 3.12+ (required by the pinned `ansible-core`), `kubectl`,
+  `flux`, `age`, `sops`, and `tofu` for the AWS target.
+- **8 GB is not enough.** Authentik alone takes about 2 GB before Nextcloud, its database,
+  Cilium, Hubble and the ingress controller.
 
 ### On availability
 
 Adding nodes gives you **etcd quorum and scheduling capacity, not high availability.**
-Three properties make the entry point single:
+The entry point is single: one ingress controller bound to one node's ports through
+`hostPort` (so every rollout is a brief outage), every DNS record pointing at that node,
+and joining servers and the kubeconfig targeting it too. Lose that node and the cluster
+survives; the traffic does not. Real HA needs a floating entry point, not implemented
+today.
 
-- the ingress controller is one `Deployment` bound to `:80`/`:443` on a single node via
-  `hostPort`, fronted by a `ClusterIP` service. Two controller pods can never coexist on
-  that node, so its rollout is pinned to `maxSurge: 0` — every update is a brief outage;
-- every DNS record external-dns publishes points at one node's IP, pinned through
-  `publish-status-address`;
-- servers join via `--server https://<node1>:6443`, and the kubeconfig targets that same
-  address.
+## CLI reference
 
-Lose that node and the cluster survives — the traffic does not. **Planned maintenance
-means a planned interruption.** Real HA needs a floating entry point, not implemented today.
+```
+noah.py
+├── setup         initialize · gitops · doctor · update-sops · reset
+├── garage        admin {init, show, set-cloud} · infra {init, plan, apply, power, destroy}
+│                 nat · deploy · provision · status
+├── cluster       bootstrap · verify · status · add-nodes · destroy
+├── flux          sync · status · logs
+├── secrets       canonical · apply · rotate · generate · validate · regenerate · init
+├── password      show-password · new
+├── certificates  generate-certs · list · deploy-manager
+├── config        show · domains · helm-values · override
+├── test          sso · headlamp · hubble
+└── status        overall status of deployed services
+```
+
+Every command takes `--help`.
 
 ## Repository layout
 
 ```
 NOAH/
-├── noah.py                  # CLI entry point (run from repo root)
-├── Scripts/                 # Python orchestration modules
-├── Ansible/                 # K3s + FluxCD bootstrap roles
-├── Tests/                   # pytest suite
-├── Age/keys.txt             # Age private key (encrypts the canonical store)
-├── Secrets/                 # canonical-secrets.enc.yaml — single source of truth
-├── clusters/production/     # Flux Kustomization CRs — the reconciliation root
-├── gitops/                  # manifests Flux reconciles
-│   ├── infrastructure/      # cilium, nginx-ingress, cert-manager,
-│   │                        #   cert-manager-issuers, external-dns, coredns
-│   ├── apps/                # authentik, headlamp, hubble-auth
-│   └── apps-extra/          # nextcloud, stalwart (opt-in)
-└── docs/                    # documentation
+├── noah.py                  CLI entry point, run from the repository root
+├── Scripts/                 Python modules behind each command group
+├── Ansible/                 playbooks and roles: K3s, Cilium, Flux, secrets, Garage, NAT
+├── Infra/                   OpenTofu: aws/ (written), baremetal/ (inventory only)
+├── clusters/production/     Flux Kustomizations: the reconciliation root
+├── gitops/                  what Flux reconciles: infrastructure/, apps/, apps-extra/
+├── Tests/                   pytest suite
+├── docs/                    guides and the diagrams in docs/images/
+├── Age/  Secrets/  Kube/    local only, gitignored: identities, stores, kubeconfig
+└── .claude/                 guidance, reviewer agent and conventions for Claude Code
 ```
 
-## Development
+## For developers
 
 ```bash
-pip install -r Scripts/utils/requirements.txt   # deps, without the venv bootstrap
-
-pytest Tests/ -q                                # default suite
-pytest Tests/ -v -m integration                 # needs a real sops binary
-NOAH_SKIP_ANSIBLE=true pytest Tests/ -q         # skip Ansible
-
+NOAH_SKIP_ANSIBLE=true pytest Tests/ -q     # the suite; integration and cluster markers excluded
 ruff check Scripts/ noah.py
 bandit -r Scripts/ noah.py -ll
-ansible-lint Ansible/
+tofu -chdir=Infra/aws fmt -check             # then `tofu init` and `tofu validate`
 ```
 
-`Tests/pytest.ini` excludes two markers by default: `integration` (needs the real `sops`
-binary, or mutates the canonical store) and `cluster` (needs a live cluster via `kubectl`).
+`noah.py` re-execs itself under `.venv/bin/python3` and puts the venv on `PATH`, so
+`python3 noah.py` always runs with the right interpreter and tools. On GitHub, CodeQL and
+GitGuardian scan every pull request; there is no other CI, so run the checks above
+yourself.
 
-`noah.py` re-execs itself under `.venv/bin/python3` when the venv exists, so
-`python3 noah.py` always runs with the right interpreter — no activation needed.
-
-| Variable | Purpose |
-|---|---|
-| `NOAH_ROOT_DIR` | Override the repo root (default: cwd) |
-| `NOAH_DOMAIN` | Default domain for CLI commands |
-| `AGE_KEY_FILE` | Path to the Age private key (default: `Age/keys.txt`) |
-| `GITHUB_TOKEN` / `GIT_TOKEN` | Git provider token, for deploy-key registration |
-| `NOAH_SKIP_ANSIBLE` | Skip Ansible execution (tests) |
-| `NOAH_DISABLE_SOPS` | Store secrets in plaintext (dev/test only) |
+Working on NOAH with Claude Code? Start with [`.claude/CLAUDE.md`](.claude/CLAUDE.md): the
+map of the code, the invariants, and the pitfalls already paid for.
 
 ## Contributing
 
-Issues and pull requests are welcome — read [`CONTRIBUTING.md`](docs/CONTRIBUTING.md)
-first, and run the lint, security and test commands above before opening a PR.
-
-NOAH uses the [Developer Certificate of Origin](docs/DCO) — **no CLA, no paperwork**.
-Sign off your commits with `git commit -s`. You keep your copyright, and your
-contribution is licensed to the project under the AGPL and nothing beyond it.
+Issues and pull requests are welcome; read [`CONTRIBUTING.md`](docs/CONTRIBUTING.md)
+first. NOAH uses the [Developer Certificate of Origin](docs/DCO): sign off your commits
+with `git commit -s`. No CLA, and you keep your copyright.
 
 ## License
 
-Copyright (C) 2026 Nicolas Engel.
+Copyright (C) 2026 Nicolas Engel
 
-NOAH is free software under the **GNU Affero General Public License, version 3 or later**
-(AGPL-3.0-or-later). Full text in [`LICENSE`](LICENSE), project-level notice in
-[`COPYRIGHT`](COPYRIGHT), and a short header in every Python source file.
-
-Under the AGPL, if you modify NOAH and make it available to users over a network, you
-must also offer those users the corresponding source code.
-
-<div align="center">
-
----
-
-Made with ❤️ by [me](https://www.linkedin.com/in/nicolas-engel-france/).
-
-</div>
+NOAH is free software under the **GNU Affero General Public License, version 3 or
+later**. Full text in [`LICENSE`](LICENSE), project notice in [`COPYRIGHT`](COPYRIGHT).
+If you modify NOAH and make it available to users over a network, you must offer them
+the corresponding source code.

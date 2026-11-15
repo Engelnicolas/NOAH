@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="t d">
+  <title id="t">How NOAH works</title>
+  <desc id="d">The operator workstation runs the NOAH CLI: OpenTofu creates the machines, Ansible installs K3s, Cilium and Flux on the compute node over SSH and reaches the Garage nodes through the compute node as a jump host. The workstation pushes the GitOps manifests to GitHub and Flux pulls them into the cluster. Every web application signs in through Authentik. external-dns publishes the DNS records in Cloudflare and cert-manager obtains Let's Encrypt certificates. Users reach the cluster over HTTPS and the mail ports. The cluster stores its objects in Garage, which sits in a private subnet without a public address.</desc>
+  <defs>
+    <marker id="aCyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#22D3EE"/>
+    </marker>
+    <marker id="aViolet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#A78BFA"/>
+    </marker>
+    <marker id="aGrey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+  <rect width="1280" height="760" rx="28" fill="#0B1220"/>
+
+  <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+
+    <!-- Operator workstation -->
+    <g>
+      <rect x="40" y="180" width="240" height="520" rx="20" fill="#111827" stroke="#374151"/>
+      <rect x="112" y="208" width="96" height="60" rx="6" fill="none" stroke="#E5E7EB" stroke-width="3"/>
+      <path d="M96 278h128l-10 10H106z" fill="#E5E7EB"/>
+      <path d="M126 228l14 10-14 10M150 248h22" stroke="#22D3EE" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="160" y="326" text-anchor="middle" font-size="21" font-weight="700" fill="#FFFFFF">Operator</text>
+      <text x="160" y="352" text-anchor="middle" font-size="21" font-weight="700" fill="#FFFFFF">workstation</text>
+      <g font-size="15" fill="#D1D5DB" text-anchor="middle">
+        <text x="160" y="388">noah.py CLI</text>
+        <text x="160" y="412">OpenTofu · Ansible</text>
+        <text x="160" y="436">SOPS · Age</text>
+      </g>
+      <path d="M64 462H256" stroke="#374151"/>
+      <text x="160" y="490" text-anchor="middle" font-size="15" font-weight="600" fill="#FFFFFF">Two Age identities</text>
+      <g font-size="13" fill="#9CA3AF" text-anchor="middle">
+        <text x="160" y="514"><tspan fill="#22D3EE">●</tspan> cluster secrets</text>
+        <text x="160" y="536"><tspan fill="#A78BFA">●</tspan> Garage administration</text>
+        <text x="160" y="562">the second one never</text>
+        <text x="160" y="580">reaches any node</text>
+      </g>
+      <rect x="62" y="632" width="196" height="40" rx="10" fill="#030712" stroke="#374151"/>
+      <text x="160" y="658" text-anchor="middle" font-size="15" fill="#22D3EE" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">$ python3 noah.py</text>
+    </g>
+
+    <!-- GitHub -->
+    <g>
+      <rect x="420" y="40" width="240" height="100" rx="18" fill="#111827" stroke="#374151"/>
+      <text x="540" y="82" text-anchor="middle" font-size="20" font-weight="700" fill="#FFFFFF">GitHub repository</text>
+      <text x="540" y="110" text-anchor="middle" font-size="14" fill="#9CA3AF">gitops/ · clusters/production/</text>
+    </g>
+
+    <!-- Cloudflare / Let's Encrypt -->
+    <g>
+      <rect x="980" y="40" width="260" height="100" rx="18" fill="#111827" stroke="#374151"/>
+      <text x="1110" y="82" text-anchor="middle" font-size="20" font-weight="700" fill="#FFFFFF">Cloudflare DNS</text>
+      <text x="1110" y="110" text-anchor="middle" font-size="14" fill="#9CA3AF">+ Let's Encrypt certificates</text>
+    </g>
+
+    <!-- Users -->
+    <g>
+      <rect x="1000" y="300" width="240" height="150" rx="20" fill="#111827" stroke="#374151"/>
+      <circle cx="1120" cy="338" r="14" fill="none" stroke="#E5E7EB" stroke-width="3"/>
+      <path d="M1094 378c4-16 14-22 26-22s22 6 26 22" fill="none" stroke="#E5E7EB" stroke-width="3" stroke-linecap="round"/>
+      <text x="1120" y="410" text-anchor="middle" font-size="20" font-weight="700" fill="#FFFFFF">Users</text>
+      <text x="1120" y="434" text-anchor="middle" font-size="14" fill="#9CA3AF">browser · mail client</text>
+    </g>
+
+    <!-- Machines: AWS or bare metal -->
+    <rect x="356" y="180" width="604" height="548" rx="22" fill="#0F172A" stroke="#374151" stroke-dasharray="8 6"/>
+    <text x="890" y="172" text-anchor="end" font-size="14" fill="#9CA3AF">AWS eu-west-3, one VPC (or your own machines)</text>
+
+    <!-- Compute node -->
+    <g>
+      <rect x="378" y="222" width="560" height="252" rx="18" fill="#062A33" stroke="#22D3EE" stroke-width="2"/>
+      <text x="400" y="256" font-size="22" font-weight="800" fill="#FFFFFF">Compute node</text>
+      <text x="400" y="280" font-size="14" fill="#A5F3FC">K3s with embedded etcd · the only public address</text>
+
+      <g font-size="15" font-weight="600" text-anchor="middle">
+        <!-- platform -->
+        <g fill="#0B1220" stroke="#22D3EE">
+          <rect x="400" y="298" width="120" height="38" rx="10"/>
+          <rect x="532" y="298" width="120" height="38" rx="10"/>
+          <rect x="664" y="298" width="120" height="38" rx="10"/>
+          <rect x="796" y="298" width="120" height="38" rx="10"/>
+          <rect x="400" y="346" width="120" height="38" rx="10"/>
+          <rect x="532" y="346" width="120" height="38" rx="10"/>
+        </g>
+        <g fill="#E0F7FA">
+          <text x="460" y="322">FluxCD</text>
+          <text x="592" y="322">Cilium</text>
+          <text x="724" y="322">ingress-nginx</text>
+          <text x="856" y="322">cert-manager</text>
+          <text x="460" y="370">external-dns</text>
+          <text x="592" y="370">CoreDNS</text>
+        </g>
+        <!-- applications behind SSO -->
+        <g fill="#1E1533" stroke="#A78BFA">
+          <rect x="664" y="346" width="120" height="38" rx="10"/>
+          <rect x="796" y="346" width="120" height="38" rx="10"/>
+          <rect x="400" y="394" width="120" height="38" rx="10"/>
+          <rect x="532" y="394" width="120" height="38" rx="10"/>
+          <rect x="664" y="394" width="120" height="38" rx="10"/>
+        </g>
+        <g fill="#EDE9FE">
+          <text x="724" y="370">Authentik</text>
+          <text x="856" y="370">Headlamp</text>
+          <text x="460" y="418">Hubble UI</text>
+          <text x="592" y="418">Nextcloud</text>
+          <text x="724" y="418">Stalwart *</text>
+        </g>
+      </g>
+      <g font-size="13" fill="#9CA3AF">
+        <rect x="400" y="448" width="10" height="10" rx="2" fill="#22D3EE"/>
+        <text x="416" y="458">platform</text>
+        <rect x="486" y="448" width="10" height="10" rx="2" fill="#A78BFA"/>
+        <text x="502" y="458">signs in through Authentik</text>
+        <text x="690" y="458">* mail, opt-in</text>
+      </g>
+    </g>
+
+    <!-- Garage -->
+    <g>
+      <rect x="378" y="560" width="560" height="148" rx="18" fill="#1E1533" stroke="#A78BFA" stroke-width="2"/>
+      <text x="400" y="592" font-size="20" font-weight="800" fill="#FFFFFF">Garage object storage</text>
+      <text x="400" y="614" font-size="14" fill="#DDD6FE">private subnet · no public address · out of the cluster's reach</text>
+      <g>
+        <rect x="400" y="630" width="250" height="60" rx="12" fill="#0F0A1F" stroke="#6D5BAE"/>
+        <rect x="666" y="630" width="250" height="60" rx="12" fill="#0F0A1F" stroke="#6D5BAE"/>
+        <text x="525" y="656" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">garage-a · site-a</text>
+        <text x="525" y="678" text-anchor="middle" font-size="13" fill="#C4B5FD">ZFS pool + snapshots</text>
+        <text x="791" y="656" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">garage-b · site-b</text>
+        <text x="791" y="678" text-anchor="middle" font-size="13" fill="#C4B5FD">ZFS pool + snapshots</text>
+      </g>
+    </g>
+
+    <!-- Arrows: workstation -> GitHub -> Flux -->
+    <path d="M160 174V90H412" fill="none" stroke="#9CA3AF" stroke-width="2.5" marker-end="url(#aGrey)"/>
+    <text x="286" y="80" text-anchor="middle" font-size="14" fill="#D1D5DB">git push</text>
+    <path d="M540 146V216" stroke="#22D3EE" stroke-width="2.5" marker-end="url(#aCyan)"/>
+    <text x="528" y="170" text-anchor="end" font-size="14" fill="#A5F3FC">Flux pulls</text>
+    <text x="528" y="188" text-anchor="end" font-size="14" fill="#A5F3FC">the manifests</text>
+
+    <!-- Arrows: workstation -> machines -->
+    <path d="M282 238H350" stroke="#9CA3AF" stroke-width="2.5" marker-end="url(#aGrey)"/>
+    <text x="318" y="230" text-anchor="middle" font-size="13" fill="#D1D5DB">tofu</text>
+    <path d="M282 330H372" stroke="#22D3EE" stroke-width="2.5" marker-end="url(#aCyan)"/>
+    <text x="318" y="306" text-anchor="middle" font-size="13" fill="#A5F3FC">Ansible</text>
+    <text x="318" y="322" text-anchor="middle" font-size="13" fill="#A5F3FC">over SSH</text>
+    <path d="M282 650H372" stroke="#A78BFA" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#aViolet)"/>
+    <text x="318" y="626" text-anchor="middle" font-size="13" fill="#DDD6FE">SSH via</text>
+    <text x="318" y="642" text-anchor="middle" font-size="13" fill="#DDD6FE">ProxyJump</text>
+
+    <!-- Compute -> Garage -->
+    <path d="M660 478V554" stroke="#A78BFA" stroke-width="2.5" marker-end="url(#aViolet)"/>
+    <text x="674" y="514" font-size="14" fill="#DDD6FE">S3 over TLS, one key per bucket</text>
+    <text x="674" y="534" font-size="14" fill="#9CA3AF">egress for Garage goes through NAT here</text>
+
+    <!-- Compute -> Cloudflare -->
+    <path d="M900 218V162H1060V148" fill="none" stroke="#22D3EE" stroke-width="2.5" marker-end="url(#aCyan)"/>
+    <text x="980" y="154" text-anchor="middle" font-size="13" fill="#A5F3FC">DNS records · ACME</text>
+
+    <!-- Users -> Cloudflare (lookup) and -> compute -->
+    <path d="M1180 294V148" stroke="#9CA3AF" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#aGrey)"/>
+    <text x="1190" y="226" font-size="13" fill="#9CA3AF">lookup</text>
+    <path d="M994 372H944" stroke="#22D3EE" stroke-width="2.5" marker-end="url(#aCyan)"/>
+    <text x="969" y="360" text-anchor="middle" font-size="12" fill="#D1D5DB">HTTPS</text>
+    <text x="969" y="392" text-anchor="middle" font-size="12" fill="#D1D5DB">mail</text>
+  </g>
+</svg>

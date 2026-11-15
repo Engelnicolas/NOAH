@@ -75,9 +75,9 @@ resource "aws_instance" "compute" {
   }
 
   tags = {
-    Name         = local.compute_name
-    "noah:role"  = "compute-node"
-    "noah:tier"  = "compute"
+    Name        = local.compute_name
+    "noah:role" = "compute-node"
+    "noah:tier" = "compute"
   }
 
   lifecycle {

@@ -85,39 +85,39 @@ resource "aws_security_group" "garage" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "garage_ssh" {
-  security_group_id = aws_security_group.garage.id
-  description       = "Administration SSH, relayed by ProxyJump through the compute node. The connection is carried, the key is not: it stays in secret domain 3 (G20)."
+  security_group_id            = aws_security_group.garage.id
+  description                  = "Administration SSH, relayed by ProxyJump through the compute node. The connection is carried, the key is not: it stays in secret domain 3 (G20)."
   referenced_security_group_id = aws_security_group.compute.id
-  from_port         = 22
-  to_port           = 22
-  ip_protocol       = "tcp"
+  from_port                    = 22
+  to_port                      = 22
+  ip_protocol                  = "tcp"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "garage_s3_tls" {
-  security_group_id = aws_security_group.garage.id
-  description       = "S3 API behind the TLS proxy - flows G1..G4 of cilium_sso.md 7.2"
+  security_group_id            = aws_security_group.garage.id
+  description                  = "S3 API behind the TLS proxy - flows G1..G4 of cilium_sso.md 7.2"
   referenced_security_group_id = aws_security_group.compute.id
-  from_port         = 443
-  to_port           = 443
-  ip_protocol       = "tcp"
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "garage_s3_plain" {
-  security_group_id = aws_security_group.garage.id
-  description       = "S3 API in the clear - only reached when garage_tls_enabled is explicitly false (5.2)"
+  security_group_id            = aws_security_group.garage.id
+  description                  = "S3 API in the clear - only reached when garage_tls_enabled is explicitly false (5.2)"
   referenced_security_group_id = aws_security_group.compute.id
-  from_port         = 3900
-  to_port           = 3900
-  ip_protocol       = "tcp"
+  from_port                    = 3900
+  to_port                      = 3900
+  ip_protocol                  = "tcp"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "garage_rpc" {
-  security_group_id = aws_security_group.garage.id
-  description       = "Garage RPC, BETWEEN GARAGE NODES ONLY. The cluster has no business here (flow G5) - self-reference, not the compute group."
+  security_group_id            = aws_security_group.garage.id
+  description                  = "Garage RPC, BETWEEN GARAGE NODES ONLY. The cluster has no business here (flow G5) - self-reference, not the compute group."
   referenced_security_group_id = aws_security_group.garage.id
-  from_port         = 3901
-  to_port           = 3901
-  ip_protocol       = "tcp"
+  from_port                    = 3901
+  to_port                      = 3901
+  ip_protocol                  = "tcp"
 }
 
 # Port 3903 — the Garage administration API — appears in NO ingress rule. It

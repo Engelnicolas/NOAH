@@ -297,7 +297,11 @@ stringData:
       secret_key: REPLACE_WITH_50_CHAR_SECRET
       bootstrap_password: REPLACE_WITH_ADMIN_PASSWORD
       bootstrap_token: REPLACE_WITH_BOOTSTRAP_TOKEN
-      bootstrap_email: admin@example.com
+      # akadmin@, not admin@: Stalwart uses the Authentik email as the mailbox
+      # address, and NOAH creates an Authentik group named `admin`, which
+      # Stalwart materializes as the group principal admin@<domain>. The
+      # generic "admin@example.com" rule still rewrites the domain part.
+      bootstrap_email: akadmin@example.com
       postgresql:
         password: REPLACE_WITH_POSTGRES_PASSWORD
     postgresql:

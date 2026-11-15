@@ -27,7 +27,8 @@ data:
     # provider is registered under the "stalwart" application slug.
     ISSUER = f"https://auth.{DOMAIN}/application/o/stalwart/"
     # Authentik's bootstrap admin, same identity the provisioner puts in the
-    # `admin` group (see authentik_provisioner.py --admin-user).
+    # `admin` group (see authentik_provisioner.py --admin-user). Its Authentik
+    # email is akadmin@<domain> (bootstrap_email), hence this mailbox name.
     ADMIN_USER = "akadmin"
 
     with open("/secrets/app/DKIM_PRIVATE_KEY") as f:
@@ -55,7 +56,13 @@ data:
         {"@type": "upsert", "object": "Directory", "matchOn": ["description"],
          "value": {"oidc0": {"@type": "Oidc", "description": "Authentik",
                              "issuerUrl": ISSUER,
-                             "claimUsername": "preferred_username",
+                             # The mailbox address IS the Authentik email:
+                             # one source of truth, Authentik's own mail to a
+                             # user reaches their mailbox, and the web
+                             # interface's login_hint (the typed address)
+                             # identifies the user in Authentik. A user whose
+                             # Authentik email is outside DOMAIN gets no mailbox.
+                             "claimUsername": "email",
                              "claimName": "name", "claimGroups": "groups",
                              "usernameDomain": DOMAIN,
                              "requireScopes": {"openid": True, "email": True}}}},

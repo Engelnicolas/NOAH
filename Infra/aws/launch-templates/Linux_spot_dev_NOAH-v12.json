@@ -1,0 +1,50 @@
+{
+    "LaunchTemplateVersions": [
+        {
+            "LaunchTemplateId": "REMPLACER-launch-template-id",
+            "LaunchTemplateName": "Linux_spot_dev_NOAH",
+            "VersionNumber": 12,
+            "CreateTime": "2026-06-07T10:19:08+00:00",
+            "CreatedBy": "arn:aws:iam::REMPLACER-ACCOUNT-ID:user/REMPLACER-iam-user",
+            "DefaultVersion": true,
+            "LaunchTemplateData": {
+                "IamInstanceProfile": {
+                    "Arn": "arn:aws:iam::REMPLACER-ACCOUNT-ID:instance-profile/EC2-SSM-Role"
+                },
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {
+                            "Encrypted": false,
+                            "DeleteOnTermination": true,
+                            "SnapshotId": "REMPLACER-snapshot-id",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp3"
+                        }
+                    }
+                ],
+                "ImageId": "REMPLACER-ami-id",
+                "InstanceType": "t2.2xlarge",
+                "KeyName": "REMPLACER-noah-compute-key",
+                "UserData": "#!/bin/bash\nset -euo pipefail\nexec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1\n\necho \"=== NOAH bootstrap started at $(date) ===\"\n\nexport DEBIAN_FRONTEND=noninteractive\n\nwhile fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do\n  echo \"Waiting for dpkg lock...\"\n  sleep 5\ndone\n\n# Recuperer la région via IMDSv2\nTOKEN=$(curl -sX PUT \"http://169.254.169.254/latest/api/token\" \\\n  -H \"X-aws-ec2-metadata-token-ttl-seconds: 300\")\nREGION=$(curl -sH \"X-aws-ec2-metadata-token: $TOKEN\" \\\n  http://169.254.169.254/latest/meta-data/placement/region)\n\n# Installer AWS CLI v2 si absent (Ubuntu n'a que la v1 dans les repos)\nif ! command -v aws >/dev/null; then\n  apt-get update\n  apt-get -y install unzip curl\n  curl -fsSL \"https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip\" -o /tmp/awscliv2.zip\n  unzip -q /tmp/awscliv2.zip -d /tmp/\n  /tmp/aws/install\n  rm -rf /tmp/aws /tmp/awscliv2.zip\nfi\n\n# Mise à jour systeme\napt-get update\napt-get -y full-upgrade\n\necho \"=== NOAH bootstrap finished at $(date) ===\"\n",
+                "SecurityGroupIds": [
+                    "REMPLACER-sg-noah-compute"
+                ],
+                "InstanceMarketOptions": {
+                    "MarketType": "spot",
+                    "SpotOptions": {
+                        "InstanceInterruptionBehavior": "terminate"
+                    }
+                },
+                "MetadataOptions": {
+                    "HttpTokens": "optional",
+                    "HttpPutResponseHopLimit": 2,
+                    "HttpEndpoint": "enabled"
+                }
+            },
+            "Operator": {
+                "Managed": false
+            }
+        }
+    ]
+}

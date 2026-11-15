@@ -1,5 +1,5 @@
 ---
-# NOAH — Garage deployment (Specs/To-do/Garage.md)
+# NOAH — Garage deployment (Specs/Garage.md)
 #
 # Garage is the ONE component of the target that lives outside the cluster and
 # out of reach of the compute node. That double externality is not a deployment

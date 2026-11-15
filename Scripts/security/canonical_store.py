@@ -97,7 +97,7 @@ CURRENT_SCHEMA_VERSION = 2
 _UNLOCKED_ENVIRONMENTS = frozenset({"development", "dev", "test", "ci"})
 
 
-# --- Secret domain separation (Specs/To-do/Garage.md §3.1) -----------------
+# --- Secret domain separation (Specs/Garage.md §3.1) -----------------
 #
 # The cluster's Age private key is handed to the compute node as the `sops-age`
 # Secret, so everything this store holds is readable from the compute node by

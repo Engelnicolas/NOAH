@@ -27,7 +27,8 @@ data:
     # provider is registered under the "stalwart" application slug.
     ISSUER = f"https://auth.{DOMAIN}/application/o/stalwart/"
     # Authentik's bootstrap admin, same identity the provisioner puts in the
-    # `admin` group (see authentik_provisioner.py --admin-user).
+    # `admin` group (see authentik_provisioner.py --admin-user). Its Authentik
+    # email is akadmin@<domain> (bootstrap_email), hence this mailbox name.
     ADMIN_USER = "akadmin"
 
     with open("/secrets/app/DKIM_PRIVATE_KEY") as f:
@@ -55,7 +56,13 @@ data:
         {"@type": "upsert", "object": "Directory", "matchOn": ["description"],
          "value": {"oidc0": {"@type": "Oidc", "description": "Authentik",
                              "issuerUrl": ISSUER,
-                             "claimUsername": "preferred_username",
+                             # The mailbox address IS the Authentik email:
+                             # one source of truth, Authentik's own mail to a
+                             # user reaches their mailbox, and the web
+                             # interface's login_hint (the typed address)
+                             # identifies the user in Authentik. A user whose
+                             # Authentik email is outside DOMAIN gets no mailbox.
+                             "claimUsername": "email",
                              "claimName": "name", "claimGroups": "groups",
                              "usernameDomain": DOMAIN,
                              "requireScopes": {"openid": True, "email": True}}}},
@@ -81,11 +88,15 @@ data:
         # does NOT inherit roles through group membership, so belonging to an
         # `admin` group is not enough. Pre-creating the account here means the
         # role is already in place the first time the identity signs in.
+        # "b" (User) is listed too: a Custom role set REPLACES the default user
+        # role, and System Administrator alone does not carry the mailbox
+        # permissions — delivery to the account is then refused with
+        # `security.unauthorized` (emailReceive) and the sender gets a bounce.
         {"@type": "upsert", "object": "Account", "matchOn": ["name"],
          "value": {"acc0": {"@type": "User", "name": ADMIN_USER,
                             "domainId": "#dom0",
                             "roles": {"@type": "Custom",
-                                      "roleIds": {"e": True}}}}},
+                                      "roleIds": {"e": True, "b": True}}}}},
         # Announce a FQDN in the SMTP greeting instead of the pod hostname
         # ("stalwart-0"). Receivers check that the HELO name is a FQDN
         # consistent with the sending IP's PTR, so this must match the reverse
@@ -93,12 +104,60 @@ data:
         # the singleton refuses to validate without it.
         {"@type": "update", "object": "SystemSettings",
          "value": {"defaultHostname": f"mail.{DOMAIN}", "defaultDomainId": "#dom0"}},
+        # The web UI is only reached through ingress-nginx. Without these two,
+        # Stalwart attributes every request to the ingress pod: the first
+        # Internet scanner probing the mail hostname gets that pod banned for
+        # "port scanning" and the UI answers 502 from then on. useXForwarded
+        # restores the real client address; the allow-list covers a ban taken
+        # before this plan first ran (an allowed address overrides a block).
+        # 10.0.0.0/8 is Cilium's cluster-pool pod CIDR (its chart default).
+        {"@type": "update", "object": "Http", "value": {"useXForwarded": True}},
+        {"@type": "upsert", "object": "AllowedIp", "matchOn": ["address"],
+         "value": {"ip0": {"address": "10.0.0.0/8",
+                           "reason": "cluster pod network (ingress controller)"}}},
+        # Web interface sign-in through Authentik. Without oauthClientId the
+        # login page only checks a password against Stalwart's own directory,
+        # which SSO users do not have: only the break-glass admin could sign in.
+        # With it, the web interface sends users to Authentik with the
+        # `stalwart` public client (PKCE). All fields are restated so the
+        # upsert cannot reset the URL prefixes the application is served on.
+        {"@type": "upsert", "object": "Application", "matchOn": ["description"],
+         "value": {"app0": {"description": "Stalwart Web Interface",
+                            "enabled": True,
+                            "urlPrefix": {"/admin": True, "/account": True},
+                            "resourceUrl": "https://github.com/stalwartlabs/webui/releases/latest/download/webui.zip",
+                            "autoUpdateFrequency": 2592000000,
+                            "oauthClientId": "stalwart"}}},
         listener("http", 8080, "http", False, False),
         listener("smtp", 25, "smtp", True, False),
         listener("submission", 587, "smtp", True, False),
         listener("submissions", 465, "smtp", True, True),
         listener("imap", 143, "imap", True, False),
         listener("imaps", 993, "imap", True, True),
+        # In-cluster relay for application notifications (Authentik, Nextcloud).
+        # Port 2525 has no hostPort and is only published by the ClusterIP
+        # Service, so it is unreachable from outside the cluster. The two rules
+        # below are keyed on that port, NOT on the client address: external
+        # connections arrive masqueraded behind a pod-network address, so an
+        # address-based rule would turn the public port 25 into an open relay.
+        # KNOWN LIMIT: ReloadSettings does not start a listener that did not
+        # exist when the server booted. After the FIRST run of this plan the
+        # relay only answers once the pod has restarted:
+        #   kubectl -n stalwart rollout restart statefulset/stalwart
+        listener("relay", 2525, "smtp", False, False),
+        {"@type": "update", "object": "MtaStageAuth",
+         "value": {"require": {"match": {},
+                               "else": "local_port != 25 && local_port != 2525"}}},
+        {"@type": "update", "object": "MtaStageRcpt",
+         "value": {"allowRelaying": {"match": {},
+                                     "else": "!is_empty(authenticated_as) || local_port == 2525"}}},
+        # The spam filter runs on unauthenticated sessions, which includes the
+        # relay: application mail from our own domain then fails SPF (the pod
+        # address is not the MX) and DMARC (p=quarantine), and lands in Junk.
+        # Exempt the relay the same way authenticated submission is exempt.
+        {"@type": "update", "object": "MtaStageData",
+         "value": {"enableSpamFilter": {"match": {},
+                                        "else": "is_empty(authenticated_as) && local_port != 2525"}}},
         {"@type": "upsert", "object": "Certificate", "matchOn": ["certificate"],
          "value": {"cert0": {"certificate": {"@type": "Text", "value": tls_crt},
                              "privateKey": {"@type": "Text", "secret": tls_key}}}},

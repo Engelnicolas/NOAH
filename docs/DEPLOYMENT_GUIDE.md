@@ -74,6 +74,12 @@ controller and every published DNS record still resolve to one node. See
 **Workstation tools** (auto-installed by `setup initialize`): Python 3.8+,
 kubectl, FluxCD CLI, Ansible, `age`, `sops`.
 
+> **`setup initialize` installs system packages with `apt` only.** On any other
+> workstation (Fedora, macOS, …) it warns and continues without them. Install
+> `kubectl`, `flux`, `age`, `sops` and — for the AWS target — `tofu` yourself
+> (user-space binaries in `~/.local/bin` are enough), then let
+> `setup initialize --skip-deps` create the venv; Ansible comes from the venv.
+
 **DNS:** Cloudflare (automatic via external-dns), or any provider with manual
 A records, or `/etc/hosts` for local testing — see
 [DNS configuration](#dns-configuration).
@@ -131,6 +137,11 @@ git push origin main
 Flux reconciles from the pushed repository, so the `gitops/` changes must be on
 the branch Flux tracks (`--flux-branch`, default `main`).
 
+> **`--flux-branch` only moves half of the sources.** It sets the branch of the
+> `flux-system` GitRepository, but `clusters/production/noah-source.yaml` (the
+> source that serves `gitops/`) hardcodes `branch: main`. To validate a branch
+> end to end, change that file on the branch too — and revert it before merging.
+
 ### Step 4 — Bootstrap the cluster
 
 ```bash
@@ -160,6 +171,14 @@ Every flag has a sensible default for the single-node case:
 - **Multi-node control plane:** add `--multi-node --nodes node1,node2,node3`.
   This buys etcd quorum and scheduling capacity, **not a redundant entry
   point** — see [Requirements](#requirements).
+
+**Driving the bootstrap from a remote workstation** (the normal case on AWS,
+where NOAH cannot run on the compute node without breaking the Garage
+isolation): the default `--node` is the Elastic IP, port 6443 is open to the
+operator CIDR only, the Cilium bootstrap pass talks to the local API server
+(`127.0.0.1`), and the kubeconfig written to `Kube/` targets the address you
+bootstrapped through. Decrypt it with
+`sops -d Kube/noah-cluster.enc.yaml > ~/.kube/config`.
 
 ### Step 5 — Watch reconciliation
 
@@ -284,11 +303,25 @@ Once enabled, Stalwart reconciles like any other app — but **delivering real
 mail needs two AWS-side steps no manifest can do**:
 
 1. **Outbound TCP 25 is blocked by default on EC2.** Ask AWS to lift it
-   ("Request to Remove Email Sending Limitations" form), and open inbound
-   25/587/465/143/993 in the instance security group.
-2. **PTR (reverse DNS) for the EIP** must be set at the AWS level and match
-   `mail.your-domain.com`. Without it (plus SPF/DKIM/DMARC), Gmail/Outlook
-   will reject or spam-folder your mail.
+   ("Request to Remove Email Sending Limitations" form, account level). No
+   resource in `Infra/aws/` can do it.
+2. **Inbound mail ports and PTR (reverse DNS) for the EIP.** Both are opt-in
+   variables of `Infra/aws/`, off by default:
+
+   ```bash
+   export TF_VAR_mail_enabled=true                         # opens 25/465/587/143/993
+   export TF_VAR_mail_ptr_domain=mail.your-domain.com      # PTR on the Elastic IP
+   python3 noah.py garage infra apply --operator-cidr <cidr>
+   ```
+
+   AWS accepts the PTR only once `mail.your-domain.com` already resolves to the
+   EIP, so apply it after external-dns has published the record. Without a
+   matching PTR (plus SPF/DKIM/DMARC), Gmail/Outlook will reject or
+   spam-folder your mail.
+3. **Restart Stalwart once after its first configuration run:**
+   `kubectl -n stalwart rollout restart statefulset/stalwart`. Stalwart does not
+   start a listener added at runtime, and the in-cluster notification relay
+   (`:2525`, see the Operations Guide) is such a listener.
 
 Client notes:
 - IMAP/SMTP clients authenticate with **OAUTHBEARER/XOAUTH2** using an
@@ -297,11 +330,12 @@ Client notes:
   `admin` account.
 - A user must **log in once** (IMAP/JMAP) before their address can receive
   mail: Stalwart materializes OIDC accounts on first authentication.
-- Stalwart runs **v0.16.x**, which keeps its configuration in the datastore
+- Stalwart runs **v0.16.27**, which keeps its configuration in the datastore
   rather than a declarative `config.toml`. NOAH applies that configuration with
   `stalwart-cli` from a provisioning Job
   (`gitops/apps-extra/stalwart/provision-config-job.yaml`), driven by the plan
-  in `apply-plan-configmap.yaml`.
+  in `apply-plan-configmap.yaml`. Earlier 0.16 builds (0.16.13 included) reject
+  the stock anti-spam rules on reload, and the Job never completes.
 
 To rotate the Authentik admin password, see
 [Operations Guide → rotating secrets](OPERATIONS_GUIDE.md#rotating-a-secret).

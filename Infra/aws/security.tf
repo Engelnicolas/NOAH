@@ -29,7 +29,7 @@ resource "aws_security_group" "compute" {
 
 resource "aws_vpc_security_group_ingress_rule" "compute_ssh" {
   security_group_id = aws_security_group.compute.id
-  description       = "Operator SSH — and the ProxyJump entry point to the Garage nodes"
+  description       = "Operator SSH - and the ProxyJump entry point to the Garage nodes"
   cidr_ipv4         = var.operator_cidr
   from_port         = 22
   to_port           = 22
@@ -95,7 +95,7 @@ resource "aws_vpc_security_group_ingress_rule" "garage_ssh" {
 
 resource "aws_vpc_security_group_ingress_rule" "garage_s3_tls" {
   security_group_id = aws_security_group.garage.id
-  description       = "S3 API behind the TLS proxy — flows G1..G4 of cilium_sso.md §7.2"
+  description       = "S3 API behind the TLS proxy - flows G1..G4 of cilium_sso.md 7.2"
   referenced_security_group_id = aws_security_group.compute.id
   from_port         = 443
   to_port           = 443
@@ -104,7 +104,7 @@ resource "aws_vpc_security_group_ingress_rule" "garage_s3_tls" {
 
 resource "aws_vpc_security_group_ingress_rule" "garage_s3_plain" {
   security_group_id = aws_security_group.garage.id
-  description       = "S3 API in the clear — only reached when garage_tls_enabled is explicitly false (§5.2)"
+  description       = "S3 API in the clear - only reached when garage_tls_enabled is explicitly false (5.2)"
   referenced_security_group_id = aws_security_group.compute.id
   from_port         = 3900
   to_port           = 3900
@@ -113,7 +113,7 @@ resource "aws_vpc_security_group_ingress_rule" "garage_s3_plain" {
 
 resource "aws_vpc_security_group_ingress_rule" "garage_rpc" {
   security_group_id = aws_security_group.garage.id
-  description       = "Garage RPC, BETWEEN GARAGE NODES ONLY. The cluster has no business here (flow G5) — self-reference, not the compute group."
+  description       = "Garage RPC, BETWEEN GARAGE NODES ONLY. The cluster has no business here (flow G5) - self-reference, not the compute group."
   referenced_security_group_id = aws_security_group.garage.id
   from_port         = 3901
   to_port           = 3901
@@ -128,7 +128,7 @@ resource "aws_vpc_security_group_ingress_rule" "garage_rpc" {
 
 resource "aws_vpc_security_group_egress_rule" "garage_all" {
   security_group_id = aws_security_group.garage.id
-  description       = "Egress via the compute node — APT mirrors and the Garage binary at bootstrap"
+  description       = "Egress via the compute node - APT mirrors and the Garage binary at bootstrap"
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
 }
@@ -228,3 +228,39 @@ resource "aws_iam_instance_profile" "compute" {
 # See the comment on aws_instance.garage in spot.tf: an instance profile
 # granted to them "for SSM convenience" would put stealable credentials back on
 # the storage tier, and IMDS would be the way to steal them.
+
+# --- Mail (opt-in, Stalwart) --------------------------------------------------
+#
+# Stalwart binds these with hostPort on the compute node (see
+# gitops/apps-extra/stalwart/statefulset.yaml). Created only when
+# var.mail_enabled is true, so a default install exposes none of them.
+
+locals {
+  mail_ports = var.mail_enabled ? {
+    smtp        = 25
+    submissions = 465
+    submission  = 587
+    imap        = 143
+    imaps       = 993
+  } : {}
+}
+
+resource "aws_vpc_security_group_ingress_rule" "compute_mail" {
+  for_each = local.mail_ports
+
+  security_group_id = aws_security_group.compute.id
+  description       = "Stalwart mail, ${each.key}"
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = each.value
+  to_port           = each.value
+  ip_protocol       = "tcp"
+}
+
+# PTR for the Elastic IP. Receivers reject or spam-folder mail whose sending
+# address has no matching reverse record.
+resource "aws_eip_domain_name" "mail" {
+  count = var.mail_ptr_domain != "" ? 1 : 0
+
+  allocation_id = aws_eip.compute.id
+  domain_name   = var.mail_ptr_domain
+}

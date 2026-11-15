@@ -184,7 +184,14 @@ def _check_urls(domain: str, timeout: int = 10) -> list[Row]:
     rows: list[Row] = []
     for sub in _SERVICE_SUBDOMAINS:
         host = f"{sub}.{domain}"
-        ok, detail = _probe_host(host, connect_ips, timeout)
+        candidates = list(connect_ips)
+        # Run from an operator workstation, the node-local addresses above are
+        # unreachable; the published name is then the only way in.
+        try:
+            candidates.append(socket.gethostbyname(host))
+        except OSError:
+            pass
+        ok, detail = _probe_host(host, candidates, timeout)
         rows.append((f"https://{host}", ok, detail))
     return rows
 

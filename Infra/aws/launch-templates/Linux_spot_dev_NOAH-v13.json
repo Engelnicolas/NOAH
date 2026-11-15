@@ -1,0 +1,65 @@
+{
+    "_comment": "NOAH - noeud de calcul, developpement sur EC2 Spot. Version 13. Voir Garage.md 16.4 pour le motif de chaque ecart avec la v12. Ce fichier est le gabarit de transition : une fois Infra/aws/ en place, la source de verite devient la ressource OpenTofu aws_launch_template et ce JSON n'est plus qu'une reference de lecture.",
+    "LaunchTemplateName": "Linux_spot_dev_NOAH",
+    "VersionDescription": "v13 - IMDSv2 requis, hop limit 1, EBS chiffre, Spot persistent+stop, noyau GA epingle, etiquettes de cout",
+    "LaunchTemplateData": {
+        "ImageId": "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
+        "InstanceType": "m6a.2xlarge",
+        "KeyName": "REMPLACER-noah-compute-key",
+        "IamInstanceProfile": {
+            "Arn": "arn:aws:iam::REMPLACER-ACCOUNT-ID:instance-profile/EC2-SSM-Role"
+        },
+        "SecurityGroupIds": [
+            "REMPLACER-sg-noah-compute"
+        ],
+        "BlockDeviceMappings": [
+            {
+                "DeviceName": "/dev/sda1",
+                "Ebs": {
+                    "VolumeSize": 100,
+                    "VolumeType": "gp3",
+                    "Encrypted": true,
+                    "DeleteOnTermination": true
+                }
+            }
+        ],
+        "InstanceMarketOptions": {
+            "MarketType": "spot",
+            "SpotOptions": {
+                "SpotInstanceType": "persistent",
+                "InstanceInterruptionBehavior": "stop"
+            }
+        },
+        "MetadataOptions": {
+            "HttpEndpoint": "enabled",
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "InstanceMetadataTags": "enabled"
+        },
+        "CreditSpecification": {
+            "CpuCredits": "standard"
+        },
+        "TagSpecifications": [
+            {
+                "ResourceType": "instance",
+                "Tags": [
+                    { "Key": "Name", "Value": "noah-compute-dev" },
+                    { "Key": "Project", "Value": "NOAH" },
+                    { "Key": "noah:role", "Value": "compute-node" },
+                    { "Key": "noah:env", "Value": "dev" },
+                    { "Key": "noah:secret-domain", "Value": "cluster" }
+                ]
+            },
+            {
+                "ResourceType": "volume",
+                "Tags": [
+                    { "Key": "Name", "Value": "noah-compute-dev-root" },
+                    { "Key": "Project", "Value": "NOAH" },
+                    { "Key": "noah:role", "Value": "compute-node" },
+                    { "Key": "noah:env", "Value": "dev" }
+                ]
+            }
+        ],
+        "UserData": "#!/bin/bash\nset -euo pipefail\nexec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1\n\necho \"=== NOAH bootstrap started at $(date) ===\"\n\nexport DEBIAN_FRONTEND=noninteractive\n\nwhile fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do\n  echo \"Waiting for dpkg lock...\"\n  sleep 5\ndone\n\n# Region via IMDSv2 (obligatoire : HttpTokens=required)\nTOKEN=$(curl -sX PUT \"http://169.254.169.254/latest/api/token\" \\\n  -H \"X-aws-ec2-metadata-token-ttl-seconds: 300\")\nREGION=$(curl -sH \"X-aws-ec2-metadata-token: $TOKEN\" \\\n  http://169.254.169.254/latest/meta-data/placement/region)\necho \"Region: $REGION\"\n\n# Noyau GA, jamais HWE : une montee de noyau en avance sur le support\n# OpenZFS rend le pool inaccessible au redemarrage (carte-etat A.3, Garage.md 5.1).\n# L'epinglage precede full-upgrade, sans quoi la mise a jour installe HWE.\napt-mark hold linux-generic-hwe-24.04 linux-image-generic-hwe-24.04 \\\n  linux-headers-generic-hwe-24.04 2>/dev/null || true\n\n# AWS CLI v2 si absent (Ubuntu ne fournit que la v1)\nif ! command -v aws >/dev/null; then\n  apt-get update\n  apt-get -y install unzip curl\n  curl -fsSL \"https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip\" -o /tmp/awscliv2.zip\n  unzip -q /tmp/awscliv2.zip -d /tmp/\n  /tmp/aws/install\n  rm -rf /tmp/aws /tmp/awscliv2.zip\nfi\n\napt-get update\napt-get -y full-upgrade\n\n# Verification : le noyau ne doit pas avoir bascule en HWE\necho \"Noyau installe : $(uname -r)\"\napt-mark showhold\n\necho \"=== NOAH bootstrap finished at $(date) ===\"\n"
+    }
+}

@@ -1,6 +1,7 @@
 ---
-# ClusterIP service for the HTTP listener only (webadmin + JMAP), consumed by
-# ingress.yaml. Mail ports are exposed via hostPort on the pod, not here.
+# ClusterIP service for the HTTP listener (webadmin + JMAP), consumed by
+# ingress.yaml, and for the in-cluster notification relay (:2525). The public
+# mail ports are exposed via hostPort on the pod, not here.
 apiVersion: v1
 kind: Service
 metadata:
@@ -13,3 +14,6 @@ spec:
     - name: http
       port: 80
       targetPort: http
+    - name: relay
+      port: 2525
+      targetPort: relay

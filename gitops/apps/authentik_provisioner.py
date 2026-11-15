@@ -241,10 +241,10 @@ def provision_proxy(service, external_host):
     bind_embedded_outpost(provider_pk)
 
 
-def provision_oidc(service, external_host, redirect_uris=None):
+def provision_oidc(service, external_host, redirect_uris=None, client_type="confidential"):
     client_id = os.environ.get("OIDC_CLIENT_ID", service)
     client_secret = os.environ.get("OIDC_CLIENT_SECRET", "")
-    if not client_secret:
+    if client_type == "confidential" and not client_secret:
         print("[ERROR] OIDC_CLIENT_SECRET must be set for --type oidc", file=sys.stderr)
         sys.exit(1)
     if not redirect_uris:
@@ -255,7 +255,7 @@ def provision_oidc(service, external_host, redirect_uris=None):
         "name": f"{service}-oidc",
         "client_id": client_id,
         "client_secret": client_secret,
-        "client_type": "confidential",
+        "client_type": client_type,
         "authorization_flow": auth_flow,
         "invalidation_flow": invalidation_flow,
         # Without this, Authentik defaults grant_types to an empty list,
@@ -305,6 +305,13 @@ def main():
         help="OIDC redirect URI (repeatable); defaults to <external-host>/oidc-callback",
     )
     parser.add_argument(
+        "--client-type",
+        choices=["confidential", "public"],
+        default="confidential",
+        help="OIDC client type. `public` for clients that cannot keep a secret "
+             "(browser apps and mail clients, which use PKCE instead)",
+    )
+    parser.add_argument(
         "--admin-group",
         default=None,
         help="Authentik group to create and populate with --admin-user; its name "
@@ -327,7 +334,7 @@ def main():
     if args.type == "proxy":
         provision_proxy(args.service, args.external_host)
     else:
-        provision_oidc(args.service, args.external_host, args.redirect_uris)
+        provision_oidc(args.service, args.external_host, args.redirect_uris, args.client_type)
 
     print("[SUCCESS] Provisioning complete")
 

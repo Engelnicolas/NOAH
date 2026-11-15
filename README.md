@@ -200,7 +200,9 @@ Stalwart is **not deployed by default**. Add it with
 `python3 noah.py setup gitops --domain … --with-stalwart` (re-running without the flag
 removes it again), then commit and push. Mail protocols (SMTP 25/587/465, IMAP 143/993)
 bind the node's public IP directly, and sending real mail needs AWS-side steps — outbound
-port 25 unblocking and an EIP PTR record. See the
+port 25 unblocking and an EIP PTR record (the inbound ports and the PTR are opt-in
+variables of `Infra/aws/`). Once enabled, Authentik and Nextcloud send their
+notifications through an in-cluster Stalwart relay. See the
 [Deployment Guide](docs/DEPLOYMENT_GUIDE.md#mail-prerequisites-stalwart).
 
 ## Requirements

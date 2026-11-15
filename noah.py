@@ -38,6 +38,9 @@ def _bootstrap_venv():
     if not venv_python.exists():
         return
     if os.path.realpath(sys.executable) == os.path.realpath(str(venv_python)):
+        # The venv is not activated, so its console scripts (ansible-playbook)
+        # are not on PATH for the subprocesses NOAH spawns.
+        os.environ["PATH"] = f"{venv_python.parent}{os.pathsep}{os.environ.get('PATH', '')}"
         return
     os.execv(str(venv_python), [str(venv_python)] + sys.argv)
 
@@ -367,7 +370,7 @@ def flux_logs(ctx, follow, tail):
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Garage — object storage OUTSIDE the cluster (Specs/To-do/Garage.md)
+# Garage — object storage OUTSIDE the cluster (Specs/Garage.md)
 # ──────────────────────────────────────────────────────────────────────
 #
 # Garage is the one component that lives outside the cluster and out of reach

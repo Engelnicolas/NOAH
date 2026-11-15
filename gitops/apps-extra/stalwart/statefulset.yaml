@@ -32,7 +32,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: stalwart
-          image: stalwartlabs/stalwart:v0.16.13
+          image: stalwartlabs/stalwart:v0.16.27
           # Drop all Linux capabilities except NET_BIND_SERVICE, which the
           # non-root (UID 2000) process needs to bind the privileged mail ports
           # 25/465/587/143/993 (K8s grants added caps to non-root via ambient
@@ -61,6 +61,9 @@ spec:
             - name: imaps
               containerPort: 993
               hostPort: 993
+            # In-cluster notification relay: deliberately no hostPort.
+            - name: relay
+              containerPort: 2525
             # webadmin + JMAP: cluster-internal only, exposed via nginx-ingress.
             - name: http
               containerPort: 8080

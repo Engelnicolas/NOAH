@@ -5,9 +5,13 @@
 # Authentik userinfo endpoint). Idempotent — re-runs PATCH the existing
 # provider/application.
 #
-# The redirect URI is a placeholder for clients driving an authorization-code
-# flow (Stalwart itself never receives a browser redirect in v0.15); tokens
-# obtained via any grant of this client work for OAUTHBEARER.
+# The client is PUBLIC: its users are the Stalwart web interface, which runs
+# in the browser and exchanges the code itself with PKCE, and mail clients,
+# which cannot keep a secret either. The redirect URIs are the web interface's
+# own callback under each of its two prefixes (/admin and /account); the plan
+# in apply-plan-configmap.yaml points the web interface at this client
+# (Application.oauthClientId). Tokens from this client are what Stalwart
+# accepts over OAUTHBEARER/XOAUTH2 and JMAP.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -34,7 +38,9 @@ spec:
                 --service stalwart \
                 --type oidc \
                 --external-host "https://mail.${DOMAIN}" \
-                --redirect-uri "https://mail.${DOMAIN}/auth/callback"
+                --client-type public \
+                --redirect-uri "https://mail.${DOMAIN}/admin/oauth/callback" \
+                --redirect-uri "https://mail.${DOMAIN}/account/oauth/callback"
           envFrom:
             # AUTHENTIK_TOKEN (bootstrap admin token).
             - secretRef:

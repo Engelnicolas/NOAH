@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: authentik
-      version: '>=2026.2.0 <2027.0.0'
+      version: '>=2026.8.5 <2027.0.0'
       sourceRef:
         kind: HelmRepository
         name: authentik
@@ -28,6 +28,16 @@ spec:
   values:
     # Non-secret defaults; secrets (admin password, postgres password,
     # bootstrap token, secret_key) are provided by authentik-values.
+    # Outgoing mail through the in-cluster Stalwart relay (no auth, no TLS:
+    # the hop never leaves the cluster). Stalwart is opt-in; without it this
+    # host does not resolve and Authentik simply cannot send, as before.
+    authentik:
+      email:
+        host: stalwart.stalwart.svc.cluster.local
+        port: 2525
+        use_tls: false
+        use_ssl: false
+        from: "Authentik <authentik@${DOMAIN}>"
     server:
       replicas: 1
     worker:

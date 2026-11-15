@@ -1,0 +1,72 @@
+{
+    "_comment": "NOAH - noeud Garage, developpement sur EC2 Spot. Gabarit distinct du noeud de calcul : c'est le cloisonnement de la condition 3 du 10.2 traduit en AWS. Ne jamais fusionner avec Linux_spot_dev_NOAH. A instancier deux fois, garage-a (site-a) et garage-b (site-b). Voir Garage.md 16.4 et 16.5.",
+    "LaunchTemplateName": "Linux_spot_garage_NOAH",
+    "VersionDescription": "v1 - noeud Garage dev, cle SSH et profil IAM distincts du noeud de calcul, volume ZFS persistant",
+    "LaunchTemplateData": {
+        "ImageId": "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
+        "InstanceType": "t3a.medium",
+        "KeyName": "REMPLACER-noah-garage-admin-ed25519",
+        "SecurityGroupIds": [
+            "REMPLACER-sg-noah-garage"
+        ],
+        "BlockDeviceMappings": [
+            {
+                "DeviceName": "/dev/sda1",
+                "Ebs": {
+                    "VolumeSize": 12,
+                    "VolumeType": "gp3",
+                    "Encrypted": true,
+                    "DeleteOnTermination": true
+                }
+            },
+            {
+                "DeviceName": "/dev/sdf",
+                "Ebs": {
+                    "VolumeSize": 20,
+                    "VolumeType": "gp3",
+                    "Encrypted": true,
+                    "DeleteOnTermination": false
+                }
+            }
+        ],
+        "InstanceMarketOptions": {
+            "MarketType": "spot",
+            "SpotOptions": {
+                "SpotInstanceType": "persistent",
+                "InstanceInterruptionBehavior": "stop"
+            }
+        },
+        "MetadataOptions": {
+            "HttpEndpoint": "enabled",
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "InstanceMetadataTags": "enabled"
+        },
+        "CreditSpecification": {
+            "CpuCredits": "standard"
+        },
+        "TagSpecifications": [
+            {
+                "ResourceType": "instance",
+                "Tags": [
+                    { "Key": "Name", "Value": "noah-garage-a" },
+                    { "Key": "Project", "Value": "NOAH" },
+                    { "Key": "noah:role", "Value": "garage-node" },
+                    { "Key": "noah:env", "Value": "dev" },
+                    { "Key": "noah:zone", "Value": "site-a" },
+                    { "Key": "noah:secret-domain", "Value": "garage-admin" }
+                ]
+            },
+            {
+                "ResourceType": "volume",
+                "Tags": [
+                    { "Key": "Name", "Value": "noah-garage-a-zfs" },
+                    { "Key": "Project", "Value": "NOAH" },
+                    { "Key": "noah:role", "Value": "garage-node" },
+                    { "Key": "noah:env", "Value": "dev" }
+                ]
+            }
+        ],
+        "UserData": "#!/bin/bash\nset -euo pipefail\nexec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1\n\necho \"=== NOAH garage node bootstrap started at $(date) ===\"\nexport DEBIAN_FRONTEND=noninteractive\n\nwhile fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done\n\n# Noyau GA, jamais HWE : prerequis OpenZFS (carte-etat A.3, Garage.md 5.1).\n# Sur un noeud Garage la consequence d'un noyau HWE est la perte d'acces au\n# pool, donc a l'historique d'instantanes : c'est la garde la plus critique\n# de ce gabarit.\napt-mark hold linux-generic-hwe-24.04 linux-image-generic-hwe-24.04 \\\n  linux-headers-generic-hwe-24.04 2>/dev/null || true\n\napt-get update\napt-get -y full-upgrade\napt-get -y install zfsutils-linux chrony\n\n# NTP commun a l'hote et aux deux VM : prerequis du retour arriere\n# coordonne (carte-etat A.1, essais V2/V3).\nsystemctl enable --now chrony\n\n# Le pool ZFS n'est PAS cree ici. Le role Ansible garage-zfs en est\n# responsable (Garage.md 5.1) : recordsize et compression par dataset ne\n# sont pas des valeurs a dupliquer dans deux endroits. Ce script se borne\n# a rendre le disque identifiable de facon stable pour ce role.\nln -sf /dev/disk/by-id/$(ls /dev/disk/by-id/ | grep -m1 'nvme.*_1$' || echo nvme1n1) /dev/noah-garage-data || true\n\necho \"Noyau installe : $(uname -r)\"\napt-mark showhold\necho \"=== NOAH garage node bootstrap finished at $(date) ===\"\n"
+    }
+}

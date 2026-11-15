@@ -76,6 +76,72 @@ the flag on a later run deletes the `stalwart` namespace and everything in it.
 Its manifests and its entries in the canonical secrets store are untouched
 either way.
 
+### Stalwart: configuration and notification relay
+
+**Changing the configuration.** Stalwart's settings live in its datastore and
+are applied by the `stalwart-config` Job from the plan in
+`gitops/apps-extra/stalwart/apply-plan-configmap.yaml`. Flux re-creates that Job
+only when the Job itself changes, so **every edit of the plan must also bump
+`noah/apply-plan-revision`** in `provision-config-job.yaml` — otherwise the new
+plan is silently never applied.
+
+**Notifications.** Authentik (`authentik.email` values) and Nextcloud
+(`mail.config.php`) send their mail through an in-cluster relay listener of
+Stalwart on port **2525**, published only by the `stalwart` ClusterIP Service
+(no `hostPort`). On that port alone Stalwart accepts mail without
+authentication and relays it; the rules are keyed on the port, not on the
+client address, because external connections reach Stalwart masqueraded
+behind a pod-network address. Consequences:
+
+- any pod in the cluster can send mail through the relay;
+- relay mail is not spam-filtered (like authenticated submission); otherwise
+  notifications from our own domain fail SPF/DMARC and land in Junk;
+- the public port 25 still refuses to relay (`5.1.2 Relay not allowed`);
+- the relay answers only after Stalwart has restarted once following its first
+  configuration run (see the Deployment Guide).
+
+Test it:
+
+```bash
+kubectl -n authentik exec deploy/authentik-worker -- ak test_email <address>
+```
+
+**Web UI behind the ingress.** The plan sets `useXForwarded` and allow-lists
+the pod network (`10.0.0.0/8`, Cilium's cluster pool). Without it, Stalwart
+attributes every web request to the ingress controller pod, and the first
+Internet scanner gets that pod banned — the web UI then answers 502.
+
+**Web interface sign-in (`/account/`, `/admin/`).** The plan sets
+`Application.oauthClientId` to the `stalwart` Authentik client, which is a
+**public** client (PKCE, no secret) registered with the two web interface
+callbacks (`/admin/oauth/callback`, `/account/oauth/callback`). The user types
+an address, the web interface discovers the provider for its domain
+(`/api/discover/<address>`) and sends the browser to Authentik with that
+address as `login_hint`. Like the relay listener, the client id only reaches
+the served pages after a Stalwart restart following the first plan run.
+
+**The mailbox address is the Authentik email.** Stalwart's OIDC directory
+reads the `email` claim, so a user's mailbox is exactly the address set on
+their Authentik account. That is also what makes the web sign-in work (the
+typed address, passed as `login_hint`, identifies the user in Authentik) and
+what makes mail Authentik sends to a user land in their mailbox. Consequences:
+
+- to give someone a NOAH mailbox, set their Authentik email to
+  `<name>@<domain>`; a user whose Authentik email is elsewhere (Gmail, …) has
+  no mailbox;
+- the bootstrap admin is `akadmin@<domain>` (`bootstrap_email`), not
+  `admin@<domain>`;
+- **Authentik group names become Stalwart group principals** (`claimGroups`):
+  the `admin` group occupies `admin@<domain>`. A user whose email equals
+  `<group name>@<domain>` cannot sign in ("Account ID from directory does not
+  correspond to a user account") — keep group names and mailbox names apart.
+
+> **Known limit — client addresses on the mail ports.** The mail ports are
+> `hostPort`s, and connections reach Stalwart source-NATed to a pod-network
+> address. Stalwart therefore never sees the real sender address on SMTP/IMAP:
+> SPF checks on inbound mail and automatic IP bans cannot work there. Fixing it
+> needs `hostNetwork` or the PROXY protocol; not done yet.
+
 ---
 
 ## Secrets
@@ -135,7 +201,7 @@ the ZFS-snapshot immutability strategy worth anything. Operate it as if that
 separation were the feature, because it is — a Garage reachable from the
 compute node works perfectly and protects nothing.
 
-Specification: [`Specs/To-do/Garage.md`](../../Specs/To-do/Garage.md).
+Specification: [`Specs/Garage.md`](../../Specs/Garage.md).
 Infrastructure: [`Infra/README.md`](../Infra/README.md).
 
 ### The three secret domains

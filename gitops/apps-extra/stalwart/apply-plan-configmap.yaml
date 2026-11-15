@@ -81,11 +81,15 @@ data:
         # does NOT inherit roles through group membership, so belonging to an
         # `admin` group is not enough. Pre-creating the account here means the
         # role is already in place the first time the identity signs in.
+        # "b" (User) is listed too: a Custom role set REPLACES the default user
+        # role, and System Administrator alone does not carry the mailbox
+        # permissions — delivery to the account is then refused with
+        # `security.unauthorized` (emailReceive) and the sender gets a bounce.
         {"@type": "upsert", "object": "Account", "matchOn": ["name"],
          "value": {"acc0": {"@type": "User", "name": ADMIN_USER,
                             "domainId": "#dom0",
                             "roles": {"@type": "Custom",
-                                      "roleIds": {"e": True}}}}},
+                                      "roleIds": {"e": True, "b": True}}}}},
         # Announce a FQDN in the SMTP greeting instead of the pod hostname
         # ("stalwart-0"). Receivers check that the HELO name is a FQDN
         # consistent with the sending IP's PTR, so this must match the reverse

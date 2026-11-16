@@ -110,10 +110,10 @@ data:
         # "port scanning" and the UI answers 502 from then on. useXForwarded
         # restores the real client address; the allow-list covers a ban taken
         # before this plan first ran (an allowed address overrides a block).
-        # 10.0.0.0/8 is Cilium's cluster-pool pod CIDR (its chart default).
+        # 10.42.0.0/16 is the pod range set in the Cilium HelmRelease.
         {"@type": "update", "object": "Http", "value": {"useXForwarded": True}},
         {"@type": "upsert", "object": "AllowedIp", "matchOn": ["address"],
-         "value": {"ip0": {"address": "10.0.0.0/8",
+         "value": {"ip0": {"address": "10.42.0.0/16",
                            "reason": "cluster pod network (ingress controller)"}}},
         # Web interface sign-in through Authentik. Without oauthClientId the
         # login page only checks a password against Stalwart's own directory,

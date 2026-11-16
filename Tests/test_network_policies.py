@@ -197,6 +197,30 @@ class TestCiliumHelmRelease:
         the netfilter NAT rule the Garage nodes egress through."""
         assert values.get('bpf', {}).get('masquerade') is not True
 
+    def test_pod_range_is_explicit_and_matches_the_preflight(self, values):
+        """Allocated once by the preflight: a HelmRelease stating another range
+        would be silently ignored for the nodes already there."""
+        (pod_cidr,) = values['ipam']['operator']['clusterPoolIPv4PodCIDRList']
+        preflight = (REPO_ROOT / 'Ansible/roles/cilium-preflight/tasks/main.yml').read_text()
+        assert f"ipam.operator.clusterPoolIPv4PodCIDRList={{{pod_cidr}}}" in preflight
+
+    def test_pod_range_overlaps_no_infrastructure_prefix(self, values):
+        """Egress to Garage is a toCIDR rule: it only means something if that
+        prefix is outside the pod range."""
+        import ipaddress
+        import json
+        import re
+        (pod_cidr,) = values['ipam']['operator']['clusterPoolIPv4PodCIDRList']
+        pods = ipaddress.ip_network(pod_cidr)
+        tf = (REPO_ROOT / 'Infra/aws/variables.tf').read_text()
+        prefixes = re.findall(r'default\s*=\s*"(\d+\.\d+\.\d+\.\d+/\d+)"', tf)
+        assert prefixes, 'no CIDR default found in Infra/aws/variables.tf'
+        example = json.loads(
+            (REPO_ROOT / 'Infra/baremetal/infra-inventory.example.json').read_text())
+        prefixes.append(example['garage_cidr'])
+        for prefix in prefixes:
+            assert not pods.overlaps(ipaddress.ip_network(prefix)), prefix
+
     def test_gui_is_only_exposed_through_the_auth_proxy(self, values):
         assert values['hubble']['ui']['ingress']['enabled'] is False
         ingress = yaml.safe_load(

@@ -22,7 +22,7 @@ all.
 | `compute_node.public_ip` | the node's real address |
 | `bastion` | **`null`** — the Garage nodes are reachable directly, so no ProxyJump is produced |
 | `garage_nodes[].public_ip` | the node's address on the administration segment |
-| `garage_cidr` | the prefix of the Garage segment, **no wider than it really is** — it is what the cluster egress policies are founded on |
+| `garage_cidr` | the prefix of the Garage segment, **no wider than it really is** — it is what the cluster egress policies are founded on. It must not overlap `10.42.0.0/16` (pods) or `10.43.0.0/16` (Kubernetes Services), and neither may any machine address |
 | `capacity` | the usable capacity of the ZFS pool, e.g. `2T` |
 | `data_device` | a **deterministic** path: `/dev/disk/by-id/…`. Never `/dev/sdb` or `/dev/nvme1n1` — enumeration order is not guaranteed, and `garage-zfs` would create the pool on the root disk |
 

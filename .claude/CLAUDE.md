@@ -185,8 +185,9 @@ When you bump a version, update the table in the main README too.
 - **DNS records outlive `destroy`**: external-dns deletes only while it runs. Clean the
   Cloudflare zone, or the records point at a released Elastic IP.
 - `setup initialize` is apt-only; the Ansible roles are apt-only too.
-- The Cilium pod CIDR (`10.0.0.0/8`) overlaps the AWS VPC (`10.0.0.0/16`): harmless on
-  one node, a collision from the second.
+- The Cilium pod CIDR is `10.42.0.0/16`, set identically in the `cilium-preflight` role
+  and the Cilium HelmRelease (the chart default `10.0.0.0/8` contains the AWS VPC). It
+  cannot change on a live cluster, and no infrastructure prefix may overlap it.
 
 ## Documentation
 

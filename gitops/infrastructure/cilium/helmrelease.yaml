@@ -39,6 +39,16 @@ spec:
     k8sServicePort: 6443
     operator:
       replicas: 1
+    # Pod range, explicit and disjoint from every infrastructure prefix.
+    # Cilium's default (10.0.0.0/8) contains the AWS VPC (10.0.0.0/16), hence
+    # the Garage subnet the egress policies target by CIDR. Must stay identical
+    # to Ansible/roles/cilium-preflight, which allocates it at bootstrap; it
+    # cannot be changed on a live cluster (rebuild).
+    ipam:
+      mode: cluster-pool
+      operator:
+        clusterPoolIPv4PodCIDRList: ["10.42.0.0/16"]
+        clusterPoolIPv4MaskSize: 24
     # L7 proxy (Envoy): required for HTTP visibility and enforcement. Chart
     # default is true; explicit so the intent is readable.
     l7Proxy: true

@@ -39,7 +39,7 @@ spec:
             'overwriteprotocol' => 'https',
             'overwritehost' => 'nextcloud.${DOMAIN}',
             'overwrite.cli.url' => 'https://nextcloud.${DOMAIN}',
-            'trusted_proxies' => array('10.0.0.0/8', '127.0.0.1'),
+            'trusted_proxies' => array('10.42.0.0/16', '127.0.0.1'),
           );
         # Outgoing mail through the in-cluster Stalwart relay (no auth, no
         # TLS: the hop never leaves the cluster). Stalwart is opt-in; without

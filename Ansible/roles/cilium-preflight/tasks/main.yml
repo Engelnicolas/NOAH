@@ -32,6 +32,11 @@
   changed_when: false
   failed_when: false
 
+# The pod range MUST be the one of gitops/infrastructure/cilium/helmrelease.yaml:
+# it is allocated here, once, and the operator does not re-allocate a node when
+# the HelmRelease later states another one. Cilium's default (10.0.0.0/8)
+# contains the AWS VPC (10.0.0.0/16) and therefore the Garage subnet.
+# Tests/test_network_policies.py keeps the two values identical.
 - name: Install minimal Cilium CNI (bootstrap pass — Flux upgrades to full config later)
   shell: |
     set -euo pipefail
@@ -40,6 +45,9 @@
       --set k8sServiceHost=127.0.0.1 \
       --set k8sServicePort=6443 \
       --set operator.replicas=1 \
+      --set ipam.mode=cluster-pool \
+      --set 'ipam.operator.clusterPoolIPv4PodCIDRList={10.42.0.0/16}' \
+      --set ipam.operator.clusterPoolIPv4MaskSize=24 \
       --set hubble.enabled=false
   args:
     executable: /bin/bash

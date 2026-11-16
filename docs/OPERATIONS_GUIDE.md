@@ -337,7 +337,7 @@ kubectl -n authentik exec deploy/authentik-worker -- ak test_email <address>
 ```
 
 **Web UI behind the ingress.** The plan sets `useXForwarded` and allow-lists
-the pod network (`10.0.0.0/8`, Cilium's cluster pool). Without it, Stalwart
+the pod network (`10.42.0.0/16`, set in the Cilium HelmRelease). Without it, Stalwart
 attributes every web request to the ingress controller pod, and the first
 Internet scanner gets that pod banned — the web UI then answers 502.
 

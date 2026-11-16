@@ -71,7 +71,7 @@ spec:
           emptyDir: {}
         - name: provisioner
           configMap:
-            # Shared script ConfigMap (defined alongside the hubble-auth
+            # Shared script ConfigMap (defined alongside the cilium-auth
             # provisioning, same authentik namespace).
             name: authentik-provisioner-script
             defaultMode: 0755

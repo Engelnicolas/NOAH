@@ -1,42 +1,42 @@
 ---
 # Routes the Authentik outpost endpoints (/outpost.goauthentik.io/start,
 # /callback, /auth/...) on the application host to the embedded outpost, WITHOUT
-# the auth_request gate that hubble-ingress puts on "/". Without this, the
+# the auth_request gate that cilium-ingress puts on "/". Without this, the
 # forward-auth login flow cannot complete:
 #
 #   * auth-signin sends the browser to
-#     https://hubble.${DOMAIN}/outpost.goauthentik.io/start
+#     https://cilium.${DOMAIN}/outpost.goauthentik.io/start
 #   * in forward_single mode the outpost only serves /start (and the /callback
 #     it redirects to) for the host matching the provider's external_host, i.e.
-#     hubble.${DOMAIN} — not auth.${DOMAIN}
+#     cilium.${DOMAIN} — not auth.${DOMAIN}
 #   * those paths must NOT be behind auth_request, or the unauthenticated
 #     browser would 401-loop before it can reach the login flow
 #
-# Backed by hubble-auth-proxy (same namespace; an Ingress can only target a
+# Backed by cilium-auth-proxy (same namespace; an Ingress can only target a
 # Service in its own namespace) which forwards to authentik-server with
-# Host: hubble.${DOMAIN}, so the outpost matches the hubble-proxy provider.
-# This is a separate Ingress (not another path on hubble-ingress) because
+# Host: cilium.${DOMAIN}, so the outpost matches the cilium-proxy provider.
+# This is a separate Ingress (not another path on cilium-ingress) because
 # auth_request is applied per-Ingress and must stay off for these paths.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: hubble-outpost
+  name: cilium-outpost
   namespace: kube-system
 spec:
   ingressClassName: nginx
   rules:
-    - host: "hubble.${DOMAIN}"
+    - host: "cilium.${DOMAIN}"
       http:
         paths:
           - path: /outpost.goauthentik.io
             pathType: Prefix
             backend:
               service:
-                name: hubble-auth-proxy
+                name: cilium-auth-proxy
                 port:
                   number: 80
   tls:
-    # Reuses the certificate provisioned by hubble-ingress for this host (no
+    # Reuses the certificate provisioned by cilium-ingress for this host (no
     # cert-manager annotation here, so only one Ingress owns the Certificate).
-    - secretName: hubble-tls
-      hosts: ["hubble.${DOMAIN}"]
+    - secretName: cilium-tls
+      hosts: ["cilium.${DOMAIN}"]

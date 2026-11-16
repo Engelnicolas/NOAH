@@ -149,7 +149,7 @@ class TestCheckUrls:
         assert urls == [
             "https://auth.example.org",
             "https://headlamp.example.org",
-            "https://hubble.example.org",
+            "https://cilium.example.org",
         ]
         assert all(ok for _, ok, _ in rows)
         assert probe.call_count == 3

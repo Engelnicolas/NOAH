@@ -6,7 +6,7 @@ resources:
   # gitops/apps/kustomization.yaml (configMapGenerator, hashed name) so edits
   # to the script re-trigger this Job.
   - provision-job.yaml
-  - hubble-ingress.yaml
-  - hubble-outpost-ingress.yaml
+  - cilium-ingress.yaml
+  - cilium-outpost-ingress.yaml
   - auth-proxy-configmap.yaml
   - auth-proxy-deployment.yaml

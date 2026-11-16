@@ -1,0 +1,24 @@
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: external-dns
+  namespace: external-dns
+spec:
+  description: "external-dns - Cloudflare API and Kubernetes API"
+  endpointSelector: {}
+  egress:
+    # Flow 15 - to be narrowed to toFQDNs api.cloudflare.com.
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Flow 16.
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP

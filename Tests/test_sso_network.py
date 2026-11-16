@@ -57,7 +57,7 @@ class SSONetworkTester:
         self.domain = domain
         self.authentik_url = f'https://auth.{domain}'
         self.headlamp_url = f'https://headlamp.{domain}'
-        self.hubble_url = f'https://hubble.{domain}'
+        self.hubble_url = f'https://cilium.{domain}'
         self.results: dict = {
             'authentik': [],
             'headlamp': [],
@@ -174,7 +174,7 @@ class SSONetworkTester:
         """Verify the Hubble UI ingress carries the Authentik forward-auth annotations."""
         self._status('INFO', 'Checking Hubble UI ingress forward-auth annotations…')
         ok, output = self._kubectl(
-            "get ingress hubble-ui -n kube-system "
+            "get ingress cilium-ui -n kube-system "
             "-o jsonpath='{.metadata.annotations}' 2>/dev/null"
         )
         if not ok or not output:
@@ -288,11 +288,11 @@ class SSONetworkTester:
             os.environ['AUTHENTIK_TOKEN'] = token
             resp = mod.requests.get(
                 f"{mod.base_url()}/core/applications/",
-                headers=mod.headers(), params={'search': 'hubble-ui'},
+                headers=mod.headers(), params={'search': 'cilium'},
                 verify=False, timeout=10,
             )
             apps = resp.json().get('results', []) if resp.ok else []
-            app = next((a for a in apps if a.get('slug') == 'hubble-ui'), None)
+            app = next((a for a in apps if a.get('slug') == 'cilium'), None)
             if app:
                 self._status('OK', f"Hubble UI app found in Authentik (slug={app['slug']})")
                 self.results['provisioner'].append(('hubble_app', True, app['slug']))

@@ -66,7 +66,7 @@ class ConfigLoader:
                 'ingress_enabled': True
             },
             'cilium': {
-                'default_subdomain': 'hubble',
+                'default_subdomain': 'cilium',
                 'namespace': self.get('KUBERNETES_NAMESPACE_NETWORK', 'kube-system'),
                 'port': 80,
                 'https_port': 443,
@@ -75,7 +75,8 @@ class ConfigLoader:
                 'tls_enabled': True,
                 'ingress_enabled': True,
                 'hubble': {
-                    'subdomain': 'hubble',
+                    # The GUI is exposed at cilium.<domain> (gitops/apps/cilium-auth).
+                    'subdomain': 'cilium',
                     'enabled': True
                 }
             },
@@ -345,7 +346,7 @@ class ConfigLoader:
                             'enabled': True,
                             'hosts': [hubble_fqdn],
                             'tls': [{
-                                'secretName': 'hubble-ui-tls',
+                                'secretName': 'cilium-tls',
                                 'hosts': [hubble_fqdn]
                             }]
                         }

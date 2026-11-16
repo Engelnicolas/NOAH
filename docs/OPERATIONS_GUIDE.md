@@ -12,12 +12,13 @@ installation see the [Deployment Guide](DEPLOYMENT_GUIDE.md).
 3. [Secrets](#secrets)
 4. [Garage object storage](#garage-object-storage)
 5. [Mail (Stalwart)](#mail-stalwart)
-6. [Common operations](#common-operations)
-7. [SSO](#sso)
-8. [Scaling to HA](#scaling-to-ha)
-9. [DNS day-2](#dns-day-2)
-10. [Disaster recovery](#disaster-recovery)
-11. [Command reference](#command-reference)
+6. [Network baseline](#network-baseline)
+7. [Common operations](#common-operations)
+8. [SSO](#sso)
+9. [Scaling to HA](#scaling-to-ha)
+10. [DNS day-2](#dns-day-2)
+11. [Disaster recovery](#disaster-recovery)
+12. [Command reference](#command-reference)
 
 ---
 
@@ -53,21 +54,23 @@ gitops/
 ├── apps/
 │   ├── authentik/              # SSO (HelmRelease; secrets applied out-of-band)
 │   ├── headlamp/               # cluster UI (OIDC via Authentik)
-│   └── hubble-auth/            # Hubble UI ingress + Authentik forward-auth
-└── apps-extra/
-    ├── nextcloud/              # file sync & share (OIDC via Authentik)
-    └── stalwart/               # mail server (SMTP/IMAP/JMAP) — opt-in, see below
+│   └── cilium-auth/            # Cilium GUI (Hubble UI) ingress + Authentik forward-auth
+├── apps-extra/
+│   ├── nextcloud/              # file sync & share (OIDC via Authentik)
+│   └── stalwart/               # mail server (SMTP/IMAP/JMAP) — opt-in, see below
+└── network-policies/           # default-deny + allows, applied last (see Network baseline)
 ```
 
 The Flux reconciliation root lives at the repo root in `clusters/production/`
 (`infrastructure.yaml`, `cert-manager-issuers.yaml`, `apps.yaml`,
-`noah-source.yaml`). Order is enforced with `dependsOn`:
+`apps-extra.yaml`, `network-policies.yaml`, `noah-source.yaml`). Order is enforced with `dependsOn`:
 
 ```
 external-dns → cert-manager → cilium → nginx-ingress
-            → authentik → hubble-auth
+            → authentik → cilium-auth
                         → headlamp
                         → apps-extra (nextcloud, stalwart when opted in)
+                                    → network-policies (always last)
 ```
 
 Stalwart is the one component absent from a default install: it is listed in
@@ -371,6 +374,71 @@ what makes mail Authentik sends to a user land in their mailbox. Consequences:
 
 ---
 
+## Network baseline
+
+`gitops/network-policies/` holds a cluster-wide **default-deny** and one explicit allow
+per legitimate flow (Cilium policies). It is reconciled by its own Flux Kustomization,
+`network-policies`, which depends on every other one: it is always the last thing to
+land. Stalwart's policies ship with `gitops/apps-extra/stalwart/` instead, so they exist
+only when Stalwart does.
+
+The same policies give Hubble its layer-7 view: HTTP and DNS flows appear in the Cilium
+GUI (`https://cilium.<domain>`) because the allows route them through Cilium's proxies.
+
+### Audit first, enforce later
+
+The baseline ships in **audit mode** (`policyAuditMode: true` in
+`gitops/infrastructure/cilium/helmrelease.yaml`): verdicts are logged, nothing is
+dropped. Let it run 24 to 48 hours under real use (SSO login, certificate renewal, a
+Flux reconciliation, a Nextcloud upload), then look at what enforcement would drop:
+
+```bash
+kubectl -n kube-system exec ds/cilium -- hubble observe --verdict AUDIT --type policy-verdict -f
+```
+
+Check first that the default-deny bites: an audit with no `AUDIT` verdict at all usually
+means an inert policy, not a complete one. From a throwaway pod,
+`curl https://example.com` must show up as an `AUDIT` verdict.
+
+Every legitimate flow reported there needs an allow in `gitops/network-policies/`
+before going further. To enforce, set `policyAuditMode: false` in the HelmRelease and
+push. Then confirm nothing legitimate is dropped:
+
+```bash
+kubectl -n kube-system exec ds/cilium -- hubble observe --verdict DROPPED -f
+```
+
+> **Never switch modes with `cilium config`.** The HelmRelease owns that setting and
+> restores the committed value at its next reconciliation, which would move the
+> cluster into enforcement in the middle of an audit.
+
+### Rollback
+
+From least to most drastic:
+
+```bash
+git revert <commit that set policyAuditMode: false>     # back to audit
+flux suspend kustomization network-policies              # freeze the current state
+flux delete kustomization network-policies               # prune every policy
+```
+
+### Editing the policies
+
+- **A policy targets the pod port, never the Service port.** `hubble-ui` is 8081 (not
+  80), `authentik-server` 9000, `headlamp` 4466. A wrong port raises no error: the
+  allow matches nothing and the flow is silently dropped. Check with
+  `kubectl -n <ns> get pod -l <selector> -o jsonpath='{.items[0].spec.containers[*].ports[*].containerPort}'`.
+- **A change that adds a data path ships its allow in the same change**, otherwise it
+  breaks at its first reconciliation under enforcement.
+- **Never allow** `169.254.169.254` (cloud metadata), nor ports 22, 3901 and 3903
+  towards the Garage segment: their absence is the protection.
+- Stalwart's relay on 2525 has no authentication; its allow list (Authentik, Nextcloud)
+  is its only protection. Do not widen it.
+
+`pytest Tests/test_network_policies.py` checks these invariants without a cluster.
+
+---
+
 ## Common operations
 
 ### Add an application
@@ -436,7 +504,7 @@ it is idempotent and there is no manual Authentik step. The bootstrap admin is
 | Service | Mechanism | Authentik provider | Notes |
 |---|---|---|---|
 | Headlamp | OIDC, confidential | `headlamp-oidc` | callback `/oidc-callback`; no cluster-admin binding by default, so a "Forbidden" view before sign-in is expected |
-| Hubble UI | forward-auth (proxy provider) | `hubble-proxy` | defined in `gitops/apps/hubble-auth/`; Hubble's own ingress is disabled |
+| Hubble UI | forward-auth (proxy provider) | `cilium-proxy` | defined in `gitops/apps/cilium-auth/`; Hubble's own ingress is disabled |
 | Nextcloud | OIDC, confidential (`user_oidc`) | `nextcloud-oidc` | local `admin` stays as break-glass |
 | Stalwart | OIDC, **public** (PKCE) | `stalwart-oidc` | web interface callbacks `/admin/oauth/callback` and `/account/oauth/callback`; tokens also accepted over IMAP/SMTP (OAUTHBEARER) and JMAP |
 
@@ -449,7 +517,7 @@ Verify:
 
 ```bash
 AUTHENTIK_BOOTSTRAP_TOKEN=<token> python3 noah.py test headlamp --domain your-domain.com
-AUTHENTIK_BOOTSTRAP_TOKEN=<token> python3 noah.py test hubble --domain your-domain.com
+AUTHENTIK_BOOTSTRAP_TOKEN=<token> python3 noah.py test cilium --domain your-domain.com
 curl https://auth.your-domain.com/application/o/headlamp/.well-known/openid-configuration
 ```
 
@@ -496,7 +564,7 @@ variable for them.
 > records. Use one zone per deployment unless you change `txtOwnerId` first.
 
 Subdomains are literals in the Ingress manifests (`auth.`, `headlamp.`,
-`hubble.` — only `${DOMAIN}` is substituted by Flux). To change one, edit the
+`cilium.` — only `${DOMAIN}` is substituted by Flux). To change one, edit the
 manifest and push:
 
 ```bash
@@ -550,7 +618,7 @@ tar -czf noah-garage-admin-$(date +%Y%m%d).tar.gz \
 | `secrets` | `apply` / `rotate` / `canonical` / `generate` / `regenerate` / `validate` / `init` | Manage the canonical store |
 | `password` | `show-password` / `new` | Authentik admin credentials |
 | `certificates` | `deploy-manager` / `generate-certs` / `list` | TLS certificate helpers |
-| `test` | `sso` / `headlamp` / `hubble` | Post-deploy service checks |
+| `test` | `sso` / `headlamp` / `cilium` | Post-deploy service checks |
 | `config` | `domains` / `show` / `override` / `helm-values` | Inspect dynamic-domain config |
 | *(top-level)* | `status` | Status of all deployed services |
 

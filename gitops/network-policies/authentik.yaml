@@ -1,0 +1,107 @@
+---
+# authentik: server, worker, PostgreSQL, Redis and the provisioning Jobs
+# (authentik-provision-*, including those shipped by gitops/apps-extra/).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: intra-namespace
+  namespace: authentik
+spec:
+  description: "authentik - backends and API between the pods of the namespace"
+  endpointSelector: {}
+  # Flow 10 (PostgreSQL 5432, Redis 6379) and flow 11 (Jobs to the API, 9000).
+  ingress:
+    - fromEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+            - port: "6379"
+              protocol: TCP
+            - port: "9000"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+            - port: "6379"
+              protocol: TCP
+            - port: "9000"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: authentik
+  namespace: authentik
+spec:
+  description: "authentik server and worker - web in, API and mail relay out"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: authentik
+  ingress:
+    # Flow 6 - auth.<domain>. Empty HTTP match: routed through Envoy for L7
+    # visibility, no application restriction (the path space of the SPA
+    # changes with the Authentik version).
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nginx-ingress
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP
+          rules:
+            http:
+              - {}
+    # Flow 5 - the forward-auth proxy only ever reaches the outpost.
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            app: cilium-auth-proxy
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP
+          rules:
+            http:
+              - path: "/outpost.goauthentik.io/.*"
+  egress:
+    # The worker manages the embedded outpost through the Kubernetes API.
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+    # Notifications through the in-cluster Stalwart relay. Matches nothing
+    # when Stalwart (opt-in) is absent; the ingress side lives with Stalwart.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: stalwart
+      toPorts:
+        - ports:
+            - port: "2525"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: provisioning-jobs
+  namespace: authentik
+spec:
+  description: "authentik-provision Jobs - pip install of requests from PyPI"
+  endpointSelector:
+    matchExpressions:
+      - key: batch.kubernetes.io/job-name
+        operator: Exists
+  egress:
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

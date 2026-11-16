@@ -125,7 +125,7 @@ python3 noah.py password show-password      # Authentik admin: akadmin
 |---|---|---|
 | Authentik | `https://auth.<domain>` | `akadmin` + `noah password show-password` |
 | Headlamp | `https://headlamp.<domain>` | Sign in with OIDC → Authentik |
-| Hubble UI | `https://hubble.<domain>` | Authentik forward-auth |
+| Cilium GUI (Hubble UI) | `https://cilium.<domain>` | Authentik forward-auth |
 | Nextcloud | `https://nextcloud.<domain>` | Log in with Authentik, or local `admin` |
 | Stalwart *(opt-in)* | `https://mail.<domain>/account/` | your Authentik email address → Authentik |
 | Stalwart console | `https://mail.<domain>/admin/` | Authentik, or break-glass `admin` |
@@ -191,7 +191,7 @@ noah.py
 ├── password      show-password · new
 ├── certificates  generate-certs · list · deploy-manager
 ├── config        show · domains · helm-values · override
-├── test          sso · headlamp · hubble
+├── test          sso · headlamp · cilium
 └── status        overall status of deployed services
 ```
 

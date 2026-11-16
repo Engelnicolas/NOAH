@@ -1,0 +1,29 @@
+---
+# NOAH network baseline: cluster-wide default-deny + explicit allows.
+#
+# Reconciled by its OWN Flux Kustomization (clusters/production/
+# network-policies.yaml), which dependsOn every other one: a default-deny
+# landing while the rest still converges would cut the convergence itself.
+# Rollback: `flux suspend kustomization network-policies` freezes it;
+# deleting the Kustomization prunes every policy below.
+#
+# Two rules for anyone editing these files:
+#   1. A policy targets the POD port (containerPort), never the Service port.
+#      A wrong port raises no error: it yields an allow that matches nothing.
+#   2. Any change that adds a data path ships its allow in the same change.
+#
+# Stalwart (opt-in) carries its own policies in gitops/apps-extra/stalwart/,
+# so they exist only when Stalwart does.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - default-deny.yaml
+  - dns.yaml
+  - kube-system.yaml
+  - nginx-ingress.yaml
+  - authentik.yaml
+  - headlamp.yaml
+  - cert-manager.yaml
+  - external-dns.yaml
+  - flux-system.yaml
+  - nextcloud.yaml

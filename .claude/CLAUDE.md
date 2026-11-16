@@ -107,7 +107,7 @@ The `noah-reviewer` agent (`.claude/agents/`) runs the gates read-only on the cu
 ### Flux ordering lives only in `clusters/production/`
 
 `dependsOn` chains the Kustomizations: infrastructure → cert-manager-issuers → apps →
-apps-extra. There is none under `gitops/`; the components inside a stage are unordered.
+apps-extra → network-policies (the Cilium default-deny baseline, always last). There is none under `gitops/`; the components inside a stage are unordered.
 `${DOMAIN}`, `${NODE_PUBLIC_IP}` and the Stalwart DNS values are substituted by Flux
 `postBuild` from ConfigMaps/Secrets seeded at bootstrap.
 
@@ -206,7 +206,7 @@ behaviour, in the same commit. Diagrams are hand-written SVG in one style (see
 | `NOAH_DISABLE_SOPS` | Store secrets in plaintext (dev/test only) |
 | `NOAH_DOMAIN` | Default domain for CLI commands |
 | `GITHUB_TOKEN` / `GIT_TOKEN` | Git provider token for deploy key registration |
-| `AUTHENTIK_BOOTSTRAP_TOKEN` | Enables the live checks of `noah test headlamp/hubble` |
+| `AUTHENTIK_BOOTSTRAP_TOKEN` | Enables the live checks of `noah test headlamp/cilium` |
 | `TF_VAR_*` | OpenTofu inputs not supplied by the wrapper (SSH public keys, `mail_enabled`, `mail_ptr_domain`) |
 
 ## Tooling in `.claude/`

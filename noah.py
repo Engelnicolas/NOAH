@@ -1121,15 +1121,15 @@ def headlamp(ctx, domain):
 @test.command()
 @click.option('--domain', default=DEFAULT_DOMAIN, help='Domain for services')
 @click.pass_context
-def hubble(ctx, domain):
-    """Test Hubble UI deployment and Authentik forward-auth integration"""
-    click.echo("Testing Hubble UI deployment and Authentik integration...")
-    from Tests.test_hubble_auth import HubbleAuthTester
-    tester = HubbleAuthTester(domain=domain)
+def cilium(ctx, domain):
+    """Test the Cilium GUI (Hubble UI) deployment and Authentik forward-auth integration"""
+    click.echo("Testing the Cilium GUI (Hubble UI) deployment and Authentik integration...")
+    from Tests.test_cilium_auth import CiliumAuthTester
+    tester = CiliumAuthTester(domain=domain)
     if tester.run_all_tests():
-        click.echo("✓ Hubble test successful")
+        click.echo("✓ Cilium GUI test successful")
     else:
-        click.echo("✗ Hubble test failed", err=True)
+        click.echo("✗ Cilium GUI test failed", err=True)
         sys.exit(1)
 
 @cli.command()  # type: ignore

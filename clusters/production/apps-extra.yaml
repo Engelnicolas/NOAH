@@ -1,7 +1,7 @@
 ---
 # Second-phase apps (Nextcloud, Stalwart) in their own Kustomization so their
 # long first-boot (PostgreSQL init, Nextcloud install, certificate issuance)
-# never blocks or times out the core apps (Authentik/Headlamp/Hubble).
+# never blocks or times out the core apps (Authentik/Headlamp/Cilium GUI).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:

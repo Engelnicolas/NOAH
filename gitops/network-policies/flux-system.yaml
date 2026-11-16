@@ -1,0 +1,62 @@
+---
+# flux-system. NOTE: Flux ships its own Kubernetes NetworkPolicy `allow-egress`
+# (gotk-components.yaml) that allows ALL egress from this namespace, and
+# policies are additive. The rules below are therefore the intended least
+# privilege, effective only once that NetworkPolicy is removed or narrowed.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: controllers
+  namespace: flux-system
+spec:
+  description: "Flux controllers - API, artifacts and events inside the namespace"
+  endpointSelector: {}
+  ingress:
+    # Flow 19 - source-controller serves artifacts on 9090 (Service port 80);
+    # notification-controller receives events on 9292.
+    - fromEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+            - port: "9292"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+            - port: "9292"
+              protocol: TCP
+    # Flow 17.
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: source-controller
+  namespace: flux-system
+spec:
+  description: "source-controller - Git over SSH, Helm indexes and chart tarballs"
+  endpointSelector:
+    matchLabels:
+      app: source-controller
+  egress:
+    - toEntities:
+        - world
+      toPorts:
+        # Flow 18a - the GitRepository is ssh://git@github.com, not HTTPS.
+        - ports:
+            - port: "22"
+              protocol: TCP
+        # Flows 18b and 18c - Helm repositories and their tarballs.
+            - port: "443"
+              protocol: TCP

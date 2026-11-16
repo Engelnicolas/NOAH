@@ -1,0 +1,119 @@
+---
+# Network policies of Stalwart. They live HERE, not in gitops/network-policies/,
+# so they exist only when Stalwart (opt-in) does: a CiliumNetworkPolicy in a
+# namespace that does not exist would fail the whole baseline.
+# Same two rules as the baseline: pod ports, never Service ports; any new data
+# path ships its allow in the same change.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: stalwart
+  namespace: stalwart
+spec:
+  description: "stalwart - public mail, web console, restricted internal relay"
+  endpointSelector:
+    matchLabels:
+      app: stalwart
+  ingress:
+    # Public mail ports, bound by hostPort. The real client address is not
+    # preserved, so the source may show up as the node: world AND node entities.
+    - fromEntities:
+        - world
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "25"
+              protocol: TCP
+            - port: "465"
+              protocol: TCP
+            - port: "587"
+              protocol: TCP
+            - port: "143"
+              protocol: TCP
+            - port: "993"
+              protocol: TCP
+    # Web console through the ingress - pod port 8080 (the Service port is 80).
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nginx-ingress
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # Configuration Job of this namespace.
+    - fromEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # THE RELAY ON 2525 HAS NO AUTHENTICATION: this rule is its only
+    # protection. Exactly Authentik (server, worker) and Nextcloud - anything
+    # added here can send mail as the domain with valid SPF and DKIM.
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: authentik
+            app.kubernetes.io/name: authentik
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nextcloud
+            app.kubernetes.io/name: nextcloud
+      toPorts:
+        - ports:
+            - port: "2525"
+              protocol: TCP
+  egress:
+    # Outbound delivery.
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "25"
+              protocol: TCP
+    # Server-side OIDC: CoreDNS rewrites auth.<domain> to the ingress controller.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nginx-ingress
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: config-job
+  namespace: stalwart
+spec:
+  description: "stalwart configuration Job - reaches the server API only"
+  endpointSelector:
+    matchExpressions:
+      - key: batch.kubernetes.io/job-name
+        operator: Exists
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app: stalwart
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+---
+# Egress side of the web console flow, in the controller's namespace.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ingress-to-stalwart
+  namespace: nginx-ingress
+spec:
+  description: "ingress-nginx to the Stalwart web console"
+  endpointSelector: {}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: stalwart
+            app: stalwart
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

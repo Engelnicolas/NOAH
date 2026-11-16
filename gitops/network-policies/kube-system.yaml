@@ -1,0 +1,195 @@
+---
+# kube-system: CoreDNS, Hubble (UI + relay), the cilium-auth forward-auth
+# proxy, and the K3s add-ons (metrics-server, local-path-provisioner).
+# The Cilium agent, operator and Envoy run in hostNetwork: they are not
+# endpoints and need no rule.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: coredns
+  namespace: kube-system
+spec:
+  description: "CoreDNS - queries in, upstream resolver and API out"
+  endpointSelector:
+    matchLabels:
+      k8s-app: kube-dns
+  ingress:
+    # Flow 1, ingress side. `cluster` = every endpoint and node.
+    - fromEntities:
+        - cluster
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+  egress:
+    # Flow 23 - upstream resolver of the node (the VPC resolver on AWS, the
+    # LAN resolver on bare metal). Port 53 only. Tighten to a toCIDR once the
+    # address is read on the node (/run/systemd/resolve/resolv.conf).
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # Flow 24 - watch Services and EndpointSlices.
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: hubble-ui
+  namespace: kube-system
+spec:
+  description: "Hubble UI - served by nginx-ingress, reads from hubble-relay"
+  endpointSelector:
+    matchLabels:
+      k8s-app: hubble-ui
+  ingress:
+    # Flow 3 - pod port 8081 (the Service port is 80).
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nginx-ingress
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+          rules:
+            http:
+              - {}
+  egress:
+    # Flow 20.
+    - toEndpoints:
+        - matchLabels:
+            k8s-app: hubble-relay
+      toPorts:
+        - ports:
+            - port: "4245"
+              protocol: TCP
+    # The UI backend lists namespaces through the Kubernetes API.
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: hubble-relay
+  namespace: kube-system
+spec:
+  description: "Hubble relay - queried by the UI, peers with the Cilium agents"
+  endpointSelector:
+    matchLabels:
+      k8s-app: hubble-relay
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s-app: hubble-ui
+      toPorts:
+        - ports:
+            - port: "4245"
+              protocol: TCP
+  egress:
+    # Flow 21 - remote-node is required as soon as there is a second node.
+    - toEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "4244"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: cilium-auth-proxy
+  namespace: kube-system
+spec:
+  description: "Forward-auth proxy of the Cilium GUI - outpost paths only"
+  endpointSelector:
+    matchLabels:
+      app: cilium-auth-proxy
+  ingress:
+    # Flow 4 - pod port 8080 (the Service port is 80). Restricted to the
+    # outpost prefix, which the forward-auth design imposes.
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nginx-ingress
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+          rules:
+            http:
+              - path: "/outpost.goauthentik.io/.*"
+  egress:
+    # Flow 5 - the path restriction is enforced on the Authentik side.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: authentik
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: metrics-server
+  namespace: kube-system
+spec:
+  description: "K3s metrics-server - aggregated API in, kubelets and API out"
+  endpointSelector:
+    matchLabels:
+      k8s-app: metrics-server
+  ingress:
+    - fromEntities:
+        - kube-apiserver
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "10250"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "10250"
+              protocol: TCP
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: local-path-provisioner
+  namespace: kube-system
+spec:
+  description: "K3s local-path-provisioner - Kubernetes API only"
+  endpointSelector:
+    matchLabels:
+      app: local-path-provisioner
+  egress:
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP

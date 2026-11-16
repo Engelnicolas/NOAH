@@ -1,0 +1,39 @@
+---
+# Network baseline (default-deny + allows), in its own Kustomization so that it
+# lands AFTER everything it governs: a default-deny applied while the rest is
+# still converging would cut the convergence itself, including this
+# Kustomization's own path to a fix. It must NOT move under
+# gitops/infrastructure/ (dependsOn does not order resources inside one
+# Kustomization).
+#
+# apps-extra has a 30m timeout (Nextcloud first boot): on a cold bootstrap the
+# baseline waits for it. Intended - it is the last thing to land.
+#
+# Rollback, least to most drastic:
+#   git revert of the commit that set policyAuditMode: false (back to audit)
+#   flux suspend kustomization network-policies        (freeze)
+#   flux delete kustomization network-policies         (prune every policy)
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: network-policies
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+    - name: cert-manager-issuers
+    - name: apps
+    - name: apps-extra
+  interval: 10m
+  path: ./gitops/network-policies
+  prune: true
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: noah
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-vars
+  timeout: 5m
+  wait: true

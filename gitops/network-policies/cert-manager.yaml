@@ -1,0 +1,57 @@
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: kube-apiserver
+  namespace: cert-manager
+spec:
+  description: "cert-manager - every component reconciles against the API"
+  endpointSelector: {}
+  # Flow 14 - admission webhook, pod port 10250 (the Service port is 443).
+  ingress:
+    - fromEntities:
+        - kube-apiserver
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "10250"
+              protocol: TCP
+  # Flow 13.
+  egress:
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: acme-dns01
+  namespace: cert-manager
+spec:
+  description: "cert-manager controller - ACME, Cloudflare and the DNS-01 self-check"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: controller
+  egress:
+    # Flows 12a and 12b - Let's Encrypt and the Cloudflare API. To be narrowed
+    # to toFQDNs once the baseline is enforced and stable.
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Flow 12c - dns01RecursiveNameservers, queried directly and NOT through
+    # CoreDNS, so the cluster-wide DNS allow does not cover it.
+    - toCIDR:
+        - 1.1.1.1/32
+        - 8.8.8.8/32
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP

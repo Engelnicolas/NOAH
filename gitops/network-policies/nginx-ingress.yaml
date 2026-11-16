@@ -1,0 +1,78 @@
+---
+# nginx-ingress: the single entry point (hostPort 80/443).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ingress-controller
+  namespace: nginx-ingress
+spec:
+  description: "ingress-nginx - HTTP(S) in from anywhere, backends and API out"
+  endpointSelector: {}
+  ingress:
+    # Flow 2 - public entry. `cluster` also covers the pods doing server-side
+    # OIDC against auth.<domain>, which CoreDNS rewrites to this controller
+    # (flow 8), and hostPort traffic whose source appears as the node.
+    - fromEntities:
+        - world
+        - cluster
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+    # Admission webhook, called by the API server on every Ingress change.
+    - fromEntities:
+        - kube-apiserver
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+    # Flows 3 and 4.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: hubble-ui
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            app: cilium-auth-proxy
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # Flow 6 - authentik-server listens on 9000 (Service port 80).
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: authentik
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP
+    # Flow 7 - headlamp listens on 4466 (Service port 80).
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: headlamp
+      toPorts:
+        - ports:
+            - port: "4466"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nextcloud
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP

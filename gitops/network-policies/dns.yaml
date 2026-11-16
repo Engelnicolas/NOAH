@@ -1,0 +1,28 @@
+---
+# Flow 1 - every pod may resolve through CoreDNS. The `dns` rule routes the
+# queries through Cilium's DNS proxy, which makes them visible in Hubble and
+# is the prerequisite for any later toFQDNs rule.
+#
+# cert-manager's DNS-01 self-check bypasses CoreDNS (literal 1.1.1.1/8.8.8.8):
+# see cert-manager.yaml.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: allow-dns-to-coredns
+spec:
+  description: "All pods to CoreDNS, with L7 DNS visibility"
+  endpointSelector: {}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"

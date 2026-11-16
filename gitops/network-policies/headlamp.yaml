@@ -1,0 +1,38 @@
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: headlamp
+  namespace: headlamp
+spec:
+  description: "headlamp - web in, OIDC through the ingress and API out"
+  endpointSelector: {}
+  ingress:
+    # Flow 7 - pod port 4466 (the Service port is 80).
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nginx-ingress
+      toPorts:
+        - ports:
+            - port: "4466"
+              protocol: TCP
+          rules:
+            http:
+              - {}
+  egress:
+    # Flow 8 - server-side OIDC: CoreDNS rewrites auth.<domain> to the
+    # ingress controller.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nginx-ingress
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Flow 9.
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP

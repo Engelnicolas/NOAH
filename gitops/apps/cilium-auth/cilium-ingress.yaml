@@ -1,29 +1,29 @@
 ---
-# Hubble UI ingress, gated by Authentik's outpost via the
+# Cilium GUI (Hubble UI) ingress at cilium.${DOMAIN}, gated by Authentik's outpost via the
 # `auth_request` annotation. Without this ingress, Hubble UI has no
 # external entry point — Cilium's chart-level ingress is disabled.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: hubble-ui
+  name: cilium-ui
   namespace: kube-system
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/auth-url: "http://hubble-auth-proxy.kube-system.svc.cluster.local/outpost.goauthentik.io/auth/nginx"
+    nginx.ingress.kubernetes.io/auth-url: "http://cilium-auth-proxy.kube-system.svc.cluster.local/outpost.goauthentik.io/auth/nginx"
     # Points at the APPLICATION host, not auth.${DOMAIN}: in forward_single mode
     # the embedded outpost serves /outpost.goauthentik.io/* per application
-    # domain (matched by the provider's external_host = hubble.${DOMAIN}). On
+    # domain (matched by the provider's external_host = cilium.${DOMAIN}). On
     # auth.${DOMAIN} no proxy provider matches, so /start there returns 404 even
-    # for an authenticated user. The hubble-outpost Ingress routes these paths
+    # for an authenticated user. The cilium-outpost Ingress routes these paths
     # (unauthenticated) to the outpost. Base URL only, no query string:
     # ingress-nginx (>=1.9, CVE-2023-5044) rejects auth-signin values containing
     # nginx runtime vars, and appends ?rd=<original-url> itself (buildAuthSignURL).
-    nginx.ingress.kubernetes.io/auth-signin: "https://hubble.${DOMAIN}/outpost.goauthentik.io/start"
+    nginx.ingress.kubernetes.io/auth-signin: "https://cilium.${DOMAIN}/outpost.goauthentik.io/start"
     nginx.ingress.kubernetes.io/auth-response-headers: "X-authentik-username,X-authentik-groups,X-authentik-email,X-authentik-name,X-authentik-uid"
 spec:
   ingressClassName: nginx
   rules:
-    - host: "hubble.${DOMAIN}"
+    - host: "cilium.${DOMAIN}"
       http:
         paths:
           - path: /
@@ -34,5 +34,5 @@ spec:
                 port:
                   number: 80
   tls:
-    - secretName: hubble-tls
-      hosts: ["hubble.${DOMAIN}"]
+    - secretName: cilium-tls
+      hosts: ["cilium.${DOMAIN}"]

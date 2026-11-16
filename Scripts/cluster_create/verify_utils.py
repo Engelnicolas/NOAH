@@ -43,7 +43,7 @@ KUSTOMIZATION_RESOURCE = "kustomizations.kustomize.toolkit.fluxcd.io"
 HELMRELEASE_RESOURCE = "helmreleases.helm.toolkit.fluxcd.io"
 
 # Service subdomains exposed via Ingress; probed for end-to-end reachability.
-_SERVICE_SUBDOMAINS = ("auth", "headlamp", "hubble")
+_SERVICE_SUBDOMAINS = ("auth", "headlamp", "cilium")
 
 _RULE = "─" * 60
 

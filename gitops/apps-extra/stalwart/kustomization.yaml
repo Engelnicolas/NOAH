@@ -12,3 +12,4 @@ resources:
   - dns-records.yaml
   - provision-job.yaml
   - provision-config-job.yaml
+  - networkpolicy.yaml

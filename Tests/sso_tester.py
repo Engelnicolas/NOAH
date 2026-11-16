@@ -303,7 +303,7 @@ class SSONetworkValidator:
             self.results['hubble'].append("deployment: 1/1 OK")
             
             # Check ingress
-            success, host = self.run_kubectl("get ingress hubble-ui -n kube-system -o jsonpath='{.spec.rules[0].host}'")
+            success, host = self.run_kubectl("get ingress cilium-ui -n kube-system -o jsonpath='{.spec.rules[0].host}'")
             if success and host:
                 self.print_status('OK', f"Hubble UI ingress configured for {host}")
                 self.results['hubble'].append(f"ingress: {host} OK")
@@ -356,7 +356,7 @@ class SSONetworkValidator:
         
         print("\nNext steps:")
         print("1. If all checks pass, test SSO login: python noah.py test sso")
-        print("2. Access Hubble UI with SSO: https://hubble.noah-infra.com")
+        print("2. Access Hubble UI with SSO: https://cilium.noah-infra.com")
         print("3. Monitor network traffic: kubectl exec -n kube-system ds/cilium -- hubble observe")
         
         return {

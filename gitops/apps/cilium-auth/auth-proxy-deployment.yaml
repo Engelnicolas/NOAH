@@ -2,17 +2,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hubble-auth-proxy
+  name: cilium-auth-proxy
   namespace: kube-system
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: hubble-auth-proxy
+      app: cilium-auth-proxy
   template:
     metadata:
       labels:
-        app: hubble-auth-proxy
+        app: cilium-auth-proxy
     spec:
       securityContext:
         runAsNonRoot: true
@@ -45,16 +45,16 @@ spec:
           emptyDir: {}
         - name: config
           configMap:
-            name: hubble-auth-proxy-config
+            name: cilium-auth-proxy-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: hubble-auth-proxy
+  name: cilium-auth-proxy
   namespace: kube-system
 spec:
   selector:
-    app: hubble-auth-proxy
+    app: cilium-auth-proxy
   ports:
     - port: 80
       targetPort: 8080

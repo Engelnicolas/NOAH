@@ -8,7 +8,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: authentik-provision-hubble
+  name: authentik-provision-cilium
   namespace: authentik
   annotations:
     # Re-run when the script changes (FluxCD will recreate the Job
@@ -30,9 +30,9 @@ spec:
               export HOME=/tmp
               pip install --quiet --user requests
               python /scripts/authentik_provisioner.py \
-                --service hubble \
+                --service cilium \
                 --type proxy \
-                --external-host "https://hubble.${DOMAIN}"
+                --external-host "https://cilium.${DOMAIN}"
           envFrom:
             - secretRef:
                 name: authentik-bootstrap-token

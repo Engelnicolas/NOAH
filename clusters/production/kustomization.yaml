@@ -7,3 +7,4 @@ resources:
 - cert-manager-issuers.yaml
 - apps.yaml
 - apps-extra.yaml
+- network-policies.yaml

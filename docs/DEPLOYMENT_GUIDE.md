@@ -224,8 +224,9 @@ Flux reconciles in four ordered stages, about 15 to 45 minutes in all:
 |---|---|---|
 | 1 | `infrastructure` | Cilium (full configuration), ingress-nginx, cert-manager, external-dns, CoreDNS |
 | 2 | `cert-manager-issuers` | Let's Encrypt production and staging issuers |
-| 3 | `apps` | Authentik, Headlamp, Hubble forward-auth, their OIDC clients |
+| 3 | `apps` | Authentik, Headlamp, Cilium GUI forward-auth, their OIDC clients |
 | 4 | `apps-extra` | Nextcloud, plus Stalwart when opted in |
+| 5 | `network-policies` | Network baseline: default-deny and explicit allows, in audit mode (see the [operations guide](OPERATIONS_GUIDE.md#network-baseline)) |
 
 Watch it with `watch kubectl get kustomization,helmrelease -A` or
 `python3 noah.py flux logs -f`.
@@ -259,14 +260,14 @@ dig +short auth.your-domain.com
 ### Option B: manual DNS
 
 Create A records pointing at the node's public IP, TTL 300: `auth`, `headlamp`,
-`hubble`, `nextcloud`, and `mail` if Stalwart is enabled. With manual DNS the mail
+`cilium`, `nextcloud`, and `mail` if Stalwart is enabled. With manual DNS the mail
 MX/SPF/DKIM/DMARC records are yours to create too; the DKIM value is in
 `kubectl -n flux-system get secret stalwart-dns-vars -o jsonpath='{.data.DKIM_TXT_VALUE}' | base64 -d`.
 
 ### Option C: local testing (`/etc/hosts`)
 
 ```bash
-echo "<node-ip> auth.your-domain.com headlamp.your-domain.com hubble.your-domain.com" | sudo tee -a /etc/hosts
+echo "<node-ip> auth.your-domain.com headlamp.your-domain.com cilium.your-domain.com" | sudo tee -a /etc/hosts
 ```
 
 Let's Encrypt cannot validate names that only exist in `/etc/hosts`: expect certificate
@@ -280,7 +281,7 @@ errors.
 |---|---|---|
 | Authentik | `https://auth.your-domain.com` | `akadmin` + `password show-password` |
 | Headlamp | `https://headlamp.your-domain.com` | "Sign in with OIDC" → Authentik |
-| Hubble UI | `https://hubble.your-domain.com` | Authentik forward-auth |
+| Cilium GUI (Hubble UI) | `https://cilium.your-domain.com` | Authentik forward-auth |
 | Nextcloud | `https://nextcloud.your-domain.com` | "Log in with Authentik", or local `admin` |
 | Stalwart *(opt-in)* | `https://mail.your-domain.com/account/` | your Authentik email → Authentik |
 | Stalwart console | `https://mail.your-domain.com/admin/` | Authentik, or break-glass `admin` (`secrets canonical --show`, service `stalwart`) |

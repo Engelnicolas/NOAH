@@ -1,0 +1,62 @@
+---
+# nextcloud (always reconciled by gitops/apps-extra/).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+spec:
+  description: "nextcloud - web in, backends, OIDC, app store and mail relay out"
+  endpointSelector: {}
+  ingress:
+    # L4 only: uploads are large and long-lived, kept out of the L7 proxy.
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nginx-ingress
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+    # PostgreSQL and Redis of the namespace.
+    - fromEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+            - port: "6379"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+            - port: "6379"
+              protocol: TCP
+    # Server-side OIDC: CoreDNS rewrites auth.<domain> to the ingress controller.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nginx-ingress
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # App store and `occ app:install user_oidc`.
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Notifications through the in-cluster Stalwart relay (opt-in).
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: stalwart
+      toPorts:
+        - ports:
+            - port: "2525"
+              protocol: TCP
+    # The S3 egress to Garage (toCIDR, never toFQDNs, never an http rule) is
+    # added by the change that moves Nextcloud storage onto Garage.
